@@ -1,0 +1,285 @@
+code,latin_description,chapter,common
+A00,Cholera,Chapter I: Morbi infectiosi et parasitarii (A00-B99),false
+A02.0,Enteritis salmonellosa,Chapter I: Morbi infectiosi et parasitarii (A00-B99),false
+A02.9,Infectio salmonellosa non specificata,Chapter I: Morbi infectiosi et parasitarii (A00-B99),false
+A03.9,Shigellosis non specificata,Chapter I: Morbi infectiosi et parasitarii (A00-B99),false
+A04.9,Infectio intestinalis bacterialis non specificata,Chapter I: Morbi infectiosi et parasitarii (A00-B99),false
+A05.9,Intoxicatio alimentaria bacterialis non specificata,Chapter I: Morbi infectiosi et parasitarii (A00-B99),false
+A06.0,Dysenteria amoebica acuta,Chapter I: Morbi infectiosi et parasitarii (A00-B99),false
+A08.0,Enteritis rotaviralis,Chapter I: Morbi infectiosi et parasitarii (A00-B99),true
+A08.1,Gastroenteritis acuta agente Norwalk,Chapter I: Morbi infectiosi et parasitarii (A00-B99),false
+A08.4,Infectio intestinalis viralis non specificata,Chapter I: Morbi infectiosi et parasitarii (A00-B99),true
+A09,Diarrhoea et gastroenteritis cum aetiologia infectiosa praesumpta,Chapter I: Morbi infectiosi et parasitarii (A00-B99),true
+A15.0,Tuberculosis pulmonum,Chapter I: Morbi infectiosi et parasitarii (A00-B99),false
+A37.0,Pertussis morbo Bordetella pertussis,Chapter I: Morbi infectiosi et parasitarii (A00-B99),false
+A37.9,Pertussis non specificata,Chapter I: Morbi infectiosi et parasitarii (A00-B99),false
+A38,Scarlatina,Chapter I: Morbi infectiosi et parasitarii (A00-B99),true
+A39.0,Meningitis meningococcica,Chapter I: Morbi infectiosi et parasitarii (A00-B99),false
+A41.9,Sepsis non specificata,Chapter I: Morbi infectiosi et parasitarii (A00-B99),false
+A46,Erysipelas,Chapter I: Morbi infectiosi et parasitarii (A00-B99),false
+A49.9,Infectio bacterialis non specificata,Chapter I: Morbi infectiosi et parasitarii (A00-B99),false
+A69.2,Morbus Lyme,Chapter I: Morbi infectiosi et parasitarii (A00-B99),false
+A75.9,Typhus non specificatus,Chapter I: Morbi infectiosi et parasitarii (A00-B99),false
+A87.9,Meningitis viralis non specificata,Chapter I: Morbi infectiosi et parasitarii (A00-B99),false
+B00.1,Dermatitis vesicularis herpetica,Chapter I: Morbi infectiosi et parasitarii (A00-B99),false
+B00.9,Infectio herpesviralis non specificata,Chapter I: Morbi infectiosi et parasitarii (A00-B99),false
+B01.9,Varicella sine complicatione,Chapter I: Morbi infectiosi et parasitarii (A00-B99),true
+B05.9,Morbilli sine complicatione,Chapter I: Morbi infectiosi et parasitarii (A00-B99),false
+B06.9,Rubeola sine complicatione,Chapter I: Morbi infectiosi et parasitarii (A00-B99),false
+B08.4,Stomatitis enteroviralis cum exanthemate,Chapter I: Morbi infectiosi et parasitarii (A00-B99),true
+B08.5,Pharyngitis enteroviralis vesicularis,Chapter I: Morbi infectiosi et parasitarii (A00-B99),false
+B08.8,Infectio viralis specificata cum exanthemate,Chapter I: Morbi infectiosi et parasitarii (A00-B99),false
+B19.9,Hepatitis viralis non specificata,Chapter I: Morbi infectiosi et parasitarii (A00-B99),false
+B26.9,Parotitis epidemica sine complicatione,Chapter I: Morbi infectiosi et parasitarii (A00-B99),false
+B27.9,Mononucleosis infectiosa non specificata,Chapter I: Morbi infectiosi et parasitarii (A00-B99),true
+B30.9,Conjunctivitis viralis non specificata,Chapter I: Morbi infectiosi et parasitarii (A00-B99),false
+B34.0,Infectio adenoviralis non specificata,Chapter I: Morbi infectiosi et parasitarii (A00-B99),true
+B34.9,Infectio viralis non specificata,Chapter I: Morbi infectiosi et parasitarii (A00-B99),true
+B35.0,Tinea barbae et capitis,Chapter I: Morbi infectiosi et parasitarii (A00-B99),false
+B35.4,Tinea corporis,Chapter I: Morbi infectiosi et parasitarii (A00-B99),false
+B36.0,Pityriasis versicolor,Chapter I: Morbi infectiosi et parasitarii (A00-B99),false
+B37.0,Stomatitis candidalis,Chapter I: Morbi infectiosi et parasitarii (A00-B99),false
+B37.9,Candidosis non specificata,Chapter I: Morbi infectiosi et parasitarii (A00-B99),false
+B49,Mycosis non specificata,Chapter I: Morbi infectiosi et parasitarii (A00-B99),false
+B86,Scabies,Chapter I: Morbi infectiosi et parasitarii (A00-B99),true
+B89,Morbus parasitarius non specificatus,Chapter I: Morbi infectiosi et parasitarii (A00-B99),false
+D50.0,Anaemia sideropenica posthaemorrhagica chronica,Chapter III: Morbi sanguinis et organorum haematopoeticorum (D50-D89),false
+D50.9,Anaemia sideropenica non specificata,Chapter III: Morbi sanguinis et organorum haematopoeticorum (D50-D89),true
+D53.9,Anaemia nutritionalis non specificata,Chapter III: Morbi sanguinis et organorum haematopoeticorum (D50-D89),false
+D56.9,Thalassaemia non specificata,Chapter III: Morbi sanguinis et organorum haematopoeticorum (D50-D89),false
+D64.9,Anaemia non specificata,Chapter III: Morbi sanguinis et organorum haematopoeticorum (D50-D89),false
+D69.3,Purpura thrombocytopenica idiopathica,Chapter III: Morbi sanguinis et organorum haematopoeticorum (D50-D89),false
+D86.9,Sarcoidosis non specificata,Chapter III: Morbi sanguinis et organorum haematopoeticorum (D50-D89),false
+E03.9,Hypothyreoidismus non specificatus,Chapter IV: Morbi systematis endocrini (E00-E90),false
+E06.3,Thyroiditis autoimmunis,Chapter IV: Morbi systematis endocrini (E00-E90),false
+E10.9,Diabetes mellitus typi I sine complicatione,Chapter IV: Morbi systematis endocrini (E00-E90),false
+E22.8,Hyperfunctio glandulae pituitariae specificata,Chapter IV: Morbi systematis endocrini (E00-E90),false
+E55.0,Rachitis activa,Chapter IV: Morbi systematis endocrini (E00-E90),true
+E55.9,Defectus vitamini D non specificatus,Chapter IV: Morbi systematis endocrini (E00-E90),true
+E61.1,Defectus ferri,Chapter IV: Morbi systematis endocrini (E00-E90),true
+E66.0,Obesitas calorias excessivas,Chapter IV: Morbi systematis endocrini (E00-E90),false
+E66.9,Obesitas non specificata,Chapter IV: Morbi systematis endocrini (E00-E90),false
+E84.9,Fibrosis cystica non specificata,Chapter IV: Morbi systematis endocrini (E00-E90),false
+E86,Hypovolaemia,Chapter IV: Morbi systematis endocrini (E00-E90),false
+E87.1,Hyponatraemia et hypo-osmolalitas,Chapter IV: Morbi systematis endocrini (E00-E90),false
+F80.9,Disordo evolutionis loquelae et linguae non specificatus,Chapter V: Morbi mentales et morbi conductus (F00-F99),false
+F81.9,Disordo evolutionis facultatum scholasticarum non specificatus,Chapter V: Morbi mentales et morbi conductus (F00-F99),false
+F84.0,Autismus infantilis,Chapter V: Morbi mentales et morbi conductus (F00-F99),false
+F84.9,Disordo evolutionis pervasivus non specificatus,Chapter V: Morbi mentales et morbi conductus (F00-F99),false
+F90.0,Disordo activitatis et attentionis,Chapter V: Morbi mentales et morbi conductus (F00-F99),false
+F98.0,Enuresis non organica,Chapter V: Morbi mentales et morbi conductus (F00-F99),false
+G40.9,Epilepsia non specificata,Chapter VI: Morbi systematis nervosi (G00-G99),false
+G43.9,Migraena non specificata,Chapter VI: Morbi systematis nervosi (G00-G99),false
+G44.2,Cephalea tensionalis,Chapter VI: Morbi systematis nervosi (G00-G99),false
+G93.3,Syndroma fatigabilitatis post viralem,Chapter VI: Morbi systematis nervosi (G00-G99),false
+H00.0,Hordeolum aliae inflammationes profundae palpebrae,Chapter VII: Morbi oculi et adnexorum (H00-H59),false
+H10.9,Conjunctivitis non specificata,Chapter VII: Morbi oculi et adnexorum (H00-H59),true
+H10.0,Conjunctivitis mucopurulenta,Chapter VII: Morbi oculi et adnexorum (H00-H59),true
+H11.3,Haemorrhagia conjunctivalis,Chapter VII: Morbi oculi et adnexorum (H00-H59),false
+H52.0,Hypermetropia,Chapter VII: Morbi oculi et adnexorum (H00-H59),false
+H52.1,Myopia,Chapter VII: Morbi oculi et adnexorum (H00-H59),false
+H52.2,Astigmatismus,Chapter VII: Morbi oculi et adnexorum (H00-H59),false
+H60.9,Otitis externa non specificata,Chapter VIII: Morbi auris et processus mastoidei (H60-H95),false
+H65.0,Otitis media serosa acuta,Chapter VIII: Morbi auris et processus mastoidei (H60-H95),true
+H65.1,Otitis media non suppurativa acuta alia,Chapter VIII: Morbi auris et processus mastoidei (H60-H95),true
+H65.9,Otitis media non suppurativa non specificata,Chapter VIII: Morbi auris et processus mastoidei (H60-H95),false
+H66.0,Otitis media suppurativa acuta,Chapter VIII: Morbi auris et processus mastoidei (H60-H95),true
+H66.9,Otitis media non specificata,Chapter VIII: Morbi auris et processus mastoidei (H60-H95),true
+H72.9,Perforatio membranae tympani non specificata,Chapter VIII: Morbi auris et processus mastoidei (H60-H95),false
+H92.0,Otalgia,Chapter VIII: Morbi auris et processus mastoidei (H60-H95),true
+I10,Hypertensio arterialis essentialis (primaria),Chapter IX: Morbi systematis circulatorii (I00-I99),false
+I88.9,Lymphadenitis non specificata acuta non specificata,Chapter IX: Morbi systematis circulatorii (I00-I99),false
+J00,Rhinitis acuta,Chapter X: Morbi systematis respiratorii (J00-J99),true
+J01.0,Sinusitis maxillaris acuta,Chapter X: Morbi systematis respiratorii (J00-J99),false
+J01.9,Sinusitis acuta non specificata,Chapter X: Morbi systematis respiratorii (J00-J99),false
+J02.0,Pharyngitis streptococcalis,Chapter X: Morbi systematis respiratorii (J00-J99),true
+J02.9,Pharyngitis acuta non specificata,Chapter X: Morbi systematis respiratorii (J00-J99),true
+J03.0,Tonsillitis streptococcalis,Chapter X: Morbi systematis respiratorii (J00-J99),true
+J03.9,Tonsillitis acuta non specificata,Chapter X: Morbi systematis respiratorii (J00-J99),true
+J04.0,Laryngitis acuta,Chapter X: Morbi systematis respiratorii (J00-J99),true
+J04.1,Tracheitis acuta,Chapter X: Morbi systematis respiratorii (J00-J99),false
+J04.2,Laryngotracheitis acuta,Chapter X: Morbi systematis respiratorii (J00-J99),true
+J05.0,Laryngitis obstructiva acuta (croup),Chapter X: Morbi systematis respiratorii (J00-J99),true
+J06.0,Laryngopharyngitis acuta,Chapter X: Morbi systematis respiratorii (J00-J99),false
+J06.8,Infectiones acutae multiplices tractus respiratorii superioris,Chapter X: Morbi systematis respiratorii (J00-J99),false
+J06.9,Infectio acuta tractus respiratorii superioris non specificata,Chapter X: Morbi systematis respiratorii (J00-J99),true
+J11.1,Influenza cum aliis manifestationibus respiratoriis,Chapter X: Morbi systematis respiratorii (J00-J99),true
+J11.8,Influenza cum aliis manifestationibus,Chapter X: Morbi systematis respiratorii (J00-J99),false
+J12.9,Pneumonia viralis non specificata,Chapter X: Morbi systematis respiratorii (J00-J99),true
+J13,Pneumonia ex Streptococcus pneumoniae,Chapter X: Morbi systematis respiratorii (J00-J99),true
+J15.9,Pneumonia bacterialis non specificata,Chapter X: Morbi systematis respiratorii (J00-J99),true
+J18.0,Bronchopneumonia non specificata,Chapter X: Morbi systematis respiratorii (J00-J99),true
+J18.9,Pneumonia non specificata,Chapter X: Morbi systematis respiratorii (J00-J99),true
+J20.9,Bronchitis acuta non specificata,Chapter X: Morbi systematis respiratorii (J00-J99),true
+J21.0,Bronchiolitis acuta ex virus syncytiale respiratorium,Chapter X: Morbi systematis respiratorii (J00-J99),true
+J21.9,Bronchiolitis acuta non specificata,Chapter X: Morbi systematis respiratorii (J00-J99),true
+J22,Infectio acuta tractus respiratorii inferioris non specificata,Chapter X: Morbi systematis respiratorii (J00-J99),false
+J30.1,Rhinitis allergica ex pollinem,Chapter X: Morbi systematis respiratorii (J00-J99),true
+J30.4,Rhinitis allergica non specificata,Chapter X: Morbi systematis respiratorii (J00-J99),true
+J31.0,Rhinitis chronica,Chapter X: Morbi systematis respiratorii (J00-J99),false
+J32.9,Sinusitis chronica non specificata,Chapter X: Morbi systematis respiratorii (J00-J99),false
+J35.0,Tonsillitis chronica,Chapter X: Morbi systematis respiratorii (J00-J99),true
+J35.2,Hypertrophia adenoidum,Chapter X: Morbi systematis respiratorii (J00-J99),true
+J35.3,Hypertrophia tonsillarum cum hypertrophia adenoidum,Chapter X: Morbi systematis respiratorii (J00-J99),true
+J38.5,Spasmus laryngis,Chapter X: Morbi systematis respiratorii (J00-J99),false
+J40,Bronchitis non specificata acuta vel chronica,Chapter X: Morbi systematis respiratorii (J00-J99),false
+J42,Bronchitis chronica non specificata,Chapter X: Morbi systematis respiratorii (J00-J99),false
+J45.0,Asthma bronchiale praedominanter allergicum,Chapter X: Morbi systematis respiratorii (J00-J99),true
+J45.1,Asthma bronchiale non allergicum,Chapter X: Morbi systematis respiratorii (J00-J99),false
+J45.8,Asthma bronchiale mixtum,Chapter X: Morbi systematis respiratorii (J00-J99),false
+J45.9,Asthma bronchiale non specificatum,Chapter X: Morbi systematis respiratorii (J00-J99),true
+J46,Status asthmaticus,Chapter X: Morbi systematis respiratorii (J00-J99),false
+J98.9,Morbus respiratorius non specificatus,Chapter X: Morbi systematis respiratorii (J00-J99),false
+K02.9,Caries dentium non specificata,Chapter XI: Morbi systematis digestionis (K00-K93),false
+K05.1,Gingivitis chronica,Chapter XI: Morbi systematis digestionis (K00-K93),false
+K11.5,Sialolithiasis,Chapter XI: Morbi systematis digestionis (K00-K93),false
+K12.0,Stomatitis aphthosa recidivans,Chapter XI: Morbi systematis digestionis (K00-K93),true
+K14.0,Glossitis,Chapter XI: Morbi systematis digestionis (K00-K93),false
+K21.0,Refluxus gastro-oesophagealis cum oesophagitide,Chapter XI: Morbi systematis digestionis (K00-K93),true
+K21.9,Refluxus gastro-oesophagealis sine oesophagitide,Chapter XI: Morbi systematis digestionis (K00-K93),true
+K29.7,Gastritis non specificata,Chapter XI: Morbi systematis digestionis (K00-K93),false
+K35.8,Appendicitis acuta non specificata,Chapter XI: Morbi systematis digestionis (K00-K93),false
+K40.9,Hernia inguinalis non bilateralis sine obstructione sine gangraena,Chapter XI: Morbi systematis digestionis (K00-K93),false
+K42.9,Hernia umbilicalis sine obstructione sine gangraena,Chapter XI: Morbi systematis digestionis (K00-K93),false
+K52.9,Gastroenteritis et colitis non specificata non infectiosa,Chapter XI: Morbi systematis digestionis (K00-K93),true
+K59.0,Constipatio,Chapter XI: Morbi systematis digestionis (K00-K93),true
+K59.1,Diarrhoea functionalis,Chapter XI: Morbi systematis digestionis (K00-K93),true
+K91.1,Syndroma post operationem ventriculi,Chapter XI: Morbi systematis digestionis (K00-K93),false
+K92.0,Haematemesis,Chapter XI: Morbi systematis digestionis (K00-K93),false
+K92.1,Melaena,Chapter XI: Morbi systematis digestionis (K00-K93),false
+L01.0,Impetigo,Chapter XII: Morbi cutis et subcutis (L00-L99),true
+L02.9,Abscessus cutaneus furunculus et carbunculus loci non specificati,Chapter XII: Morbi cutis et subcutis (L00-L99),false
+L03.9,Cellulitis non specificata,Chapter XII: Morbi cutis et subcutis (L00-L99),true
+L20.9,Dermatitis atopica non specificata,Chapter XII: Morbi cutis et subcutis (L00-L99),true
+L21.0,Seborrhoea capitis,Chapter XII: Morbi cutis et subcutis (L00-L99),false
+L22,Dermatitis pannosa infantilis,Chapter XII: Morbi cutis et subcutis (L00-L99),true
+L23.9,Dermatitis allergica contactus non specificata,Chapter XII: Morbi cutis et subcutis (L00-L99),false
+L24.9,Dermatitis irritativa contactus non specificata,Chapter XII: Morbi cutis et subcutis (L00-L99),false
+L25.9,Dermatitis contactus non specificata non specificata causa,Chapter XII: Morbi cutis et subcutis (L00-L99),false
+L29.9,Pruritus non specificatus,Chapter XII: Morbi cutis et subcutis (L00-L99),false
+L30.9,Dermatitis non specificata,Chapter XII: Morbi cutis et subcutis (L00-L99),false
+L50.9,Urticaria non specificata,Chapter XII: Morbi cutis et subcutis (L00-L99),true
+L70.0,Acne vulgaris,Chapter XII: Morbi cutis et subcutis (L00-L99),false
+L80,Vitiligo,Chapter XII: Morbi cutis et subcutis (L00-L99),false
+M25.5,Dolor articulationis,Chapter XIII: Morbi systematis musculosceletalis (M00-M99),false
+M54.5,Lumbalgia,Chapter XIII: Morbi systematis musculosceletalis (M00-M99),false
+M67.9,Disordo synovii et tendonis non specificatus,Chapter XIII: Morbi systematis musculosceletalis (M00-M99),false
+M79.1,Myalgia,Chapter XIII: Morbi systematis musculosceletalis (M00-M99),false
+M89.9,Disordo ossis non specificatus,Chapter XIII: Morbi systematis musculosceletalis (M00-M99),false
+M92.5,Osteochondrosis juvenilis tibiae et fibulae,Chapter XIII: Morbi systematis musculosceletalis (M00-M99),false
+N10,Pyelonephritis acuta,Chapter XIV: Morbi systematis urogenitalis (N00-N99),false
+N30.0,Cystitis acuta,Chapter XIV: Morbi systematis urogenitalis (N00-N99),true
+N39.0,Infectio tractus urinarii loci non specificati,Chapter XIV: Morbi systematis urogenitalis (N00-N99),true
+N43.3,Hydrocele non specificatum,Chapter XIV: Morbi systematis urogenitalis (N00-N99),false
+N47,Phimosis,Chapter XIV: Morbi systematis urogenitalis (N00-N99),true
+N48.1,Balanitis,Chapter XIV: Morbi systematis urogenitalis (N00-N99),true
+N76.0,Vaginitis acuta,Chapter XIV: Morbi systematis urogenitalis (N00-N99),false
+N94.6,Dysmenorrhoea non specificata,Chapter XIV: Morbi systematis urogenitalis (N00-N99),false
+P05.9,Retardatio crescentiae fetalis non specificata,Chapter XVI: Affectiones periodi perinatalis (P00-P96),false
+P07.3,Aliae partus praematurae,Chapter XVI: Affectiones periodi perinatalis (P00-P96),false
+P22.0,Syndroma distress respiratorii neonatorum,Chapter XVI: Affectiones periodi perinatalis (P00-P96),false
+P55.9,Morbus haemolyticus fetus et neonati non specificatus,Chapter XVI: Affectiones periodi perinatalis (P00-P96),false
+P59.9,Icterus neonatalis non specificatus,Chapter XVI: Affectiones periodi perinatalis (P00-P96),true
+P83.6,Granuloma umbilicale,Chapter XVI: Affectiones periodi perinatalis (P00-P96),false
+P92.0,Vomitus neonatalis,Chapter XVI: Affectiones periodi perinatalis (P00-P96),false
+P92.5,Difficultas suctionis neonatalis,Chapter XVI: Affectiones periodi perinatalis (P00-P96),false
+P92.9,Problema nutritionis neonati non specificatum,Chapter XVI: Affectiones periodi perinatalis (P00-P96),true
+Q21.0,Defectus septi ventricularis,Chapter XVII: Malformationes congenitae (Q00-Q99),false
+Q21.1,Defectus septi atrialis,Chapter XVII: Malformationes congenitae (Q00-Q99),false
+Q25.0,Ductus arteriosus patens,Chapter XVII: Malformationes congenitae (Q00-Q99),false
+Q53.9,Testis non descensus non specificatus,Chapter XVII: Malformationes congenitae (Q00-Q99),false
+Q54.9,Hypospadias non specificata,Chapter XVII: Malformationes congenitae (Q00-Q99),false
+Q65.9,Deformitas congenita coxae non specificata,Chapter XVII: Malformationes congenitae (Q00-Q99),false
+Q66.0,Talipes equinovarus,Chapter XVII: Malformationes congenitae (Q00-Q99),false
+Q90.9,Syndroma Down non specificatum,Chapter XVII: Malformationes congenitae (Q00-Q99),false
+R00.0,Tachycardia non specificata,Chapter XVIII: Symptomata et signa anormales (R00-R99),false
+R04.0,Epistaxis,Chapter XVIII: Symptomata et signa anormales (R00-R99),true
+R05,Tussis,Chapter XVIII: Symptomata et signa anormales (R00-R99),true
+R06.0,Dyspnoea,Chapter XVIII: Symptomata et signa anormales (R00-R99),false
+R06.2,Wheezing,Chapter XVIII: Symptomata et signa anormales (R00-R99),true
+R07.0,Dolor in gutture,Chapter XVIII: Symptomata et signa anormales (R00-R99),true
+R07.4,Dolor in pectore non specificatus,Chapter XVIII: Symptomata et signa anormales (R00-R99),false
+R10.0,Abdomen acutum,Chapter XVIII: Symptomata et signa anormales (R00-R99),false
+R10.4,Dolor abdominis non specificatus,Chapter XVIII: Symptomata et signa anormales (R00-R99),true
+R11,Nausea et vomitus,Chapter XVIII: Symptomata et signa anormales (R00-R99),true
+R19.7,Diarrhoea non specificata,Chapter XVIII: Symptomata et signa anormales (R00-R99),true
+R21,Eruptio cutanea non specificata,Chapter XVIII: Symptomata et signa anormales (R00-R99),true
+R25.1,Tremor non specificatus,Chapter XVIII: Symptomata et signa anormales (R00-R99),false
+R30.0,Dysuria,Chapter XVIII: Symptomata et signa anormales (R00-R99),false
+R36,Excretio uretralis,Chapter XVIII: Symptomata et signa anormales (R00-R99),false
+R50.9,Febris non specificata,Chapter XVIII: Symptomata et signa anormales (R00-R99),true
+R51,Cephalea,Chapter XVIII: Symptomata et signa anormales (R00-R99),true
+R56.0,Convulsiones febriles,Chapter XVIII: Symptomata et signa anormales (R00-R99),true
+R56.8,Convulsiones aliae et non specificatae,Chapter XVIII: Symptomata et signa anormales (R00-R99),false
+R62.8,Retardatio evolutionis physiologicae aliae,Chapter XVIII: Symptomata et signa anormales (R00-R99),false
+R63.3,Difficultas nutritionis et manipulationis alimenti,Chapter XVIII: Symptomata et signa anormales (R00-R99),true
+R63.4,Decrementum ponderis anormale,Chapter XVIII: Symptomata et signa anormales (R00-R99),false
+R63.5,Incrementum ponderis anormale,Chapter XVIII: Symptomata et signa anormales (R00-R99),false
+R68.1,Symptomata non specificata peculiaria infantiae,Chapter XVIII: Symptomata et signa anormales (R00-R99),false
+S00.0,Vulnus superficiale capitis,Chapter XIX: Laesiones traumaticae (S00-T98),false
+S00.9,Vulnus superficiale capitis non specificatum,Chapter XIX: Laesiones traumaticae (S00-T98),false
+S01.0,Vulnus apertum capitis,Chapter XIX: Laesiones traumaticae (S00-T98),false
+S06.0,Concussio cerebri,Chapter XIX: Laesiones traumaticae (S00-T98),true
+S09.9,Laesio capitis non specificata,Chapter XIX: Laesiones traumaticae (S00-T98),false
+S30.0,Contusio dorsi inferioris et pelvis,Chapter XIX: Laesiones traumaticae (S00-T98),false
+S52.5,Fractura extremitatis distalis radii,Chapter XIX: Laesiones traumaticae (S00-T98),false
+S60.2,Contusio digiti manus aliorum sine vulneratione unguinis,Chapter XIX: Laesiones traumaticae (S00-T98),false
+S63.4,Distorsio articulationis interphalangeae digiti manus,Chapter XIX: Laesiones traumaticae (S00-T98),false
+S82.6,Fractura malleoli lateralis,Chapter XIX: Laesiones traumaticae (S00-T98),false
+S93.4,Distorsio articulationis talocruralis,Chapter XIX: Laesiones traumaticae (S00-T98),false
+T14.0,Vulnus superficiale partis corporis non specificatae,Chapter XIX: Laesiones traumaticae (S00-T98),false
+T14.9,Laesio non specificata,Chapter XIX: Laesiones traumaticae (S00-T98),false
+T15.0,Corpus alienum in cornea,Chapter XIX: Laesiones traumaticae (S00-T98),false
+T16,Corpus alienum in aure,Chapter XIX: Laesiones traumaticae (S00-T98),false
+T17.0,Corpus alienum in sinu nasali,Chapter XIX: Laesiones traumaticae (S00-T98),false
+T17.9,Corpus alienum in tractu respiratorio loci non specificati,Chapter XIX: Laesiones traumaticae (S00-T98),false
+T18.9,Corpus alienum in tractu digestivo loci non specificati,Chapter XIX: Laesiones traumaticae (S00-T98),false
+T20.0,Combustio capitis et colli gradus non specificati,Chapter XIX: Laesiones traumaticae (S00-T98),false
+T63.4,Effectus toxicus veneni animalis specificati,Chapter XIX: Laesiones traumaticae (S00-T98),false
+T78.0,Reactio anaphylactica ex alimento adverso,Chapter XIX: Laesiones traumaticae (S00-T98),false
+T78.1,Reactiones adversae alimentariae aliae,Chapter XIX: Laesiones traumaticae (S00-T98),false
+T78.3,Oedema angioneuroticum,Chapter XIX: Laesiones traumaticae (S00-T98),false
+T78.4,Allergia non specificata,Chapter XIX: Laesiones traumaticae (S00-T98),true
+T88.7,Effectus adversus pharmaci non specificatus,Chapter XIX: Laesiones traumaticae (S00-T98),false
+W57,Morsus vel ictus insecti non venenati et arthropodum aliorum non venenatorum,Chapter XX: Causae externae morbiditatis (V01-Y98),false
+W74,Submersio et suffocatio in aqua non specificata,Chapter XX: Causae externae morbiditatis (V01-Y98),false
+X19,Contactus cum corpore calido et substantia calida alia,Chapter XX: Causae externae morbiditatis (V01-Y98),false
+X44,Intoxicatio accidentalis ex exspositionem medicamentis et substantiis biologicis non specificatis,Chapter XX: Causae externae morbiditatis (V01-Y98),false
+Y58.9,Vaccinum bacterialis non specificatum,Chapter XX: Causae externae morbiditatis (V01-Y98),false
+Z00.0,Examen generale et investigatio personarum sine plaintae,Chapter XXI: Factores impedientes statum sanitatis (Z00-Z99),true
+Z00.1,Examen sanitatis pueritiae regulare,Chapter XXI: Factores impedientes statum sanitatis (Z00-Z99),true
+Z00.2,Examen periodi crescentiae rapidae pueritiae,Chapter XXI: Factores impedientes statum sanitatis (Z00-Z99),true
+Z00.3,Examen evolutionis adolescentis,Chapter XXI: Factores impedientes statum sanitatis (Z00-Z99),false
+Z01.0,Examen oculorum et visus,Chapter XXI: Factores impedientes statum sanitatis (Z00-Z99),false
+Z01.1,Examen aurium et auditus,Chapter XXI: Factores impedientes statum sanitatis (Z00-Z99),false
+Z02.0,Examen pro admissione institutionis educationalis,Chapter XXI: Factores impedientes statum sanitatis (Z00-Z99),true
+Z02.1,Examen pro admissione laborem,Chapter XXI: Factores impedientes statum sanitatis (Z00-Z99),false
+Z02.5,Examen pro participationem sportus,Chapter XXI: Factores impedientes statum sanitatis (Z00-Z99),true
+Z03.6,Observatio pro suspicionem effectus toxici substantiae ingestae,Chapter XXI: Factores impedientes statum sanitatis (Z00-Z99),false
+Z11.9,Examen specialis screeningum pro morbi infectiosi et parasitarii non specificatum,Chapter XXI: Factores impedientes statum sanitatis (Z00-Z99),false
+Z13.9,Examen specialis screeningum pro morbi non specificati,Chapter XXI: Factores impedientes statum sanitatis (Z00-Z99),false
+Z20.4,Contactus et exspositio rubeolae,Chapter XXI: Factores impedientes statum sanitatis (Z00-Z99),false
+Z20.7,Contactus et exspositio pediculosi acariasi et infestationibus aliis,Chapter XXI: Factores impedientes statum sanitatis (Z00-Z99),false
+Z20.9,Contactus et exspositio morbi transmissibilis non specificati,Chapter XXI: Factores impedientes statum sanitatis (Z00-Z99),false
+Z23.0,Vaccinatio singularis contra cholera,Chapter XXI: Factores impedientes statum sanitatis (Z00-Z99),false
+Z23.1,Vaccinatio singularis contra typhus et paratyphus,Chapter XXI: Factores impedientes statum sanitatis (Z00-Z99),false
+Z23.2,Vaccinatio singularis contra tuberculosim,Chapter XXI: Factores impedientes statum sanitatis (Z00-Z99),false
+Z24.0,Vaccinatio singularis contra poliomyelitis,Chapter XXI: Factores impedientes statum sanitatis (Z00-Z99),true
+Z24.4,Vaccinatio singularis contra morbillos,Chapter XXI: Factores impedientes statum sanitatis (Z00-Z99),false
+Z24.5,Vaccinatio singularis contra rubeolam,Chapter XXI: Factores impedientes statum sanitatis (Z00-Z99),false
+Z24.6,Vaccinatio singularis contra hepatitidem viralem,Chapter XXI: Factores impedientes statum sanitatis (Z00-Z99),false
+Z25.1,Vaccinatio singularis contra influenzam,Chapter XXI: Factores impedientes statum sanitatis (Z00-Z99),true
+Z25.8,Vaccinatio singularis contra morbi virales alios specificatos,Chapter XXI: Factores impedientes statum sanitatis (Z00-Z99),false
+Z27.0,Vaccinatio combinata contra cholera et typhus-paratyphus,Chapter XXI: Factores impedientes statum sanitatis (Z00-Z99),false
+Z27.3,Vaccinatio combinata contra diphtheriam tetanum pertussim et poliomyelitis,Chapter XXI: Factores impedientes statum sanitatis (Z00-Z99),true
+Z27.4,Vaccinatio combinata contra morbillos parotitidem epidemicam et rubeolam,Chapter XXI: Factores impedientes statum sanitatis (Z00-Z99),true
+Z27.8,Vaccinatio combinata contra alias morbi infectiosos combinationes,Chapter XXI: Factores impedientes statum sanitatis (Z00-Z99),false
+Z27.9,Vaccinatio combinata contra morbi infectiosos non specificata,Chapter XXI: Factores impedientes statum sanitatis (Z00-Z99),true
+Z29.1,Profilaxis cum immunotherapia,Chapter XXI: Factores impedientes statum sanitatis (Z00-Z99),false
+Z29.8,Profilaxis aliae specificatae,Chapter XXI: Factores impedientes statum sanitatis (Z00-Z99),false
+Z51.4,Cura preparatoria pro therapia subsequenti non alibi classificata,Chapter XXI: Factores impedientes statum sanitatis (Z00-Z99),false
+Z71.3,Consultatio dietetica et instructio,Chapter XXI: Factores impedientes statum sanitatis (Z00-Z99),false
+Z71.8,Consultatio specificata alia,Chapter XXI: Factores impedientes statum sanitatis (Z00-Z99),false
+Z76.1,Sanitas et exanimatio infantis suppositorii,Chapter XXI: Factores impedientes statum sanitatis (Z00-Z99),false
+Z76.2,Sanitas et exanimatio infantis et pueri alii,Chapter XXI: Factores impedientes statum sanitatis (Z00-Z99),true
+Z76.3,Persona sana cum aegrotantem comitans,Chapter XXI: Factores impedientes statum sanitatis (Z00-Z99),false

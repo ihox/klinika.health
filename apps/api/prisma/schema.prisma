@@ -1,0 +1,448 @@
+// Klinika — primary database schema.
+//
+// All clinical tables carry `clinic_id` and are protected by Postgres
+// Row-Level Security policies (see migrations/manual/001_rls.sql and
+// docs/decisions/005-multi-tenancy.md). The Prisma client never queries
+// without `clinic_id` scoping; RLS is the second layer of defense.
+//
+// All `TIMESTAMPTZ` columns are stored in UTC and rendered in
+// `Europe/Belgrade` at the UI layer (ADR-006). `created_at` defaults to
+// `now()` at the database level. `updated_at` is maintained by both
+// Prisma (`@updatedAt`) and a Postgres trigger (migrations/manual/002_triggers.sql)
+// so raw-SQL updates also stay correct.
+//
+// Soft delete is the default (ADR-008): the Prisma middleware adds
+// `WHERE deleted_at IS NULL` to all reads. Records are never physically
+// removed in v1.
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = []
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+/// Lifecycle state of a tenant clinic. Suspended clinics keep their data
+/// but reject all logins and API traffic until reactivated by a platform
+/// admin.
+enum ClinicStatus {
+  active
+  suspended
+
+  @@map("clinic_status")
+}
+
+/// Application roles within a clinic. Platform admins live in a separate
+/// table and are not part of any clinic. Per CLAUDE.md §1.2, the
+/// `receptionist` role sees only patient name and date of birth — all
+/// other fields are hidden at UI, API, and RLS layers.
+enum UserRole {
+  doctor
+  receptionist
+  clinic_admin
+
+  @@map("user_role")
+}
+
+/// Lifecycle states of a scheduled appointment.
+enum AppointmentStatus {
+  scheduled
+  completed
+  no_show
+  cancelled
+
+  @@map("appointment_status")
+}
+
+// ---------------------------------------------------------------------------
+// Tenancy
+// ---------------------------------------------------------------------------
+
+/// A clinic is one tenant. Subdomain (`donetamed.klinika.health`) is the
+/// public-facing identifier and is resolved on every request by
+/// `ClinicResolutionMiddleware` (see ADR-005). All clinical tables FK to
+/// `clinic_id`.
+///
+/// `hours_config` and `payment_codes` are clinic-specific JSON so a new
+/// tenant can be onboarded without schema changes.
+/// `smtp_config` is optional — clinics that don't override SMTP fall
+/// back to the platform-wide Resend account.
+model Clinic {
+  id           String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  subdomain    String       @unique
+  name         String
+  shortName    String       @map("short_name")
+  address      String
+  city         String
+  phones       String[]
+  email        String
+  hoursConfig  Json         @map("hours_config")
+  paymentCodes Json         @map("payment_codes")
+  logoUrl      String       @map("logo_url")
+  signatureUrl String       @map("signature_url")
+  smtpConfig   Json?        @map("smtp_config")
+  status       ClinicStatus @default(active)
+  createdAt    DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime     @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt    DateTime?    @map("deleted_at") @db.Timestamptz(6)
+
+  users             User[]
+  patients          Patient[]
+  visits            Visit[]
+  appointments      Appointment[]
+  vertetime         Vertetim[]
+  dicomStudies      DicomStudy[]
+  prescriptionLines PrescriptionLine[]
+
+  @@map("clinics")
+}
+
+/// A user account belonging to one clinic. Email is globally unique so a
+/// single person cannot belong to two clinics — they would need separate
+/// emails (intentional, per ADR-004).
+///
+/// Doctors carry `signature_url` for printed prescriptions and
+/// `vërtetime` documents. Receptionists and clinic admins typically do
+/// not, though the field is available for all roles.
+model User {
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  clinicId     String    @map("clinic_id") @db.Uuid
+  email        String    @unique
+  passwordHash String    @map("password_hash")
+  role         UserRole
+  firstName    String    @map("first_name")
+  lastName     String    @map("last_name")
+  title        String?
+  credential   String?
+  signatureUrl String?   @map("signature_url")
+  isActive     Boolean   @default(true) @map("is_active")
+  lastLoginAt  DateTime? @map("last_login_at") @db.Timestamptz(6)
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt    DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  clinic              Clinic             @relation(fields: [clinicId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  visitsCreated       Visit[]            @relation("VisitCreatedBy")
+  visitsUpdated       Visit[]            @relation("VisitUpdatedBy")
+  appointmentsCreated Appointment[]      @relation("AppointmentCreatedBy")
+  vertetimeIssued     Vertetim[]         @relation("VertetimIssuedBy")
+  dicomLinksCreated   VisitDicomLink[]   @relation("DicomLinkLinkedBy")
+  prescriptionLines   PrescriptionLine[]
+
+  @@index([clinicId])
+  @@map("users")
+}
+
+/// Platform admins (founder, support, on-call ops) — not part of any
+/// clinic. They use a separate Postgres role (`platform_admin_role`)
+/// with `BYPASSRLS` for cross-tenant queries. See ADR-005.
+///
+/// No `deleted_at` — admin accounts are toggled active/inactive instead;
+/// permanent removal is via SQL only.
+model PlatformAdmin {
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email        String    @unique
+  passwordHash String    @map("password_hash")
+  firstName    String    @map("first_name")
+  lastName     String    @map("last_name")
+  isActive     Boolean   @default(true) @map("is_active")
+  lastLoginAt  DateTime? @map("last_login_at") @db.Timestamptz(6)
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("platform_admins")
+}
+
+// ---------------------------------------------------------------------------
+// Clinical core
+// ---------------------------------------------------------------------------
+
+/// A patient (pediatric — DonetaMED's first cohort is ages 0-18).
+/// `legacy_id` is the source `ID` field from the Access migration
+/// (ADR-010) and is unique within a clinic; new patients created after
+/// migration have `legacy_id = NULL`. Patient names migrate with
+/// asterisks stripped per ADR-010.
+///
+/// `alergji_tjera` ("other allergies" in Albanian) is the free-text
+/// allergy field from the Access source. Birth measurements migrate
+/// from `PL`/`Pesha lindjes` and friends; `0` in source maps to NULL.
+model Patient {
+  id                       String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  clinicId                 String    @map("clinic_id") @db.Uuid
+  legacyId                 Int?      @map("legacy_id")
+  firstName                String    @map("first_name")
+  lastName                 String    @map("last_name")
+  dateOfBirth              DateTime  @map("date_of_birth") @db.Date
+  placeOfBirth             String?   @map("place_of_birth")
+  birthWeightG             Int?      @map("birth_weight_g")
+  birthHeadCircumferenceCm Decimal?  @map("birth_head_circumference_cm") @db.Decimal(5, 2)
+  birthLengthCm            Decimal?  @map("birth_length_cm") @db.Decimal(5, 2)
+  alergjiTjera             String?   @map("alergji_tjera") @db.Text
+  phone                    String?
+  createdAt                DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt                DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  clinic       Clinic        @relation(fields: [clinicId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  visits       Visit[]
+  appointments Appointment[]
+  vertetime    Vertetim[]
+
+  @@unique([clinicId, legacyId], name: "patient_clinic_legacy_unique")
+  @@index([clinicId])
+  @@map("patients")
+}
+
+/// A clinical visit. The doctor's daily working surface. Most fields are
+/// optional because doctors fill in only what is relevant. `complaint`,
+/// `examinations`, `prescription`, `lab_results`, `followup_notes`, and
+/// `other_notes` are the main free-text fields and are redacted from all
+/// logs per CLAUDE.md §1.3.
+///
+/// `payment_code` is a single character (E/A/B/C/D) describing the
+/// patient's payment status — preserved from the Access source.
+/// `legacy_diagnosis` is the raw text diagnosis from the Access source;
+/// new visits use the structured `visit_diagnoses` join table against
+/// `icd10_codes`.
+model Visit {
+  id                  String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  clinicId            String    @map("clinic_id") @db.Uuid
+  patientId           String    @map("patient_id") @db.Uuid
+  legacyId            Int?      @map("legacy_id")
+  visitDate           DateTime  @map("visit_date") @db.Date
+  complaint           String?   @db.Text
+  feedingNotes        String?   @map("feeding_notes") @db.Text
+  feedingBreast       Boolean   @default(false) @map("feeding_breast")
+  feedingFormula      Boolean   @default(false) @map("feeding_formula")
+  feedingSolid        Boolean   @default(false) @map("feeding_solid")
+  weightG             Int?      @map("weight_g")
+  heightCm            Decimal?  @map("height_cm") @db.Decimal(5, 2)
+  headCircumferenceCm Decimal?  @map("head_circumference_cm") @db.Decimal(5, 2)
+  temperatureC        Decimal?  @map("temperature_c") @db.Decimal(4, 2)
+  paymentCode         String?   @map("payment_code") @db.Char(1)
+  examinations        String?   @db.Text
+  ultrasoundNotes     String?   @map("ultrasound_notes") @db.Text
+  legacyDiagnosis     String?   @map("legacy_diagnosis") @db.Text
+  prescription        String?   @db.Text
+  labResults          String?   @map("lab_results") @db.Text
+  followupNotes       String?   @map("followup_notes") @db.Text
+  otherNotes          String?   @map("other_notes") @db.Text
+  createdBy           String    @map("created_by") @db.Uuid
+  updatedBy           String    @map("updated_by") @db.Uuid
+  createdAt           DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt           DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  clinic        Clinic           @relation(fields: [clinicId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  patient       Patient          @relation(fields: [patientId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  createdByUser User             @relation("VisitCreatedBy", fields: [createdBy], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  updatedByUser User             @relation("VisitUpdatedBy", fields: [updatedBy], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  diagnoses     VisitDiagnosis[]
+  vertetime     Vertetim[]
+  dicomLinks    VisitDicomLink[]
+
+  @@unique([clinicId, legacyId], name: "visit_clinic_legacy_unique")
+  @@index([clinicId])
+  @@index([patientId])
+  @@map("visits")
+}
+
+/// Structured diagnoses on a visit. Replaces the free-text diagnosis
+/// approach of the Access source. `order_index` preserves the doctor's
+/// chosen ordering (primary diagnosis first by convention).
+model VisitDiagnosis {
+  id         String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  visitId    String @map("visit_id") @db.Uuid
+  icd10Code  String @map("icd10_code")
+  orderIndex Int    @map("order_index")
+
+  visit Visit     @relation(fields: [visitId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  code  Icd10Code @relation(fields: [icd10Code], references: [code], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([visitId])
+  @@index([icd10Code])
+  @@map("visit_diagnoses")
+}
+
+/// WHO ICD-10 catalogue. Pre-populated from
+/// `apps/api/prisma/fixtures/icd10.csv` (Latin descriptions only — UI
+/// shows codes and Latin per CLAUDE.md §1.5). `common = true` flags
+/// frequently-used pediatric codes that surface first in the ICD-10
+/// multi-select.
+model Icd10Code {
+  code             String  @id
+  latinDescription String  @map("latin_description") @db.Text
+  chapter          String
+  common           Boolean @default(false)
+
+  diagnoses VisitDiagnosis[]
+
+  @@index([common])
+  @@map("icd10_codes")
+}
+
+/// Per-doctor index of prescription text snippets, used to power
+/// autocomplete in the prescription field. `use_count` and timestamps
+/// drive ranking (most-used + most-recent first). Owned by both the
+/// user (autocomplete is personal) and the clinic (defense-in-depth for
+/// RLS).
+model PrescriptionLine {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId      String   @map("user_id") @db.Uuid
+  clinicId    String   @map("clinic_id") @db.Uuid
+  lineText    String   @map("line_text") @db.Text
+  useCount    Int      @default(1) @map("use_count")
+  lastUsedAt  DateTime @map("last_used_at") @db.Timestamptz(6)
+  firstUsedAt DateTime @map("first_used_at") @db.Timestamptz(6)
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([userId])
+  @@index([clinicId])
+  @@map("prescription_lines")
+}
+
+// ---------------------------------------------------------------------------
+// Scheduling
+// ---------------------------------------------------------------------------
+
+/// A scheduled appointment. `scheduled_for` is `TIMESTAMPTZ` because the
+/// time matters; the UI renders in Europe/Belgrade.
+model Appointment {
+  id              String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  clinicId        String            @map("clinic_id") @db.Uuid
+  patientId       String            @map("patient_id") @db.Uuid
+  scheduledFor    DateTime          @map("scheduled_for") @db.Timestamptz(6)
+  durationMinutes Int               @map("duration_minutes")
+  status          AppointmentStatus @default(scheduled)
+  createdBy       String            @map("created_by") @db.Uuid
+  createdAt       DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime          @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt       DateTime?         @map("deleted_at") @db.Timestamptz(6)
+
+  clinic        Clinic  @relation(fields: [clinicId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  patient       Patient @relation(fields: [patientId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  createdByUser User    @relation("AppointmentCreatedBy", fields: [createdBy], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([clinicId])
+  @@index([patientId])
+  @@index([scheduledFor])
+  @@map("appointments")
+}
+
+// ---------------------------------------------------------------------------
+// Documents
+// ---------------------------------------------------------------------------
+
+/// Vërtetim — Albanian medical certificate / sick note. Once issued, a
+/// vërtetim is immutable (no `updated_at`, no soft delete) because it's
+/// a legal record. `diagnosis_snapshot` captures the diagnosis text at
+/// the moment of issue so subsequent edits to the visit don't change
+/// the printed document (per CLAUDE.md §1.8).
+model Vertetim {
+  id                String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  clinicId          String   @map("clinic_id") @db.Uuid
+  patientId         String   @map("patient_id") @db.Uuid
+  visitId           String   @map("visit_id") @db.Uuid
+  issuedBy          String   @map("issued_by") @db.Uuid
+  issuedAt          DateTime @map("issued_at") @db.Timestamptz(6)
+  absenceFrom       DateTime @map("absence_from") @db.Date
+  absenceTo         DateTime @map("absence_to") @db.Date
+  diagnosisSnapshot String   @map("diagnosis_snapshot") @db.Text
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  clinic       Clinic  @relation(fields: [clinicId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  patient      Patient @relation(fields: [patientId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  visit        Visit   @relation(fields: [visitId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  issuedByUser User    @relation("VertetimIssuedBy", fields: [issuedBy], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([clinicId])
+  @@index([patientId])
+  @@index([visitId])
+  @@map("vertetime")
+}
+
+// ---------------------------------------------------------------------------
+// DICOM
+// ---------------------------------------------------------------------------
+
+/// A DICOM study received by Orthanc. `orthanc_study_id` is Orthanc's
+/// internal study identifier (used to fetch image data via the proxy).
+/// The image bytes live in Orthanc, not in Postgres; this table is the
+/// index Klinika uses to authorize access and link to visits.
+model DicomStudy {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  clinicId       String   @map("clinic_id") @db.Uuid
+  orthancStudyId String   @map("orthanc_study_id")
+  receivedAt     DateTime @map("received_at") @db.Timestamptz(6)
+  imageCount     Int      @map("image_count")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  clinic Clinic           @relation(fields: [clinicId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  links  VisitDicomLink[]
+
+  @@unique([clinicId, orthancStudyId], name: "dicom_clinic_orthanc_unique")
+  @@index([clinicId])
+  @@map("dicom_studies")
+}
+
+/// Join table: a visit can link to multiple DICOM studies, a study can
+/// link to multiple visits (e.g. follow-up reads). `linked_by` records
+/// which user attached the study.
+model VisitDicomLink {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  visitId      String   @map("visit_id") @db.Uuid
+  dicomStudyId String   @map("dicom_study_id") @db.Uuid
+  linkedAt     DateTime @default(now()) @map("linked_at") @db.Timestamptz(6)
+  linkedBy     String   @map("linked_by") @db.Uuid
+
+  visit        Visit      @relation(fields: [visitId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  dicomStudy   DicomStudy @relation(fields: [dicomStudyId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  linkedByUser User       @relation("DicomLinkLinkedBy", fields: [linkedBy], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([visitId, dicomStudyId], name: "visit_dicom_unique")
+  @@index([visitId])
+  @@index([dicomStudyId])
+  @@map("visit_dicom_links")
+}
+
+// ---------------------------------------------------------------------------
+// Audit
+// ---------------------------------------------------------------------------
+
+/// Append-mostly audit log. Every mutation on clinical or sensitive data
+/// writes a row here (see CLAUDE.md §5.3). Successive saves within 60
+/// seconds by the same user on the same resource coalesce by updating
+/// the most-recent row's `changes` array — this is the only mutation
+/// path. Reads of sensitive resources (chart open, document print)
+/// write rows with `changes = NULL`.
+///
+/// PHI must never appear in this table outside of the `changes` JSONB
+/// field, where it's expected (diff content) and access-controlled.
+/// `ip_address` is `INET` to allow CIDR queries during incident
+/// investigation.
+model AuditLog {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  clinicId     String   @map("clinic_id") @db.Uuid
+  userId       String   @map("user_id") @db.Uuid
+  action       String
+  resourceType String   @map("resource_type")
+  resourceId   String   @map("resource_id") @db.Uuid
+  changes      Json?
+  ipAddress    String   @map("ip_address") @db.Inet
+  userAgent    String   @map("user_agent")
+  sessionId    String   @map("session_id")
+  timestamp    DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([clinicId, timestamp])
+  @@index([resourceType, resourceId])
+  @@map("audit_log")
+}
