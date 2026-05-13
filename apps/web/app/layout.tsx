@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { Inter, Inter_Tight } from 'next/font/google';
+import { ConnectionStatus } from '@/components/connection-status';
 import './globals.css';
 
 const inter = Inter({
@@ -24,7 +25,10 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="sq" className={`${inter.variable} ${interDisplay.variable}`}>
-      <body className="font-sans">{children}</body>
+      <body className="font-sans">
+        {children}
+        <ConnectionStatus />
+      </body>
     </html>
   );
 }

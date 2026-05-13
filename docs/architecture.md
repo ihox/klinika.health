@@ -162,3 +162,149 @@ make db-seed        # populate clinic, users, ICD-10
 
 Re-running `make db-migrate` and `make db-seed` is safe — both are
 idempotent.
+
+## Slice 03 — observability
+
+This slice lays down structured logging with PHI redaction, health
+endpoints, the telemetry agent that phones home every minute, the
+platform-side receiver, the alert engine, and a frontend connection
+indicator. Telemetry is deliberately best-effort (ADR-003); failures
+never crash the host process and never block a clinical request.
+
+### Pino logging
+
+All logs flow through `nestjs-pino` configured in
+[`apps/api/src/common/logging/`](../apps/api/src/common/logging/).
+The configuration is centralised so PHI redaction and request-ID
+propagation apply uniformly across every module.
+
+* **Output.** Structured JSON in production; `pino-pretty` in
+  development (controlled by `NODE_ENV`).
+* **Level.** `info` in production, `debug` in development, `silent`
+  in tests. Override with `LOG_LEVEL`.
+* **Request ID.** Generated per request (UUID v4) or taken from an
+  inbound `x-request-id` header — useful for end-to-end correlation
+  with the SPA. The chosen ID is echoed back as `x-request-id` so the
+  browser knows what to reference.
+* **Standard fields.** Every log line carries `timestamp`, `level`,
+  `requestId`. When the request has been through `ClinicScopeGuard`
+  and the auth pipeline (later slices), `userId` and `clinicId` are
+  attached via `pinoHttp.customProps`.
+* **Health endpoint noise.** `/health*` requests log at `debug`, not
+  `info`, so the 30-second poll from the frontend doesn't drown the
+  signal.
+
+#### PHI redaction
+
+Per CLAUDE.md §1.3, no PHI may appear in logs. Defence-in-depth:
+
+1. **Authors don't log PHI.** Conventional logger calls take
+   identifiers (`{ patientId, visitId }`), never names or free-text.
+2. **Pino redacts.** Every field name on the redaction list resolves
+   to `[Redacted]` at serialisation time. The list — defined in
+   [`redaction.ts`](../apps/api/src/common/logging/redaction.ts) — covers
+   every clinical free-text column, every name/contact field, and
+   wildcards across the common nesting prefixes (`body.*`, `req.body.*`,
+   `patient.*`, `visit.*`, `payload.*`, `changes[*].old/new`).
+3. **Tests enforce the contract.** [`redaction.spec.ts`](../apps/api/src/common/logging/redaction.spec.ts)
+   pipes a real pino instance through an in-memory stream and asserts
+   that nothing leaks for the documented field set.
+
+### Health endpoints
+
+All under `/health` on the API:
+
+| Path | Purpose | Status logic |
+|---|---|---|
+| `GET /health` | Liveness (process alive) | Always 200 if the process answers. |
+| `GET /health/ready` | Readiness — DB reachable | 200 when `SELECT 1` succeeds, 503 otherwise. |
+| `GET /health/deep` | Full snapshot for telemetry | DB latency, Orthanc reachability, CPU/RAM/disk percentages. |
+
+`/health/deep` is never exposed publicly — Caddy 403s it from the
+public internet in production; only the local telemetry agent (same
+host) and authenticated platform admins reach it. The endpoint itself
+performs no auth, by design: the gate lives at the network edge.
+
+### Telemetry agent
+
+Lives in [`apps/api/src/modules/telemetry/`](../apps/api/src/modules/telemetry/).
+Three pg-boss scheduled jobs:
+
+| Job | Schedule | Role | Action |
+|---|---|---|---|
+| `telemetry.heartbeat` | `* * * * *` | every install | Collect snapshot, POST to platform |
+| `telemetry.offline-sweep` | `* * * * *` | platform only | Detect tenants with no recent heartbeat |
+| `telemetry.retention` | `30 3 * * *` | platform only | Prune heartbeats older than 90 days |
+
+The agent role is controlled by `TELEMETRY_ROLE` (`agent` or
+`platform`). The platform tenant runs as `platform` and emits its own
+heartbeats; cloud-hosted and on-premise installs run as `agent`.
+
+**Payload shape** (see [`telemetry.types.ts`](../apps/api/src/modules/telemetry/telemetry.types.ts)):
+metadata only — tenant ID, version, health flags, CPU/RAM/disk
+percentages, queue depth, last-backup timestamp, active sessions,
+error rate. The `telemetry-collector.service.spec.ts` test scans
+every key and value against the redaction field list to verify no
+PHI leaks. The receiver re-runs that check before persisting,
+dropping unexpected keys into a `payload` JSONB column with PHI
+keys stripped.
+
+**Failure handling.** Every error is caught and logged. The agent
+must never crash the host process or block a clinical request.
+Network failures on the heartbeat POST log a warning and return.
+pg-boss start failures log an error and the agent silently no-ops
+until the next boot.
+
+### Alert engine
+
+The engine (see [`alert-engine.service.ts`](../apps/api/src/modules/telemetry/alert-engine.service.ts))
+runs in two modes:
+
+1. **Synchronously**, after each heartbeat is persisted. The
+   `derive()` function maps a payload to zero-or-more alerts using
+   pure rules (disk thresholds, health flags, backup age). Critical
+   alerts get `notifiedAt = now()` on insert and fire the
+   immediate-notification job; warnings stay `notifiedAt = NULL` and
+   are picked up by the daily 9am digest.
+2. **On the platform-side sweep job**, which queries
+   `telemetry_heartbeats` for tenants that have stopped reporting.
+
+**Dedupe.** Every alert carries a `dedupeKey` whose granularity
+matches the alert's natural retry window (per-day for disk, per-hour
+for transient health checks, per-5-minute window for offline detection).
+The engine skips inserts when an identical key already exists.
+
+**Smart grouping.** When the offline sweep finds ≥3 tenants offline
+simultaneously, it downgrades the per-tenant alerts to `warning` and
+inserts a single `critical` `tenant_offline` row scoped to
+`tenant_id='platform'`. The operator gets one page, not three.
+
+### Frontend connection status
+
+[`apps/web/components/connection-status.tsx`](../apps/web/components/connection-status.tsx)
+shows a small corner indicator. Polls `/health/ready` every 30s,
+listens to `window.online/offline` events for fast-path updates, and
+surfaces four states (`online`, `degraded`, `offline`, `unknown`)
+each with an Albanian label and a color (no emoji — CLAUDE.md §1.12).
+A 503 from readiness surfaces as `degraded` (the API is up, the DB
+is not), distinct from a full network drop.
+
+### Tables
+
+Two new tables added by the
+[`20260513150000_telemetry`](../apps/api/prisma/migrations/20260513150000_telemetry/)
+migration:
+
+* `telemetry_heartbeats` — 90-day retention, indexed by
+  `(tenant_id, received_at)`.
+* `telemetry_alerts` — append-only, indexed by `(tenant_id, created_at)`
+  and `(severity, notified_at)`. `dedupeKey` is application-enforced.
+
+Both tables are platform-side only and have no `clinic_id` (they live
+outside the tenant data model — `tenant_id` here is a subdomain
+string, not a UUID FK).
+
+### Runbook
+
+Operator procedures for the three most common alerts (tenant offline,
+backup failed, disk full) live in [`runbook.md`](runbook.md).

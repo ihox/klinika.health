@@ -446,3 +446,67 @@ model AuditLog {
   @@index([resourceType, resourceId])
   @@map("audit_log")
 }
+
+// ---------------------------------------------------------------------------
+// Telemetry (platform-side)
+// ---------------------------------------------------------------------------
+
+/// Severity of a telemetry-derived alert.
+enum AlertSeverity {
+  critical
+  warning
+
+  @@map("alert_severity")
+}
+
+/// Heartbeat received from a tenant install (cloud or on-premise).
+///
+/// Payload is metadata only — CPU/RAM/disk percentages, queue depths,
+/// reachability flags. **Never PHI.** A `tenantId` is the subdomain
+/// (`donetamed`); cloud-hosted installs and the platform tenant emit
+/// heartbeats too. Rows older than 90 days are pruned by a scheduled
+/// job (see `apps/api/src/modules/telemetry/`).
+model TelemetryHeartbeat {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId      String   @map("tenant_id")
+  version       String
+  receivedAt    DateTime @default(now()) @map("received_at") @db.Timestamptz(6)
+  emittedAt     DateTime @map("emitted_at") @db.Timestamptz(6)
+  appHealthy    Boolean  @map("app_healthy")
+  dbHealthy     Boolean  @map("db_healthy")
+  orthancHealthy Boolean @map("orthanc_healthy")
+  cpuPercent    Decimal  @map("cpu_percent") @db.Decimal(5, 2)
+  ramPercent    Decimal  @map("ram_percent") @db.Decimal(5, 2)
+  diskPercent   Decimal  @map("disk_percent") @db.Decimal(5, 2)
+  lastBackupAt  DateTime? @map("last_backup_at") @db.Timestamptz(6)
+  activeSessions Int     @map("active_sessions")
+  queueDepth    Int      @map("queue_depth")
+  errorRate5xx  Int      @map("error_rate_5xx")
+  payload       Json
+
+  @@index([tenantId, receivedAt])
+  @@index([receivedAt])
+  @@map("telemetry_heartbeats")
+}
+
+/// Critical or warning alerts derived from heartbeat anomalies.
+/// Critical alerts trigger immediate notification; warnings are batched
+/// into the daily 9am digest. `dedupeKey` lets the alert engine coalesce
+/// repeated identical conditions (e.g. one disk-full alert per tenant
+/// per day instead of one per heartbeat).
+model TelemetryAlert {
+  id          String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId    String        @map("tenant_id")
+  severity    AlertSeverity
+  kind        String
+  message     String        @db.Text
+  dedupeKey   String        @map("dedupe_key")
+  notifiedAt  DateTime?     @map("notified_at") @db.Timestamptz(6)
+  digestedAt  DateTime?     @map("digested_at") @db.Timestamptz(6)
+  createdAt   DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([tenantId, createdAt])
+  @@index([dedupeKey])
+  @@index([severity, notifiedAt])
+  @@map("telemetry_alerts")
+}
