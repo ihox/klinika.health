@@ -404,3 +404,93 @@ Every auth event writes to `audit_log`:
 `changes` is NULL for these (the action verb is the signal; no
 field-diff applies).
 
+## Slice 05 — platform admin
+
+This slice introduces the `admin.klinika.health` surface: a separate web
+area for platform-level tenant management, with its own auth stack, its
+own audit log, and explicit cross-tenant data access. Documentation
+specific to provisioning a tenant lives in
+[`docs/deployment.md`](deployment.md#provisioning-a-new-tenant).
+
+### Platform admins live outside the tenant model (ADR-005)
+
+The `platform_admins` table is deliberately separate from `users`:
+
+* No `clinic_id` — platform admins are cross-tenant by design.
+* No `deleted_at` — admin accounts are toggled active/inactive instead,
+  with permanent removal via SQL by the founder.
+* The DB role used for queries that legitimately span tenants
+  (`platform_admin_role`) has `BYPASSRLS`. Application code currently
+  runs as a single connection that's also BYPASSRLS-capable; the
+  separation matters more in production where the planned split is one
+  role per access pattern.
+
+Three parallel auth tables back the admin flow:
+
+| Table                  | Purpose                                                                           |
+|------------------------|-----------------------------------------------------------------------------------|
+| `auth_admin_sessions`  | Server-side session storage for platform admins. 8-hour TTL, no remember-me.       |
+| `auth_admin_mfa_codes` | Email-delivered 6-digit codes. MFA fires on every admin login (no trusted device). |
+| `platform_audit_log`   | Append-only record of admin actions (tenant create/suspend/activate, admin create).|
+
+The session cookie name (`klinika_admin_session`) deliberately differs
+from the tenant `klinika_session` so a leaked tenant session can never
+be mistaken for an admin session at the API.
+
+### Suspended tenants
+
+`clinics.status` is one of `active` | `suspended`. When a platform admin
+calls `POST /api/admin/tenants/:id/suspend`:
+
+1. The clinic row flips to `suspended`.
+2. Every active tenant session is revoked with `revoked_reason =
+   'tenant_suspended'` (in the same transaction).
+3. A `tenant.suspended` row is written to `platform_audit_log`.
+
+The
+[`ClinicResolutionMiddleware`](../apps/api/src/common/middleware/clinic-resolution.middleware.ts)
+fetches `status` along with `clinic_id` on every request, and the
+[`ClinicScopeGuard`](../apps/api/src/common/guards/clinic-scope.guard.ts)
+rejects every non-admin request to a suspended tenant subdomain with a
+403 carrying `reason: 'clinic_suspended'`. The web layer's login form
+reads that reason and redirects to `/suspended`.
+
+Activation (`POST /api/admin/tenants/:id/activate`) flips the status
+back. Sessions are NOT auto-resurrected — users sign in fresh. Trusted
+devices remain so MFA isn't required on the first post-resume login.
+
+### Admin endpoints
+
+| Endpoint                                                | Description                                                  |
+|---------------------------------------------------------|--------------------------------------------------------------|
+| `POST /api/admin/auth/login`                            | Email + password. Always returns `mfa_required`.             |
+| `POST /api/admin/auth/mfa/verify`                       | 6-digit code → session cookie.                               |
+| `POST /api/admin/auth/mfa/resend`                       | New code, previous expired.                                  |
+| `GET  /api/admin/auth/me`                               | Profile of the authenticated admin.                          |
+| `POST /api/admin/auth/logout`                           | Revoke session, clear cookie.                                |
+| `GET  /api/admin/tenants`                               | List all tenants with summary metrics.                       |
+| `GET  /api/admin/tenants/subdomain-availability`        | Live subdomain check (format + reserved + uniqueness).       |
+| `POST /api/admin/tenants`                               | Create tenant + first clinic admin user + setup email.       |
+| `GET  /api/admin/tenants/:id`                           | Tenant detail with telemetry, users, recent audit.           |
+| `POST /api/admin/tenants/:id/suspend`                   | Suspend; revoke sessions.                                    |
+| `POST /api/admin/tenants/:id/activate`                  | Activate.                                                    |
+| `GET  /api/admin/platform-admins`                       | List platform admins.                                        |
+| `POST /api/admin/platform-admins`                       | Create platform admin + setup email.                         |
+| `GET  /api/admin/health`                                | Platform-wide rollup (tenant counts, recent alerts, system). |
+
+Every admin endpoint is gated by `AdminAuthGuard` (validates the admin
+session cookie) and the `@AdminScope()` marker (rejects requests that
+arrive on a tenant subdomain instead of `admin.klinika.health`). In
+production the `/admin` path is further gated by Cloudflare Access — see
+[`deployment.md`](deployment.md#cloudflare-access-for-admin).
+
+### Reserved subdomains
+
+Tenant subdomains pass through
+[`validateSubdomain`](../apps/api/src/modules/admin/subdomain-validation.ts)
+on both the create endpoint and the live availability check. The
+reserved-word list blocks names the platform itself serves: `admin`,
+`www`, `api`, `mail`, `support`, `app`, `status`, `help`, `docs`,
+`static`, `cdn`, `auth`, `login`, `staging`, `test`, `dev`,
+`internal`, `klinika`.
+

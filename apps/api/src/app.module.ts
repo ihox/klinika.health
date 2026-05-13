@@ -5,6 +5,7 @@ import { AuditModule } from './common/audit/audit.module';
 import { ClinicResolutionMiddleware } from './common/middleware/clinic-resolution.middleware';
 import { RolesGuard } from './common/guards/roles.guard';
 import { LoggingModule } from './common/logging/logger.module';
+import { AdminModule } from './modules/admin/admin.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { EmailModule } from './modules/email/email.module';
 import { HealthModule } from './modules/health/health.module';
@@ -25,6 +26,7 @@ import { PrismaModule } from './prisma/prisma.module';
     HealthModule,
     TelemetryModule,
     AuthModule,
+    AdminModule,
   ],
   providers: [
     // RolesGuard is global so `@Roles()` works on any handler without

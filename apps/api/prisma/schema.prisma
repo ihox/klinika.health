@@ -128,12 +128,12 @@ model User {
   updatedAt    DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
   deletedAt    DateTime? @map("deleted_at") @db.Timestamptz(6)
 
-  clinic              Clinic             @relation(fields: [clinicId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  visitsCreated       Visit[]            @relation("VisitCreatedBy")
-  visitsUpdated       Visit[]            @relation("VisitUpdatedBy")
-  appointmentsCreated Appointment[]      @relation("AppointmentCreatedBy")
-  vertetimeIssued     Vertetim[]         @relation("VertetimIssuedBy")
-  dicomLinksCreated   VisitDicomLink[]   @relation("DicomLinkLinkedBy")
+  clinic              Clinic                   @relation(fields: [clinicId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  visitsCreated       Visit[]                  @relation("VisitCreatedBy")
+  visitsUpdated       Visit[]                  @relation("VisitUpdatedBy")
+  appointmentsCreated Appointment[]            @relation("AppointmentCreatedBy")
+  vertetimeIssued     Vertetim[]               @relation("VertetimIssuedBy")
+  dicomLinksCreated   VisitDicomLink[]         @relation("DicomLinkLinkedBy")
   prescriptionLines   PrescriptionLine[]
   authSessions        AuthSession[]
   trustedDevices      AuthTrustedDevice[]
@@ -161,7 +161,91 @@ model PlatformAdmin {
   createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt    DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
+  adminSessions        AuthAdminSession[]
+  adminMfaCodes        AuthAdminMfaCode[]
+  platformAuditEntries PlatformAuditLog[]
+
   @@map("platform_admins")
+}
+
+/// Platform-admin session. Parallel to {@link AuthSession} but bound to
+/// {@link PlatformAdmin}, not a clinic user. No `clinic_id` — platform
+/// admins are cross-tenant by design (ADR-005). The cookie name differs
+/// (`klinika_admin_session`) so a leaked tenant session can never be
+/// mistaken for an admin session on the API.
+///
+/// MFA is enforced on every admin login — no trusted-device shortcut —
+/// so this slice does not introduce an `auth_admin_trusted_devices`
+/// counterpart.
+model AuthAdminSession {
+  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  platformAdminId String    @map("platform_admin_id") @db.Uuid
+  tokenHash       String    @unique @map("token_hash")
+  expiresAt       DateTime  @map("expires_at") @db.Timestamptz(6)
+  ipAddress       String    @map("ip_address") @db.Inet
+  userAgent       String    @map("user_agent")
+  deviceLabel     String    @map("device_label")
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  lastUsedAt      DateTime  @default(now()) @map("last_used_at") @db.Timestamptz(6)
+  revokedAt       DateTime? @map("revoked_at") @db.Timestamptz(6)
+  revokedReason   String?   @map("revoked_reason")
+
+  platformAdmin PlatformAdmin @relation(fields: [platformAdminId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([platformAdminId])
+  @@index([expiresAt])
+  @@map("auth_admin_sessions")
+}
+
+/// Pending email MFA code for a platform-admin login. 6 digits, 15-min
+/// TTL, 3-attempt limit. Same shape as {@link AuthMfaCode} but without
+/// `clinic_id` and without the `remember_device` / `extended_ttl`
+/// columns (admin sessions are always short-lived, MFA every login).
+model AuthAdminMfaCode {
+  id               String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  platformAdminId  String    @map("platform_admin_id") @db.Uuid
+  pendingSessionId String    @unique @map("pending_session_id")
+  codeHash         String    @map("code_hash")
+  expiresAt        DateTime  @map("expires_at") @db.Timestamptz(6)
+  attempts         Int       @default(0)
+  consumedAt       DateTime? @map("consumed_at") @db.Timestamptz(6)
+  ipAddress        String    @map("ip_address") @db.Inet
+  userAgent        String    @map("user_agent")
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  platformAdmin PlatformAdmin @relation(fields: [platformAdminId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([platformAdminId])
+  @@index([expiresAt])
+  @@map("auth_admin_mfa_codes")
+}
+
+/// Append-only log of platform-admin actions (tenant creation, suspend,
+/// activate, new admin created, etc). Separate from {@link AuditLog}
+/// because the per-clinic audit log requires both `clinic_id` and a
+/// clinic user — platform admins are neither. Rows are visible to all
+/// platform admins; no RLS. The `targetClinicId` is set when the action
+/// touches a specific tenant (suspend, activate, create), and null for
+/// platform-wide actions (creating another platform admin).
+model PlatformAuditLog {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  platformAdminId String   @map("platform_admin_id") @db.Uuid
+  action          String
+  targetClinicId  String?  @map("target_clinic_id") @db.Uuid
+  resourceType    String   @map("resource_type")
+  resourceId      String   @map("resource_id")
+  metadata        Json?
+  ipAddress       String   @map("ip_address") @db.Inet
+  userAgent       String   @map("user_agent")
+  sessionId       String   @map("session_id")
+  timestamp       DateTime @default(now()) @db.Timestamptz(6)
+
+  platformAdmin PlatformAdmin @relation(fields: [platformAdminId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([platformAdminId, timestamp])
+  @@index([targetClinicId, timestamp])
+  @@index([action, timestamp])
+  @@map("platform_audit_log")
 }
 
 // ---------------------------------------------------------------------------
@@ -471,22 +555,22 @@ enum AlertSeverity {
 /// heartbeats too. Rows older than 90 days are pruned by a scheduled
 /// job (see `apps/api/src/modules/telemetry/`).
 model TelemetryHeartbeat {
-  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  tenantId      String   @map("tenant_id")
-  version       String
-  receivedAt    DateTime @default(now()) @map("received_at") @db.Timestamptz(6)
-  emittedAt     DateTime @map("emitted_at") @db.Timestamptz(6)
-  appHealthy    Boolean  @map("app_healthy")
-  dbHealthy     Boolean  @map("db_healthy")
-  orthancHealthy Boolean @map("orthanc_healthy")
-  cpuPercent    Decimal  @map("cpu_percent") @db.Decimal(5, 2)
-  ramPercent    Decimal  @map("ram_percent") @db.Decimal(5, 2)
-  diskPercent   Decimal  @map("disk_percent") @db.Decimal(5, 2)
-  lastBackupAt  DateTime? @map("last_backup_at") @db.Timestamptz(6)
-  activeSessions Int     @map("active_sessions")
-  queueDepth    Int      @map("queue_depth")
-  errorRate5xx  Int      @map("error_rate_5xx")
-  payload       Json
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId       String    @map("tenant_id")
+  version        String
+  receivedAt     DateTime  @default(now()) @map("received_at") @db.Timestamptz(6)
+  emittedAt      DateTime  @map("emitted_at") @db.Timestamptz(6)
+  appHealthy     Boolean   @map("app_healthy")
+  dbHealthy      Boolean   @map("db_healthy")
+  orthancHealthy Boolean   @map("orthanc_healthy")
+  cpuPercent     Decimal   @map("cpu_percent") @db.Decimal(5, 2)
+  ramPercent     Decimal   @map("ram_percent") @db.Decimal(5, 2)
+  diskPercent    Decimal   @map("disk_percent") @db.Decimal(5, 2)
+  lastBackupAt   DateTime? @map("last_backup_at") @db.Timestamptz(6)
+  activeSessions Int       @map("active_sessions")
+  queueDepth     Int       @map("queue_depth")
+  errorRate5xx   Int       @map("error_rate_5xx")
+  payload        Json
 
   @@index([tenantId, receivedAt])
   @@index([receivedAt])
@@ -499,15 +583,15 @@ model TelemetryHeartbeat {
 /// repeated identical conditions (e.g. one disk-full alert per tenant
 /// per day instead of one per heartbeat).
 model TelemetryAlert {
-  id          String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  tenantId    String        @map("tenant_id")
-  severity    AlertSeverity
-  kind        String
-  message     String        @db.Text
-  dedupeKey   String        @map("dedupe_key")
-  notifiedAt  DateTime?     @map("notified_at") @db.Timestamptz(6)
-  digestedAt  DateTime?     @map("digested_at") @db.Timestamptz(6)
-  createdAt   DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  id         String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId   String        @map("tenant_id")
+  severity   AlertSeverity
+  kind       String
+  message    String        @db.Text
+  dedupeKey  String        @map("dedupe_key")
+  notifiedAt DateTime?     @map("notified_at") @db.Timestamptz(6)
+  digestedAt DateTime?     @map("digested_at") @db.Timestamptz(6)
+  createdAt  DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
 
   @@index([tenantId, createdAt])
   @@index([dedupeKey])
@@ -537,19 +621,19 @@ model TelemetryAlert {
 /// "Më mbaj të kyçur" checkbox — when true, the session lasts 30 days
 /// instead of the default 8 hours.
 model AuthSession {
-  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  userId         String    @map("user_id") @db.Uuid
-  clinicId       String    @map("clinic_id") @db.Uuid
-  tokenHash      String    @unique @map("token_hash")
-  expiresAt      DateTime  @map("expires_at") @db.Timestamptz(6)
-  extendedTtl    Boolean   @default(false) @map("extended_ttl")
-  ipAddress      String    @map("ip_address") @db.Inet
-  userAgent      String    @map("user_agent")
-  deviceLabel    String    @map("device_label")
-  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
-  lastUsedAt     DateTime  @default(now()) @map("last_used_at") @db.Timestamptz(6)
-  revokedAt      DateTime? @map("revoked_at") @db.Timestamptz(6)
-  revokedReason  String?   @map("revoked_reason")
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId        String    @map("user_id") @db.Uuid
+  clinicId      String    @map("clinic_id") @db.Uuid
+  tokenHash     String    @unique @map("token_hash")
+  expiresAt     DateTime  @map("expires_at") @db.Timestamptz(6)
+  extendedTtl   Boolean   @default(false) @map("extended_ttl")
+  ipAddress     String    @map("ip_address") @db.Inet
+  userAgent     String    @map("user_agent")
+  deviceLabel   String    @map("device_label")
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  lastUsedAt    DateTime  @default(now()) @map("last_used_at") @db.Timestamptz(6)
+  revokedAt     DateTime? @map("revoked_at") @db.Timestamptz(6)
+  revokedReason String?   @map("revoked_reason")
 
   user User @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
@@ -564,17 +648,17 @@ model AuthSession {
 /// password every time). On every login, we look up by `(userId,
 /// tokenHash)` and only skip MFA if the row is unrevoked and unexpired.
 model AuthTrustedDevice {
-  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  userId      String    @map("user_id") @db.Uuid
-  clinicId    String    @map("clinic_id") @db.Uuid
-  tokenHash   String    @unique @map("token_hash")
-  label       String
-  expiresAt   DateTime  @map("expires_at") @db.Timestamptz(6)
-  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
-  lastSeenAt  DateTime  @default(now()) @map("last_seen_at") @db.Timestamptz(6)
-  ipAddress   String    @map("ip_address") @db.Inet
-  userAgent   String    @map("user_agent")
-  revokedAt   DateTime? @map("revoked_at") @db.Timestamptz(6)
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId     String    @map("user_id") @db.Uuid
+  clinicId   String    @map("clinic_id") @db.Uuid
+  tokenHash  String    @unique @map("token_hash")
+  label      String
+  expiresAt  DateTime  @map("expires_at") @db.Timestamptz(6)
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  lastSeenAt DateTime  @default(now()) @map("last_seen_at") @db.Timestamptz(6)
+  ipAddress  String    @map("ip_address") @db.Inet
+  userAgent  String    @map("user_agent")
+  revokedAt  DateTime? @map("revoked_at") @db.Timestamptz(6)
 
   user User @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
@@ -613,13 +697,13 @@ model AuthMfaCode {
 /// Drives the per-email rate limit and supports incident forensics
 /// without storing the password attempt itself.
 model AuthLoginAttempt {
-  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  emailLower  String   @map("email_lower")
-  ipAddress   String   @map("ip_address") @db.Inet
-  userAgent   String   @map("user_agent")
-  success     Boolean
-  reason      String?
-  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  emailLower String   @map("email_lower")
+  ipAddress  String   @map("ip_address") @db.Inet
+  userAgent  String   @map("user_agent")
+  success    Boolean
+  reason     String?
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
   @@index([emailLower, createdAt])
   @@index([ipAddress, createdAt])
@@ -630,13 +714,13 @@ model AuthLoginAttempt {
 /// token is delivered in the email link as `?t=<raw>`; the user clicks
 /// it, then types the new password.
 model AuthPasswordResetToken {
-  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  userId      String    @map("user_id") @db.Uuid
-  tokenHash   String    @unique @map("token_hash")
-  expiresAt   DateTime  @map("expires_at") @db.Timestamptz(6)
-  consumedAt  DateTime? @map("consumed_at") @db.Timestamptz(6)
-  ipAddress   String    @map("ip_address") @db.Inet
-  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId     String    @map("user_id") @db.Uuid
+  tokenHash  String    @unique @map("token_hash")
+  expiresAt  DateTime  @map("expires_at") @db.Timestamptz(6)
+  consumedAt DateTime? @map("consumed_at") @db.Timestamptz(6)
+  ipAddress  String    @map("ip_address") @db.Inet
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
 
   user User @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
 

@@ -56,6 +56,20 @@ export class ClinicScopeGuard implements CanActivate {
       throw new ForbiddenException('Klinika nuk u njoh.');
     }
 
+    if (ctx.clinicStatus === 'suspended') {
+      // Suspended clinics keep their data but reject every request —
+      // login, authenticated traffic, password reset — until a
+      // platform admin reactivates. The error code lets the web
+      // layer redirect to `/suspended` instead of showing a generic
+      // 403. Active sessions are also revoked at suspension time
+      // (admin-tenants.service), so an in-flight session can't carry
+      // a user past this guard.
+      throw new ForbiddenException({
+        reason: 'clinic_suspended',
+        message: 'Klinika juaj është pezulluar. Kontaktoni adminin.',
+      });
+    }
+
     if (ctx.userId && req.userId && ctx.clinicId !== req.clinicId) {
       throw new ForbiddenException('Përshtatja klinikë/sesion është e pavlefshme.');
     }

@@ -71,6 +71,7 @@ export class ClinicResolutionMiddleware implements NestMiddleware {
     if (clinic) {
       ctx.clinicId = clinic.id;
       ctx.clinicSubdomain = resolved.subdomain;
+      ctx.clinicStatus = clinic.status;
       req.clinicId = clinic.id;
     } else {
       this.logger.warn(

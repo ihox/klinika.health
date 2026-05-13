@@ -18,6 +18,7 @@ import type { Request } from 'express';
 export interface RequestContext {
   clinicId: string | null;
   clinicSubdomain: string | null;
+  clinicStatus: 'active' | 'suspended' | null;
   userId: string | null;
   role: 'doctor' | 'receptionist' | 'clinic_admin' | 'platform_admin' | null;
   sessionId: string | null;
@@ -37,6 +38,7 @@ export function buildBaseContext(req: RequestWithContext): RequestContext {
   return {
     clinicId: null,
     clinicSubdomain: null,
+    clinicStatus: null,
     userId: null,
     role: null,
     sessionId: null,

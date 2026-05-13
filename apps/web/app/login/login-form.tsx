@@ -60,6 +60,10 @@ export function LoginForm() {
       setFormError('Hyrja dështoi. Provoni përsëri.');
     } catch (err) {
       if (err instanceof ApiError) {
+        if (err.status === 403 && err.body.reason === 'clinic_suspended') {
+          router.replace('/suspended');
+          return;
+        }
         if (err.status === 429) {
           setFormError('Tepër kërkesa. Provoni përsëri pas pak minutash.');
         } else if (err.status === 401) {
