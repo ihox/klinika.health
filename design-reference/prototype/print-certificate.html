@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="sq">
+<head>
+<meta charset="UTF-8">
+<title>Klinika — Vërtetim</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="print-visit.html" disabled>
+<style>
+  body { background: #E7E5E4; min-height: 100vh; }
+
+  .preview-bar {
+    position: sticky;
+    top: 0;
+    background: var(--bg-elevated);
+    border-bottom: 1px solid var(--border);
+    padding: 12px 24px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    z-index: 10;
+    box-shadow: var(--shadow-xs);
+  }
+  .pb-back { display: flex; align-items: center; gap: 6px; color: var(--text-muted); font-size: 13px; }
+  .pb-title { font-family: var(--font-display); font-size: 15px; font-weight: 600; }
+  .pb-sub { font-size: 12px; color: var(--text-muted); }
+  .pb-spacer { flex: 1; }
+
+  .paper-area { padding: 32px; display: flex; justify-content: center; }
+  .paper {
+    width: 148mm;
+    min-height: 210mm;
+    background: white;
+    box-shadow: 0 8px 24px rgba(28,25,23,0.16), 0 2px 8px rgba(28,25,23,0.08);
+    padding: 16mm 16mm 12mm;
+    font-family: 'Inter', system-ui, sans-serif;
+    font-size: 10pt;
+    color: #1c1917;
+    line-height: 1.5;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+  }
+
+  /* Centered letterhead */
+  .cert-letterhead {
+    text-align: center;
+    padding-bottom: 6mm;
+    border-bottom: 2px solid #0F766E;
+    margin-bottom: 10mm;
+  }
+  .cert-letterhead .mark {
+    display: inline-block;
+    margin-bottom: 3mm;
+    color: #0F766E;
+  }
+  .cert-letterhead .name {
+    font-family: 'Inter Tight', sans-serif;
+    font-size: 13pt;
+    font-weight: 700;
+    letter-spacing: -0.005em;
+    color: #0F766E;
+  }
+  .cert-letterhead .meta {
+    font-size: 8pt;
+    color: #57534E;
+    margin-top: 2mm;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .cert-title {
+    text-align: center;
+    font-family: 'Inter Tight', sans-serif;
+    font-size: 26pt;
+    font-weight: 700;
+    letter-spacing: 0.15em;
+    color: #0F766E;
+    margin: 8mm 0 12mm;
+    position: relative;
+  }
+  .cert-title::before, .cert-title::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    width: 25mm;
+    height: 1px;
+    background: #D6D3D1;
+  }
+  .cert-title::before { left: 8mm; }
+  .cert-title::after { right: 8mm; }
+
+  .cert-num {
+    display: flex;
+    justify-content: space-between;
+    font-size: 8.5pt;
+    color: #57534E;
+    margin-bottom: 8mm;
+  }
+  .cert-num strong { color: #1c1917; font-weight: 600; font-variant-numeric: tabular-nums; }
+
+  .cert-body {
+    font-size: 11pt;
+    line-height: 1.7;
+    text-align: justify;
+    text-justify: inter-word;
+    color: #1c1917;
+  }
+  .cert-body strong { font-weight: 600; }
+
+  .cert-dx-box {
+    margin: 8mm auto;
+    padding: 5mm 8mm;
+    border: 1.5px solid #0F766E;
+    border-radius: 3px;
+    text-align: center;
+    max-width: 100mm;
+    background: rgba(204,251,241,0.18);
+  }
+  .cert-dx-box .lab {
+    font-size: 7.5pt;
+    color: #0F766E;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-weight: 700;
+    margin-bottom: 2mm;
+  }
+  .cert-dx-box .dx {
+    font-family: 'Inter Tight', sans-serif;
+    font-size: 12pt;
+    font-style: italic;
+    font-weight: 600;
+    color: #1c1917;
+  }
+  .cert-dx-box .code {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9pt;
+    color: #0F766E;
+    font-style: normal;
+    font-weight: 700;
+    margin-right: 5mm;
+  }
+
+  .cert-period {
+    text-align: center;
+    margin-top: 6mm;
+    font-size: 10pt;
+  }
+  .cert-period strong { font-weight: 600; font-variant-numeric: tabular-nums; }
+
+  .doc-footer {
+    margin-top: auto;
+    padding-top: 12mm;
+    display: grid;
+    grid-template-columns: 1fr 50mm;
+    gap: 10mm;
+    align-items: flex-end;
+  }
+  .sig-col { font-size: 8.5pt; }
+  .sig-col .sig-img { height: 16mm; margin-bottom: 2mm; color: #1c1917; }
+  .sig-col .sig-line { border-top: 1px solid #1c1917; padding-top: 1.5mm; width: 60mm; }
+  .sig-col .name { font-weight: 600; font-size: 9.5pt; }
+  .sig-col .cred { color: #57534E; font-size: 8pt; }
+  .sig-col .date { color: #57534E; font-size: 8pt; margin-top: 5mm; font-variant-numeric: tabular-nums; }
+
+  .stamp-area {
+    height: 50mm;
+    border: 1px dashed #D6D3D1;
+    border-radius: 3px;
+    display: grid;
+    place-items: center;
+    color: #A8A29E;
+    font-size: 8pt;
+    text-align: center;
+    background: repeating-linear-gradient(45deg, transparent 0, transparent 8px, rgba(28,25,23,0.015) 8px, rgba(28,25,23,0.015) 9px);
+  }
+  .stamp-area .lab { text-transform: uppercase; letter-spacing: 0.1em; font-weight: 500; }
+  .stamp-area .sub { font-size: 7pt; color: #C4C0BC; margin-top: 2mm; font-style: italic; }
+
+  @page { size: A5 portrait; margin: 0; }
+  @media print {
+    body { background: white; }
+    .preview-bar { display: none; }
+    .paper-area { padding: 0; }
+    .paper { box-shadow: none; margin: 0; }
+    .stamp-area { border: none; background: none; }
+    .stamp-area .lab, .stamp-area .sub { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="preview-bar">
+  <a href="chart.html" class="pb-back btn btn-ghost btn-sm">← Kthehu</a>
+  <div>
+    <div class="pb-title">Vërtetim · Mungesë në shkollë</div>
+    <div class="pb-sub" id="pbSub">Era Krasniqi · 14.05.2026 · A5</div>
+  </div>
+  <div class="pb-spacer"></div>
+  <button class="btn btn-secondary btn-sm">PDF</button>
+  <button class="btn btn-primary btn-sm" onclick="window.print()">Printo</button>
+</div>
+
+<div class="paper-area">
+  <article class="paper">
+    <header class="cert-letterhead">
+      <div class="mark">
+        <svg width="26" height="26" viewBox="0 0 64 64" fill="none">
+          <path d="M32 54 C 12 40, 8 26, 18 18 C 24 14, 30 16, 32 22 C 34 16, 40 14, 46 18 C 56 26, 52 40, 32 54 Z" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M10 34 L 22 34 L 26 28 L 30 40 L 34 30 L 38 36 L 54 36" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+          <circle cx="54" cy="36" r="2.6" fill="currentColor"/>
+        </svg>
+      </div>
+      <div class="name">OSP DONETA-MED</div>
+      <div class="meta">Ambulanca Specialistike Pediatrike · Prizren, Kosovë<br>
+        Tel: 045 83 00 83 · 043 543 123 · 10:00 – 18:00</div>
+    </header>
+
+    <h1 class="cert-title">VËRTETIM</h1>
+
+    <div class="cert-num">
+      <span>Nr. <strong>2026-0142</strong></span>
+      <span>Data: <strong>14.05.2026</strong></span>
+    </div>
+
+    <div class="cert-body">
+      Me të cilin vërtetohet se nxënësja <strong>Era Krasniqi</strong>, e lindur më <strong>03.08.2023</strong> në <strong>Prizren</strong>, ka munguar në shkollë / kopsht për arsye shëndetësore.
+
+      <div class="cert-dx-box">
+        <div class="lab">Diagnoza</div>
+        <div class="dx"><span class="code">J03.9</span>Tonsillitis acuta</div>
+      </div>
+
+      <div class="cert-period">
+        Ky vërtetim i lëshohet për të arsyetuar mungesat<br>
+        për periudhën <strong id="certPeriodText">14.05.2026 – 18.05.2026</strong> (<strong id="certDaysText">5</strong> ditë).
+      </div>
+    </div>
+
+    <footer class="doc-footer">
+      <div class="sig-col">
+        <svg class="sig-img" viewBox="0 0 200 60" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M 8 42 Q 15 18 32 26 Q 42 32 36 42 Q 28 50 38 38 Q 50 24 64 36 Q 72 44 80 30 Q 90 14 100 28 Q 108 38 118 26 Q 130 12 144 30 Q 152 42 160 30 L 178 14"
+                opacity="0.85"/>
+        </svg>
+        <div class="sig-line"></div>
+        <div class="name">Dr. Taulant Shala</div>
+        <div class="cred">pediatër · DonetaMED</div>
+        <div class="date">14.05.2026 · Prizren</div>
+      </div>
+
+      <div class="stamp-area">
+        <div>
+          <div class="lab">Vendi i vulës</div>
+          <div class="sub">vendoset manualisht</div>
+        </div>
+      </div>
+    </footer>
+  </article>
+</div>
+
+<script>
+  // Parse ?from=YYYY-MM-DD&to=YYYY-MM-DD and inject into the certificate.
+  // Also auto-print when ?print=1 is present.
+  (function () {
+    const params = new URLSearchParams(location.search);
+    const from = params.get('from');
+    const to = params.get('to');
+    if (from && to) {
+      const pad = n => String(n).padStart(2, '0');
+      const parse = s => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
+      const fmt = d => pad(d.getDate()) + '.' + pad(d.getMonth() + 1) + '.' + d.getFullYear();
+      const f = parse(from), t = parse(to);
+      if (!isNaN(f) && !isNaN(t) && t >= f) {
+        const days = Math.round((t - f) / 86400000) + 1;
+        const periodStr = fmt(f) + ' – ' + fmt(t);
+        const pt = document.getElementById('certPeriodText');
+        const dt = document.getElementById('certDaysText');
+        const sub = document.getElementById('pbSub');
+        if (pt) pt.textContent = periodStr;
+        if (dt) dt.textContent = days;
+        if (sub) sub.textContent = 'Era Krasniqi · ' + periodStr + ' · A5';
+      }
+    }
+    if (params.get('print') === '1') {
+      window.addEventListener('load', () => {
+        setTimeout(() => window.print(), 250);
+      });
+    }
+  })();
+</script>
+
+</body>
+</html>

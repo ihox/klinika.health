@@ -1,0 +1,898 @@
+<!DOCTYPE html>
+<html lang="sq">
+<head>
+<meta charset="UTF-8">
+<title>Klinika — Booking flow paths</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="styles.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Inter+Tight:wght@500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-ui);
+    margin: 0;
+    padding: 32px 40px 80px;
+  }
+
+  .pg-head {
+    max-width: 1700px;
+    margin: 0 auto 28px;
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 24px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid var(--border-soft);
+  }
+  .pg-head h1 { font-size: 26px; font-weight: 600; letter-spacing: -0.02em; }
+  .pg-head p { color: var(--text-muted); font-size: 13px; line-height: 1.55; max-width: 720px; margin-top: 6px; }
+  .pg-head .meta {
+    font-family: var(--font-mono); font-size: 11px;
+    color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.08em;
+  }
+
+  .wrap { max-width: 1700px; margin: 0 auto; }
+
+  .sec { margin-top: 36px; }
+  .sec h2 {
+    font-size: 13px; font-weight: 600; color: var(--text-strong);
+    letter-spacing: 0.08em; text-transform: uppercase;
+    margin-bottom: 14px; padding-bottom: 8px; border-bottom: 1px solid var(--border-soft);
+    font-family: var(--font-mono);
+  }
+  .sec .desc {
+    font-size: 13px; color: var(--text-muted); line-height: 1.6;
+    max-width: 760px; margin-bottom: 18px;
+  }
+
+  /* ===== Card chrome ===== */
+  .card {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-soft);
+    border-radius: 14px;
+    overflow: hidden;
+    display: grid; grid-template-rows: auto 1fr auto;
+  }
+  .card .card-head {
+    padding: 14px 18px 12px;
+    border-bottom: 1px solid var(--border-soft);
+    background: var(--bg-subtle);
+    display: flex; align-items: flex-start; justify-content: space-between;
+    gap: 12px;
+  }
+  .card .card-head .num {
+    font-family: var(--font-mono); font-size: 10.5px;
+    color: var(--text-faint); letter-spacing: 0.08em;
+  }
+  .card .card-head h3 {
+    font-family: var(--font-display); font-size: 14.5px; font-weight: 600;
+    color: var(--text-strong); letter-spacing: -0.005em; margin-top: 2px;
+  }
+  .card .card-head .tag {
+    font-family: var(--font-mono); font-size: 10px;
+    padding: 3px 8px; border-radius: 999px;
+    letter-spacing: 0.04em; white-space: nowrap;
+    color: var(--teal-800); background: var(--teal-50); border: 1px solid var(--teal-200);
+  }
+  .card-foot {
+    padding: 14px 18px 16px;
+    border-top: 1px solid var(--border-soft);
+    font-size: 12px;
+    color: var(--text-muted);
+    line-height: 1.55;
+  }
+  .card-foot strong { color: var(--text); font-weight: 600; }
+  .card-stage {
+    padding: 22px 22px;
+    background:
+      radial-gradient(800px 300px at 50% 100%, rgba(13,148,136,0.04), transparent 60%),
+      linear-gradient(180deg, #fafaf7 0%, #f4f3ed 100%);
+    min-height: 460px;
+    display: grid; place-items: center;
+    position: relative;
+  }
+
+  /* ===== Path 1 specific: tiny calendar + popover ===== */
+  .cal-mini {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-soft);
+    border-radius: var(--r-md);
+    width: 380px;
+    overflow: hidden;
+    position: relative;
+  }
+  .cal-mini-head {
+    padding: 9px 12px;
+    border-bottom: 1px solid var(--border-soft);
+    font-family: var(--font-display); font-size: 12.5px; font-weight: 600;
+    color: var(--text-strong);
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .cal-mini-head .pill {
+    font-family: var(--font-mono); font-size: 9px;
+    color: var(--text-muted); background: var(--bg-subtle);
+    padding: 2px 6px; border-radius: 999px;
+    letter-spacing: 0.04em;
+  }
+  .cal-mini-grid {
+    display: grid; grid-template-columns: 40px 1fr 1fr; min-height: 280px;
+    font-variant-numeric: tabular-nums;
+  }
+  .cal-mini-time {
+    background: var(--bg-subtle);
+    border-right: 1px solid var(--border-soft);
+    padding: 4px 0;
+    position: relative;
+  }
+  .cal-mini-time div {
+    height: 30px;
+    font-size: 9.5px;
+    color: var(--text-faint);
+    padding: 0 6px;
+    border-bottom: 1px dashed transparent;
+  }
+  .cal-mini-day {
+    border-right: 1px solid var(--border-soft);
+    position: relative;
+    padding: 4px 4px;
+    background:
+      repeating-linear-gradient(
+        to bottom,
+        transparent 0,
+        transparent 29px,
+        var(--border-soft) 29px,
+        var(--border-soft) 30px
+      );
+  }
+  .cal-mini-day:last-child { border-right: none; }
+  .cal-mini-day .head {
+    font-size: 10px; color: var(--text-muted);
+    text-transform: uppercase; letter-spacing: 0.06em;
+    padding: 0 4px 4px;
+    border-bottom: 1px solid var(--border-soft);
+    margin-bottom: 4px;
+  }
+  .cal-mini-day .head strong { color: var(--text); font-weight: 600; font-size: 13px; }
+  .mini-appt {
+    position: absolute; left: 6px; right: 6px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--teal-200);
+    border-left: 2px solid var(--primary);
+    border-radius: 3px;
+    padding: 2px 4px;
+    font-size: 9px;
+    color: var(--text);
+    overflow: hidden;
+    box-shadow: var(--shadow-xs);
+    line-height: 1.2;
+  }
+  .mini-appt.completed { background: var(--green-bg); border-color: var(--green-soft); border-left-color: var(--green); opacity: 0.7; }
+  .mini-appt .nm { font-weight: 600; font-size: 9.5px; }
+  .mini-appt .mt { color: var(--text-muted); font-size: 8.5px; margin-top: 1px; }
+
+  .mini-ghost {
+    position: absolute; left: 6px; right: 6px;
+    border: 1px dashed var(--teal-400);
+    background: rgba(204,251,241,0.55);
+    border-radius: 3px;
+    padding: 2px 4px;
+    color: var(--primary-dark);
+    font-size: 9.5px;
+    font-weight: 500;
+    display: flex; align-items: center; gap: 4px;
+    box-shadow: 0 1px 2px rgba(13,148,136,0.08);
+  }
+  .mini-ghost .plus {
+    width: 11px; height: 11px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--teal-300);
+    border-radius: 2px;
+    display: grid; place-items: center;
+    color: var(--primary); font-weight: 700;
+    font-size: 9px; line-height: 1;
+  }
+
+  /* ===== Picker popover replica ===== */
+  .picker-replica {
+    position: absolute;
+    width: 280px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: var(--r-lg);
+    box-shadow: 0 18px 48px rgba(28,25,23,0.22), 0 2px 6px rgba(28,25,23,0.08);
+    overflow: hidden;
+    z-index: 10;
+  }
+  .picker-replica .pp-h {
+    padding: 11px 13px 9px;
+    border-bottom: 1px solid var(--border-soft);
+    background: var(--bg-subtle);
+    display: flex; justify-content: space-between; align-items: flex-start;
+  }
+  .picker-replica .eyebrow {
+    font-family: var(--font-mono); font-size: 10px;
+    color: var(--text-muted); letter-spacing: 0.06em;
+    text-transform: uppercase; margin-bottom: 2px;
+  }
+  .picker-replica .ctx {
+    font-family: var(--font-display); font-size: 12.5px; font-weight: 600;
+    color: var(--text-strong); font-variant-numeric: tabular-nums;
+  }
+  .picker-replica .x { color: var(--text-muted); font-size: 16px; line-height: 1; }
+  .picker-replica .pp-s {
+    padding: 9px 11px;
+    border-bottom: 1px solid var(--border-soft);
+    position: relative;
+  }
+  .picker-replica .pp-s .ico {
+    position: absolute; left: 21px; top: 50%; transform: translateY(-50%);
+    color: var(--text-faint);
+  }
+  .picker-replica .pp-s .input-stub {
+    padding: 7px 10px 7px 30px;
+    border: 1px solid var(--primary);
+    box-shadow: var(--focus-ring);
+    border-radius: var(--r-md);
+    background: var(--bg);
+    font-size: 12.5px;
+    color: var(--text);
+    font-family: var(--font-ui);
+  }
+  .picker-replica .pp-s .input-stub .caret {
+    display: inline-block;
+    width: 1px; height: 12px;
+    background: var(--primary);
+    vertical-align: -2px;
+    animation: blink 1s steps(2) infinite;
+  }
+  @keyframes blink { 50% { opacity: 0; } }
+  .picker-replica .pp-r {
+    padding: 4px 0;
+  }
+  .picker-replica .pp-r .row {
+    padding: 7px 13px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .picker-replica .pp-r .row.focused { background: var(--bg-subtle); }
+  .picker-replica .pp-r .row .nm { font-size: 12px; font-weight: 600; color: var(--text-strong); }
+  .picker-replica .pp-r .row .db { font-size: 10.5px; color: var(--text-muted); margin-top: 1px; }
+  .picker-replica .pp-r .row .vc {
+    font-size: 9.5px; color: var(--text-muted);
+    padding: 2px 5px; background: var(--bg-subtle); border-radius: 3px;
+  }
+  .picker-replica .pp-add {
+    padding: 9px 13px;
+    background: var(--bg-subtle);
+    border-top: 1px solid var(--border);
+    color: var(--primary-dark);
+    font-size: 11.5px; font-weight: 500;
+    display: flex; align-items: center; gap: 7px;
+  }
+  .picker-replica .pp-add .plus {
+    width: 16px; height: 16px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--teal-300);
+    border-radius: 3px;
+    display: grid; place-items: center;
+    color: var(--primary); font-weight: 700;
+    font-size: 11px; line-height: 1;
+  }
+
+  /* ===== Booking dialog replica (smaller) ===== */
+  .dlg-replica {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: var(--r-lg);
+    box-shadow: 0 24px 64px rgba(28,25,23,0.18), 0 4px 12px rgba(28,25,23,0.08);
+    width: 100%; max-width: 420px;
+    overflow: hidden;
+    display: flex; flex-direction: column;
+  }
+  .dlg-replica > header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 18px 12px;
+    border-bottom: 1px solid var(--border-soft);
+  }
+  .dlg-replica h4 {
+    font-family: var(--font-display); font-size: 15.5px; font-weight: 600;
+    letter-spacing: -0.01em; color: var(--text-strong); margin: 0;
+  }
+  .dlg-replica .x {
+    color: var(--text-muted); font-size: 18px;
+    width: 26px; height: 26px;
+    display: grid; place-items: center;
+  }
+  .dlg-body { padding: 14px 18px 4px; display: grid; gap: 14px; }
+  .dlg-pat {
+    background: var(--bg-subtle);
+    border: 1px solid var(--border-soft);
+    border-radius: var(--r-md);
+    padding: 10px 12px;
+  }
+  .dlg-pat .eyebrow {
+    font-family: var(--font-mono); font-size: 10px;
+    color: var(--text-muted); letter-spacing: 0.06em;
+    text-transform: uppercase; margin-bottom: 5px;
+  }
+  .dlg-pat .row { display: flex; align-items: center; gap: 9px; }
+  .dlg-pat .av {
+    width: 30px; height: 30px;
+    border-radius: 999px;
+    background: var(--teal-700); color: white;
+    display: grid; place-items: center;
+    font-family: var(--font-display); font-weight: 600; font-size: 12px;
+  }
+  .dlg-pat .name {
+    font-family: var(--font-display); font-size: 13.5px; font-weight: 600;
+    color: var(--text-strong);
+  }
+  .dlg-pat .meta {
+    font-size: 11px; color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .dlg-row { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
+  .dlg-field { display: flex; flex-direction: column; gap: 4px; }
+  .dlg-field > span {
+    font-family: var(--font-mono); font-size: 10px;
+    color: var(--text-muted); letter-spacing: 0.06em; text-transform: uppercase;
+  }
+  .dlg-field .stub {
+    font-variant-numeric: tabular-nums;
+    padding: 8px 10px;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--r-md);
+    background: var(--bg-elevated);
+    font-size: 12.5px;
+    color: var(--text);
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .dlg-field .stub .chev { color: var(--text-faint); font-size: 10px; }
+  .dlg-field .stub.empty { color: var(--text-faint); font-style: italic; }
+  .dlg-field .stub.prefilled {
+    background: var(--teal-50);
+    border-color: var(--teal-300);
+    color: var(--teal-900);
+    font-style: normal;
+  }
+
+  .dlg-dur .lab {
+    font-family: var(--font-mono); font-size: 10px;
+    color: var(--text-muted); letter-spacing: 0.06em; text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+  .dlg-dur-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+
+  .dur {
+    background: var(--bg-elevated);
+    border: 1.5px solid var(--border-strong);
+    border-radius: var(--r-md);
+    padding: 10px 12px;
+    min-height: 54px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .dur .num {
+    font-family: var(--font-display); font-size: 18px; font-weight: 600;
+    color: var(--text-strong);
+    font-variant-numeric: tabular-nums;
+  }
+  .dur .num span {
+    font-family: var(--font-ui); font-size: 11.5px; font-weight: 500;
+    color: var(--text-muted); margin-left: 3px;
+  }
+  .dur .dot {
+    width: 18px; height: 18px;
+    border-radius: 999px;
+    border: 1.5px solid var(--border-strong);
+    background: var(--bg-elevated);
+  }
+
+  .dlg-replica > footer {
+    padding: 11px 18px 14px;
+    display: flex; justify-content: flex-end; gap: 8px;
+    border-top: 1px solid var(--border-soft);
+    background: var(--bg-subtle);
+    margin-top: 10px;
+  }
+  .btn-stub {
+    padding: 7px 13px;
+    border-radius: var(--r-md);
+    font-size: 12.5px;
+    font-weight: 500;
+  }
+  .btn-stub.ghost { color: var(--text-muted); }
+  .btn-stub.primary.disabled {
+    background: var(--bg-muted); color: var(--text-faint);
+  }
+
+  /* Annotation badge */
+  .annot {
+    position: absolute;
+    background: var(--bg-elevated);
+    border: 1px solid var(--teal-300);
+    color: var(--teal-800);
+    font-family: var(--font-mono);
+    font-size: 10px;
+    padding: 4px 9px;
+    border-radius: 999px;
+    box-shadow: var(--shadow-sm);
+    white-space: nowrap;
+  }
+  .annot.amber { border-color: #FDE68A; background: #FFFBEB; color: #92400E; }
+  .annot.muted { border-color: var(--border); background: var(--bg-subtle); color: var(--text-muted); }
+  .annot::before {
+    content: ''; position: absolute;
+    width: 28px; height: 1px;
+    background: var(--teal-300);
+    top: 50%;
+    transform-origin: left center;
+  }
+  .annot.amber::before { background: #FDE68A; }
+  .annot.muted::before { background: var(--border); }
+  .annot.right::before { right: -28px; }
+  .annot.left::before { left: -28px; transform: rotate(180deg); transform-origin: right center; }
+
+  /* ===== Path comparison ===== */
+  .path-diagram {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-soft);
+    border-radius: 14px;
+    padding: 24px 28px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 32px;
+  }
+  .path-col h3 {
+    font-family: var(--font-display);
+    font-size: 16px; font-weight: 600;
+    color: var(--text-strong);
+    margin-bottom: 4px;
+  }
+  .path-col .sub {
+    font-size: 11.5px;
+    color: var(--text-muted);
+    margin-bottom: 16px;
+  }
+  .path-steps {
+    display: grid; gap: 8px;
+  }
+  .path-step {
+    display: grid;
+    grid-template-columns: 32px 1fr;
+    gap: 12px;
+    align-items: flex-start;
+  }
+  .path-step .num {
+    width: 24px; height: 24px;
+    border-radius: 999px;
+    background: var(--teal-50);
+    color: var(--primary-dark);
+    border: 1px solid var(--teal-200);
+    display: grid; place-items: center;
+    font-family: var(--font-mono); font-size: 11px; font-weight: 600;
+    flex-shrink: 0;
+  }
+  .path-step .txt {
+    font-size: 13px; color: var(--text); line-height: 1.55;
+    padding-top: 3px;
+  }
+  .path-step .txt strong { color: var(--text-strong); font-weight: 600; }
+  .path-step .txt .meta { color: var(--text-muted); font-size: 11.5px; }
+
+  /* Comparison table */
+  .comp-table {
+    margin-top: 28px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-soft);
+    border-radius: 14px;
+    overflow: hidden;
+  }
+  .comp-table table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+  .comp-table th {
+    text-align: left;
+    padding: 12px 18px;
+    background: var(--bg-subtle);
+    font-family: var(--font-mono); font-size: 11px;
+    color: var(--text-muted);
+    letter-spacing: 0.06em; text-transform: uppercase;
+    font-weight: 500;
+    border-bottom: 1px solid var(--border-soft);
+  }
+  .comp-table td {
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--border-soft);
+    color: var(--text);
+  }
+  .comp-table tr:last-child td { border-bottom: none; }
+  .comp-table td.field {
+    font-family: var(--font-mono); font-size: 12px;
+    color: var(--text-muted);
+    background: var(--bg-subtle);
+    width: 130px;
+    border-right: 1px solid var(--border-soft);
+  }
+  .comp-table td.filled { color: var(--text); }
+  .comp-table td.empty { color: var(--text-faint); font-style: italic; }
+  .comp-table .pill {
+    display: inline-block;
+    font-family: var(--font-mono); font-size: 10px;
+    padding: 2px 7px; border-radius: 999px;
+    letter-spacing: 0.04em;
+    margin-left: 6px;
+  }
+  .comp-table .pill.fill { background: var(--teal-50); color: var(--teal-800); border: 1px solid var(--teal-200); }
+  .comp-table .pill.empty { background: var(--bg-subtle); color: var(--text-muted); border: 1px solid var(--border); }
+
+  /* Grid layouts */
+  .mock-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 20px;
+  }
+</style>
+</head>
+<body>
+
+<div class="pg-head">
+  <div>
+    <h1>Booking flow · dy rrugëhyrjet</h1>
+    <p>Caktimi i terminit ka dy fillime: tap-im në një orar të lirë në kalendar (Path 1) ose përdorim i kërkimit global (Path 2). Të dy ndajnë të njëjtin dialog — vetëm <em>çfarë</em> parazgjidhet ndryshon.</p>
+  </div>
+  <div class="meta">v1.0 · receptionist · tablet-first</div>
+</div>
+
+<div class="wrap">
+
+  <!-- ============ ROW 1 — MOCKUPS ============ -->
+  <section class="sec">
+    <h2>Mockup-et</h2>
+    <p class="desc">Nga e majta në të djathtë: hapi i parë i Path 1 (popover-i i pacientit i ankoruar te slot-i), dialogu i hapur përmes Path 1, dhe dialogu i hapur përmes Path 2.</p>
+
+    <div class="mock-row">
+
+      <!-- ============ Path 1, step 1 — slot tap → picker popover ============ -->
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <div class="num">01 · PATH 1</div>
+            <h3>Tap-im te slot-i i lirë</h3>
+          </div>
+          <span class="tag">slot → patient</span>
+        </div>
+        <div class="card-stage">
+          <div class="cal-mini">
+            <div class="cal-mini-head">
+              <span>14 maj · sot</span>
+              <span class="pill">10:00–12:00</span>
+            </div>
+            <div class="cal-mini-grid">
+              <div class="cal-mini-time">
+                <div>10:00</div>
+                <div>10:30</div>
+                <div>11:00</div>
+                <div>11:30</div>
+              </div>
+              <div class="cal-mini-day">
+                <div class="head">Mar · <strong>14</strong></div>
+                <div class="mini-appt completed" style="top: 34px; height: 22px;">
+                  <div class="nm">Era B.</div><div class="mt">10:00 · 15m</div>
+                </div>
+                <div class="mini-appt completed" style="top: 58px; height: 18px;">
+                  <div class="nm">Dion H.</div><div class="mt">10:30 · 10m</div>
+                </div>
+                <!-- Ghost slot at 10:50 -->
+                <div class="mini-ghost" style="top: 78px; height: 14px;">
+                  <span class="plus">+</span> Termin i ri · 10:50
+                </div>
+              </div>
+              <div class="cal-mini-day">
+                <div class="head">Mër · 15</div>
+                <div class="mini-appt" style="top: 34px; height: 22px;">
+                  <div class="nm">Klea H.</div><div class="mt">10:00 · 15m</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Picker popover anchored to the ghost slot -->
+            <div class="picker-replica" style="top: 24px; left: 200px;">
+              <div class="pp-h">
+                <div>
+                  <div class="eyebrow">Cakto për</div>
+                  <div class="ctx">E martë, 14 maj · 10:50</div>
+                </div>
+                <div class="x">×</div>
+              </div>
+              <div class="pp-s">
+                <span class="ico">
+                  <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <circle cx="7" cy="7" r="5"/><path d="M11 11l3 3" stroke-linecap="round"/>
+                  </svg>
+                </span>
+                <div class="input-stub">Rit<span class="caret"></span></div>
+              </div>
+              <div class="pp-r">
+                <div class="row focused">
+                  <div>
+                    <div class="nm">Rita Hoxha</div>
+                    <div class="db">12.02.2024 · 2v 3m</div>
+                  </div>
+                  <span class="vc">14 viz.</span>
+                </div>
+                <div class="row">
+                  <div>
+                    <div class="nm">Rita Hoxhaj</div>
+                    <div class="db">15.02.2024 · 2v 2m</div>
+                  </div>
+                  <span class="vc">3 viz.</span>
+                </div>
+                <div class="row">
+                  <div>
+                    <div class="nm">Rinor Hoxha</div>
+                    <div class="db">07.11.2022 · 3v 6m</div>
+                  </div>
+                  <span class="vc">9 viz.</span>
+                </div>
+              </div>
+              <div class="pp-add">
+                <span class="plus">+</span> Shto pacient të ri · "Rit"
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="card-foot">
+          <strong>Hapi 1.</strong> Recepsionistja prek slot-in e zbrazët në kalendar. Popover-i hapet i ankoruar tek slot-i, me input-in tashmë në fokus dhe header-in që konfirmon çfarë po cakton — <em>E martë, 14 maj · 10:50</em>.
+        </div>
+      </div>
+
+      <!-- ============ Path 1, step 2 — booking dialog (date+time prefilled) ============ -->
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <div class="num">02 · PATH 1</div>
+            <h3>Dialog · date + time janë parazgjedhur</h3>
+          </div>
+          <span class="tag">prefilled</span>
+        </div>
+        <div class="card-stage">
+          <div class="dlg-replica">
+            <header>
+              <h4>Cakto termin</h4>
+              <div class="x">×</div>
+            </header>
+            <div class="dlg-body">
+              <div class="dlg-pat">
+                <div class="eyebrow">Pacienti</div>
+                <div class="row">
+                  <div class="av">RH</div>
+                  <div>
+                    <div class="name">Rita Hoxha</div>
+                    <div class="meta">DL 12.02.2024 · 2v 3m</div>
+                  </div>
+                </div>
+              </div>
+              <div class="dlg-row">
+                <div class="dlg-field">
+                  <span>Data</span>
+                  <div class="stub prefilled">14.05.2026 <span class="chev">▾</span></div>
+                </div>
+                <div class="dlg-field">
+                  <span>Ora</span>
+                  <div class="stub prefilled">10:50 <span class="chev">▾</span></div>
+                </div>
+              </div>
+              <div class="dlg-dur">
+                <div class="lab">Kohëzgjatja · zgjidhe</div>
+                <div class="dlg-dur-grid">
+                  <div class="dur"><span class="num">10<span> min</span></span><span class="dot"></span></div>
+                  <div class="dur"><span class="num">15<span> min</span></span><span class="dot"></span></div>
+                </div>
+              </div>
+            </div>
+            <footer>
+              <span class="btn-stub ghost">Anulo</span>
+              <span class="btn-stub primary disabled">Cakto termin</span>
+            </footer>
+          </div>
+        </div>
+        <div class="card-foot">
+          <strong>Hapi 2 (Path 1).</strong> Pas zgjedhjes së pacientit, dialogu hapet me <strong>data dhe ora të mbushura</strong> automatikisht nga slot-i — ngjyrë teal për të theksuar parazgjedhjen. Vetëm kohëzgjatja mbetet bosh, sepse ajo është vendimi kryesor i recepsionistes.
+        </div>
+      </div>
+
+      <!-- ============ Path 2 — search → dialog (time empty) ============ -->
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <div class="num">03 · PATH 2</div>
+            <h3>Dialog · vetëm data parazgjedhur</h3>
+          </div>
+          <span class="tag">search-first</span>
+        </div>
+        <div class="card-stage">
+          <div class="dlg-replica">
+            <header>
+              <h4>Cakto termin</h4>
+              <div class="x">×</div>
+            </header>
+            <div class="dlg-body">
+              <div class="dlg-pat">
+                <div class="eyebrow">Pacienti</div>
+                <div class="row">
+                  <div class="av">RH</div>
+                  <div>
+                    <div class="name">Rita Hoxha</div>
+                    <div class="meta">DL 12.02.2024 · 2v 3m</div>
+                  </div>
+                </div>
+              </div>
+              <div class="dlg-row">
+                <div class="dlg-field">
+                  <span>Data</span>
+                  <div class="stub prefilled">14.05.2026 <span class="chev">▾</span></div>
+                </div>
+                <div class="dlg-field">
+                  <span>Ora</span>
+                  <div class="stub empty">Zgjidh orarin... <span class="chev">▾</span></div>
+                </div>
+              </div>
+              <div class="dlg-dur">
+                <div class="lab">Kohëzgjatja · zgjidhe</div>
+                <div class="dlg-dur-grid">
+                  <div class="dur"><span class="num">10<span> min</span></span><span class="dot"></span></div>
+                  <div class="dur"><span class="num">15<span> min</span></span><span class="dot"></span></div>
+                </div>
+              </div>
+            </div>
+            <footer>
+              <span class="btn-stub ghost">Anulo</span>
+              <span class="btn-stub primary disabled">Cakto termin</span>
+            </footer>
+          </div>
+        </div>
+        <div class="card-foot">
+          <strong>Path 2.</strong> Kur dialogu hapet nga kërkimi, vetëm data është parazgjedhur (sot). Ora është bosh me placeholder <em>"Zgjidh orarin..."</em>; recepsionistja zgjedh manualisht nga lista që tregon orarët e zënë si të çaktivizuar.
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ============ ROW 2 — PATH DIAGRAM ============ -->
+  <section class="sec">
+    <h2>Krahasimi i rrugëhyrjeve</h2>
+    <p class="desc">Të dy rrugët bashkohen në të njëjtin dialog. Vetëm parazgjedhja e fushave ndryshon — kjo është thelbi i krahasimit.</p>
+
+    <div class="path-diagram">
+      <div class="path-col">
+        <h3>Path 1 · Slot-first</h3>
+        <div class="sub">~80% e rasteve · recepsionistja sheh kalendarin dhe zgjedh slot-in</div>
+        <div class="path-steps">
+          <div class="path-step">
+            <div class="num">1</div>
+            <div class="txt">Prek një slot të lirë në kalendar <div class="meta">hover tregon "+ Termin i ri · 10:50"</div></div>
+          </div>
+          <div class="path-step">
+            <div class="num">2</div>
+            <div class="txt">Popover-i i kërkimit hapet i ankoruar te slot-i <div class="meta">input automatikisht në fokus</div></div>
+          </div>
+          <div class="path-step">
+            <div class="num">3</div>
+            <div class="txt">Shkruan emrin, zgjedh pacientin (ose shton të ri)</div>
+          </div>
+          <div class="path-step">
+            <div class="num">4</div>
+            <div class="txt">Dialogu hapet me <strong>data + ora të mbushura</strong></div>
+          </div>
+          <div class="path-step">
+            <div class="num">5</div>
+            <div class="txt">Zgjedh kohëzgjatjen (10 ose 15 min) <div class="meta">konflikti zbulohet automatikisht</div></div>
+          </div>
+          <div class="path-step">
+            <div class="num">6</div>
+            <div class="txt">Konfirmon → termini krijohet</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="path-col">
+        <h3>Path 2 · Patient-first</h3>
+        <div class="sub">~20% e rasteve · prindi telefonon dhe recepsionistja niset nga pacienti</div>
+        <div class="path-steps">
+          <div class="path-step">
+            <div class="num">1</div>
+            <div class="txt">Fokuson fushën globale të kërkimit <div class="meta">tap, ose <code style="font-family: var(--font-mono); font-size: 11px; padding: 1px 5px; background: var(--bg-subtle); border-radius: 3px;">/</code></div></div>
+          </div>
+          <div class="path-step">
+            <div class="num">2</div>
+            <div class="txt">Shkruan emrin, zgjedh pacientin (ose shton të ri)</div>
+          </div>
+          <div class="path-step">
+            <div class="num">3</div>
+            <div class="txt">Dialogu hapet me <strong>vetëm datën të mbushur</strong> (sot)</div>
+          </div>
+          <div class="path-step">
+            <div class="num">4</div>
+            <div class="txt">Zgjedh datën (nëse e ndryshon)</div>
+          </div>
+          <div class="path-step">
+            <div class="num">5</div>
+            <div class="txt">Zgjedh orarin nga lista <div class="meta">orarët e zënë janë të çaktivizuar</div></div>
+          </div>
+          <div class="path-step">
+            <div class="num">6</div>
+            <div class="txt">Zgjedh kohëzgjatjen → konfirmon</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ COMPARISON TABLE ============ -->
+  <section class="sec">
+    <h2>Parazgjedhjet · krahasim fushash</h2>
+    <div class="comp-table">
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 130px;">Fusha</th>
+            <th>Path 1 · slot-tap</th>
+            <th>Path 2 · search</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="field">Pacienti</td>
+            <td class="filled">parazgjedhur pas zgjedhjes <span class="pill fill">prefilled</span></td>
+            <td class="filled">parazgjedhur pas zgjedhjes <span class="pill fill">prefilled</span></td>
+          </tr>
+          <tr>
+            <td class="field">Data</td>
+            <td class="filled">nga slot-i <span class="pill fill">prefilled</span></td>
+            <td class="filled">data e sotme · e ndryshueshme <span class="pill fill">prefilled</span></td>
+          </tr>
+          <tr>
+            <td class="field">Ora</td>
+            <td class="filled">nga slot-i <span class="pill fill">prefilled</span></td>
+            <td class="empty">bosh · "Zgjidh orarin..." <span class="pill empty">empty</span></td>
+          </tr>
+          <tr>
+            <td class="field">Kohëzgjatja</td>
+            <td class="empty">bosh · duhet zgjedhur me vetëdije <span class="pill empty">empty</span></td>
+            <td class="empty">bosh · duhet zgjedhur me vetëdije <span class="pill empty">empty</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ============ DESIGN DECISIONS ============ -->
+  <section class="sec">
+    <h2>Vendime të dizajnit</h2>
+    <div class="path-diagram" style="grid-template-columns: 1fr;">
+      <div>
+        <ul style="margin: 0; padding-left: 18px; font-size: 13px; color: var(--text-muted); line-height: 1.8;">
+          <li><strong style="color: var(--text);">Hover ghost-slot, jo "+" i ngulitur.</strong> Çdo qelizë e zbrazët është e prekshme; hover-i tregon "+ Termin i ri · 10:50" me kohën e snap-uar te 10-minutëshi më i afërt. Pa rrëmujë vizuale në gjendje pushimi.</li>
+          <li><strong style="color: var(--text);">Popover ankoruar, jo modal.</strong> Për Path 1, popover-i hapet pranë slot-it të prekur — recepsionistja nuk humbet kontekstin e kalendarit. Modal-e janë vetëm për dialogun e plotë të caktimit.</li>
+          <li><strong style="color: var(--text);">Slot-context në header.</strong> Popover-i tregon gjithmonë çfarë slot-i po cakton: <em>"Cakto për: E martë, 14 maj · 10:50"</em>. Pa surpriza kur dialogu hapet.</li>
+          <li><strong style="color: var(--text);">Path 2 nuk ka ora paracaktuar.</strong> Sepse "tani" nuk është një ditë specifike — recepsionistja duhet të mendojë cilën ditë dhe orë po cakton. Default-i te sot pengohet duke e mbajtur orën bosh.</li>
+          <li><strong style="color: var(--text);">Orarët e zënë në listë: të çaktivizuar, jo të fshehur.</strong> Recepsionistja sheh dendësinë e ditës; zgjedh boshllëkun e duhur me një vështrim.</li>
+          <li><strong style="color: var(--text);">Tastiera është first-class.</strong> Esc mbyll, ↑/↓ navigon në rezultate, Enter konfirmon. Tabletë + tastierë janë në punë reale.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <p style="margin-top: 28px; font-size: 12.5px; color: var(--text-muted); line-height: 1.6;">
+    Versioni interaktiv: hapni <a href="receptionist.html" style="color: var(--primary); font-weight: 500;">receptionist.html</a>. Hover-i mbi çdo qelizë të zbrazët në kalendar tregon ghost-slot-in; klikimi hap popover-in e pacientit. Ose përdorni fushën e kërkimit mbi grid për Path 2.
+  </p>
+</div>
+
+</body>
+</html>

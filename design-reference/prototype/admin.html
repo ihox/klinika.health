@@ -1,0 +1,1033 @@
+<!DOCTYPE html>
+<html lang="sq">
+<head>
+<meta charset="UTF-8">
+<title>Klinika · Platform Admin</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="styles.css">
+<style>
+  /* ============== Platform-admin identity stripe + topbar tweaks ============== */
+  body { padding-top: 3px; }
+  body::before {
+    content: '';
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, var(--teal-700) 0%, var(--teal-500) 50%, var(--teal-700) 100%);
+    z-index: 100;
+  }
+  .topbar-brand .pa-pill {
+    font-family: var(--font-ui);
+    font-size: 10.5px;
+    font-weight: 600;
+    color: var(--teal-800);
+    background: var(--primary-soft);
+    border: 1px solid var(--teal-200);
+    padding: 2px 7px;
+    border-radius: 999px;
+    letter-spacing: 0.02em;
+    margin-left: 6px;
+  }
+  .topbar-user .role-tag {
+    font-size: 11px;
+    color: var(--text-muted);
+    font-weight: 400;
+  }
+
+  /* ============== Page heading ============== */
+  .page-heading {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 24px;
+    margin-bottom: 20px;
+  }
+  .page-heading h1 {
+    font-family: var(--font-display);
+    font-size: 26px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    line-height: 1.2;
+  }
+  .page-heading .sub {
+    color: var(--text-muted);
+    font-size: 13px;
+    margin-top: 4px;
+  }
+
+  .breadcrumb {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+  }
+  .breadcrumb a { color: var(--text-muted); }
+  .breadcrumb a:hover { color: var(--primary); }
+  .breadcrumb .sep { color: var(--text-faint); }
+  .breadcrumb .cur { color: var(--text); font-weight: 500; }
+
+  /* ============== Toolbar (search + button) ============== */
+  .toolbar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 14px;
+  }
+  .toolbar .search {
+    flex: 1;
+    max-width: 360px;
+    position: relative;
+  }
+  .toolbar .search input {
+    width: 100%;
+    padding: 9px 12px 9px 34px;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--r-md);
+    background: var(--bg-elevated);
+    font-size: 13px;
+    outline: none;
+  }
+  .toolbar .search input:focus { border-color: var(--primary); box-shadow: var(--focus-ring); }
+  .toolbar .search .icon { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-faint); }
+  .toolbar .filter-select {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--r-md);
+    padding: 8px 32px 8px 12px;
+    font-size: 13px;
+    color: var(--text);
+  }
+
+  /* ============== Tenants table ============== */
+  .data-table {
+    width: 100%;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: var(--r-lg);
+    border-collapse: separate;
+    border-spacing: 0;
+    overflow: hidden;
+    box-shadow: var(--shadow-xs);
+  }
+  .data-table thead th {
+    text-align: left;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+    font-weight: 600;
+    padding: 12px 16px;
+    background: var(--bg-subtle);
+    border-bottom: 1px solid var(--border);
+  }
+  .data-table tbody td {
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border-soft);
+    font-size: 13px;
+    color: var(--text);
+    vertical-align: middle;
+  }
+  .data-table tbody tr:last-child td { border-bottom: none; }
+  .data-table tbody tr { cursor: pointer; transition: background 120ms ease; }
+  .data-table tbody tr:hover { background: var(--bg-subtle); }
+  .data-table .num { font-variant-numeric: tabular-nums; }
+  .data-table .mono { font-family: var(--font-mono); font-size: 12.5px; color: var(--text-muted); }
+  .data-table .name-cell { font-weight: 500; color: var(--text-strong); }
+  .data-table .right { text-align: right; }
+  .data-table th.sort {
+    cursor: pointer;
+  }
+  .data-table th.sort::after {
+    content: '↑';
+    margin-left: 4px;
+    color: var(--text-faint);
+    font-size: 10px;
+  }
+
+  .row-arrow {
+    color: var(--text-faint);
+    font-size: 14px;
+    transition: transform 120ms ease, color 120ms ease;
+  }
+  tr:hover .row-arrow { color: var(--primary); transform: translateX(2px); }
+
+  /* ============== Stat grid for health page ============== */
+  .stat-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    margin-bottom: 20px;
+  }
+  .stat-card {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: var(--r-lg);
+    padding: 18px 20px;
+    box-shadow: var(--shadow-xs);
+  }
+  .stat-card .label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-muted);
+    font-weight: 600;
+    margin-bottom: 14px;
+  }
+  .stat-card .breakdown {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .stat-card .row-stat {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .stat-card .row-stat .k { font-size: 13px; color: var(--text-muted); }
+  .stat-card .row-stat .v {
+    font-family: var(--font-display);
+    font-size: 20px;
+    font-weight: 600;
+    letter-spacing: -0.015em;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-strong);
+  }
+  .stat-card .row-stat .v.sm { font-size: 14px; }
+
+  .check-list {
+    display: flex;
+    flex-direction: column;
+  }
+  .check-list .item {
+    display: grid;
+    grid-template-columns: 24px 120px 1fr auto;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--border-soft);
+    font-size: 13px;
+  }
+  .check-list .item:last-child { border-bottom: none; }
+  .check-list .item .ok {
+    width: 18px; height: 18px;
+    background: var(--green-bg);
+    border-radius: 999px;
+    display: grid; place-items: center;
+    color: var(--green);
+    font-size: 11px;
+    font-weight: 700;
+  }
+  .check-list .item .k { color: var(--text-muted); font-weight: 500; }
+  .check-list .item .v { color: var(--text-strong); }
+  .check-list .item .t { font-family: var(--font-mono); font-size: 11.5px; color: var(--text-faint); }
+
+  /* ============== Tenant detail blocks ============== */
+  .tenant-hero {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 24px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 24px;
+  }
+  .tenant-hero h1 {
+    font-family: var(--font-display);
+    font-size: 28px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+  .tenant-hero .url {
+    font-family: var(--font-mono);
+    font-size: 13px;
+    color: var(--text-muted);
+    margin-top: 6px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .tenant-hero .url a {
+    color: var(--primary);
+    font-weight: 500;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .tenant-hero .url a:hover { text-decoration: underline; }
+
+  .panel-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    margin-bottom: 20px;
+  }
+
+  .kv-list {
+    display: flex;
+    flex-direction: column;
+  }
+  .kv-list .row {
+    display: grid;
+    grid-template-columns: 140px 1fr;
+    padding: 10px 20px;
+    border-bottom: 1px solid var(--border-soft);
+    font-size: 13px;
+    align-items: center;
+    gap: 12px;
+  }
+  .kv-list .row:last-child { border-bottom: none; }
+  .kv-list .k { color: var(--text-muted); }
+  .kv-list .v { color: var(--text-strong); font-weight: 500; }
+  .kv-list .v.muted { color: var(--text-faint); font-weight: 400; }
+
+  .panel-actions {
+    padding: 12px 20px;
+    border-top: 1px solid var(--border);
+    background: var(--bg-subtle);
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+  }
+
+  /* Compact users table inside tenant detail */
+  .mini-table { width: 100%; border-collapse: collapse; }
+  .mini-table th {
+    text-align: left;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+    font-weight: 600;
+    padding: 10px 20px;
+    background: var(--bg-subtle);
+    border-bottom: 1px solid var(--border);
+  }
+  .mini-table td {
+    padding: 11px 20px;
+    border-bottom: 1px solid var(--border-soft);
+    font-size: 13px;
+  }
+  .mini-table tr:last-child td { border-bottom: none; }
+  .mini-table .nm { font-weight: 500; color: var(--text-strong); }
+  .mini-table .role { color: var(--text-muted); }
+
+  .danger-zone {
+    display: flex;
+    gap: 8px;
+    padding: 16px 20px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .danger-zone .label {
+    font-size: 13px;
+    color: var(--text-muted);
+    margin-right: auto;
+  }
+
+  /* ============== Empty state ============== */
+  .empty {
+    padding: 60px 24px;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 13px;
+  }
+
+  /* ============== Wider modal for create tenant ============== */
+  .modal.wide { width: 540px; }
+  .modal-body .section-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-faint);
+    font-weight: 600;
+    margin-bottom: 4px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid var(--border);
+  }
+  .modal-body .field-pair {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+  .modal-body .field-pair-3 {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 12px;
+  }
+
+  .sub-domain-field {
+    display: flex;
+    align-items: stretch;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--r-md);
+    background: var(--bg-elevated);
+    overflow: hidden;
+  }
+  .sub-domain-field:focus-within { border-color: var(--primary); box-shadow: var(--focus-ring); }
+  .sub-domain-field input {
+    flex: 1; min-width: 0;
+    padding: 8px 12px;
+    border: none; outline: none;
+    font-family: var(--font-mono);
+    font-size: 13px;
+    background: transparent;
+  }
+  .sub-domain-field .suffix {
+    padding: 8px 12px;
+    background: var(--bg-subtle);
+    border-left: 1px solid var(--border);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--text-muted);
+    display: flex; align-items: center;
+  }
+  .sub-validate {
+    font-size: 11px;
+    color: var(--text-faint);
+    margin-top: 4px;
+    min-height: 14px;
+  }
+  .sub-validate.ok { color: var(--green); }
+  .sub-validate.bad { color: var(--red); }
+
+  .radio-row {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .radio-card {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 12px 14px;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--r-md);
+    cursor: pointer;
+    background: var(--bg-elevated);
+    transition: all 150ms ease;
+  }
+  .radio-card:hover { border-color: var(--text-faint); }
+  .radio-card.selected {
+    border-color: var(--primary);
+    background: var(--primary-tint);
+  }
+  .radio-card input { accent-color: var(--primary); margin-top: 2px; }
+  .radio-card .rc-title { font-size: 13px; font-weight: 500; color: var(--text-strong); }
+  .radio-card .rc-sub { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+
+  .info-tip {
+    display: flex;
+    gap: 8px;
+    padding: 10px 12px;
+    background: var(--primary-tint);
+    border: 1px solid var(--teal-200);
+    border-radius: var(--r-md);
+    font-size: 12px;
+    color: var(--teal-900);
+  }
+  .info-tip .i {
+    width: 16px; height: 16px;
+    background: var(--primary);
+    color: white;
+    border-radius: 999px;
+    display: grid; place-items: center;
+    font-size: 10px;
+    font-weight: 700;
+    font-style: italic;
+    flex-shrink: 0;
+  }
+
+  /* delete confirm */
+  .danger-modal .modal-body {
+    padding-top: 20px;
+  }
+  .danger-confirm-input {
+    font-family: var(--font-mono);
+    font-size: 14px;
+  }
+
+  /* view switching */
+  .view { display: none; }
+  .view.active { display: block; }
+
+  /* sub-tabs for tenant detail */
+  .sub-tabs {
+    display: flex;
+    gap: 0;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 20px;
+  }
+  .sub-tabs a {
+    padding: 10px 16px;
+    font-size: 13px;
+    color: var(--text-muted);
+    font-weight: 500;
+    border-bottom: 2px solid transparent;
+    transition: all 150ms ease;
+    margin-bottom: -1px;
+  }
+  .sub-tabs a:hover { color: var(--text); }
+  .sub-tabs a.active { color: var(--text-strong); border-bottom-color: var(--primary); }
+
+  /* admins list */
+  .admin-cell-mail { color: var(--text-muted); font-family: var(--font-mono); font-size: 12.5px; }
+
+  /* misc */
+  .section-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-strong);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin: 28px 0 12px;
+    color: var(--text-muted);
+  }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <a href="admin.html" class="topbar-brand">
+    <svg width="22" height="22" viewBox="0 0 64 64" fill="none" style="color: var(--primary);">
+      <path d="M32 54 C 12 40, 8 26, 18 18 C 24 14, 30 16, 32 22 C 34 16, 40 14, 46 18 C 56 26, 52 40, 32 54 Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M14 34 L 22 34 L 26 26 L 30 42 L 34 28 L 38 36 L 50 36" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+    </svg>
+    klinika<span class="dot-app">.</span>
+    <span class="pa-pill">Platform Admin</span>
+  </a>
+
+  <nav class="topbar-nav">
+    <a href="#tenants" class="nav-link" data-view="tenants">Klinikat</a>
+    <a href="#health" class="nav-link" data-view="health">Sistemi</a>
+    <a href="#admins" class="nav-link" data-view="admins">Administratorët</a>
+  </nav>
+
+  <div class="topbar-spacer"></div>
+
+  <div class="topbar-search">
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+      <circle cx="7" cy="7" r="5"/><path d="M11 11l3 3" stroke-linecap="round"/>
+    </svg>
+    <input placeholder="Kërko klinikë, përdorues...">
+    <kbd>⌘K</kbd>
+  </div>
+
+  <button class="topbar-user">
+    <div class="avatar" style="background: var(--text-strong);">AD</div>
+    <div style="display: flex; flex-direction: column; align-items: flex-start; line-height: 1.2;">
+      <span class="name">Andi Dushi</span>
+      <span class="role-tag">Platform Admin</span>
+    </div>
+    <span class="chev">▾</span>
+  </button>
+</header>
+
+<main class="page">
+
+  <!-- ================ VIEW: TENANTS LIST ================ -->
+  <section class="view" data-view="tenants">
+    <div class="page-heading">
+      <div>
+        <h1>Klinikat</h1>
+        <div class="sub">3 klinika · 2 aktive · 1 në pezullim</div>
+      </div>
+    </div>
+
+    <div class="toolbar">
+      <div class="search">
+        <span class="icon">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+            <circle cx="7" cy="7" r="5"/><path d="M11 11l3 3" stroke-linecap="round"/>
+          </svg>
+        </span>
+        <input placeholder="Kërko klinikë...">
+      </div>
+      <select class="filter-select">
+        <option>Të gjitha statuset</option>
+        <option>Aktive</option>
+        <option>Në pezullim</option>
+        <option>Konfigurim në pritje</option>
+      </select>
+      <div style="flex: 1;"></div>
+      <button class="btn btn-secondary">Eksporto CSV</button>
+      <button class="btn btn-primary" onclick="openCreate()">
+        <span style="font-size: 14px; line-height: 1;">+</span> Krijo klinikë
+      </button>
+    </div>
+
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th class="sort">Emri</th>
+          <th>Subdomain</th>
+          <th>Statusi</th>
+          <th class="right">Pacientë</th>
+          <th class="right">Përdorues</th>
+          <th>Krijuar</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr onclick="goto('tenant')">
+          <td class="name-cell">DonetaMED</td>
+          <td class="mono">donetamed.klinika.health</td>
+          <td><span class="chip chip-green"><span class="dot"></span>Aktive</span></td>
+          <td class="right num">11,163</td>
+          <td class="right num">2</td>
+          <td class="num">14.02.2024</td>
+          <td class="right"><span class="row-arrow">→</span></td>
+        </tr>
+        <tr>
+          <td class="name-cell">Klinika Dy</td>
+          <td class="mono">clinic2.klinika.health</td>
+          <td><span class="chip chip-green"><span class="dot"></span>Aktive</span></td>
+          <td class="right num">247</td>
+          <td class="right num">3</td>
+          <td class="num">22.09.2025</td>
+          <td class="right"><span class="row-arrow">→</span></td>
+        </tr>
+        <tr>
+          <td class="name-cell">Demo Pediatri</td>
+          <td class="mono">demo.klinika.health</td>
+          <td><span class="chip chip-amber"><span class="dot"></span>Pezullim</span></td>
+          <td class="right num">50</td>
+          <td class="right num">1</td>
+          <td class="num">03.05.2026</td>
+          <td class="right"><span class="row-arrow">→</span></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="muted" style="margin-top: 14px; font-size: 12px;">
+      Shfaqen 3 nga 3 klinika. Klikoni rreshtin për detaje.
+    </div>
+  </section>
+
+  <!-- ================ VIEW: TENANT DETAIL ================ -->
+  <section class="view" data-view="tenant">
+    <div class="breadcrumb">
+      <a href="#tenants">← Klinikat</a>
+      <span class="sep">/</span>
+      <span class="cur">DonetaMED</span>
+    </div>
+
+    <div class="tenant-hero">
+      <div>
+        <h1>DonetaMED <span class="chip chip-green" style="font-size: 12px; padding: 4px 10px;"><span class="dot"></span>Aktive</span></h1>
+        <div class="url">
+          donetamed.klinika.health
+          <a href="doctor.html" target="_blank">Vizito klinikën ↗</a>
+        </div>
+      </div>
+      <div style="display: flex; gap: 8px;">
+        <button class="btn btn-secondary">Modifiko</button>
+        <button class="btn btn-secondary">Personifiko hyrjen</button>
+      </div>
+    </div>
+
+    <div class="panel-grid">
+      <!-- Info -->
+      <div class="card">
+        <div class="card-header"><h3>Informacione</h3></div>
+        <div class="kv-list">
+          <div class="row"><span class="k">Emri i plotë</span><span class="v">Ambulanca Specialistike Pediatrike DonetaMED</span></div>
+          <div class="row"><span class="k">Emri i shkurtuar</span><span class="v">DONETA-MED</span></div>
+          <div class="row"><span class="k">Tipi</span><span class="v">Cloud</span></div>
+          <div class="row"><span class="k">Krijuar</span><span class="v num">14.02.2024</span></div>
+          <div class="row"><span class="k">Qyteti</span><span class="v">Prizren</span></div>
+          <div class="row"><span class="k">Telefoni</span><span class="v num">045 83 00 83</span></div>
+          <div class="row"><span class="k">Tunel</span><span class="v muted">— (Cloud)</span></div>
+          <div class="row"><span class="k">Certifikatë TLS</span><span class="v" style="color: var(--green);">✓ E vlefshme · skadon 12.08.2026</span></div>
+        </div>
+      </div>
+
+      <!-- Usage -->
+      <div class="card">
+        <div class="card-header"><h3>Përdorimi</h3><span class="meta">Përditësuar tani</span></div>
+        <div class="kv-list">
+          <div class="row"><span class="k">Pacientë</span><span class="v num" style="font-size: 16px;">11,163</span></div>
+          <div class="row"><span class="k">Vizita gjithsej</span><span class="v num" style="font-size: 16px;">220,465</span></div>
+          <div class="row"><span class="k">Vizita këtë muaj</span><span class="v num">412</span></div>
+          <div class="row"><span class="k">Përdorues aktivë</span><span class="v num">2 / 2</span></div>
+          <div class="row"><span class="k">Hapësirë e përdorur</span><span class="v num">~1.2 GB</span></div>
+          <div class="row"><span class="k">Backup i fundit</span><span class="v">~6 orë më parë</span></div>
+          <div class="row"><span class="k">Plan</span><span class="v">Pediatri Solo · €49 / muaj</span></div>
+          <div class="row"><span class="k">Faturim i ardhshëm</span><span class="v num">01.06.2026</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Users -->
+    <div class="card" style="margin-bottom: 20px;">
+      <div class="card-header">
+        <h3>Përdoruesit (2)</h3>
+        <span class="meta">Menaxhohen nga vetë klinika · vetëm shfaqje këtu</span>
+      </div>
+      <table class="mini-table">
+        <thead>
+          <tr><th>Emri</th><th>Roli</th><th>Email</th><th>Statusi</th><th>Hyrja e fundit</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="nm">Dr. Taulant Shala</td>
+            <td class="role">Mjek · Admin</td>
+            <td class="mono" style="font-size: 12px; color: var(--text-muted);">taulant@donetamed.com</td>
+            <td><span class="chip chip-green"><span class="dot"></span>Aktiv</span></td>
+            <td class="num" style="color: var(--text-muted);">2 orë më parë</td>
+          </tr>
+          <tr>
+            <td class="nm">Erëblirë Krasniqi</td>
+            <td class="role">Infermierja</td>
+            <td class="mono" style="font-size: 12px; color: var(--text-muted);">ereblire@donetamed.com</td>
+            <td><span class="chip chip-green"><span class="dot"></span>Aktiv</span></td>
+            <td class="num" style="color: var(--text-muted);">30 min më parë</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Danger zone -->
+    <div class="card">
+      <div class="card-header"><h3>Veprime</h3></div>
+      <div class="danger-zone">
+        <span class="label">Pezulloni hyrjen, eksportoni të dhënat ose fshijeni plotësisht këtë klinikë.</span>
+        <button class="btn btn-secondary">Pezullo</button>
+        <button class="btn btn-secondary">Eksporto të dhënat</button>
+        <button class="btn btn-danger" onclick="openDelete()">Fshij klinikën</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================ VIEW: PLATFORM HEALTH ================ -->
+  <section class="view" data-view="health">
+    <div class="page-heading">
+      <div>
+        <h1>Sistemi</h1>
+        <div class="sub">Gjendja e platformës · përditësuar tani</div>
+      </div>
+      <div class="row">
+        <span class="chip chip-green"><span class="dot"></span>Të gjitha sistemet të shëndetshme</span>
+      </div>
+    </div>
+
+    <div class="stat-grid">
+      <div class="stat-card">
+        <div class="label">Klinikat</div>
+        <div class="breakdown">
+          <div class="row-stat"><span class="k">Totali</span><span class="v">3</span></div>
+          <div class="row-stat"><span class="k">Aktive</span><span class="v sm" style="color: var(--green);">2</span></div>
+          <div class="row-stat"><span class="k">Pezullim</span><span class="v sm" style="color: var(--amber);">1</span></div>
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Përdoruesit</div>
+        <div class="breakdown">
+          <div class="row-stat"><span class="k">Totali</span><span class="v">8</span></div>
+          <div class="row-stat"><span class="k">Aktivë sot</span><span class="v sm" style="color: var(--green);">5</span></div>
+          <div class="row-stat"><span class="k">Mjekë / Recepsion</span><span class="v sm">3 / 5</span></div>
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Pacientët</div>
+        <div class="breakdown">
+          <div class="row-stat"><span class="k">Totali</span><span class="v">11,460</span></div>
+          <div class="row-stat"><span class="k">Vizita / muaj</span><span class="v sm">441</span></div>
+          <div class="row-stat"><span class="k">Hapësirë</span><span class="v sm">~1.4 GB</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><h3>Sistemet</h3><span class="meta">Kontroll automatik çdo 60s</span></div>
+      <div class="check-list">
+        <div class="item">
+          <span class="ok">✓</span>
+          <span class="k">Database</span>
+          <span class="v">I shëndetshëm · latencë mesatare 45ms</span>
+          <span class="t">tani</span>
+        </div>
+        <div class="item">
+          <span class="ok">✓</span>
+          <span class="k">Backup-ot</span>
+          <span class="v">3 / 3 të suksesshme · më i fundit ~6 orë më parë</span>
+          <span class="t">06:14</span>
+        </div>
+        <div class="item">
+          <span class="ok">✓</span>
+          <span class="k">Tunelet on-prem</span>
+          <span class="v">0 / 0 të lidhura · asnjë klinikë on-prem</span>
+          <span class="t">—</span>
+        </div>
+        <div class="item">
+          <span class="ok">✓</span>
+          <span class="k">Email (Resend)</span>
+          <span class="v">412 të dërguara këtë muaj · 0 dështime 24h</span>
+          <span class="t">tani</span>
+        </div>
+        <div class="item">
+          <span class="ok">✓</span>
+          <span class="k">TLS</span>
+          <span class="v">Të gjitha certifikatat të vlefshme · skadojnë në 90+ ditë</span>
+          <span class="t">tani</span>
+        </div>
+        <div class="item">
+          <span class="ok">✓</span>
+          <span class="k">Storage</span>
+          <span class="v">14% e përdorur · 86 GB të lira</span>
+          <span class="t">tani</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="section-title">Aktiviteti i fundit</div>
+    <div class="card">
+      <table class="mini-table">
+        <thead>
+          <tr><th>Koha</th><th>Klinika</th><th>Veprimi</th></tr>
+        </thead>
+        <tbody>
+          <tr><td class="num" style="color: var(--text-muted);">14:23</td><td class="nm">DonetaMED</td><td>Vizitë e re · Dr. Taulant Shala</td></tr>
+          <tr><td class="num" style="color: var(--text-muted);">13:50</td><td class="nm">DonetaMED</td><td>Vërtetim i lëshuar · Rita Hoxha</td></tr>
+          <tr><td class="num" style="color: var(--text-muted);">12:02</td><td class="nm">Klinika Dy</td><td>Përdorues i ri u shtua · Adea M.</td></tr>
+          <tr><td class="num" style="color: var(--text-muted);">06:14</td><td class="nm">Sistemi</td><td>Backup-i ditor i suksesshëm</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ================ VIEW: PLATFORM ADMINS ================ -->
+  <section class="view" data-view="admins">
+    <div class="page-heading">
+      <div>
+        <h1>Administratorët e platformës</h1>
+        <div class="sub">Llogari me akses në panelin /admin · jashtë klinikave të veçanta</div>
+      </div>
+      <button class="btn btn-primary">
+        <span style="font-size: 14px; line-height: 1;">+</span> Shto admin
+      </button>
+    </div>
+
+    <div class="card">
+      <table class="mini-table">
+        <thead>
+          <tr><th>Emri</th><th>Email</th><th>MFA</th><th>Statusi</th><th>Hyrja e fundit</th><th></th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="nm">Andi Dushi</td>
+            <td class="admin-cell-mail">you@klinika.health</td>
+            <td><span class="chip chip-green"><span class="dot"></span>I aktivizuar</span></td>
+            <td><span class="chip chip-green"><span class="dot"></span>Aktiv</span></td>
+            <td class="num" style="color: var(--text-muted);">Tani</td>
+            <td class="right"><button class="btn btn-ghost btn-sm">···</button></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="info-tip" style="margin-top: 20px;">
+      <span class="i">i</span>
+      <div>
+        <strong>Praktikë e mirë:</strong> mbani të paktën 2 admin platforme aktivë. Llogaritë e administratorit duhet të kenë MFA të aktivizuar; veprimet shkruhen në audit log të platformës.
+      </div>
+    </div>
+  </section>
+
+</main>
+
+
+<!-- ============== Modal: Create tenant ============== -->
+<div class="modal-overlay" id="create-modal" style="display: none;">
+  <div class="modal wide" role="dialog" aria-modal="true">
+    <div class="modal-header">
+      <h2>Krijo klinikë të re</h2>
+      <div class="sub">Caktoni informacionet themelore. Admini i parë do të marrë një email me link për të caktuar fjalëkalimin.</div>
+    </div>
+    <div class="modal-body">
+
+      <div class="section-label">Informacionet</div>
+      <div class="field">
+        <label class="field-label">Emri i plotë</label>
+        <input class="input" placeholder="p.sh. Ambulanca Specialistike Pediatrike Aurora">
+      </div>
+      <div class="field-pair">
+        <div class="field">
+          <label class="field-label">Emri i shkurtuar</label>
+          <input class="input" placeholder="AURORA-PED">
+        </div>
+        <div class="field">
+          <label class="field-label">Tipi</label>
+          <select class="select">
+            <option>Cloud (default)</option>
+            <option>On-premise</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="field">
+        <label class="field-label">Subdomain</label>
+        <div class="sub-domain-field">
+          <input id="m-sub" placeholder="emri-i-klinikes" value="aurora-ped">
+          <span class="suffix">.klinika.health</span>
+        </div>
+        <div class="sub-validate ok" id="m-sub-validate">✓ aurora-ped.klinika.health · i lirë</div>
+      </div>
+
+      <div class="section-label" style="margin-top: 6px;">Kontakti</div>
+      <div class="field">
+        <label class="field-label">Adresa</label>
+        <input class="input" placeholder="Rruga, numri, qyteti">
+      </div>
+      <div class="field-pair">
+        <div class="field">
+          <label class="field-label">Qyteti</label>
+          <input class="input" placeholder="Prishtinë">
+        </div>
+        <div class="field">
+          <label class="field-label">Telefoni</label>
+          <input class="input" placeholder="045 00 00 00">
+        </div>
+      </div>
+      <div class="field-pair">
+        <div class="field">
+          <label class="field-label">Email kontakti</label>
+          <input class="input" type="email" placeholder="info@klinika.com">
+        </div>
+        <div class="field">
+          <label class="field-label">Orari</label>
+          <input class="input" placeholder="10:00 — 18:00">
+        </div>
+      </div>
+
+      <div class="section-label" style="margin-top: 6px;">Admin i parë i klinikës</div>
+      <div class="field-pair">
+        <div class="field">
+          <label class="field-label">Emri</label>
+          <input class="input" placeholder="Emri">
+        </div>
+        <div class="field">
+          <label class="field-label">Mbiemri</label>
+          <input class="input" placeholder="Mbiemri">
+        </div>
+      </div>
+      <div class="field">
+        <label class="field-label">Email</label>
+        <input class="input" type="email" placeholder="admini@klinika.com">
+      </div>
+
+      <div class="info-tip">
+        <span class="i">i</span>
+        <div>Do t'i dërgohet një email me link për të caktuar fjalëkalimin. Linku skadon në 24 orë. Admini mund të shtojë vetë mjekë / recepsion pasi të hyjë.</div>
+      </div>
+
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeCreate()">Anulo</button>
+      <button class="btn btn-primary" onclick="submitCreate()">Krijo klinikën</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- ============== Modal: Delete confirm ============== -->
+<div class="modal-overlay danger-modal" id="delete-modal" style="display: none;">
+  <div class="modal" role="dialog" aria-modal="true">
+    <div class="modal-header">
+      <h2 style="color: var(--red);">Fshini DonetaMED?</h2>
+      <div class="sub">Ky veprim është i pakthyeshëm. Të gjitha të dhënat e pacientëve, vizitave dhe dokumenteve do të fshihen përgjithmonë pas 30 ditësh.</div>
+    </div>
+    <div class="modal-body">
+      <div style="display: flex; flex-direction: column; gap: 6px;">
+        <div style="font-size: 13px; color: var(--text-muted);">Para fshirjes:</div>
+        <ul style="margin: 0; padding-left: 18px; font-size: 13px; color: var(--text); line-height: 1.7;">
+          <li>11,163 pacientë · 220,465 vizita do të arkivohen 30 ditë</li>
+          <li>Përdoruesit do të çaktivizohen menjëherë</li>
+          <li>Subdomain-i <span class="mono" style="font-family: var(--font-mono);">donetamed.klinika.health</span> do të lirohet</li>
+          <li>Backup-i përfundimtar mund të shkarkohet brenda 30 ditësh</li>
+        </ul>
+      </div>
+
+      <div class="field">
+        <label class="field-label">Për të konfirmuar, shkruani emrin e klinikës: <span class="mono" style="font-family: var(--font-mono); color: var(--text-strong);">DonetaMED</span></label>
+        <input class="input danger-confirm-input" id="confirm-name" placeholder="Shkruani këtu" oninput="updateConfirm()">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeDelete()">Anulo</button>
+      <button class="btn btn-danger" id="confirm-delete" disabled>Fshij klinikën</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- Toast -->
+<div class="toast" id="toast">
+  <span class="check">✓</span>
+  <span id="toast-msg">U krijua klinika.</span>
+</div>
+
+
+<script>
+  // ===== View switching =====
+  const VIEWS = ['tenants', 'tenant', 'health', 'admins'];
+  function showView(name) {
+    if (!VIEWS.includes(name)) name = 'tenants';
+    document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.dataset.view === name));
+    document.querySelectorAll('.nav-link').forEach(a => {
+      a.classList.toggle('active', a.dataset.view === name || (name === 'tenant' && a.dataset.view === 'tenants'));
+    });
+    window.scrollTo({ top: 0 });
+  }
+  function goto(name) {
+    window.location.hash = name;
+  }
+  window.addEventListener('hashchange', () => showView(window.location.hash.slice(1)));
+  showView(window.location.hash.slice(1) || 'tenants');
+
+  // ===== Modals =====
+  const $ = (id) => document.getElementById(id);
+  function openCreate() { $('create-modal').style.display = 'grid'; }
+  function closeCreate() { $('create-modal').style.display = 'none'; }
+  function submitCreate() {
+    closeCreate();
+    showToast('Klinika "Aurora-Ped" u krijua · email u dërgua admin-it');
+  }
+
+  function openDelete() { $('delete-modal').style.display = 'grid'; }
+  function closeDelete() { $('delete-modal').style.display = 'none'; $('confirm-name').value = ''; updateConfirm(); }
+  function updateConfirm() {
+    const ok = $('confirm-name').value.trim() === 'DonetaMED';
+    $('confirm-delete').disabled = !ok;
+  }
+
+  // Subdomain live validation in create modal
+  const sub = $('m-sub');
+  const val = $('m-sub-validate');
+  if (sub) {
+    sub.addEventListener('input', () => {
+      const v = sub.value.trim().toLowerCase();
+      if (!v) { val.textContent = ''; val.className = 'sub-validate'; return; }
+      if (!/^[a-z0-9-]+$/.test(v)) { val.textContent = '✗ Karaktere të palejuara'; val.className = 'sub-validate bad'; return; }
+      if (['donetamed', 'clinic2', 'demo'].includes(v)) { val.textContent = '✗ Subdomain i zënë'; val.className = 'sub-validate bad'; return; }
+      val.textContent = '✓ ' + v + '.klinika.health · i lirë'; val.className = 'sub-validate ok';
+    });
+  }
+
+  // Toast
+  let toastTimer;
+  function showToast(msg) {
+    $('toast-msg').textContent = msg;
+    $('toast').classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => $('toast').classList.remove('show'), 3000);
+  }
+</script>
+
+</body>
+</html>

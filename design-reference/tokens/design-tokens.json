@@ -1,0 +1,208 @@
+{
+  "$schema": "https://design-tokens.org/schema.json",
+  "meta": {
+    "name": "Klinika",
+    "domain": "klinika.health",
+    "source": "prototype/styles.css",
+    "version": "1.0.0",
+    "notes": "Warm-neutral clinical UI. Teal primary, amber accent (used sparingly), warm near-black text on warm off-white surfaces."
+  },
+
+  "color": {
+    "brand": {
+      "teal": {
+        "50":  "#F0FDFA",
+        "100": "#CCFBF1",
+        "200": "#99F6E4",
+        "300": "#5EEAD4",
+        "400": "#2DD4BF",
+        "500": "#14B8A6",
+        "600": "#0D9488",
+        "700": "#0F766E",
+        "800": "#115E59",
+        "900": "#134E4A"
+      },
+      "primary":      "#0D9488",
+      "primary-dark": "#0F766E",
+      "primary-soft": "#CCFBF1",
+      "primary-tint": "#F0FDFA"
+    },
+
+    "accent": {
+      "amber-50":  "#FFF7ED",
+      "amber-100": "#FFEDD5",
+      "amber-400": "#FB923C",
+      "amber-500": "#F97316",
+      "amber-600": "#EA580C"
+    },
+
+    "surface": {
+      "bg":          "#FAFAF9",
+      "bg-elevated": "#FFFFFF",
+      "bg-subtle":   "#F5F5F4",
+      "bg-muted":    "#EFEEEC"
+    },
+
+    "border": {
+      "default": "#E7E5E4",
+      "strong":  "#D6D3D1",
+      "soft":    "#F0EFEC"
+    },
+
+    "text": {
+      "default": "#1C1917",
+      "strong":  "#0C0A09",
+      "muted":   "#57534E",
+      "faint":   "#A8A29E",
+      "on-primary": "#FFFFFF"
+    },
+
+    "status": {
+      "green":      "#15803D",
+      "green-bg":   "#DCFCE7",
+      "green-soft": "#BBF7D0",
+
+      "amber":      "#B45309",
+      "amber-bg":   "#FEF3C7",
+      "amber-soft": "#FDE68A",
+
+      "red":        "#B91C1C",
+      "red-bg":     "#FEE2E2",
+      "red-soft":   "#FECACA"
+    },
+
+    "selection": {
+      "bg": "#99F6E4",
+      "fg": "#134E4A"
+    },
+
+    "overlay": {
+      "modal-scrim": "rgba(28, 25, 23, 0.4)"
+    }
+  },
+
+  "spacing": {
+    "scale": {
+      "0":  "0px",
+      "1":  "4px",
+      "2":  "8px",
+      "3":  "12px",
+      "4":  "16px",
+      "5":  "20px",
+      "6":  "24px",
+      "8":  "32px",
+      "10": "40px",
+      "12": "48px",
+      "16": "64px"
+    },
+    "notes": "Tokens used in source: 4, 6, 8, 10, 12, 14, 16, 20, 24, 32 px. Utilities .mt-2/3/4/6 map to 8/12/16/24."
+  },
+
+  "radius": {
+    "xs":  "4px",
+    "sm":  "6px",
+    "md":  "8px",
+    "lg":  "12px",
+    "xl":  "16px",
+    "2xl": "20px",
+    "pill": "999px"
+  },
+
+  "shadow": {
+    "xs":    "0 1px 2px rgba(28, 25, 23, 0.04)",
+    "sm":    "0 1px 3px rgba(28, 25, 23, 0.06), 0 1px 2px rgba(28, 25, 23, 0.04)",
+    "md":    "0 4px 12px rgba(28, 25, 23, 0.06), 0 2px 4px rgba(28, 25, 23, 0.04)",
+    "lg":    "0 12px 28px rgba(28, 25, 23, 0.08), 0 4px 10px rgba(28, 25, 23, 0.04)",
+    "modal": "0 24px 48px rgba(28, 25, 23, 0.16), 0 8px 16px rgba(28, 25, 23, 0.08)",
+    "focus-ring": "0 0 0 3px rgba(13, 148, 136, 0.25)",
+    "btn-primary-inset": "0 1px 0 rgba(0,0,0,0.05), inset 0 1px 0 rgba(255,255,255,0.15)"
+  },
+
+  "typography": {
+    "family": {
+      "ui":      "'Inter', system-ui, -apple-system, sans-serif",
+      "display": "'Inter Tight', 'Inter', system-ui, sans-serif",
+      "mono":    "'JetBrains Mono', ui-monospace, Menlo, monospace"
+    },
+
+    "size": {
+      "xs":   "11px",
+      "sm":   "12px",
+      "base": "13px",
+      "md":   "14px",
+      "lg":   "16px",
+      "xl":   "18px",
+      "2xl":  "20px",
+      "3xl":  "24px",
+      "4xl":  "28px"
+    },
+
+    "weight": {
+      "regular":  400,
+      "medium":   500,
+      "semibold": 600,
+      "bold":     700
+    },
+
+    "lineHeight": {
+      "tight":  1.2,
+      "normal": 1.5
+    },
+
+    "tracking": {
+      "tight":   "-0.02em",
+      "tighter": "-0.015em",
+      "snug":    "-0.01em",
+      "normal":  "0",
+      "wide":    "0.01em"
+    },
+
+    "roles": {
+      "body":      { "family": "ui",      "size": "14px", "weight": 400, "lineHeight": 1.5 },
+      "ui":        { "family": "ui",      "size": "13px", "weight": 500 },
+      "label":     { "family": "ui",      "size": "12px", "weight": 500, "color": "text.muted", "tracking": "0.01em" },
+      "help":      { "family": "ui",      "size": "12px", "weight": 400, "color": "text.faint" },
+      "h1":        { "family": "display", "size": "28px", "weight": 600, "tracking": "-0.02em" },
+      "h2":        { "family": "display", "size": "20px", "weight": 600, "tracking": "-0.015em" },
+      "h3":        { "family": "display", "size": "16px", "weight": 600 },
+      "h4":        { "family": "display", "size": "14px", "weight": 600 },
+      "greeting":  { "family": "display", "size": "24px", "weight": 600, "tracking": "-0.02em" },
+      "mono":      { "family": "mono",    "size": "12.5px", "weight": 400 }
+    },
+
+    "features": "\"tnum\", \"cv11\", \"ss01\""
+  },
+
+  "motion": {
+    "duration": {
+      "fast":   "150ms",
+      "medium": "180ms",
+      "slow":   "250ms"
+    },
+    "easing": {
+      "default": "ease"
+    },
+    "transition": {
+      "ui":     "all 150ms ease",
+      "color":  "color 150ms ease, background 150ms ease",
+      "input":  "border-color 150ms ease, box-shadow 150ms ease",
+      "toast":  "all 250ms ease"
+    },
+    "keyframes": {
+      "fade-in":  "150ms ease",
+      "modal-in": "180ms ease"
+    }
+  },
+
+  "z": {
+    "topbar": 30,
+    "modal":  50,
+    "toast":  100
+  },
+
+  "layout": {
+    "page-max-width": "1440px",
+    "page-padding":   "24px 32px 40px",
+    "topbar-height":  "60px"
+  }
+}

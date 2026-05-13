@@ -1,0 +1,149 @@
+/* ============================================================================
+   Klinika — Design Tokens (CSS Custom Properties)
+   Source: prototype/styles.css   ·   klinika.health
+   ============================================================================ */
+
+:root {
+  /* ---------- Brand: teal scale ----------------------------------------- */
+  --teal-50:  #F0FDFA;
+  --teal-100: #CCFBF1;
+  --teal-200: #99F6E4;
+  --teal-300: #5EEAD4;
+  --teal-400: #2DD4BF;
+  --teal-500: #14B8A6;
+  --teal-600: #0D9488;
+  --teal-700: #0F766E;
+  --teal-800: #115E59;
+  --teal-900: #134E4A;
+
+  --primary:      #0D9488;   /* = teal-600 */
+  --primary-dark: #0F766E;   /* = teal-700 */
+  --primary-soft: #CCFBF1;   /* = teal-100 */
+  --primary-tint: #F0FDFA;   /* = teal-50  */
+
+  /* ---------- Accent: warm amber (sparing use) -------------------------- */
+  --accent-50:  #FFF7ED;
+  --accent-100: #FFEDD5;
+  --accent-400: #FB923C;
+  --accent-500: #F97316;
+  --accent-600: #EA580C;
+
+  /* ---------- Surfaces (warm neutrals) ---------------------------------- */
+  --bg:          #FAFAF9;
+  --bg-elevated: #FFFFFF;
+  --bg-subtle:   #F5F5F4;
+  --bg-muted:    #EFEEEC;
+
+  /* ---------- Borders --------------------------------------------------- */
+  --border:        #E7E5E4;
+  --border-strong: #D6D3D1;
+  --border-soft:   #F0EFEC;
+
+  /* ---------- Text ------------------------------------------------------ */
+  --text:        #1C1917;
+  --text-strong: #0C0A09;
+  --text-muted:  #57534E;
+  --text-faint:  #A8A29E;
+  --text-on-primary: #FFFFFF;
+
+  /* ---------- Status ---------------------------------------------------- */
+  --green:      #15803D;
+  --green-bg:   #DCFCE7;
+  --green-soft: #BBF7D0;
+
+  --amber:      #B45309;
+  --amber-bg:   #FEF3C7;
+  --amber-soft: #FDE68A;
+
+  --red:        #B91C1C;
+  --red-bg:     #FEE2E2;
+  --red-soft:   #FECACA;
+
+  /* ---------- Overlays / selection ------------------------------------- */
+  --selection-bg: #99F6E4;
+  --selection-fg: #134E4A;
+  --modal-scrim:  rgba(28, 25, 23, 0.4);
+
+  /* ---------- Spacing scale (px) --------------------------------------- */
+  --space-0:  0px;
+  --space-1:  4px;
+  --space-2:  8px;
+  --space-3:  12px;
+  --space-4:  16px;
+  --space-5:  20px;
+  --space-6:  24px;
+  --space-8:  32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+
+  /* ---------- Radii ----------------------------------------------------- */
+  --r-xs:  4px;
+  --r-sm:  6px;
+  --r-md:  8px;
+  --r-lg:  12px;
+  --r-xl:  16px;
+  --r-2xl: 20px;
+  --r-pill: 999px;
+
+  /* ---------- Shadows --------------------------------------------------- */
+  --shadow-xs:    0 1px 2px rgba(28, 25, 23, 0.04);
+  --shadow-sm:    0 1px 3px rgba(28, 25, 23, 0.06), 0 1px 2px rgba(28, 25, 23, 0.04);
+  --shadow-md:    0 4px 12px rgba(28, 25, 23, 0.06), 0 2px 4px rgba(28, 25, 23, 0.04);
+  --shadow-lg:    0 12px 28px rgba(28, 25, 23, 0.08), 0 4px 10px rgba(28, 25, 23, 0.04);
+  --shadow-modal: 0 24px 48px rgba(28, 25, 23, 0.16), 0 8px 16px rgba(28, 25, 23, 0.08);
+  --shadow-btn-primary-inset: 0 1px 0 rgba(0,0,0,0.05), inset 0 1px 0 rgba(255,255,255,0.15);
+
+  --focus-ring: 0 0 0 3px rgba(13, 148, 136, 0.25);
+
+  /* ---------- Typography ------------------------------------------------ */
+  --font-ui:      'Inter', system-ui, -apple-system, sans-serif;
+  --font-display: 'Inter Tight', 'Inter', system-ui, sans-serif;
+  --font-mono:    'JetBrains Mono', ui-monospace, Menlo, monospace;
+
+  --fs-xs:   11px;
+  --fs-sm:   12px;
+  --fs-base: 13px;   /* default UI text */
+  --fs-md:   14px;   /* body */
+  --fs-lg:   16px;
+  --fs-xl:   18px;
+  --fs-2xl:  20px;
+  --fs-3xl:  24px;
+  --fs-4xl:  28px;
+
+  --fw-regular:  400;
+  --fw-medium:   500;
+  --fw-semibold: 600;
+  --fw-bold:     700;
+
+  --lh-tight:  1.2;
+  --lh-normal: 1.5;
+
+  --tracking-tight:   -0.02em;
+  --tracking-tighter: -0.015em;
+  --tracking-snug:    -0.01em;
+  --tracking-normal:  0;
+  --tracking-wide:    0.01em;
+
+  --font-features: "tnum", "cv11", "ss01";
+
+  /* ---------- Motion ---------------------------------------------------- */
+  --dur-fast:   150ms;
+  --dur-medium: 180ms;
+  --dur-slow:   250ms;
+  --ease:       ease;
+
+  --transition-ui:    all 150ms ease;
+  --transition-color: color 150ms ease, background 150ms ease;
+  --transition-input: border-color 150ms ease, box-shadow 150ms ease;
+  --transition-toast: all 250ms ease;
+
+  /* ---------- Z-index --------------------------------------------------- */
+  --z-topbar: 30;
+  --z-modal:  50;
+  --z-toast:  100;
+
+  /* ---------- Layout ---------------------------------------------------- */
+  --page-max-width: 1440px;
+  --topbar-height:  60px;
+}

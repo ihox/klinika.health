@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="sq">
+<head>
+<meta charset="UTF-8">
+<title>Klinika — Booking dialog states</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="styles.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Inter+Tight:wght@500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-ui);
+    margin: 0;
+    padding: 32px 40px 80px;
+  }
+
+  .pg-head {
+    max-width: 1700px;
+    margin: 0 auto 28px;
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 24px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid var(--border-soft);
+  }
+  .pg-head h1 { font-size: 26px; font-weight: 600; letter-spacing: -0.02em; }
+  .pg-head p { color: var(--text-muted); font-size: 13px; line-height: 1.55; max-width: 720px; margin-top: 6px; }
+  .pg-head .meta {
+    font-family: var(--font-mono); font-size: 11px;
+    color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.08em;
+  }
+
+  .wrap { max-width: 1700px; margin: 0 auto; }
+
+  .states-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 22px;
+  }
+  .state-card {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-soft);
+    border-radius: 14px;
+    overflow: hidden;
+    display: grid; grid-template-rows: auto 1fr auto;
+  }
+  .state-head {
+    padding: 16px 20px 14px;
+    border-bottom: 1px solid var(--border-soft);
+    background: var(--bg-subtle);
+    display: flex; align-items: flex-start; justify-content: space-between;
+    gap: 12px;
+  }
+  .state-head .num {
+    font-family: var(--font-mono); font-size: 10.5px;
+    color: var(--text-faint); letter-spacing: 0.08em;
+  }
+  .state-head h3 {
+    font-family: var(--font-display); font-size: 15px; font-weight: 600;
+    color: var(--text-strong); letter-spacing: -0.005em; margin-top: 2px;
+  }
+  .state-head .tag {
+    font-family: var(--font-mono); font-size: 10px;
+    padding: 3px 8px; border-radius: 999px;
+    letter-spacing: 0.04em; white-space: nowrap;
+  }
+  .state-head .tag.t-clean { color: var(--teal-800); background: var(--teal-50); border: 1px solid var(--teal-200); }
+  .state-head .tag.t-extend { color: var(--teal-800); background: var(--teal-50); border: 1px solid var(--teal-200); }
+  .state-head .tag.t-blocked { color: #92400E; background: #FFFBEB; border: 1px solid #FDE68A; }
+
+  .state-stage {
+    padding: 26px 22px;
+    background:
+      radial-gradient(800px 300px at 50% 100%, rgba(13,148,136,0.04), transparent 60%),
+      linear-gradient(180deg, #fafaf7 0%, #f4f3ed 100%);
+    display: grid; place-items: center;
+    min-height: 540px;
+  }
+
+  .state-foot {
+    padding: 14px 20px 16px;
+    border-top: 1px solid var(--border-soft);
+    font-size: 12px;
+    color: var(--text-muted);
+    line-height: 1.55;
+  }
+  .state-foot strong { color: var(--text); font-weight: 600; }
+
+  /* =========== Dialog (static replica) =========== */
+  .dlg {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: var(--r-lg);
+    box-shadow: 0 24px 64px rgba(28,25,23,0.18), 0 4px 12px rgba(28,25,23,0.08);
+    width: 100%; max-width: 460px;
+    overflow: hidden;
+    display: flex; flex-direction: column;
+  }
+  .dlg > header {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 12px;
+    padding: 16px 20px 12px;
+    border-bottom: 1px solid var(--border-soft);
+  }
+  .dlg h4 {
+    font-family: var(--font-display); font-size: 16px; font-weight: 600;
+    letter-spacing: -0.01em; color: var(--text-strong); margin: 0;
+  }
+  .dlg .x {
+    width: 28px; height: 28px; border-radius: 6px;
+    color: var(--text-muted);
+    display: grid; place-items: center;
+    font-size: 20px; line-height: 1;
+  }
+
+  .dlg-body { padding: 16px 20px 4px; display: grid; gap: 16px; }
+
+  .dlg-pat {
+    background: var(--bg-subtle);
+    border: 1px solid var(--border-soft);
+    border-radius: var(--r-md);
+    padding: 11px 12px;
+  }
+  .dlg-pat .eyebrow {
+    font-family: var(--font-mono); font-size: 10.5px;
+    color: var(--text-muted); letter-spacing: 0.06em;
+    text-transform: uppercase; margin-bottom: 5px;
+  }
+  .dlg-pat .row { display: flex; align-items: center; gap: 10px; }
+  .dlg-pat .av {
+    width: 34px; height: 34px;
+    border-radius: 999px;
+    background: var(--teal-700); color: white;
+    display: grid; place-items: center;
+    font-family: var(--font-display); font-weight: 600; font-size: 13px;
+  }
+  .dlg-pat .name {
+    font-family: var(--font-display); font-size: 14px; font-weight: 600;
+    color: var(--text-strong);
+  }
+  .dlg-pat .meta {
+    font-size: 11.5px; color: var(--text-muted);
+    font-variant-numeric: tabular-nums; margin-top: 1px;
+  }
+
+  .dlg-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .dlg-field { display: flex; flex-direction: column; gap: 4px; }
+  .dlg-field > span {
+    font-family: var(--font-mono); font-size: 10.5px;
+    color: var(--text-muted); letter-spacing: 0.06em; text-transform: uppercase;
+  }
+  .dlg-field .stub {
+    font-variant-numeric: tabular-nums;
+    padding: 9px 11px;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--r-md);
+    background: var(--bg-elevated);
+    font-size: 13.5px;
+    color: var(--text);
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .dlg-field .stub .chev { color: var(--text-faint); font-size: 11px; }
+
+  .dlg-dur .lab {
+    font-family: var(--font-mono); font-size: 10.5px;
+    color: var(--text-muted); letter-spacing: 0.06em; text-transform: uppercase;
+    margin-bottom: 7px;
+  }
+  .dlg-dur-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
+
+  .dur {
+    background: var(--bg-elevated);
+    border: 1.5px solid var(--border-strong);
+    border-radius: var(--r-md);
+    padding: 12px 14px;
+    min-height: 60px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .dur .num {
+    font-family: var(--font-display); font-size: 20px; font-weight: 600;
+    letter-spacing: -0.015em; color: var(--text-strong);
+    font-variant-numeric: tabular-nums;
+  }
+  .dur .num span {
+    font-family: var(--font-ui); font-size: 12px; font-weight: 500;
+    color: var(--text-muted); margin-left: 3px;
+    letter-spacing: 0;
+  }
+  .dur .dot {
+    width: 20px; height: 20px;
+    border-radius: 999px;
+    border: 1.5px solid var(--border-strong);
+    background: var(--bg-elevated);
+    flex-shrink: 0;
+    position: relative;
+  }
+  .dur.selected {
+    border-color: var(--primary);
+    background: var(--teal-50);
+  }
+  .dur.selected .num { color: var(--primary-dark); }
+  .dur.selected .dot {
+    border-color: var(--primary);
+    background: var(--primary);
+  }
+  .dur.selected .dot::after {
+    content: ''; position: absolute;
+    left: 50%; top: 50%;
+    width: 7px; height: 7px;
+    background: white;
+    border-radius: 999px;
+    transform: translate(-50%, -50%);
+  }
+  .dur.disabled {
+    background: var(--bg-subtle);
+    border-color: var(--border);
+    border-style: dashed;
+  }
+  .dur.disabled .num { color: var(--text-faint); }
+  .dur.disabled .num span { color: var(--text-faint); }
+  .dur.disabled .dot { border-style: dashed; }
+
+  .dlg-notice {
+    display: flex; gap: 9px;
+    padding: 9px 12px;
+    border-radius: var(--r-md);
+    font-size: 12px;
+    line-height: 1.55;
+    align-items: flex-start;
+    margin-top: 9px;
+  }
+  .dlg-notice strong { font-weight: 600; }
+  .dlg-notice.info {
+    background: var(--teal-50);
+    border: 1px solid var(--teal-200);
+    color: var(--teal-900);
+  }
+  .dlg-notice.info .ico { color: var(--primary); }
+  .dlg-notice.warn {
+    background: #FFFBEB;
+    border: 1px solid #FDE68A;
+    color: #92400E;
+  }
+  .dlg-notice.warn .ico { color: var(--accent-500); }
+  .dlg-notice .ico { flex-shrink: 0; margin-top: 1px; }
+  .dlg-notice .sub { opacity: 0.78; font-size: 11px; margin-top: 2px; }
+
+  .dlg > footer {
+    padding: 12px 20px 16px;
+    display: flex; justify-content: flex-end; gap: 8px;
+    border-top: 1px solid var(--border-soft);
+    background: var(--bg-subtle);
+    margin-top: 12px;
+  }
+  .btn-stub {
+    padding: 8px 14px;
+    border-radius: var(--r-md);
+    font-size: 13px;
+    font-weight: 500;
+    font-family: var(--font-ui);
+  }
+  .btn-stub.ghost { color: var(--text-muted); }
+  .btn-stub.primary {
+    background: var(--primary); color: white;
+    box-shadow: 0 1px 0 rgba(0,0,0,0.05), inset 0 1px 0 rgba(255,255,255,0.15);
+  }
+  .btn-stub.primary.disabled {
+    background: var(--bg-muted); color: var(--text-faint);
+    box-shadow: none;
+  }
+
+  .design-note {
+    margin-top: 32px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-soft);
+    border-radius: var(--r-lg);
+    padding: 22px 26px;
+    display: grid;
+    grid-template-columns: 220px 1fr;
+    gap: 28px;
+  }
+  .design-note h2 {
+    font-family: var(--font-display);
+    font-size: 16px; font-weight: 600;
+    letter-spacing: -0.01em; color: var(--text-strong);
+    margin-bottom: 6px;
+  }
+  .design-note .l {
+    font-family: var(--font-mono); font-size: 10.5px;
+    color: var(--text-faint); letter-spacing: 0.08em;
+    text-transform: uppercase; margin-bottom: 6px;
+  }
+  .design-note p {
+    font-size: 12.5px; color: var(--text-muted); line-height: 1.65;
+    margin: 0 0 8px;
+  }
+  .design-note p strong { color: var(--text); font-weight: 600; }
+  .design-note ul {
+    margin: 0; padding-left: 16px;
+    font-size: 12.5px; color: var(--text-muted); line-height: 1.7;
+  }
+  .design-note ul li strong { color: var(--text); font-weight: 600; }
+</style>
+</head>
+<body>
+
+<div class="pg-head">
+  <div>
+    <h1>Booking dialog · tre gjendje</h1>
+    <p>Dialogu i caktimit të terminit pas zgjedhjes së pacientit. Asnjë kohëzgjatje nuk është e parazgjedhur — recepsionistja duhet ta zgjedhë me vetëdije. Tre rastet e konfliktit janë mbajtur në një dizajn të vetëm me vetëm një ndryshim vizual për gjendje.</p>
+  </div>
+  <div class="meta">v1.0 · receptionist · tablet-first</div>
+</div>
+
+<div class="wrap">
+  <div class="states-grid">
+
+    <!-- ============ STATE A — CLEAN FIT ============ -->
+    <div class="state-card">
+      <div class="state-head">
+        <div>
+          <div class="num">01</div>
+          <h3>Default · zgjedhja e kohëzgjatjes</h3>
+        </div>
+        <span class="tag t-clean">CASE A · clean</span>
+      </div>
+      <div class="state-stage">
+        <div class="dlg">
+          <header>
+            <h4>Cakto termin</h4>
+            <div class="x">×</div>
+          </header>
+          <div class="dlg-body">
+            <div class="dlg-pat">
+              <div class="eyebrow">Pacienti</div>
+              <div class="row">
+                <div class="av">RH</div>
+                <div>
+                  <div class="name">Rita Hoxha</div>
+                  <div class="meta">DL 12.02.2024 · 2v 3m</div>
+                </div>
+              </div>
+            </div>
+            <div class="dlg-row">
+              <div class="dlg-field">
+                <span>Data</span>
+                <div class="stub">14.05.2026 <span class="chev">▾</span></div>
+              </div>
+              <div class="dlg-field">
+                <span>Ora</span>
+                <div class="stub">10:30 <span class="chev">▾</span></div>
+              </div>
+            </div>
+            <div class="dlg-dur">
+              <div class="lab">Kohëzgjatja</div>
+              <div class="dlg-dur-grid">
+                <div class="dur">
+                  <span class="num">10<span> min</span></span>
+                  <span class="dot"></span>
+                </div>
+                <div class="dur selected">
+                  <span class="num">15<span> min</span></span>
+                  <span class="dot"></span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <footer>
+            <span class="btn-stub ghost">Anulo</span>
+            <span class="btn-stub primary">Cakto termin</span>
+          </footer>
+        </div>
+      </div>
+      <div class="state-foot">
+        <strong>Rasti A — fitim i pastër.</strong> Kohëzgjatja e zgjedhur përshtatet plotësisht në boshllëkun e zgjedhur. Pa paralajmërime, pa frikë — vetëm konfirmim. Toast pas klikimit: <em>"Termini u caktua për 14 maj, ora 10:30 (15 min)"</em>.
+      </div>
+    </div>
+
+    <!-- ============ STATE B — AUTO-EXTEND ============ -->
+    <div class="state-card">
+      <div class="state-head">
+        <div>
+          <div class="num">02</div>
+          <h3>Auto-extend · 5 min e ardhshme janë të lira</h3>
+        </div>
+        <span class="tag t-extend">CASE B · extend</span>
+      </div>
+      <div class="state-stage">
+        <div class="dlg">
+          <header>
+            <h4>Cakto termin</h4>
+            <div class="x">×</div>
+          </header>
+          <div class="dlg-body">
+            <div class="dlg-pat">
+              <div class="eyebrow">Pacienti</div>
+              <div class="row">
+                <div class="av">RH</div>
+                <div>
+                  <div class="name">Rita Hoxha</div>
+                  <div class="meta">DL 12.02.2024 · 2v 3m</div>
+                </div>
+              </div>
+            </div>
+            <div class="dlg-row">
+              <div class="dlg-field">
+                <span>Data</span>
+                <div class="stub">15.05.2026 <span class="chev">▾</span></div>
+              </div>
+              <div class="dlg-field">
+                <span>Ora</span>
+                <div class="stub">11:00 <span class="chev">▾</span></div>
+              </div>
+            </div>
+            <div class="dlg-dur">
+              <div class="lab">Kohëzgjatja</div>
+              <div class="dlg-dur-grid">
+                <div class="dur">
+                  <span class="num">10<span> min</span></span>
+                  <span class="dot"></span>
+                </div>
+                <div class="dur selected">
+                  <span class="num">15<span> min</span></span>
+                  <span class="dot"></span>
+                </div>
+              </div>
+              <div class="dlg-notice info">
+                <svg class="ico" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6">
+                  <circle cx="8" cy="8" r="6.5"/>
+                  <path d="M8 7v4M8 5h.01" stroke-linecap="round"/>
+                </svg>
+                <div>Ky termin do të zgjasë deri <strong>11:15</strong>. Të vazhdojmë?</div>
+              </div>
+            </div>
+          </div>
+          <footer>
+            <span class="btn-stub ghost">Anulo</span>
+            <span class="btn-stub primary">Cakto termin</span>
+          </footer>
+        </div>
+      </div>
+      <div class="state-foot">
+        <strong>Rasti B — zgjerim i butë.</strong> Slot-i 10-minutësh u zgjodh por kohëzgjatja 15-min do të kalojë në 5 minutat e ardhshme që janë të lira. Njoftim i butë — pa amber, pa alarm — vetëm një konfirmim "po të vazhdojmë?". Recepsionistja vendos.
+      </div>
+    </div>
+
+    <!-- ============ STATE C — BLOCKED ============ -->
+    <div class="state-card">
+      <div class="state-head">
+        <div>
+          <div class="num">03</div>
+          <h3>Bllokuar · 5 min e ardhshme janë të zëna</h3>
+        </div>
+        <span class="tag t-blocked">CASE C · blocked</span>
+      </div>
+      <div class="state-stage">
+        <div class="dlg">
+          <header>
+            <h4>Cakto termin</h4>
+            <div class="x">×</div>
+          </header>
+          <div class="dlg-body">
+            <div class="dlg-pat">
+              <div class="eyebrow">Pacienti</div>
+              <div class="row">
+                <div class="av">RH</div>
+                <div>
+                  <div class="name">Rita Hoxha</div>
+                  <div class="meta">DL 12.02.2024 · 2v 3m</div>
+                </div>
+              </div>
+            </div>
+            <div class="dlg-row">
+              <div class="dlg-field">
+                <span>Data</span>
+                <div class="stub">16.05.2026 <span class="chev">▾</span></div>
+              </div>
+              <div class="dlg-field">
+                <span>Ora</span>
+                <div class="stub">12:30 <span class="chev">▾</span></div>
+              </div>
+            </div>
+            <div class="dlg-dur">
+              <div class="lab">Kohëzgjatja</div>
+              <div class="dlg-dur-grid">
+                <div class="dur selected">
+                  <span class="num">10<span> min</span></span>
+                  <span class="dot"></span>
+                </div>
+                <div class="dur disabled">
+                  <span class="num">15<span> min</span></span>
+                  <span class="dot"></span>
+                </div>
+              </div>
+              <div class="dlg-notice warn">
+                <svg class="ico" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6">
+                  <path d="M8 1.5L14.5 13.5h-13z" stroke-linejoin="round"/>
+                  <path d="M8 6.5v3.5M8 12h.01" stroke-linecap="round"/>
+                </svg>
+                <div>
+                  <strong>15 minuta nuk është e disponueshme në këtë orar.</strong>
+                  <div class="sub">Zgjidh 10 minuta ose ndrysho orarin.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <footer>
+            <span class="btn-stub ghost">Anulo</span>
+            <span class="btn-stub primary">Cakto termin</span>
+          </footer>
+        </div>
+      </div>
+      <div class="state-foot">
+        <strong>Rasti C — zgjedhje e bllokuar (Treatment 1).</strong> Slot-i 15-min është i çaktivizuar vizualisht me kornizë me vija të ndërprera dhe një paralajmërim amber poshtë. Asnjë surprizë: recepsionistja sheh menjëherë çfarë nuk është e mundur dhe si ta zgjidhë.
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Design notes -->
+  <div class="design-note">
+    <div>
+      <div class="l">Vendime kyçe</div>
+      <h2>Pse asnjë default</h2>
+      <p style="font-size: 11.5px;">Çdo termin meriton zgjedhje me vetëdije.</p>
+    </div>
+    <div>
+      <ul>
+        <li><strong>Asnjë kohëzgjatje e parazgjedhur.</strong> Të dy butonat fillojnë në gjendje të çzgjedhur. "Cakto termin" mbetet i çaktivizuar derisa recepsionistja të prekë 10 ose 15 min. Kjo parandalon zakonin e keq që çdo termin të paracaktohet pa menduar.</li>
+        <li><strong>Konflikti komunikohet inline, jo në modal të ri.</strong> Njoftimet shfaqen drejtpërdrejt nën përzgjedhësin e kohëzgjatjes — pa frika, pa kërcim konteksti. Teal për informim, amber vetëm për pamundësi reale.</li>
+        <li><strong>Cakti i parazgjedhur i terapise.</strong> Treatment 1 (çaktivizim i butonit + amber inline) është më i qartë se Treatment 2 (kornizë e theksuar + paralajmërim modal). Më pak klikime, më shumë qartësi.</li>
+        <li><strong>Madhësia për tablet.</strong> Butonat e kohëzgjatjes janë minimum 60px lartësi — më të dukshëm se inputet e datës/orës sepse janë <em>vendimi kryesor</em> i dialogut.</li>
+        <li><strong>Ndryshimi i orës rivendos gjendjen.</strong> Kur recepsionistja ndryshon orarin pasi ka zgjedhur kohëzgjatjen, përzgjedhja zerohet — ajo duhet ta konfirmojë sërish. Më shumë friksion, më pak gabime.</li>
+      </ul>
+    </div>
+  </div>
+
+  <p style="margin-top: 28px; font-size: 12.5px; color: var(--text-muted); line-height: 1.6;">
+    Versioni interaktiv: hapni <a href="receptionist.html" style="color: var(--primary); font-weight: 500;">receptionist.html</a> dhe klikoni një nga tre slotat e shenjuar "+ Termin i lirë" në kalendar (Mar 14:30 → clean, Mër 11:00 → extend, Enj 12:30 → blocked), ose përdorni kërkimin për të caktuar pacientin.
+  </p>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="sq">
+<head>
+<meta charset="UTF-8">
+<title>Klinika — Pamja e ditës</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="styles.css">
+<style>
+  .dash-grid {
+    display: grid;
+    grid-template-columns: 40fr 60fr;
+    gap: 20px;
+    align-items: flex-start;
+  }
+
+  /* Left column */
+  .panel { background: var(--bg-elevated); border: 1px solid var(--border); border-radius: var(--r-lg); box-shadow: var(--shadow-xs); overflow: hidden; }
+  .panel-head { padding: 12px 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+  .panel-head h3 { font-size: 13px; font-weight: 600; letter-spacing: -0.005em; }
+  .panel-head .meta { font-size: 12px; color: var(--text-muted); }
+  .panel-body { padding: 4px 0; }
+
+  /* Appointment list */
+  .appt-list { display: flex; flex-direction: column; }
+  .appt-row {
+    display: grid;
+    grid-template-columns: 58px 12px 1fr auto;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 16px;
+    border-bottom: 1px solid var(--border-soft);
+    cursor: pointer;
+    transition: background 120ms ease;
+  }
+  .appt-row:last-child { border-bottom: none; }
+  .appt-row:hover { background: var(--bg-subtle); }
+  .appt-row .time { font-variant-numeric: tabular-nums; font-size: 13px; font-weight: 500; color: var(--text); }
+  .appt-row.done .time { color: var(--text-faint); text-decoration: line-through; text-decoration-thickness: 1px; }
+  .appt-row .status-dot { width: 8px; height: 8px; border-radius: 999px; background: var(--border-strong); }
+  .appt-row.done .status-dot { background: var(--green); }
+  .appt-row.next .status-dot { background: var(--primary); box-shadow: 0 0 0 3px var(--primary-soft); }
+  .appt-row .name { font-size: 13px; font-weight: 500; color: var(--text); }
+  .appt-row.done .name { color: var(--text-muted); }
+  .appt-row .name .age { color: var(--text-faint); font-weight: 400; margin-left: 6px; font-size: 12px; }
+  .appt-row .reason { font-size: 11px; color: var(--text-muted); }
+  .appt-row.next {
+    background: linear-gradient(90deg, var(--primary-soft) 0%, transparent 100%);
+    border-left: 2px solid var(--primary);
+    padding-left: 14px;
+  }
+  .appt-row.next .name { color: var(--text-strong); font-weight: 600; }
+
+  /* Mini stats */
+  .stats-mini {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    border-top: 1px solid var(--border);
+  }
+  .stats-mini .s {
+    padding: 14px 16px;
+    border-right: 1px solid var(--border);
+  }
+  .stats-mini .s:last-child { border-right: none; }
+  .stats-mini .v {
+    font-family: var(--font-display);
+    font-size: 22px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+  }
+  .stats-mini .l {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .stats-mini .delta {
+    font-size: 11px;
+    color: var(--green);
+    margin-left: 6px;
+    font-weight: 500;
+  }
+
+  /* Quick search */
+  .quick-search-mini {
+    margin: 14px 16px 16px;
+    position: relative;
+  }
+  .quick-search-mini input {
+    width: 100%;
+    padding: 8px 12px 8px 32px;
+    border-radius: var(--r-md);
+    border: 1px solid var(--border-strong);
+    background: var(--bg-elevated);
+    font-size: 13px;
+    outline: none;
+  }
+  .quick-search-mini input:focus { border-color: var(--primary); box-shadow: var(--focus-ring); }
+  .quick-search-mini .icon { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--text-faint); }
+
+  /* Right column - Next patient card */
+  .next-patient {
+    padding: 24px;
+    background:
+      radial-gradient(ellipse 60% 60% at 100% 0%, var(--primary-tint), transparent 50%),
+      var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: var(--r-lg);
+    box-shadow: var(--shadow-xs);
+    margin-bottom: 20px;
+  }
+  .np-tag {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--primary-dark);
+    font-weight: 600;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .np-tag .dot { width: 6px; height: 6px; background: var(--primary); border-radius: 999px; animation: pulse 2s ease-in-out infinite; }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+  .np-grid {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 20px;
+    align-items: flex-start;
+  }
+  .np-name {
+    font-family: var(--font-display);
+    font-size: 30px;
+    font-weight: 600;
+    letter-spacing: -0.025em;
+    line-height: 1.1;
+  }
+  .np-meta {
+    display: flex;
+    gap: 16px;
+    margin-top: 8px;
+    font-size: 13px;
+    color: var(--text-muted);
+  }
+  .np-meta strong { color: var(--text); font-weight: 600; }
+  .np-time {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+  .np-time .t {
+    font-family: var(--font-display);
+    font-size: 28px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+  }
+  .np-time .sub { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+
+  .np-quick {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    margin-top: 20px;
+    padding-top: 18px;
+    border-top: 1px solid var(--border);
+  }
+  .np-quick .item .lab {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-faint);
+    font-weight: 500;
+  }
+  .np-quick .item .v {
+    font-family: var(--font-display);
+    font-size: 18px;
+    font-weight: 600;
+    margin-top: 4px;
+    color: var(--text-strong);
+    font-variant-numeric: tabular-nums;
+  }
+  .np-quick .item .sub { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+
+  .np-actions {
+    margin-top: 18px;
+    display: flex;
+    gap: 10px;
+  }
+
+  /* Today's done log */
+  .done-log .row-log {
+    display: grid;
+    grid-template-columns: 60px 1fr auto auto;
+    gap: 16px;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border-soft);
+    align-items: center;
+    font-size: 13px;
+  }
+  .done-log .row-log:last-child { border-bottom: none; }
+  .done-log .row-log:hover { background: var(--bg-subtle); cursor: pointer; }
+  .done-log .time { font-variant-numeric: tabular-nums; color: var(--text-muted); font-size: 12px; }
+  .done-log .pt { font-weight: 500; }
+  .done-log .pt .age { color: var(--text-faint); margin-left: 6px; font-size: 11px; font-weight: 400; }
+  .done-log .dx {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    background: var(--bg-subtle);
+    border: 1px solid var(--border);
+    padding: 1px 6px;
+    border-radius: 4px;
+    color: var(--text-muted);
+  }
+  .done-log .pay {
+    font-family: var(--font-display);
+    font-weight: 600;
+    color: var(--text);
+    font-size: 13px;
+    font-variant-numeric: tabular-nums;
+  }
+  .done-log .pay .code {
+    color: var(--text-faint);
+    font-weight: 400;
+    font-size: 11px;
+    margin-right: 4px;
+  }
+
+  /* Greeting strip */
+  .greeting-strip {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    margin-bottom: 20px;
+  }
+  .greeting-strip .gr {
+    font-family: var(--font-display);
+    font-size: 26px;
+    font-weight: 600;
+    letter-spacing: -0.025em;
+  }
+  .greeting-strip .gr .accent { color: var(--primary-dark); }
+  .greeting-strip .sub { color: var(--text-muted); font-size: 13px; margin-top: 2px; }
+
+  .refresh-pill {
+    font-size: 11px;
+    color: var(--text-faint);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .refresh-pill .dot { width: 6px; height: 6px; background: var(--green); border-radius: 999px; }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <a href="index.html" class="topbar-brand">
+    <svg width="22" height="22" viewBox="0 0 64 64" fill="none" style="color: var(--primary);">
+      <path d="M32 54 C 12 40, 8 26, 18 18 C 24 14, 30 16, 32 22 C 34 16, 40 14, 46 18 C 56 26, 52 40, 32 54 Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M14 34 L 22 34 L 26 26 L 30 42 L 34 28 L 38 36 L 50 36" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+    </svg>
+    klinika<span class="dot-app">.</span>
+  </a>
+
+  <nav class="topbar-nav">
+    <a href="doctor.html" class="nav-link active">Kalendari</a>
+    <a href="#" class="nav-link">Pacientët</a>
+    <a href="#" class="nav-link">Raportet</a>
+    <a href="clinic-settings.html" class="nav-link">Cilësimet</a>
+  </nav>
+
+  <div class="topbar-spacer"></div>
+
+  <div class="topbar-search">
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+      <circle cx="7" cy="7" r="5"/><path d="M11 11l3 3" stroke-linecap="round"/>
+    </svg>
+    <input placeholder="Kërko pacient, vizitë, ICD-10... (⌘K ose /)" data-os-search-placeholder="Kërko pacient, vizitë, ICD-10... ({shortcut} ose /)" />
+    <kbd>⌘K</kbd>
+  </div>
+
+  <button class="topbar-user">
+    <div class="avatar">TS</div>
+    <span class="name">Dr. Taulant Shala</span>
+    <span class="chev">▾</span>
+  </button>
+</header>
+
+<main class="page">
+  <div class="greeting-strip">
+    <div>
+      <div class="gr">Mirëdita, <span class="accent">Dr. Taulant Shala</span>.</div>
+      <div class="sub">E martë, 14 maj 2026 · 5 vizita të kryera · 9 të mbetura</div>
+    </div>
+    <div class="refresh-pill">
+      <span class="dot"></span>
+      I përditësuar para 14 sekondash
+    </div>
+  </div>
+
+  <div class="dash-grid">
+    <!-- LEFT COLUMN -->
+    <div class="col">
+      <!-- Appointments -->
+      <section class="panel">
+        <div class="panel-head">
+          <h3>Terminet e sotit</h3>
+          <span class="meta">14 gjithsej · 5 të kryera</span>
+        </div>
+        <div class="quick-search-mini">
+          <span class="icon">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+              <circle cx="7" cy="7" r="5"/><path d="M11 11l3 3" stroke-linecap="round"/>
+            </svg>
+          </span>
+          <input placeholder="Kërko pacient ose diagnozë...">
+        </div>
+        <div class="panel-body appt-list">
+          <div class="appt-row done">
+            <div class="time">10:00</div><div class="status-dot"></div>
+            <div><div class="name">Era Berisha <span class="age">4v 2m</span></div><div class="reason">Tonsillopharyngitis acuta</div></div>
+            <span class="chip">A · 15€</span>
+          </div>
+          <div class="appt-row done">
+            <div class="time">10:30</div><div class="status-dot"></div>
+            <div><div class="name">Dion Hoxha <span class="age">7m</span></div><div class="reason">Kontroll i rregullt</div></div>
+            <span class="chip">B · 10€</span>
+          </div>
+          <div class="appt-row done">
+            <div class="time">11:10</div><div class="status-dot"></div>
+            <div><div class="name">Aria Kelmendi <span class="age">1v 3m</span></div><div class="reason">Kontroll i rregullt</div></div>
+            <span class="chip">A · 15€</span>
+          </div>
+          <div class="appt-row done" style="opacity: 0.6;">
+            <div class="time">12:10</div><div class="status-dot" style="background: var(--red);"></div>
+            <div><div class="name">Ben Krasniqi <span class="age">3v</span></div><div class="reason">Mungesë</div></div>
+            <span class="chip chip-red"><span class="dot"></span>MS</span>
+          </div>
+          <div class="appt-row done">
+            <div class="time">12:50</div><div class="status-dot"></div>
+            <div><div class="name">Lena Hoti <span class="age">5v 8m</span></div><div class="reason">Bronkit akut · kontroll</div></div>
+            <span class="chip">A · 15€</span>
+          </div>
+          <div class="appt-row next">
+            <div class="time">14:20</div><div class="status-dot"></div>
+            <div><div class="name">Era Krasniqi <span class="age">2v 9m</span></div><div class="reason">Kontroll i rregullt</div></div>
+            <span class="chip chip-teal"><span class="dot"></span>Tani</span>
+          </div>
+          <div class="appt-row">
+            <div class="time">14:50</div><div class="status-dot"></div>
+            <div><div class="name">Mira Hoxhaj <span class="age">11m</span></div><div class="reason">Otitis media · pasvizitë</div></div>
+            <span class="chip">15 min</span>
+          </div>
+          <div class="appt-row">
+            <div class="time">15:30</div><div class="status-dot"></div>
+            <div><div class="name">Endi Krasniqi <span class="age">3 ditë</span></div><div class="reason">Vizita e parë · pacient i ri</div></div>
+            <span class="chip chip-amber"><span class="dot"></span>40 min</span>
+          </div>
+          <div class="appt-row">
+            <div class="time">16:30</div><div class="status-dot"></div>
+            <div><div class="name">Lori Gashi <span class="age">6v 4m</span></div><div class="reason">Bronkit akut</div></div>
+            <span class="chip">15 min</span>
+          </div>
+          <div class="appt-row">
+            <div class="time">17:10</div><div class="status-dot"></div>
+            <div><div class="name">Sara Berisha <span class="age">8m</span></div><div class="reason">Kontroll i rregullt</div></div>
+            <span class="chip">10 min</span>
+          </div>
+        </div>
+
+        <div class="stats-mini">
+          <div class="s"><div class="v">5</div><div class="l">Të kryera</div></div>
+          <div class="s"><div class="v">8.4<span style="font-size: 12px; color: var(--text-faint); margin-left: 4px; letter-spacing: 0;">min</span></div><div class="l">Mesatare</div></div>
+          <div class="s"><div class="v">70<span style="font-size: 12px; color: var(--text-faint); margin-left: 4px; letter-spacing: 0;">€</span></div><div class="l">Pagesa</div></div>
+        </div>
+      </section>
+    </div>
+
+    <!-- RIGHT COLUMN -->
+    <div class="col">
+      <!-- Next patient -->
+      <a href="chart.html" style="display: block;">
+        <div class="next-patient">
+          <div class="np-tag"><span class="dot"></span>Pacienti në vijim · pas 12 minutash</div>
+          <div class="np-grid">
+            <div>
+              <div class="np-name">Era Krasniqi</div>
+              <div class="np-meta">
+                <span><strong>2v 9m</strong> · vajzë</span>
+                <span>5 vizita</span>
+                <span class="chip chip-green"><span class="dot"></span>43 ditë nga vizita e fundit</span>
+              </div>
+            </div>
+            <div class="np-time">
+              <div class="t">14:20</div>
+              <div class="sub">Mar · 15 min</div>
+            </div>
+          </div>
+
+          <div class="np-quick">
+            <div class="item">
+              <div class="lab">Diagnoza e fundit</div>
+              <div class="v" style="font-size: 14px;">Tonsillitis acuta</div>
+              <div class="sub">J03.9 · 01.04.2026</div>
+            </div>
+            <div class="item">
+              <div class="lab">Pesha</div>
+              <div class="v">13.6 <span style="font-size: 12px; color: var(--text-faint); letter-spacing: 0;">kg</span></div>
+              <div class="sub">P50 · ↑ 0.4 kg</div>
+            </div>
+            <div class="item">
+              <div class="lab">Gjatësia</div>
+              <div class="v">92 <span style="font-size: 12px; color: var(--text-faint); letter-spacing: 0;">cm</span></div>
+              <div class="sub">P50</div>
+            </div>
+            <div class="item">
+              <div class="lab">Arsyeja</div>
+              <div class="v" style="font-size: 14px;">Kontroll i rregullt</div>
+              <div class="sub">temperaturë e lehtë gjatë natës</div>
+            </div>
+          </div>
+
+          <div class="np-actions">
+            <button class="btn btn-primary">Hap kartelën →</button>
+            <button class="btn btn-secondary">Shiko historinë</button>
+            <button class="btn btn-ghost">Shtyje</button>
+          </div>
+        </div>
+      </a>
+
+      <!-- Today's visits -->
+      <section class="panel done-log">
+        <div class="panel-head">
+          <h3>Vizitat e sotshme</h3>
+          <span class="meta">5 të regjistruara</span>
+        </div>
+        <div class="row-log">
+          <div class="time">12:50</div>
+          <div class="pt">Lena Hoti <span class="age">5v 8m</span></div>
+          <div class="dx">J20.9 Bronchitis acuta</div>
+          <div class="pay"><span class="code">A</span>15 €</div>
+        </div>
+        <div class="row-log">
+          <div class="time">11:10</div>
+          <div class="pt">Aria Kelmendi <span class="age">1v 3m</span></div>
+          <div class="dx">Z00.1 Kontroll i rregullt</div>
+          <div class="pay"><span class="code">A</span>15 €</div>
+        </div>
+        <div class="row-log">
+          <div class="time">10:30</div>
+          <div class="pt">Dion Hoxha <span class="age">7m</span></div>
+          <div class="dx">Z00.1 Kontroll rutinë</div>
+          <div class="pay"><span class="code">B</span>10 €</div>
+        </div>
+        <div class="row-log">
+          <div class="time">10:00</div>
+          <div class="pt">Era Berisha <span class="age">4v 2m</span></div>
+          <div class="dx">J03.9 Tonsillitis acuta</div>
+          <div class="pay"><span class="code">A</span>15 €</div>
+        </div>
+        <div class="row-log" style="background: var(--bg-subtle);">
+          <div class="time">09:50</div>
+          <div class="pt">Drini Hoxha <span class="age">3v 1m</span></div>
+          <div class="dx">H66.9 Otitis media</div>
+          <div class="pay"><span class="code">A</span>15 €</div>
+        </div>
+      </section>
+    </div>
+  </div>
+</main>
+
+</body>
+<script src="shortcuts.js"></script>
+</html>

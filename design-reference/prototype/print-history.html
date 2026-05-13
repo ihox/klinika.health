@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="sq">
+<head>
+<meta charset="UTF-8">
+<title>Klinika — Historia e pacientit</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="styles.css">
+<style>
+  body { background: #E7E5E4; min-height: 100vh; }
+
+  .preview-bar {
+    position: sticky;
+    top: 0;
+    background: var(--bg-elevated);
+    border-bottom: 1px solid var(--border);
+    padding: 12px 24px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    z-index: 10;
+    box-shadow: var(--shadow-xs);
+  }
+  .pb-back { display: flex; align-items: center; gap: 6px; color: var(--text-muted); font-size: 13px; }
+  .pb-title { font-family: var(--font-display); font-size: 15px; font-weight: 600; }
+  .pb-sub { font-size: 12px; color: var(--text-muted); }
+  .pb-spacer { flex: 1; }
+
+  .check-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--text-muted);
+    padding: 5px 10px;
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    background: var(--bg-subtle);
+  }
+
+  .paper-area { padding: 32px; display: flex; flex-direction: column; align-items: center; gap: 20px; }
+  .paper {
+    width: 148mm;
+    min-height: 210mm;
+    background: white;
+    box-shadow: 0 8px 24px rgba(28,25,23,0.16), 0 2px 8px rgba(28,25,23,0.08);
+    padding: 12mm 12mm 10mm;
+    font-family: 'Inter', system-ui, sans-serif;
+    font-size: 8.5pt;
+    color: #1c1917;
+    line-height: 1.4;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Page header */
+  .h-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-bottom: 4mm;
+    border-bottom: 1.5px solid #0F766E;
+    margin-bottom: 4mm;
+  }
+  .h-clinic {
+    display: flex;
+    align-items: center;
+    gap: 3mm;
+  }
+  .h-clinic .mark { color: #0F766E; }
+  .h-clinic .name {
+    font-family: 'Inter Tight', sans-serif;
+    font-size: 11pt;
+    font-weight: 700;
+    color: #0F766E;
+    line-height: 1;
+  }
+  .h-clinic .sub {
+    font-size: 7pt;
+    color: #57534E;
+    margin-top: 1mm;
+  }
+  .h-meta {
+    text-align: right;
+    font-size: 7.5pt;
+    color: #57534E;
+    font-variant-numeric: tabular-nums;
+  }
+  .h-meta .pt-id { font-weight: 600; color: #1c1917; }
+
+  /* Title bar */
+  .h-title-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    margin-bottom: 5mm;
+  }
+  .h-title-bar .title {
+    font-family: 'Inter Tight', sans-serif;
+    font-size: 13pt;
+    font-weight: 700;
+    letter-spacing: -0.005em;
+  }
+  .h-title-bar .subt { font-size: 8pt; color: #57534E; }
+
+  /* Patient master */
+  .h-master {
+    background: #F5F5F4;
+    border: 1px solid #E7E5E4;
+    border-radius: 3px;
+    padding: 3mm 4mm;
+    margin-bottom: 5mm;
+    display: grid;
+    grid-template-columns: 1.4fr 1fr 1fr;
+    gap: 5mm;
+  }
+  .h-master .col .l {
+    font-size: 6.5pt;
+    color: #78716C;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-weight: 500;
+  }
+  .h-master .col .v {
+    font-size: 9pt;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    margin-top: 1mm;
+  }
+  .h-master .col .v.name { font-family: 'Inter Tight', sans-serif; font-size: 11pt; }
+  .h-master .col .sub { font-size: 7.5pt; color: #57534E; margin-top: 1mm; font-variant-numeric: tabular-nums; }
+
+  /* Allergy alert — master block, life-safety field */
+  .h-allergy {
+    margin-bottom: 5mm;
+    padding: 2.5mm 4mm;
+    background: #FEF3C7;
+    border: 1px solid #FDE68A;
+    border-left: 3px solid #B45309;
+    border-radius: 3px;
+    display: flex;
+    align-items: center;
+    gap: 3mm;
+    font-size: 9pt;
+    color: #78350F;
+    line-height: 1.35;
+  }
+  .h-allergy .alg-icon {
+    flex: 0 0 auto;
+    width: 4mm; height: 4mm;
+    border-radius: 999px;
+    background: #B45309;
+    color: white;
+    display: grid; place-items: center;
+    font-size: 7pt;
+    font-weight: 700;
+    line-height: 1;
+  }
+  .h-allergy .alg-lab {
+    font-size: 7.5pt;
+    font-weight: 700;
+    color: #B45309;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+  .h-allergy .alg-val { font-weight: 600; }
+
+  /* Visit table */
+  .visits-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 8pt;
+    font-variant-numeric: tabular-nums;
+  }
+  .visits-table thead th {
+    text-align: left;
+    padding: 2.5mm 3mm;
+    font-size: 7pt;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-weight: 700;
+    color: #0F766E;
+    border-bottom: 1.5px solid #0F766E;
+    background: white;
+  }
+  .visits-table td {
+    padding: 2.5mm 3mm;
+    border-bottom: 1px solid #E7E5E4;
+    vertical-align: top;
+  }
+  .visits-table tbody tr:nth-child(odd) td { background: rgba(204,251,241,0.18); }
+  .visits-table td.date {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 7.5pt;
+    color: #57534E;
+    width: 18mm;
+  }
+  .visits-table td.weight {
+    width: 16mm;
+    color: #1c1917;
+    font-weight: 600;
+  }
+  .visits-table td.dx {
+    font-size: 8pt;
+  }
+  .visits-table td.dx .code {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 7.5pt;
+    color: #0F766E;
+    font-weight: 700;
+    margin-right: 2mm;
+  }
+  .visits-table td.dx .desc { font-style: italic; }
+  .visits-table td.tx {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 7pt;
+    color: #1c1917;
+    line-height: 1.5;
+    white-space: pre-wrap;
+  }
+
+  /* Footer */
+  .doc-footer {
+    margin-top: auto;
+    padding-top: 6mm;
+    display: grid;
+    grid-template-columns: 1fr 45mm;
+    gap: 6mm;
+    align-items: flex-end;
+  }
+  .doc-footer .sig { font-size: 7.5pt; }
+  .doc-footer .sig .sig-img { height: 12mm; color: #1c1917; }
+  .doc-footer .sig .sig-line { border-top: 1px solid #1c1917; padding-top: 1mm; width: 50mm; margin-top: 1mm; }
+  .doc-footer .sig .name { font-weight: 600; font-size: 8pt; }
+  .doc-footer .sig .cred { color: #57534E; font-size: 7pt; }
+  .doc-footer .stamp-area {
+    height: 38mm;
+    border: 1px dashed #D6D3D1;
+    border-radius: 3px;
+    display: grid;
+    place-items: center;
+    color: #A8A29E;
+    font-size: 7pt;
+    text-align: center;
+    background: repeating-linear-gradient(45deg, transparent 0, transparent 8px, rgba(28,25,23,0.015) 8px, rgba(28,25,23,0.015) 9px);
+  }
+  .doc-footer .stamp-area .lab { text-transform: uppercase; letter-spacing: 0.1em; font-weight: 500; }
+  .doc-footer .stamp-area .sub { font-size: 6.5pt; color: #C4C0BC; margin-top: 1mm; font-style: italic; }
+
+  .page-num {
+    text-align: center;
+    font-size: 7pt;
+    color: #78716C;
+    padding-top: 4mm;
+    border-top: 1px solid #E7E5E4;
+    margin-top: 4mm;
+    font-variant-numeric: tabular-nums;
+  }
+
+  @page { size: A5 portrait; margin: 0; }
+  @media print {
+    body { background: white; }
+    .preview-bar { display: none; }
+    .paper-area { padding: 0; gap: 0; }
+    .paper { box-shadow: none; margin: 0; page-break-after: always; }
+    .paper:last-child { page-break-after: auto; }
+    .stamp-area { border: none; background: none; }
+    .stamp-area .lab, .stamp-area .sub { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="preview-bar">
+  <a href="chart.html" class="pb-back btn btn-ghost btn-sm">← Kthehu</a>
+  <div>
+    <div class="pb-title">Historia e pacientit</div>
+    <div class="pb-sub">Era Krasniqi · 5 vizita · 2 faqe A5</div>
+  </div>
+  <div class="pb-spacer"></div>
+  <label class="check-row"><input type="checkbox"> Imazhet e ultrazerit <span style="color: var(--text-faint);">(3)</span></label>
+  <button class="btn btn-secondary btn-sm">PDF</button>
+  <button class="btn btn-primary btn-sm" onclick="window.print()">Printo</button>
+</div>
+
+<div class="paper-area">
+
+  <!-- ============ Page 1 ============ -->
+  <article class="paper">
+    <header class="h-header">
+      <div class="h-clinic">
+        <svg class="mark" width="24" height="24" viewBox="0 0 64 64" fill="none">
+          <path d="M32 54 C 12 40, 8 26, 18 18 C 24 14, 30 16, 32 22 C 34 16, 40 14, 46 18 C 56 26, 52 40, 32 54 Z" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M10 34 L 22 34 L 26 28 L 30 40 L 34 30 L 38 36 L 54 36" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+        </svg>
+        <div>
+          <div class="name">OSP DONETA-MED</div>
+          <div class="sub">Prizren · 045 83 00 83</div>
+        </div>
+      </div>
+      <div class="h-meta">
+        <div class="pt-id">PT-04829</div>
+        <div>E lëshuar 14.05.2026</div>
+      </div>
+    </header>
+
+    <div class="h-title-bar">
+      <div>
+        <div class="title">HISTORIA E PACIENTIT</div>
+        <div class="subt">5 vizita · 04.10.2025 – 14.05.2026</div>
+      </div>
+    </div>
+
+    <div class="h-master">
+      <div class="col">
+        <div class="l">Pacienti</div>
+        <div class="v name">Era Krasniqi</div>
+        <div class="sub">vajzë · 2v 9m · lindur 03.08.2023</div>
+      </div>
+      <div class="col">
+        <div class="l">Lindja</div>
+        <div class="v">3 280 g · 51 cm</div>
+        <div class="sub">PK 34 cm · Prizren</div>
+      </div>
+      <div class="col">
+        <div class="l">Sot</div>
+        <div class="v">13.6 kg · 92 cm</div>
+        <div class="sub">PK 48.2 cm · P50</div>
+      </div>
+    </div>
+
+    <!-- Alergji / Tjera is OMITTED from history printouts (internal-only field). -->
+
+    <table class="visits-table">
+      <thead>
+        <tr>
+          <th>Data</th>
+          <th>Pesha</th>
+          <th>Diagnoza</th>
+          <th>Terapia</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="date">14.05.2026</td>
+          <td class="weight">13.6 kg</td>
+          <td class="dx">
+            <div><span class="code">J03.9</span><span class="desc">Tonsillitis acuta</span></div>
+            <div style="margin-top: 1mm;"><span class="code">R05</span><span class="desc">Tussis</span></div>
+          </td>
+          <td class="tx">Spray.Axxa 2× në ditë, 5 ditë
+Ibuprofen susp. 100mg/5ml — 5ml×3 p.r.n.
+>rez. pas 5 ditësh</td>
+        </tr>
+        <tr>
+          <td class="date">01.04.2026</td>
+          <td class="weight">13.2 kg</td>
+          <td class="dx">
+            <div><span class="code">J03.9</span><span class="desc">Tonsillitis acuta</span></div>
+          </td>
+          <td class="tx">Amoksicilinë susp. 250mg/5ml — 5ml×3, 7 ditë
+Paracetamol p.r.n.</td>
+        </tr>
+        <tr>
+          <td class="date">22.02.2026</td>
+          <td class="weight">12.8 kg</td>
+          <td class="dx">
+            <div><span class="code">Z00.1</span><span class="desc">Kontroll i rregullt</span></div>
+          </td>
+          <td class="tx">Kontroll i rregullt — zhvillim në normë.
+Paracetamol p.r.n. nëse temp.</td>
+        </tr>
+        <tr>
+          <td class="date">17.12.2025</td>
+          <td class="weight">12.4 kg</td>
+          <td class="dx">
+            <div><span class="code">J20.9</span><span class="desc">Bronchitis acuta</span></div>
+          </td>
+          <td class="tx">Salbutamol inh. — 2 puff × 4
+Ambroxol susp. — 2.5ml × 3, 7 ditë</td>
+        </tr>
+        <tr>
+          <td class="date">04.10.2025</td>
+          <td class="weight">11.8 kg</td>
+          <td class="dx">
+            <div><span class="code">Z00.1</span><span class="desc">Kontroll i rregullt</span></div>
+          </td>
+          <td class="tx">Pa terapi. Rritja në P50.
+Kontrolla pas 4 muajsh.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="page-num">Faqe 1/2 · DonetaMED · PT-04829</div>
+  </article>
+
+  <!-- ============ Page 2 (continuation + footer) ============ -->
+  <article class="paper">
+    <header class="h-header">
+      <div class="h-clinic">
+        <svg class="mark" width="24" height="24" viewBox="0 0 64 64" fill="none">
+          <path d="M32 54 C 12 40, 8 26, 18 18 C 24 14, 30 16, 32 22 C 34 16, 40 14, 46 18 C 56 26, 52 40, 32 54 Z" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M10 34 L 22 34 L 26 28 L 30 40 L 34 30 L 38 36 L 54 36" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+        </svg>
+        <div>
+          <div class="name">OSP DONETA-MED</div>
+          <div class="sub">Era Krasniqi · PT-04829</div>
+        </div>
+      </div>
+      <div class="h-meta">
+        <div class="pt-id">Vazhdim</div>
+        <div>Diagramet e rritjes</div>
+      </div>
+    </header>
+
+    <div class="h-title-bar">
+      <div class="title" style="font-size: 11pt;">DIAGRAMET E RRITJES · WHO</div>
+    </div>
+
+    <!-- Mini charts -->
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6mm; margin-bottom: 6mm;">
+      <div style="border: 1px solid #E7E5E4; border-radius: 3px; padding: 3mm 4mm;">
+        <div style="font-size: 7pt; color: #78716C; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 700; margin-bottom: 2mm;">Pesha · P50</div>
+        <svg viewBox="0 0 200 90" style="width: 100%; height: 24mm;" preserveAspectRatio="none">
+          <path d="M 0,75 C 50,68 100,58 150,48 S 200,38 200,38 L 200,90 L 0,90 Z" fill="rgba(204,251,241,0.4)"/>
+          <path d="M 0,75 C 50,68 100,58 150,48 S 200,38 200,38" stroke="#14B8A6" stroke-width="1.2" fill="none"/>
+          <path d="M 0,85 C 50,80 100,72 150,64 S 200,52 200,52" stroke="#14B8A6" stroke-width="0.7" fill="none" stroke-dasharray="2 2" opacity="0.5"/>
+          <path d="M 0,62 C 50,54 100,44 150,32 S 200,18 200,18" stroke="#14B8A6" stroke-width="0.7" fill="none" stroke-dasharray="2 2" opacity="0.5"/>
+          <path d="M 20,78 L 80,70 L 120,60 L 160,52 L 190,42" stroke="#0F766E" stroke-width="1.5" fill="none"/>
+          <g fill="#0F766E">
+            <circle cx="20" cy="78" r="2"/><circle cx="80" cy="70" r="2"/>
+            <circle cx="120" cy="60" r="2"/><circle cx="160" cy="52" r="2"/><circle cx="190" cy="42" r="2.5"/>
+          </g>
+        </svg>
+      </div>
+      <div style="border: 1px solid #E7E5E4; border-radius: 3px; padding: 3mm 4mm;">
+        <div style="font-size: 7pt; color: #78716C; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 700; margin-bottom: 2mm;">Gjatësia · P50</div>
+        <svg viewBox="0 0 200 90" style="width: 100%; height: 24mm;" preserveAspectRatio="none">
+          <path d="M 0,75 C 50,65 100,55 150,42 S 200,30 200,30 L 200,90 L 0,90 Z" fill="rgba(204,251,241,0.4)"/>
+          <path d="M 0,75 C 50,65 100,55 150,42 S 200,30 200,30" stroke="#14B8A6" stroke-width="1.2" fill="none"/>
+          <path d="M 20,82 L 80,72 L 120,60 L 160,48 L 190,34" stroke="#0F766E" stroke-width="1.5" fill="none"/>
+          <g fill="#0F766E">
+            <circle cx="20" cy="82" r="2"/><circle cx="80" cy="72" r="2"/>
+            <circle cx="120" cy="60" r="2"/><circle cx="160" cy="48" r="2"/><circle cx="190" cy="34" r="2.5"/>
+          </g>
+        </svg>
+      </div>
+    </div>
+
+    <!-- Per-visit vitals table (Gjatësia / PK / Temp) removed.
+         Per canonical visibility table, Gjatësia / PK / Temperatura are ❌ for Patient History.
+         Growth charts above remain — they're master-level trajectory data, not per-visit fields,
+         and are standard pediatric history content (kept as senior-designer call). -->
+
+    <footer class="doc-footer">
+      <div class="sig">
+        <svg class="sig-img" viewBox="0 0 200 60" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M 8 42 Q 15 18 32 26 Q 42 32 36 42 Q 28 50 38 38 Q 50 24 64 36 Q 72 44 80 30 Q 90 14 100 28 Q 108 38 118 26 Q 130 12 144 30 Q 152 42 160 30 L 178 14" opacity="0.85"/>
+        </svg>
+        <div class="sig-line"></div>
+        <div class="name">Dr. Taulant Shala</div>
+        <div class="cred">pediatër · DonetaMED</div>
+        <div style="margin-top: 3mm; font-size: 7pt; color: #57534E;">14.05.2026 · Prizren</div>
+      </div>
+      <div class="stamp-area">
+        <div>
+          <div class="lab">Vendi i vulës</div>
+          <div class="sub">vendoset manualisht</div>
+        </div>
+      </div>
+    </footer>
+
+    <div class="page-num">Faqe 2/2 · DonetaMED · PT-04829</div>
+  </article>
+
+</div>
+
+</body>
+</html>

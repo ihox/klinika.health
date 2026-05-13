@@ -1,0 +1,1902 @@
+<!DOCTYPE html>
+<html lang="sq">
+<head>
+<meta charset="UTF-8">
+<title>Klinika — Cilësimet e klinikës</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="styles.css">
+<style>
+  /* ============== Page layout: sidebar + content ============== */
+  .settings-page {
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 24px 32px 60px;
+    display: grid;
+    grid-template-columns: 232px 1fr;
+    gap: 32px;
+    align-items: flex-start;
+  }
+
+  .settings-head {
+    grid-column: 1 / -1;
+    margin-bottom: 8px;
+  }
+  .settings-head h1 {
+    font-family: var(--font-display);
+    font-size: 26px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    margin-bottom: 4px;
+  }
+  .settings-head .sub {
+    color: var(--text-muted);
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-family: var(--font-mono);
+  }
+  .settings-head .sub .name { font-family: var(--font-ui); color: var(--text); font-weight: 500; }
+  .settings-head .sub .sep { color: var(--text-faint); }
+
+  /* Sidebar */
+  .settings-sidebar {
+    position: sticky;
+    top: 84px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .settings-sidebar .group-label {
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-faint);
+    font-weight: 600;
+    padding: 8px 12px 6px;
+    margin-top: 14px;
+  }
+  .settings-sidebar .group-label:first-child { margin-top: 0; }
+  .settings-sidebar a {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 9px 12px;
+    border-radius: var(--r-sm);
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-muted);
+    transition: all 120ms ease;
+  }
+  .settings-sidebar a:hover { background: var(--bg-subtle); color: var(--text); }
+  .settings-sidebar a.active {
+    background: var(--primary-tint);
+    color: var(--primary-dark);
+  }
+  .settings-sidebar a .count {
+    font-size: 11px;
+    color: var(--text-faint);
+    background: var(--bg-subtle);
+    padding: 1px 6px;
+    border-radius: 999px;
+    font-variant-numeric: tabular-nums;
+  }
+  .settings-sidebar a.active .count {
+    background: white;
+    color: var(--primary-dark);
+  }
+
+  /* Content panes */
+  .pane { display: none; }
+  .pane.active { display: block; }
+
+  .pane h2 {
+    font-family: var(--font-display);
+    font-size: 18px;
+    font-weight: 600;
+    letter-spacing: -0.015em;
+    color: var(--text-strong);
+    margin-bottom: 4px;
+  }
+  .pane .pane-sub {
+    color: var(--text-muted);
+    font-size: 13px;
+    margin-bottom: 24px;
+  }
+
+  /* Section card */
+  .section-card {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: var(--r-lg);
+    box-shadow: var(--shadow-xs);
+    margin-bottom: 20px;
+    overflow: hidden;
+  }
+  .section-card-head {
+    padding: 16px 24px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+  }
+  .section-card-head h3 {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-strong);
+  }
+  .section-card-head .desc {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-top: 2px;
+  }
+  .section-card-body {
+    padding: 20px 24px;
+  }
+
+  .form-grid {
+    display: grid;
+    grid-template-columns: 200px 1fr;
+    gap: 18px 28px;
+    align-items: flex-start;
+  }
+  .form-grid .field-label {
+    padding-top: 9px;
+    font-size: 13px;
+    color: var(--text-muted);
+    font-weight: 500;
+  }
+  .form-grid .field-help {
+    margin-top: 4px;
+  }
+
+  .photo-tile {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+  .photo-tile .preview {
+    width: 64px; height: 64px;
+    border-radius: var(--r-md);
+    background: var(--primary-tint);
+    border: 1px solid var(--teal-200);
+    display: grid; place-items: center;
+    color: var(--primary-dark);
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 18px;
+    letter-spacing: -0.02em;
+  }
+  .photo-tile .preview.signature {
+    background: var(--bg-subtle);
+    border: 1px dashed var(--border-strong);
+    color: var(--text-faint);
+    font-style: italic;
+    font-family: 'Brush Script MT', cursive;
+    font-size: 22px;
+    font-weight: 400;
+  }
+
+  .form-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 14px 24px;
+    border-top: 1px solid var(--border);
+    background: var(--bg-subtle);
+  }
+
+  .info-tip {
+    display: flex;
+    gap: 10px;
+    padding: 10px 12px;
+    background: var(--primary-tint);
+    border: 1px solid var(--teal-200);
+    border-radius: var(--r-md);
+    font-size: 12px;
+    color: var(--teal-900);
+    line-height: 1.5;
+  }
+  .info-tip .i {
+    width: 16px; height: 16px;
+    background: var(--primary);
+    color: white;
+    border-radius: 999px;
+    display: grid; place-items: center;
+    font-size: 10px;
+    font-weight: 700;
+    font-style: italic;
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+  .info-tip.amber {
+    background: var(--amber-bg);
+    border-color: var(--amber-soft);
+    color: var(--amber);
+  }
+  .info-tip.amber .i {
+    background: var(--amber);
+  }
+
+  /* Multi-input row (phones) */
+  .multi-row { display: flex; flex-direction: column; gap: 6px; }
+  .multi-row .line { display: flex; gap: 8px; align-items: center; }
+  .multi-row .line .input { flex: 1; }
+  .multi-row .add {
+    align-self: flex-start;
+    font-size: 12px;
+    color: var(--primary);
+    padding: 6px 0;
+  }
+  .multi-row .add:hover { text-decoration: underline; }
+  .multi-row .x {
+    width: 32px; height: 32px;
+    border-radius: var(--r-sm);
+    color: var(--text-faint);
+    display: grid; place-items: center;
+  }
+  .multi-row .x:hover { background: var(--bg-subtle); color: var(--red); }
+
+  /* ============== Users table ============== */
+  .users-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 14px;
+  }
+  .users-toolbar .search {
+    flex: 1;
+    max-width: 320px;
+    position: relative;
+  }
+  .users-toolbar .search input {
+    width: 100%;
+    padding: 9px 12px 9px 34px;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--r-md);
+    font-size: 13px;
+    background: var(--bg-elevated);
+    outline: none;
+  }
+  .users-toolbar .search input:focus { border-color: var(--primary); box-shadow: var(--focus-ring); }
+  .users-toolbar .search .icon { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-faint); }
+
+  .users-table {
+    width: 100%;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: var(--r-lg);
+    border-collapse: separate;
+    border-spacing: 0;
+    overflow: hidden;
+    box-shadow: var(--shadow-xs);
+  }
+  .users-table th {
+    text-align: left;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+    font-weight: 600;
+    padding: 12px 16px;
+    background: var(--bg-subtle);
+    border-bottom: 1px solid var(--border);
+  }
+  .users-table td {
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border-soft);
+    font-size: 13px;
+    vertical-align: middle;
+  }
+  .users-table tr:last-child td { border-bottom: none; }
+  .users-table tbody tr { cursor: pointer; transition: background 120ms ease; }
+  .users-table tbody tr:hover { background: var(--bg-subtle); }
+  .users-table .user-cell { display: flex; align-items: center; gap: 10px; }
+  .users-table .user-cell .av {
+    width: 30px; height: 30px; border-radius: 999px;
+    background: var(--teal-700); color: white;
+    display: grid; place-items: center;
+    font-size: 11px; font-weight: 600;
+    flex-shrink: 0;
+  }
+  .users-table .user-cell .av.gray { background: var(--text-muted); }
+  .users-table .user-cell .av.inactive { background: var(--text-faint); }
+  .users-table .nm { font-weight: 500; color: var(--text-strong); }
+  .users-table .em { font-size: 12px; color: var(--text-muted); font-family: var(--font-mono); }
+  .users-table .row-actions { display: flex; gap: 4px; justify-content: flex-end; }
+  .users-table tr.inactive .nm { color: var(--text-faint); }
+  .users-table tr.inactive .em { color: var(--text-faint); }
+
+  /* ============== Payment codes table ============== */
+  .codes-table {
+    width: 100%;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: var(--r-lg);
+    border-collapse: separate;
+    border-spacing: 0;
+    overflow: hidden;
+    box-shadow: var(--shadow-xs);
+  }
+  .codes-table th {
+    text-align: left;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+    font-weight: 600;
+    padding: 12px 16px;
+    background: var(--bg-subtle);
+    border-bottom: 1px solid var(--border);
+  }
+  .codes-table td {
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border-soft);
+    font-size: 13px;
+    vertical-align: middle;
+  }
+  .codes-table tr:last-child td { border-bottom: none; }
+  .codes-table .code-badge {
+    display: inline-flex;
+    width: 28px; height: 28px;
+    background: var(--primary-soft);
+    color: var(--teal-800);
+    border-radius: var(--r-sm);
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 14px;
+    align-items: center;
+    justify-content: center;
+  }
+  .codes-table .price { font-family: var(--font-mono); font-size: 14px; font-weight: 500; color: var(--text-strong); }
+  .codes-table tr.editing { background: var(--bg-subtle); }
+  .codes-table tr.editing .input { padding: 6px 10px; font-size: 13px; }
+  .codes-table .right { text-align: right; }
+
+  /* ============== Email settings ============== */
+  .radio-stack { display: flex; flex-direction: column; gap: 12px; }
+  .radio-card {
+    display: flex;
+    flex-direction: column;
+    padding: 16px 18px;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--r-md);
+    cursor: pointer;
+    background: var(--bg-elevated);
+    transition: all 150ms ease;
+  }
+  .radio-card:hover { border-color: var(--text-faint); }
+  .radio-card.selected {
+    border-color: var(--primary);
+    background: var(--primary-tint);
+    box-shadow: 0 0 0 3px rgba(13,148,136,0.10);
+  }
+  .radio-card .rc-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  .radio-card input[type=radio] { accent-color: var(--primary); margin-top: 4px; }
+  .radio-card .rc-title { font-size: 14px; font-weight: 600; color: var(--text-strong); }
+  .radio-card .rc-sub { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+  .radio-card .rc-sub .mono { font-family: var(--font-mono); color: var(--text); }
+  .radio-card .rc-detail {
+    display: none;
+    margin-top: 18px;
+    padding-top: 18px;
+    border-top: 1px solid var(--teal-200);
+  }
+  .radio-card.selected.has-detail .rc-detail { display: block; }
+  .radio-card .rc-detail .field-pair {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 12px;
+  }
+  .radio-card .rc-detail .row-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 14px;
+  }
+  .radio-card .test-result {
+    display: none;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--green);
+    font-weight: 500;
+  }
+  .radio-card .test-result.show { display: inline-flex; }
+
+  /* ============== Audit ============== */
+  .audit-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 14px;
+    flex-wrap: wrap;
+  }
+  .audit-toolbar .filter-select {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--r-md);
+    padding: 8px 32px 8px 12px;
+    font-size: 13px;
+    color: var(--text);
+  }
+  .audit-toolbar .spacer { flex: 1; }
+
+  .audit-list {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: var(--r-lg);
+    box-shadow: var(--shadow-xs);
+    overflow: hidden;
+  }
+  .audit-row {
+    display: grid;
+    grid-template-columns: 130px 200px 1fr 24px;
+    gap: 12px;
+    padding: 12px 18px;
+    align-items: center;
+    border-bottom: 1px solid var(--border-soft);
+    cursor: pointer;
+    transition: background 120ms ease;
+  }
+  .audit-row:last-child { border-bottom: none; }
+  .audit-row:hover { background: var(--bg-subtle); }
+  .audit-row .when {
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    color: var(--text-muted);
+  }
+  .audit-row .who { font-size: 13px; color: var(--text); font-weight: 500; }
+  .audit-row .what { font-size: 13px; color: var(--text-muted); }
+  .audit-row .what .target { color: var(--text-strong); font-weight: 500; }
+  .audit-row .chev { color: var(--text-faint); transition: transform 150ms ease; }
+  .audit-row.open .chev { transform: rotate(90deg); }
+  .audit-row.open { background: var(--bg-subtle); }
+  .audit-detail {
+    display: none;
+    padding: 0 18px 14px 178px;
+    background: var(--bg-subtle);
+    border-bottom: 1px solid var(--border-soft);
+  }
+  .audit-detail.open { display: block; }
+  .audit-detail .diff {
+    display: grid;
+    grid-template-columns: 140px 1fr 1fr;
+    gap: 12px;
+    font-size: 12.5px;
+    padding: 8px 0;
+    border-top: 1px dashed var(--border);
+  }
+  .audit-detail .diff:first-child { border-top: none; }
+  .audit-detail .diff .k { color: var(--text-muted); }
+  .audit-detail .diff .old { color: var(--text-muted); text-decoration: line-through; }
+  .audit-detail .diff .new { color: var(--text-strong); font-weight: 500; }
+
+  .audit-footer {
+    padding: 12px 18px;
+    border-top: 1px solid var(--border);
+    background: var(--bg-subtle);
+    text-align: center;
+    font-size: 13px;
+    color: var(--text-muted);
+  }
+  .audit-footer a { color: var(--primary); font-weight: 500; }
+  .audit-footer a:hover { text-decoration: underline; }
+
+  /* ============== Edit user side panel ============== */
+  .side-drawer {
+    position: fixed;
+    inset: 0;
+    background: rgba(28,25,23,0.35);
+    z-index: 60;
+    display: none;
+  }
+  .side-drawer.open { display: block; }
+  .side-drawer .panel {
+    position: absolute;
+    right: 0; top: 0; bottom: 0;
+    width: 440px;
+    max-width: calc(100vw - 60px);
+    background: var(--bg-elevated);
+    box-shadow: var(--shadow-modal);
+    display: flex;
+    flex-direction: column;
+    animation: slide-in 200ms ease;
+  }
+  @keyframes slide-in { from { transform: translateX(20px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+  .side-drawer .panel-head {
+    padding: 18px 24px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .side-drawer .panel-head h2 { font-size: 18px; font-weight: 600; }
+  .side-drawer .panel-head .x {
+    width: 32px; height: 32px;
+    border-radius: var(--r-sm);
+    display: grid; place-items: center;
+    color: var(--text-muted);
+  }
+  .side-drawer .panel-head .x:hover { background: var(--bg-subtle); color: var(--text); }
+  .side-drawer .panel-body {
+    padding: 20px 24px;
+    overflow-y: auto;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .side-drawer .panel-foot {
+    padding: 14px 24px;
+    border-top: 1px solid var(--border);
+    background: var(--bg-subtle);
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+  }
+
+  .status-radio-row { display: flex; flex-direction: column; gap: 8px; }
+  .status-radio-row label {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    padding: 10px 12px;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--r-md);
+    cursor: pointer;
+  }
+  .status-radio-row label.selected { border-color: var(--primary); background: var(--primary-tint); }
+  .status-radio-row input { accent-color: var(--primary); margin-top: 2px; }
+  .status-radio-row .t { font-size: 13px; font-weight: 500; color: var(--text-strong); }
+  .status-radio-row .s { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+
+  .danger-action {
+    margin-top: 4px;
+    padding: 14px;
+    background: var(--bg-subtle);
+    border-radius: var(--r-md);
+    border: 1px solid var(--border);
+  }
+  .danger-action .h {
+    font-size: 13px; font-weight: 600; color: var(--text-strong);
+    margin-bottom: 4px;
+  }
+  .danger-action .s {
+    font-size: 12px; color: var(--text-muted);
+    margin-bottom: 10px;
+  }
+
+  /* Quick action chips at top of overview */
+  .quick-cards {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+  }
+  .quick-card {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    padding: 16px;
+    cursor: pointer;
+    transition: all 150ms ease;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .quick-card:hover { border-color: var(--text-faint); box-shadow: var(--shadow-sm); }
+  .quick-card .qc-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-strong);
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .quick-card .qc-title .badge {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-muted);
+    font-weight: 500;
+  }
+  .quick-card .qc-sub {
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+
+  .empty-state {
+    padding: 50px 24px;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 13px;
+  }
+
+  /* ============== Orari dhe terminet ============== */
+  .hours-table {
+    display: flex;
+    flex-direction: column;
+  }
+  .hours-row {
+    display: grid;
+    grid-template-columns: 140px 130px 1fr;
+    gap: 16px;
+    align-items: flex-start;
+    padding: 14px 0;
+    border-bottom: 1px solid var(--border-soft);
+  }
+  .hours-row:last-child { border-bottom: none; }
+  .hours-row.closed-day .ranges { opacity: 0.45; pointer-events: none; }
+  .hours-row .day-name {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-strong);
+    padding-top: 9px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .hours-row .day-name .today-pill {
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    font-weight: 600;
+    color: var(--teal-800);
+    background: var(--primary-soft);
+    border: 1px solid var(--teal-200);
+    padding: 1px 6px;
+    border-radius: 999px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+  .hours-row .day-name .closed-pill {
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    font-weight: 600;
+    color: var(--text-faint);
+    background: var(--bg-subtle);
+    border: 1px solid var(--border);
+    padding: 1px 6px;
+    border-radius: 999px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+
+  .day-state-select {
+    appearance: none;
+    width: 100%;
+    padding: 8px 28px 8px 12px;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--r-md);
+    background: var(--bg-elevated)
+      url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path d='M1 1l4 4 4-4' stroke='%2378716C' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>")
+      no-repeat right 10px center;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text);
+  }
+  .day-state-select.is-closed { color: var(--text-muted); background-color: var(--bg-subtle); }
+
+  .ranges {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .range-line {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .time-picker {
+    appearance: none;
+    width: 84px;
+    padding: 7px 22px 7px 10px;
+    background: var(--bg-elevated)
+      url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path d='M1 1l4 4 4-4' stroke='%2378716C' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>")
+      no-repeat right 7px center;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--r-sm);
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    font-size: 13px;
+    color: var(--text);
+    text-align: center;
+  }
+  .time-picker:focus { outline: none; border-color: var(--primary); box-shadow: var(--focus-ring); }
+  .range-line .dash {
+    color: var(--text-faint);
+    font-family: var(--font-mono);
+    font-size: 13px;
+  }
+  .range-line .x-btn {
+    width: 28px; height: 28px;
+    border-radius: var(--r-sm);
+    color: var(--text-faint);
+    display: grid; place-items: center;
+    transition: all 120ms ease;
+    flex-shrink: 0;
+  }
+  .range-line .x-btn:hover { background: var(--red-bg); color: var(--red); }
+  .range-line .x-btn.disabled { opacity: 0.25; pointer-events: none; }
+
+  .range-add {
+    align-self: flex-start;
+    font-size: 12.5px;
+    color: var(--primary);
+    background: transparent;
+    border: 1px dashed var(--teal-300);
+    padding: 5px 10px;
+    border-radius: var(--r-sm);
+    font-weight: 500;
+    transition: all 120ms ease;
+  }
+  .range-add:hover {
+    background: var(--primary-tint);
+    border-style: solid;
+    border-color: var(--primary);
+  }
+  .closed-msg {
+    padding-top: 9px;
+    color: var(--text-muted);
+    font-size: 13px;
+    font-style: italic;
+  }
+
+  .hours-actions-strip {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 14px 24px;
+    background: var(--bg-subtle);
+    border-top: 1px solid var(--border);
+    gap: 14px;
+    flex-wrap: wrap;
+  }
+  .hours-actions-strip .apply-mon {
+    font-size: 13px;
+    color: var(--primary);
+    font-weight: 500;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: transparent;
+    border: 1px solid var(--teal-300);
+    padding: 7px 12px;
+    border-radius: var(--r-sm);
+    transition: all 120ms ease;
+  }
+  .hours-actions-strip .apply-mon:hover {
+    background: var(--primary-tint);
+    border-color: var(--primary);
+  }
+  .hours-actions-strip .apply-mon .ico {
+    display: grid; place-items: center;
+    color: var(--primary);
+  }
+
+  /* Duration checkboxes */
+  .dur-checks {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+  }
+  .dur-check {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 11px 14px;
+    border: 1px solid var(--border-strong);
+    background: var(--bg-elevated);
+    border-radius: var(--r-md);
+    cursor: pointer;
+    transition: all 130ms ease;
+    user-select: none;
+  }
+  .dur-check input { accent-color: var(--primary); width: 14px; height: 14px; }
+  .dur-check .v {
+    font-family: var(--font-display);
+    font-size: 15px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-strong);
+  }
+  .dur-check .v .u {
+    font-family: var(--font-ui);
+    font-size: 12px;
+    color: var(--text-muted);
+    font-weight: 500;
+    margin-left: 3px;
+  }
+  .dur-check .default-tag {
+    margin-left: auto;
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    font-weight: 600;
+    color: var(--teal-800);
+    background: var(--primary-soft);
+    border: 1px solid var(--teal-200);
+    padding: 1px 6px;
+    border-radius: 3px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    display: none;
+  }
+  .dur-check.is-selected {
+    border-color: var(--primary);
+    background: var(--primary-tint);
+  }
+  .dur-check.is-default .default-tag { display: inline-flex; }
+
+  .dur-custom-row {
+    margin-top: 12px;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+  .dur-custom-row .add-link {
+    font-size: 12.5px;
+    color: var(--primary);
+    background: transparent;
+    border: 1px dashed var(--teal-300);
+    padding: 5px 10px;
+    border-radius: var(--r-sm);
+    font-weight: 500;
+  }
+  .dur-custom-row .add-link:hover { background: var(--primary-tint); border-style: solid; border-color: var(--primary); }
+
+  .default-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 16px 0 0;
+    border-top: 1px solid var(--border-soft);
+    margin-top: 16px;
+  }
+  .default-row .lab {
+    font-size: 13px;
+    color: var(--text-muted);
+    font-weight: 500;
+  }
+  .default-row .select {
+    width: 160px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .range-line .invalid-mark, .range-line.invalid .time-picker { border-color: var(--red); }
+  .range-error {
+    font-size: 11.5px;
+    color: var(--red);
+    margin-left: 4px;
+  }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <a href="doctor.html" class="topbar-brand">
+    <svg width="22" height="22" viewBox="0 0 64 64" fill="none" style="color: var(--primary);">
+      <path d="M32 54 C 12 40, 8 26, 18 18 C 24 14, 30 16, 32 22 C 34 16, 40 14, 46 18 C 56 26, 52 40, 32 54 Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M14 34 L 22 34 L 26 26 L 30 42 L 34 28 L 38 36 L 50 36" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+    </svg>
+    klinika<span class="dot-app">.</span>
+  </a>
+
+  <nav class="topbar-nav">
+    <a href="doctor.html" class="nav-link">Kalendari</a>
+    <a href="#" class="nav-link">Pacientët</a>
+    <a href="#" class="nav-link">Raportet</a>
+    <a href="clinic-settings.html" class="nav-link active">Cilësimet</a>
+  </nav>
+
+  <div class="topbar-spacer"></div>
+
+  <div class="topbar-search">
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+      <circle cx="7" cy="7" r="5"/><path d="M11 11l3 3" stroke-linecap="round"/>
+    </svg>
+    <input placeholder="Kërko në cilësime..." data-os-search-placeholder="Kërko në cilësime... ({shortcut} ose /)">
+    <kbd>⌘K</kbd>
+  </div>
+
+  <button class="topbar-user">
+    <div class="avatar">TS</div>
+    <div style="display: flex; flex-direction: column; align-items: flex-start; line-height: 1.2;">
+      <span class="name">Dr. Taulant Shala</span>
+      <span style="font-size: 11px; color: var(--text-muted);">Mjek · Admin</span>
+    </div>
+    <span class="chev">▾</span>
+  </button>
+</header>
+
+<main class="settings-page">
+
+  <div class="settings-head">
+    <h1>Cilësimet e klinikës</h1>
+    <div class="sub">
+      <span class="name">DonetaMED</span>
+      <span class="sep">·</span>
+      <span>donetamed.klinika.health</span>
+      <span class="sep">·</span>
+      <span>Ambulanca Specialistike Pediatrike</span>
+    </div>
+  </div>
+
+  <!-- Sidebar -->
+  <aside class="settings-sidebar">
+    <div class="group-label">Klinika</div>
+    <a href="#general" data-view="general">Përgjithshme</a>
+    <a href="#hours" data-view="hours">Orari dhe terminet</a>
+    <a href="#users" data-view="users">Përdoruesit <span class="count" id="user-count">3</span></a>
+    <a href="#payments" data-view="payments">Pagesa</a>
+
+    <div class="group-label">Sistemi</div>
+    <a href="#email" data-view="email">Email</a>
+    <a href="#audit" data-view="audit">Auditimi</a>
+  </aside>
+
+  <!-- Content -->
+  <div class="settings-content">
+
+    <!-- ========= GENERAL ========= -->
+    <section class="pane" data-view="general">
+      <h2>Përgjithshme</h2>
+      <div class="pane-sub">Informacionet bazë të klinikës që shfaqen në dokumente dhe në ndërfaqe.</div>
+
+      <div class="section-card">
+        <div class="section-card-head">
+          <div>
+            <h3>Identiteti</h3>
+            <div class="desc">Emri zyrtar i klinikës dhe logo që përdoret në dokumente.</div>
+          </div>
+        </div>
+        <div class="section-card-body">
+          <div class="form-grid">
+            <label class="field-label">Emri i plotë</label>
+            <input class="input" value="Ambulanca Specialistike Pediatrike DonetaMED">
+
+            <label class="field-label">Emri i shkurtuar</label>
+            <div>
+              <input class="input" value="DONETA-MED">
+              <div class="field-help">Përdoret në kokën e dokumenteve dhe nënshkrime PDF.</div>
+            </div>
+
+            <label class="field-label">Tipi i klinikës</label>
+            <input class="input" value="Pediatri specialistike">
+
+            <label class="field-label">Logo</label>
+            <div class="photo-tile">
+              <div class="preview">DM</div>
+              <div style="display: flex; flex-direction: column; gap: 4px;">
+                <div style="display: flex; gap: 8px;">
+                  <button class="btn btn-secondary btn-sm">Ndrysho</button>
+                  <button class="btn btn-ghost btn-sm">Hiq</button>
+                </div>
+                <span class="field-help">PNG ose SVG · 512×512 px · sfond transparent</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="form-actions">
+          <button class="btn btn-ghost">Anulo</button>
+          <button class="btn btn-primary">Ruaj</button>
+        </div>
+      </div>
+
+      <div class="section-card">
+        <div class="section-card-head">
+          <div>
+            <h3>Kontakti</h3>
+            <div class="desc">Shfaqen në dokumente klinike, vërtetime dhe email-e.</div>
+          </div>
+        </div>
+        <div class="section-card-body">
+          <div class="form-grid">
+            <label class="field-label">Adresa</label>
+            <input class="input" value="Rruga Sheshi Shadërvan, p.n.">
+
+            <label class="field-label">Qyteti</label>
+            <input class="input" value="Prizren">
+
+            <label class="field-label">Telefoni</label>
+            <div class="multi-row">
+              <div class="line"><input class="input" value="045 83 00 83"></div>
+              <div class="line"><input class="input" value="043 543 123"><button class="x" aria-label="Hiq">×</button></div>
+              <button type="button" class="add">+ Shto numër</button>
+            </div>
+
+            <label class="field-label">Email</label>
+            <input class="input" type="email" value="info@donetamed.com">
+
+            <label class="field-label">Orari</label>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+              <input class="input" value="10:00 — 18:00">
+              <input class="input" value="E hënë — E shtunë">
+            </div>
+          </div>
+        </div>
+        <div class="form-actions">
+          <button class="btn btn-ghost">Anulo</button>
+          <button class="btn btn-primary">Ruaj</button>
+        </div>
+      </div>
+
+      <div class="section-card">
+        <div class="section-card-head">
+          <div>
+            <h3>Mjeku përgjegjës</h3>
+            <div class="desc">Informacionet që shfaqen në vërtetime dhe receta të lëshuara.</div>
+          </div>
+        </div>
+        <div class="section-card-body">
+          <div class="form-grid">
+            <label class="field-label">Emri</label>
+            <input class="input" value="Dr. Taulant Shala">
+
+            <label class="field-label">Titulli profesional</label>
+            <input class="input" value="pediatër">
+
+            <label class="field-label">Numri i licencës</label>
+            <input class="input" value="OMK-2017-3812">
+
+            <label class="field-label">Nënshkrimi i skanuar</label>
+            <div class="photo-tile">
+              <div class="preview signature">T. Shala</div>
+              <div style="display: flex; flex-direction: column; gap: 4px;">
+                <div style="display: flex; gap: 8px;">
+                  <button class="btn btn-secondary btn-sm">Ngarko</button>
+                  <button class="btn btn-ghost btn-sm">Hiq</button>
+                </div>
+                <span class="field-help">Ruhet i koduar · vetëm mjeku e sheh dhe e përdor.</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="info-tip amber" style="margin-top: 18px;">
+            <span class="i">!</span>
+            <div><strong>Vulat digjitale nuk lejohen në Kosovë.</strong> Vula fizike e klinikës duhet të vendoset manualisht në dokumentet e printuara.</div>
+          </div>
+        </div>
+        <div class="form-actions">
+          <button class="btn btn-ghost">Anulo</button>
+          <button class="btn btn-primary">Ruaj</button>
+        </div>
+      </div>
+    </section>
+
+
+    <!-- ========= ORARI DHE TERMINET ========= -->
+    <section class="pane" data-view="hours">
+      <h2>Orari dhe terminet</h2>
+      <div class="pane-sub">Orari i punës për çdo ditë dhe kohëzgjatjet që mund të caktohen. Këto cilësime drejtojnë kalendarin e recepsionit dhe dialogun e caktimit.</div>
+
+      <div class="section-card">
+        <div class="section-card-head">
+          <div>
+            <h3>Orari i punës</h3>
+            <div class="desc">Një interval i vetëm hapje–mbyllje për çdo ditë të hapur. Drejton kalendarin e recepsionit.</div>
+          </div>
+          <span class="chip"><span class="dot"></span>Java aktuale</span>
+        </div>
+        <div class="section-card-body">
+          <div class="hours-table" id="hoursTable">
+            <!-- E hënë -->
+            <div class="hours-row" data-day="mon">
+              <div class="day-name">E hënë</div>
+              <select class="day-state-select"><option>Hapur</option><option>Mbyllur</option></select>
+              <div class="ranges">
+                <div class="range-line">
+                  <select class="time-picker">
+                    <option>08:00</option><option>08:30</option><option selected>09:00</option><option>09:30</option><option>10:00</option>
+                  </select>
+                  <span class="dash">—</span>
+                  <select class="time-picker">
+                    <option>17:00</option><option>17:30</option><option selected>18:00</option><option>18:30</option><option>19:00</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <!-- E martë (today) -->
+            <div class="hours-row" data-day="tue">
+              <div class="day-name">E martë <span class="today-pill">Sot</span></div>
+              <select class="day-state-select"><option>Hapur</option><option>Mbyllur</option></select>
+              <div class="ranges">
+                <div class="range-line">
+                  <select class="time-picker">
+                    <option selected>09:00</option><option>09:30</option><option>10:00</option>
+                  </select>
+                  <span class="dash">—</span>
+                  <select class="time-picker">
+                    <option>17:30</option><option selected>18:00</option><option>18:30</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <!-- E mërkurë -->
+            <div class="hours-row" data-day="wed">
+              <div class="day-name">E mërkurë</div>
+              <select class="day-state-select"><option>Hapur</option><option>Mbyllur</option></select>
+              <div class="ranges">
+                <div class="range-line">
+                  <select class="time-picker"><option selected>09:00</option><option>09:30</option></select>
+                  <span class="dash">—</span>
+                  <select class="time-picker"><option selected>18:00</option><option>18:30</option></select>
+                </div>
+              </div>
+            </div>
+
+            <!-- E enjte -->
+            <div class="hours-row" data-day="thu">
+              <div class="day-name">E enjte</div>
+              <select class="day-state-select"><option>Hapur</option><option>Mbyllur</option></select>
+              <div class="ranges">
+                <div class="range-line">
+                  <select class="time-picker"><option selected>09:00</option><option>09:30</option></select>
+                  <span class="dash">—</span>
+                  <select class="time-picker"><option selected>18:00</option><option>18:30</option></select>
+                </div>
+              </div>
+            </div>
+
+            <!-- E premte -->
+            <div class="hours-row" data-day="fri">
+              <div class="day-name">E premte</div>
+              <select class="day-state-select"><option>Hapur</option><option>Mbyllur</option></select>
+              <div class="ranges">
+                <div class="range-line">
+                  <select class="time-picker"><option selected>09:00</option><option>09:30</option></select>
+                  <span class="dash">—</span>
+                  <select class="time-picker"><option selected>18:00</option><option>18:30</option></select>
+                </div>
+              </div>
+            </div>
+
+            <!-- E shtunë — half day -->
+            <div class="hours-row" data-day="sat">
+              <div class="day-name">E shtunë</div>
+              <select class="day-state-select"><option>Hapur</option><option>Mbyllur</option></select>
+              <div class="ranges">
+                <div class="range-line">
+                  <select class="time-picker"><option>09:00</option><option>09:30</option><option selected>10:00</option></select>
+                  <span class="dash">—</span>
+                  <select class="time-picker"><option>13:00</option><option>13:30</option><option selected>14:00</option><option>14:30</option></select>
+                </div>
+              </div>
+            </div>
+
+            <!-- E diel — closed -->
+            <div class="hours-row closed-day" data-day="sun">
+              <div class="day-name">E diel <span class="closed-pill">Mbyllur</span></div>
+              <select class="day-state-select is-closed"><option>Mbyllur</option><option>Hapur</option></select>
+              <div class="closed-msg">Klinika nuk pranon termine të dielën.</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="hours-actions-strip">
+          <button type="button" class="apply-mon" onclick="showToast('Orari i së hënës u aplikua për të gjitha ditët e hapura')">
+            <span class="ico">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8h10M10 4l3 4-3 4"/></svg>
+            </span>
+            Apliko orarin e së hënës për të gjitha ditët e hapura
+          </button>
+          <div style="display:flex; gap:8px;">
+            <button class="btn btn-ghost">Anulo</button>
+            <button class="btn btn-primary" onclick="showToast('Orari u ruajt · 6 ditë të hapura')">Ruaj orarin</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="section-card">
+        <div class="section-card-head">
+          <div>
+            <h3>Kohëzgjatja e termineve</h3>
+            <div class="desc">Zgjidh kohëzgjatjet që ofrohen për të caktuar terminet. Të paktën një është e nevojshme.</div>
+          </div>
+        </div>
+        <div class="section-card-body">
+          <div class="dur-checks" id="durChecks">
+            <label class="dur-check is-selected">
+              <input type="checkbox" checked onchange="onDurChange(this)">
+              <span class="v">10<span class="u">min</span></span>
+              <span class="default-tag">Parazgjedhur</span>
+            </label>
+            <label class="dur-check is-selected is-default">
+              <input type="checkbox" checked onchange="onDurChange(this)">
+              <span class="v">15<span class="u">min</span></span>
+              <span class="default-tag">Parazgjedhur</span>
+            </label>
+            <label class="dur-check">
+              <input type="checkbox" onchange="onDurChange(this)">
+              <span class="v">20<span class="u">min</span></span>
+              <span class="default-tag">Parazgjedhur</span>
+            </label>
+            <label class="dur-check">
+              <input type="checkbox" onchange="onDurChange(this)">
+              <span class="v">30<span class="u">min</span></span>
+              <span class="default-tag">Parazgjedhur</span>
+            </label>
+            <label class="dur-check">
+              <input type="checkbox" onchange="onDurChange(this)">
+              <span class="v">45<span class="u">min</span></span>
+              <span class="default-tag">Parazgjedhur</span>
+            </label>
+            <label class="dur-check">
+              <input type="checkbox" onchange="onDurChange(this)">
+              <span class="v">60<span class="u">min</span></span>
+              <span class="default-tag">Parazgjedhur</span>
+            </label>
+          </div>
+
+          <div class="dur-custom-row">
+            <button type="button" class="add-link" onclick="addCustomDuration()">+ Shto kohëzgjatje</button>
+            <span style="font-size: 11.5px; color: var(--text-faint);">për vlera jo-standarde (p.sh. 12 minuta)</span>
+          </div>
+
+          <div class="default-row">
+            <span class="lab">Kohëzgjatja e parazgjedhur</span>
+            <select class="select" id="defaultDur">
+              <option>10 minuta</option>
+              <option selected>15 minuta</option>
+            </select>
+            <span style="font-size: 12px; color: var(--text-faint);">— shfaqet e zgjedhur në dialogun e caktimit.</span>
+          </div>
+
+          <div class="info-tip" style="margin-top: 18px;">
+            <span class="i">i</span>
+            <div>
+              Rezolucioni i kalendarit ndjek kohëzgjatjen më të shkurtër të zgjedhur. Me 10 min të zgjedhura, kalendari shfaq një ndarje çdo 10 minuta.
+            </div>
+          </div>
+        </div>
+        <div class="form-actions">
+          <button class="btn btn-ghost">Anulo</button>
+          <button class="btn btn-primary" onclick="showToast('Kohëzgjatjet u ruajtën')">Ruaj kohëzgjatjet</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========= USERS ========= -->
+    <section class="pane" data-view="users">
+      <h2>Përdoruesit</h2>
+      <div class="pane-sub">Stafi i klinikës që hyn në Klinika. Shtoni mjekë, infermiere ose admin shtesë.</div>
+
+      <div class="users-toolbar">
+        <div class="search">
+          <span class="icon">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+              <circle cx="7" cy="7" r="5"/><path d="M11 11l3 3" stroke-linecap="round"/>
+            </svg>
+          </span>
+          <input placeholder="Kërko sipas emrit ose email-it...">
+        </div>
+        <select class="filter-select" style="background: var(--bg-elevated); border: 1px solid var(--border-strong); border-radius: var(--r-md); padding: 8px 32px 8px 12px; font-size: 13px;">
+          <option>Të gjithë rolet</option>
+          <option>Mjek</option>
+          <option>Infermierja</option>
+          <option>Admin</option>
+        </select>
+        <div style="flex: 1;"></div>
+        <button class="btn btn-primary" onclick="openAddUser()">
+          <span style="font-size: 14px; line-height: 1;">+</span> Shto staf
+        </button>
+      </div>
+
+      <table class="users-table">
+        <thead>
+          <tr>
+            <th>Emri</th>
+            <th>Roli</th>
+            <th>Statusi</th>
+            <th>Hyrja e fundit</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr onclick="openEditUser('ereblire')">
+            <td>
+              <div class="user-cell">
+                <div class="av">TS</div>
+                <div>
+                  <div class="nm">Dr. Taulant Shala</div>
+                  <div class="em">taulant@donetamed.com</div>
+                </div>
+              </div>
+            </td>
+            <td><span class="chip chip-teal"><span class="dot"></span>Mjek · Admin</span></td>
+            <td><span class="chip chip-green"><span class="dot"></span>Aktiv</span></td>
+            <td class="num" style="color: var(--text-muted); font-variant-numeric: tabular-nums;">Tani</td>
+            <td class="row-actions"><button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();">···</button></td>
+          </tr>
+          <tr onclick="openEditUser('ereblire')">
+            <td>
+              <div class="user-cell">
+                <div class="av gray">EK</div>
+                <div>
+                  <div class="nm">Erëblirë Krasniqi</div>
+                  <div class="em">ereblire@donetamed.com</div>
+                </div>
+              </div>
+            </td>
+            <td><span class="chip"><span class="dot"></span>Infermierja</span></td>
+            <td><span class="chip chip-green"><span class="dot"></span>Aktiv</span></td>
+            <td class="num" style="color: var(--text-muted); font-variant-numeric: tabular-nums;">30 min më parë</td>
+            <td class="row-actions"><button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();">···</button></td>
+          </tr>
+          <tr class="inactive">
+            <td>
+              <div class="user-cell">
+                <div class="av inactive">AH</div>
+                <div>
+                  <div class="nm">Ardita Hoxha</div>
+                  <div class="em">ardita@donetamed.com</div>
+                </div>
+              </div>
+            </td>
+            <td><span class="chip"><span class="dot"></span>Infermierja</span></td>
+            <td><span class="chip chip-amber"><span class="dot"></span>E çaktivizuar</span></td>
+            <td class="num" style="color: var(--text-muted); font-variant-numeric: tabular-nums;">3 javë më parë</td>
+            <td class="row-actions"><button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();">···</button></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="info-tip" style="margin-top: 18px;">
+        <span class="i">i</span>
+        <div>
+          Të dhënat e përdoruesve të çaktivizuar ruhen për integritetin e audit log-ut. Përdoruesit nuk fshihen kurrë plotësisht. Të paktën një administrator duhet të mbetet aktiv.
+        </div>
+      </div>
+    </section>
+
+
+    <!-- ========= PAYMENTS ========= -->
+    <section class="pane" data-view="payments">
+      <h2>Kodet e pagesave</h2>
+      <div class="pane-sub">Kode të shkurtra që mjeku zgjedh gjatë vizitës. Vetëm mjeku i sheh — nuk shfaqen për recepsion ose pacient.</div>
+
+      <table class="codes-table">
+        <thead>
+          <tr>
+            <th style="width: 80px;">Kodi</th>
+            <th>Përshkrimi</th>
+            <th style="width: 140px;">Çmimi</th>
+            <th style="width: 100px;">Përdorim/muaj</th>
+            <th style="width: 120px;" class="right">Veprimi</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="code-badge">E</span></td>
+            <td>Falas <span style="color: var(--text-muted);">— vizita pa pagesë (anëtarë familje, raste)</span></td>
+            <td class="price">€ 0</td>
+            <td class="num" style="color: var(--text-muted);">3</td>
+            <td class="right"><button class="btn btn-ghost btn-sm">Modifiko</button></td>
+          </tr>
+          <tr class="editing">
+            <td><span class="code-badge">A</span></td>
+            <td><input class="input" value="Vizitë standarde"></td>
+            <td><input class="input" value="15" style="font-family: var(--font-mono);"></td>
+            <td class="num" style="color: var(--text-muted);">187</td>
+            <td class="right" style="display: flex; gap: 4px; justify-content: flex-end; padding-top: 14px; padding-bottom: 14px;">
+              <button class="btn btn-ghost btn-sm">Anulo</button>
+              <button class="btn btn-primary btn-sm">Ruaj</button>
+            </td>
+          </tr>
+          <tr>
+            <td><span class="code-badge">B</span></td>
+            <td>Vizitë e shkurtër <span style="color: var(--text-muted);">— kontroll i shpejtë</span></td>
+            <td class="price">€ 10</td>
+            <td class="num" style="color: var(--text-muted);">94</td>
+            <td class="right"><button class="btn btn-ghost btn-sm">Modifiko</button></td>
+          </tr>
+          <tr>
+            <td><span class="code-badge">C</span></td>
+            <td>Kontroll <span style="color: var(--text-muted);">— pasvizitë, rezultate, recetë</span></td>
+            <td class="price">€ 5</td>
+            <td class="num" style="color: var(--text-muted);">61</td>
+            <td class="right"><button class="btn btn-ghost btn-sm">Modifiko</button></td>
+          </tr>
+          <tr>
+            <td><span class="code-badge">D</span></td>
+            <td>Vizitë e gjatë <span style="color: var(--text-muted);">— rast kompleks ose i parë</span></td>
+            <td class="price">€ 20</td>
+            <td class="num" style="color: var(--text-muted);">28</td>
+            <td class="right"><button class="btn btn-ghost btn-sm">Modifiko</button></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="info-tip" style="margin-top: 18px;">
+        <span class="i">i</span>
+        <div>Ndryshimet aplikohen për vizitat e reja. Vizitat ekzistuese mbajnë çmimin e tyre origjinal për integritetin financiar.</div>
+      </div>
+    </section>
+
+
+    <!-- ========= EMAIL ========= -->
+    <section class="pane" data-view="email">
+      <h2>Email</h2>
+      <div class="pane-sub">Si dërgohen vërtetimet, kujtesat dhe linket për reset të fjalëkalimit.</div>
+
+      <div class="section-card">
+        <div class="section-card-head">
+          <div>
+            <h3>Mënyra e dërgimit</h3>
+            <div class="desc">Zgjidhni një opsion. Mund të ndryshohet në çdo kohë.</div>
+          </div>
+        </div>
+        <div class="section-card-body">
+          <div class="radio-stack">
+
+            <label class="radio-card selected" id="email-default-card" onclick="selectEmail('default')">
+              <div class="rc-row">
+                <input type="radio" name="email-mode" value="default" checked>
+                <div style="flex: 1;">
+                  <div class="rc-title">Default i Klinika</div>
+                  <div class="rc-sub">Email-et dërgohen përmes infrastrukturës së Klinika nga <span class="mono">noreply@klinika.health</span>. Pa konfigurim.</div>
+                </div>
+                <span class="chip chip-teal"><span class="dot"></span>I rekomanduar</span>
+              </div>
+            </label>
+
+            <label class="radio-card has-detail" id="email-smtp-card" onclick="selectEmail('smtp')">
+              <div class="rc-row">
+                <input type="radio" name="email-mode" value="smtp">
+                <div style="flex: 1;">
+                  <div class="rc-title">Konfiguro SMTP-në tuaj</div>
+                  <div class="rc-sub">Email-et dërgohen nga adresa e klinikës. Kërkon kredenciale SMTP nga ofruesi juaj (Google Workspace, Zoho, etj.).</div>
+                </div>
+              </div>
+
+              <div class="rc-detail">
+                <div style="display: flex; flex-direction: column; gap: 12px;">
+                  <div class="field-pair">
+                    <div class="field">
+                      <label class="field-label">SMTP Host</label>
+                      <input class="input" placeholder="smtp.gmail.com">
+                    </div>
+                    <div class="field">
+                      <label class="field-label">Port</label>
+                      <input class="input" value="587" style="font-family: var(--font-mono);">
+                    </div>
+                  </div>
+                  <div class="field-pair">
+                    <div class="field">
+                      <label class="field-label">Username</label>
+                      <input class="input" placeholder="info@donetamed.com">
+                    </div>
+                    <div class="field">
+                      <label class="field-label">Password</label>
+                      <input class="input" type="password" placeholder="••••••••">
+                    </div>
+                  </div>
+                  <div class="field-pair">
+                    <div class="field">
+                      <label class="field-label">Emri i dërguesit</label>
+                      <input class="input" value="DonetaMED">
+                    </div>
+                    <div class="field">
+                      <label class="field-label">Adresa dërguese</label>
+                      <input class="input" value="info@donetamed.com">
+                    </div>
+                  </div>
+                </div>
+
+                <div class="row-actions">
+                  <button class="btn btn-secondary btn-sm" onclick="testSmtp(event)">Testo lidhjen</button>
+                  <span class="test-result" id="smtp-test"><span style="color: var(--green);">✓</span> Lidhja u testua me sukses · email i testit u dërgua</span>
+                </div>
+
+                <div class="info-tip" style="margin-top: 14px;">
+                  <span class="i">i</span>
+                  <div>Nëse SMTP-ja juaj dështon, Klinika dërgon automatikisht përmes default-it për të mos humbur asnjë email kritik. Do të njoftoheni në audit log.</div>
+                </div>
+              </div>
+            </label>
+
+          </div>
+        </div>
+        <div class="form-actions">
+          <button class="btn btn-ghost">Anulo</button>
+          <button class="btn btn-primary" id="email-save">Ruaj</button>
+        </div>
+      </div>
+
+      <div class="section-card">
+        <div class="section-card-head">
+          <div>
+            <h3>Email-et e dërguara së fundi</h3>
+            <div class="desc">Aktiviteti i 7 ditëve të fundit.</div>
+          </div>
+          <button class="btn btn-secondary btn-sm">Shiko të gjitha</button>
+        </div>
+        <table class="users-table" style="border-radius: 0; border: none; box-shadow: none;">
+          <thead>
+            <tr><th>Koha</th><th>Tipi</th><th>Marrësi</th><th>Statusi</th></tr>
+          </thead>
+          <tbody>
+            <tr style="cursor: default;"><td class="num" style="color: var(--text-muted);">14:18</td><td>Kujtesë termini</td><td class="em" style="font-family: var(--font-mono);">prindi@gmail.com</td><td><span class="chip chip-green"><span class="dot"></span>Dorëzuar</span></td></tr>
+            <tr style="cursor: default;"><td class="num" style="color: var(--text-muted);">13:50</td><td>Vërtetim PDF</td><td class="em" style="font-family: var(--font-mono);">marigona.h@hotmail.com</td><td><span class="chip chip-green"><span class="dot"></span>Hapur</span></td></tr>
+            <tr style="cursor: default;"><td class="num" style="color: var(--text-muted);">11:02</td><td>Reset fjalëkalimi</td><td class="em" style="font-family: var(--font-mono);">ereblire@donetamed.com</td><td><span class="chip chip-green"><span class="dot"></span>Klikuar</span></td></tr>
+            <tr style="cursor: default;"><td class="num" style="color: var(--text-muted);">09:14</td><td>Kujtesë termini</td><td class="em" style="font-family: var(--font-mono);">arta.k@gmail.com</td><td><span class="chip chip-amber"><span class="dot"></span>Në pritje</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+
+    <!-- ========= AUDIT ========= -->
+    <section class="pane" data-view="audit">
+      <h2>Auditimi</h2>
+      <div class="pane-sub">Të gjitha ndryshimet e të dhënave klinike dhe veprimet e përdoruesve. Mbahen për 7 vjet sipas rregullores.</div>
+
+      <div class="audit-toolbar">
+        <select class="filter-select"><option>Të gjithë veprimet</option><option>Krijim</option><option>Modifikim</option><option>Fshirje</option><option>Hyrje</option></select>
+        <select class="filter-select"><option>Të gjithë përdoruesit</option><option>Dr. Taulant Shala</option><option>Erëblirë Krasniqi</option></select>
+        <select class="filter-select"><option>7 ditët e fundit</option><option>30 ditët e fundit</option><option>Sot</option><option>Periudhë e personalizuar</option></select>
+        <div class="spacer"></div>
+        <button class="btn btn-secondary btn-sm">Eksporto CSV</button>
+      </div>
+
+      <div class="audit-list">
+        <div class="audit-row" onclick="toggleAudit(this)">
+          <div class="when">14.05 · 14:23</div>
+          <div class="who">Dr. Taulant Shala</div>
+          <div class="what">Modifikoi vizitën · <span class="target">Rita Hoxha · 4v 6m</span></div>
+          <div class="chev">›</div>
+        </div>
+        <div class="audit-detail">
+          <div class="diff"><span class="k">Diagnoza</span><span class="old">Faringit akut</span><span class="new">Tonsillopharyngitis acuta · J03.9</span></div>
+          <div class="diff"><span class="k">Terapia</span><span class="old">—</span><span class="new">Amoxicilin susp. 250mg/5ml · 7 ditë</span></div>
+          <div class="diff"><span class="k">Pagesa</span><span class="old">B · €10</span><span class="new">A · €15</span></div>
+        </div>
+
+        <div class="audit-row" onclick="toggleAudit(this)">
+          <div class="when">14.05 · 14:18</div>
+          <div class="who">Erëblirë Krasniqi</div>
+          <div class="what">Caktoi termin · <span class="target">Aron Berisha · 14.05 15:40</span></div>
+          <div class="chev">›</div>
+        </div>
+        <div class="audit-detail">
+          <div class="diff"><span class="k">Pacienti</span><span class="old">—</span><span class="new">Aron Berisha (2v 1m)</span></div>
+          <div class="diff"><span class="k">Termini</span><span class="old">—</span><span class="new">14.05.2026 · 15:40 — 16:00</span></div>
+          <div class="diff"><span class="k">Arsyeja</span><span class="old">—</span><span class="new">Kontroll i rregullt</span></div>
+        </div>
+
+        <div class="audit-row" onclick="toggleAudit(this)">
+          <div class="when">14.05 · 14:15</div>
+          <div class="who">Dr. Taulant Shala</div>
+          <div class="what">Krijoi vizitë · <span class="target">Liam Hoti · 11m</span></div>
+          <div class="chev">›</div>
+        </div>
+        <div class="audit-detail">
+          <div class="diff"><span class="k">Diagnoza</span><span class="old">—</span><span class="new">Otitis media acuta · H66.0</span></div>
+          <div class="diff"><span class="k">Pagesa</span><span class="old">—</span><span class="new">A · €15</span></div>
+        </div>
+
+        <div class="audit-row" onclick="toggleAudit(this)">
+          <div class="when">14.05 · 13:50</div>
+          <div class="who">Dr. Taulant Shala</div>
+          <div class="what">Lëshoi vërtetim · <span class="target">Rita Hoxha</span></div>
+          <div class="chev">›</div>
+        </div>
+        <div class="audit-detail">
+          <div class="diff"><span class="k">Tipi</span><span class="old">—</span><span class="new">Vërtetim mungese për kopsht</span></div>
+          <div class="diff"><span class="k">Periudha</span><span class="old">—</span><span class="new">14.05 — 17.05.2026 (3 ditë)</span></div>
+        </div>
+
+        <div class="audit-row" onclick="toggleAudit(this)">
+          <div class="when">14.05 · 10:02</div>
+          <div class="who">Dr. Taulant Shala</div>
+          <div class="what">Hyrje në sistem · <span class="target">nga Prizren · Chrome / macOS</span></div>
+          <div class="chev">›</div>
+        </div>
+        <div class="audit-detail">
+          <div class="diff"><span class="k">IP</span><span class="old">—</span><span class="new">85.94.116.42</span></div>
+          <div class="diff"><span class="k">Pajisja</span><span class="old">—</span><span class="new">Chrome 134 · macOS · MacBook Pro</span></div>
+        </div>
+
+        <div class="audit-row" onclick="toggleAudit(this)">
+          <div class="when">13.05 · 17:48</div>
+          <div class="who">Erëblirë Krasniqi</div>
+          <div class="what">Anuloi termin · <span class="target">Ben Krasniqi · 14.05 12:10</span></div>
+          <div class="chev">›</div>
+        </div>
+        <div class="audit-detail">
+          <div class="diff"><span class="k">Arsyeja</span><span class="old">—</span><span class="new">Pacienti njoftoi mungesën nga prindi</span></div>
+        </div>
+
+        <div class="audit-footer">
+          Shfaqen 6 nga 142 ngjarje · <a href="#">Shfaq më shumë</a>
+        </div>
+      </div>
+    </section>
+
+  </div>
+</main>
+
+
+<!-- ============== Modal: Add user ============== -->
+<div class="modal-overlay" id="add-user-modal" style="display: none;">
+  <div class="modal" role="dialog" aria-modal="true">
+    <div class="modal-header">
+      <h2>Shto staf</h2>
+      <div class="sub">Personi do të marrë një email me link për të caktuar fjalëkalimin. Linku skadon në 24 orë.</div>
+    </div>
+    <div class="modal-body">
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+        <div class="field">
+          <label class="field-label">Emri</label>
+          <input class="input" placeholder="p.sh. Adea">
+        </div>
+        <div class="field">
+          <label class="field-label">Mbiemri</label>
+          <input class="input" placeholder="p.sh. Maloku">
+        </div>
+      </div>
+
+      <div class="field">
+        <label class="field-label">Email</label>
+        <input class="input" type="email" placeholder="adea@donetamed.com">
+        <span class="field-help">Adresa në të cilën do të dërgohet linku.</span>
+      </div>
+
+      <div class="field">
+        <label class="field-label">Roli</label>
+        <select class="select">
+          <option>Mjek</option>
+          <option selected>Infermierja</option>
+          <option>Admin · administrator i klinikës</option>
+        </select>
+      </div>
+
+      <div class="info-tip">
+        <span class="i">i</span>
+        <div>Mjeku ka qasje në karta pacientësh dhe vizita. Infermierja menaxhon vetëm terminet. Admini menaxhon stafin dhe cilësimet — pa qasje në karta klinike, përveç nëse është gjithashtu mjek.</div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeAddUser()">Anulo</button>
+      <button class="btn btn-primary" onclick="submitAddUser()">Shto dhe dërgo email</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- ============== Side drawer: Edit user ============== -->
+<div class="side-drawer" id="edit-user-drawer">
+  <div class="panel">
+    <div class="panel-head">
+      <div>
+        <h2>Erëblirë Krasniqi</h2>
+        <div style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">Krijuar 14.02.2024 · Hyrja e fundit 30 min më parë</div>
+      </div>
+      <button class="x" onclick="closeEditUser()" aria-label="Mbyll">×</button>
+    </div>
+    <div class="panel-body">
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+        <div class="field">
+          <label class="field-label">Emri</label>
+          <input class="input" value="Erëblirë">
+        </div>
+        <div class="field">
+          <label class="field-label">Mbiemri</label>
+          <input class="input" value="Krasniqi">
+        </div>
+      </div>
+      <div class="field">
+        <label class="field-label">Email</label>
+        <input class="input" type="email" value="ereblire@donetamed.com">
+      </div>
+      <div class="field">
+        <label class="field-label">Roli</label>
+        <select class="select">
+          <option>Mjek</option>
+          <option selected>Infermierja</option>
+          <option>Admin</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label class="field-label">Statusi</label>
+        <div class="status-radio-row">
+          <label class="selected" onclick="pickStatus(this)">
+            <input type="radio" name="status" checked>
+            <div>
+              <div class="t">Aktive</div>
+              <div class="s">Mund të identifikohet dhe të punojë në Klinika.</div>
+            </div>
+          </label>
+          <label onclick="pickStatus(this)">
+            <input type="radio" name="status">
+            <div>
+              <div class="t">Çaktivizo</div>
+              <div class="s">Nuk mund të identifikohet, por të dhënat dhe historiku ruhen.</div>
+            </div>
+          </label>
+        </div>
+      </div>
+
+      <div class="danger-action">
+        <div class="h">Reset i fjalëkalimit</div>
+        <div class="s">Përdoruesit do t'i dërgohet një email me link të ri. Linku skadon në 24 orë. Fjalëkalimet nuk shfaqen kurrë.</div>
+        <button class="btn btn-secondary btn-sm">Dërgo link reseti</button>
+      </div>
+    </div>
+    <div class="panel-foot">
+      <button class="btn btn-ghost" onclick="closeEditUser()">Anulo</button>
+      <button class="btn btn-primary" onclick="saveEditUser()">Ruaj</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- Toast -->
+<div class="toast" id="toast">
+  <span class="check">✓</span>
+  <span id="toast-msg">Ndryshimet u ruajtën.</span>
+</div>
+
+
+<script>
+  // ===== View switching =====
+  const VIEWS = ['general', 'hours', 'users', 'payments', 'email', 'audit'];
+  function showView(name) {
+    if (!VIEWS.includes(name)) name = 'general';
+    document.querySelectorAll('.pane').forEach(p => p.classList.toggle('active', p.dataset.view === name));
+    document.querySelectorAll('.settings-sidebar a').forEach(a => a.classList.toggle('active', a.dataset.view === name));
+    window.scrollTo({ top: 0 });
+  }
+  window.addEventListener('hashchange', () => showView(location.hash.slice(1)));
+  showView(location.hash.slice(1) || 'general');
+
+  // ===== Modals & drawers =====
+  const $ = (id) => document.getElementById(id);
+
+  function openAddUser() { $('add-user-modal').style.display = 'grid'; }
+  function closeAddUser() { $('add-user-modal').style.display = 'none'; }
+  function submitAddUser() {
+    closeAddUser();
+    showToast('Stafi u shtua · email me link u dërgua');
+  }
+
+  function openEditUser(id) { $('edit-user-drawer').classList.add('open'); }
+  function closeEditUser() { $('edit-user-drawer').classList.remove('open'); }
+  function saveEditUser() {
+    closeEditUser();
+    showToast('Ndryshimet u ruajtën');
+  }
+  function pickStatus(label) {
+    document.querySelectorAll('.status-radio-row label').forEach(l => l.classList.remove('selected'));
+    label.classList.add('selected');
+    label.querySelector('input').checked = true;
+  }
+
+  // Email mode toggle
+  function selectEmail(mode) {
+    const defaultCard = $('email-default-card');
+    const smtpCard = $('email-smtp-card');
+    defaultCard.classList.toggle('selected', mode === 'default');
+    smtpCard.classList.toggle('selected', mode === 'smtp');
+    defaultCard.querySelector('input').checked = mode === 'default';
+    smtpCard.querySelector('input').checked = mode === 'smtp';
+    // Save disabled until SMTP test passes (when SMTP selected)
+    if (mode === 'smtp' && !$('smtp-test').classList.contains('show')) {
+      $('email-save').disabled = true;
+    } else {
+      $('email-save').disabled = false;
+    }
+  }
+  function testSmtp(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    setTimeout(() => {
+      $('smtp-test').classList.add('show');
+      $('email-save').disabled = false;
+    }, 400);
+  }
+
+  // Audit row expand
+  function toggleAudit(row) {
+    const detail = row.nextElementSibling;
+    if (!detail || !detail.classList.contains('audit-detail')) return;
+    const open = detail.classList.toggle('open');
+    row.classList.toggle('open', open);
+  }
+
+  // ===== Orari dhe terminet =====
+  // Single time range per day — no split hours, no lunch breaks.
+  // (Earlier iterations supported addRange/removeRange; reverted per simplification.)
+  // Validation: start time must be before end time. Wire up listeners on every
+  // time-picker so an invalid range surfaces inline.
+  function validateRange(line) {
+    const pickers = line.querySelectorAll('.time-picker');
+    if (pickers.length !== 2) return;
+    const a = pickers[0].value, b = pickers[1].value;
+    const bad = a && b && a >= b;
+    line.classList.toggle('invalid', bad);
+    let msg = line.querySelector('.range-error');
+    if (bad && !msg) {
+      msg = document.createElement('span');
+      msg.className = 'range-error';
+      msg.textContent = 'Mbyllja duhet pas hapjes';
+      line.appendChild(msg);
+    } else if (!bad && msg) {
+      msg.remove();
+    }
+  }
+  document.querySelectorAll('.hours-row .range-line').forEach(line => {
+    line.querySelectorAll('.time-picker').forEach(p =>
+      p.addEventListener('change', () => validateRange(line))
+    );
+  });
+
+  function onDurChange(input) {
+    const card = input.closest('.dur-check');
+    card.classList.toggle('is-selected', input.checked);
+    // If user un-checks the default, promote the lowest still-checked option.
+    const selected = [...document.querySelectorAll('.dur-check.is-selected')];
+    if (selected.length === 0) {
+      // Re-check at least one — UX guarantee per spec.
+      input.checked = true;
+      card.classList.add('is-selected');
+      return;
+    }
+    const hasDefault = selected.some(c => c.classList.contains('is-default'));
+    if (!hasDefault) {
+      document.querySelectorAll('.dur-check').forEach(c => c.classList.remove('is-default'));
+      selected[0].classList.add('is-default');
+    }
+    // Re-populate the default dropdown to mirror the selected set.
+    const sel = document.getElementById('defaultDur');
+    if (sel) {
+      const current = sel.value;
+      sel.innerHTML = '';
+      selected.forEach(c => {
+        const v = c.querySelector('.v').textContent.trim().replace(/min$/, ' min');
+        const opt = document.createElement('option');
+        opt.textContent = v + 'uta';
+        sel.appendChild(opt);
+      });
+      // Try to preserve selection
+      [...sel.options].forEach(o => { if (o.textContent === current) sel.value = current; });
+    }
+  }
+
+  function addCustomDuration() {
+    const val = prompt('Sa minuta? (1–120)', '12');
+    if (!val) return;
+    const n = parseInt(val, 10);
+    if (isNaN(n) || n < 1 || n > 120) { alert('Vendos një vlerë midis 1 dhe 120.'); return; }
+    const grid = document.getElementById('durChecks');
+    const label = document.createElement('label');
+    label.className = 'dur-check is-selected';
+    label.innerHTML = `
+      <input type="checkbox" checked onchange="onDurChange(this)">
+      <span class="v">${n}<span class="u">min</span></span>
+      <span class="default-tag">Parazgjedhur</span>
+    `;
+    grid.appendChild(label);
+    onDurChange(label.querySelector('input'));
+    showToast(`Kohëzgjatja ${n} min u shtua`);
+  }
+
+  // Toast
+  let toastTimer;
+  function showToast(msg) {
+    $('toast-msg').textContent = msg;
+    $('toast').classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => $('toast').classList.remove('show'), 3000);
+  }
+</script>
+
+</body>
+<script src="shortcuts.js"></script>
+</html>

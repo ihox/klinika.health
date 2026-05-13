@@ -1,0 +1,3321 @@
+<!DOCTYPE html>
+<html lang="sq">
+<head>
+<meta charset="UTF-8">
+<title>Klinika — Era Krasniqi · Kartela</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="styles.css">
+<style>
+  body { padding-bottom: 76px; }
+
+  /* ====== Master data strip ====== */
+  .master {
+    background: var(--bg-elevated);
+    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 60px;
+    z-index: 20;
+  }
+  .master-main {
+    padding: 16px 32px;
+    display: flex;
+    align-items: center;
+    gap: 24px;
+  }
+
+  /* Allergies sub-strip — only renders when populated; subtle amber wash */
+  .master-allergies {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 7px 32px;
+    background: var(--amber-bg);
+    border-top: 1px solid var(--amber-soft);
+    font-size: 12.5px;
+    color: #78350F;
+    cursor: text;
+    transition: background 120ms ease;
+  }
+  .master-allergies:hover { background: #FDE8B0; }
+  .master-allergies .alg-icon {
+    flex: 0 0 auto;
+    width: 18px; height: 18px;
+    border-radius: 999px;
+    background: var(--amber);
+    color: white;
+    display: grid; place-items: center;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1;
+  }
+  .master-allergies .alg-lab {
+    font-size: 10.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--amber);
+  }
+  .master-allergies .alg-val {
+    font-weight: 500;
+    color: #78350F;
+    flex: 1;
+    min-width: 0;
+    white-space: normal;
+    word-break: break-word;
+  }
+  .master-allergies .alg-edit {
+    flex: 0 0 auto;
+    font-size: 11px;
+    color: var(--amber);
+    background: transparent;
+    border: 1px solid transparent;
+    padding: 2px 8px;
+    border-radius: 4px;
+    opacity: 0;
+    transition: opacity 120ms ease;
+  }
+  .master-allergies:hover .alg-edit { opacity: 1; }
+  .master-allergies .alg-edit:hover { background: rgba(180,83,9,0.08); border-color: var(--amber-soft); }
+
+  /* Empty-state affordance — low contrast, doctor's eye finds it */
+  .master-allergies.empty {
+    background: var(--bg-elevated);
+    border-top: 1px solid var(--border-soft);
+    padding: 6px 32px;
+  }
+  .master-allergies.empty .alg-add {
+    font-size: 11.5px;
+    color: var(--text-faint);
+    background: transparent;
+    border: 1px dashed var(--border-strong);
+    padding: 3px 10px;
+    border-radius: 999px;
+    transition: all 120ms ease;
+  }
+  .master-allergies.empty:hover .alg-add {
+    color: var(--amber);
+    border-color: var(--amber-soft);
+    background: var(--amber-bg);
+  }
+  .m-id {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-faint);
+    background: var(--bg-subtle);
+    border: 1px solid var(--border);
+    padding: 3px 8px;
+    border-radius: 4px;
+  }
+  .m-name-block { flex: 0 0 auto; }
+  .m-name {
+    font-family: var(--font-display);
+    font-size: 22px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    line-height: 1.1;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .m-name .sex-pill {
+    font-size: 10px;
+    font-weight: 600;
+    background: #FDF2F8;
+    color: #BE185D;
+    padding: 2px 6px;
+    border-radius: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    border: 1px solid #FBCFE8;
+  }
+  .m-sub {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-top: 4px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .m-sub .sep { color: var(--border-strong); }
+
+  .m-divider { width: 1px; height: 44px; background: var(--border); }
+
+  .m-stat { display: flex; flex-direction: column; gap: 2px; }
+  .m-stat .l {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--text-faint);
+    font-weight: 500;
+  }
+  .m-stat .v {
+    font-family: var(--font-display);
+    font-size: 16px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+  }
+  .m-stat .v .u { font-size: 11px; color: var(--text-faint); font-weight: 400; letter-spacing: 0; margin-left: 2px; }
+
+  .m-spacer { flex: 1; }
+
+  .m-actions { display: flex; gap: 8px; }
+
+  /* ====== Visit nav bar ====== */
+  .visit-nav {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 32px;
+    background: var(--bg-subtle);
+    border-bottom: 1px solid var(--border);
+  }
+  .visit-nav .left { display: flex; align-items: center; gap: 14px; }
+  .visit-nav .counter {
+    font-family: var(--font-display);
+    font-size: 14px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+  .visit-nav .counter .total { color: var(--text-muted); font-weight: 500; }
+  .visit-nav .dot-dirty {
+    width: 7px; height: 7px;
+    background: var(--accent-500);
+    border-radius: 999px;
+    display: inline-block;
+    margin-left: 6px;
+  }
+  .visit-nav .when {
+    font-size: 12px;
+    color: var(--text-muted);
+    padding-left: 14px;
+    border-left: 1px solid var(--border);
+  }
+  .visit-nav .when strong { color: var(--text); font-weight: 500; }
+
+  .visit-jump {
+    padding: 5px 10px;
+    border: 1px solid var(--border-strong);
+    background: var(--bg-elevated);
+    border-radius: var(--r-sm);
+    font-size: 12px;
+    color: var(--text);
+  }
+
+  /* ====== Auto-save state indicator (visit form header) ======
+     Five states, calm by default; only error gets the amber pill treatment.
+     Lives at the right end of .visit-nav so it sits near the patient/date. */
+  .autosave {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12.5px;
+    color: var(--teal-700);
+    font-variant-numeric: tabular-nums;
+    padding: 4px 0;
+    transition: color 200ms ease, opacity 200ms ease;
+    user-select: none;
+  }
+  .autosave .as-ico {
+    display: inline-grid;
+    place-items: center;
+    width: 14px; height: 14px;
+    flex-shrink: 0;
+  }
+  .autosave .as-ico svg { display: block; }
+  .autosave .as-text { line-height: 1; }
+  .autosave .as-text .ts { color: var(--text-faint); margin-left: 2px; }
+
+  .autosave .as-spin {
+    width: 12px; height: 12px;
+    border: 1.5px solid var(--teal-200);
+    border-top-color: var(--primary);
+    border-radius: 999px;
+    animation: as-spin 800ms linear infinite;
+  }
+  @keyframes as-spin { to { transform: rotate(360deg); } }
+
+  /* Dirty pulse */
+  .autosave[data-state="dirty"] { color: var(--text-muted); }
+  .autosave[data-state="dirty"] .as-ico {
+    width: 8px; height: 8px;
+    background: var(--accent-500);
+    border-radius: 999px;
+    animation: as-pulse 1.6s ease-in-out infinite;
+  }
+  @keyframes as-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+
+  /* Just-saved flash */
+  .autosave[data-state="saved-flash"] {
+    color: var(--green);
+  }
+  .autosave[data-state="saving"] { color: var(--text-muted); }
+
+  /* Idle (saved + timestamp) */
+  .autosave[data-state="idle"] { color: var(--text-muted); }
+  .autosave[data-state="idle"] .as-ico { color: var(--green); }
+
+  /* Error — amber pill, prominent */
+  .autosave[data-state="error"] {
+    background: var(--amber-bg);
+    border: 1px solid var(--amber-soft);
+    border-radius: 999px;
+    padding: 4px 6px 4px 10px;
+    color: var(--amber);
+    font-weight: 500;
+  }
+  .autosave[data-state="error"] .as-ico { color: var(--amber); width: 14px; height: 14px; }
+  .autosave[data-state="error"] .as-retry {
+    margin-left: 4px;
+    font-size: 12px;
+    padding: 3px 10px;
+    background: var(--amber);
+    color: white;
+    border-radius: 999px;
+    font-weight: 500;
+  }
+  .autosave[data-state="error"] .as-retry:hover { background: #9A4A07; }
+
+  /* Hide chrome that doesn't fit the current state */
+  .autosave .for-idle,
+  .autosave .for-dirty,
+  .autosave .for-saving,
+  .autosave .for-saved-flash,
+  .autosave .for-error { display: none; }
+  .autosave[data-state="idle"]        .for-idle,
+  .autosave[data-state="dirty"]       .for-dirty,
+  .autosave[data-state="saving"]      .for-saving,
+  .autosave[data-state="saved-flash"] .for-saved-flash,
+  .autosave[data-state="error"]       .for-error { display: inline-flex; }
+
+  /* Manual save button (small, secondary, in the corner) */
+  .visit-nav .right {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+  .manual-save {
+    font-size: 12px;
+    color: var(--text-muted);
+    background: transparent;
+    border: 1px solid var(--border);
+    padding: 4px 10px;
+    border-radius: var(--r-sm);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 120ms ease;
+  }
+  .manual-save:hover { background: var(--bg-elevated); border-color: var(--border-strong); color: var(--text); }
+  .manual-save .kbd-hint {
+    font-family: var(--font-ui);
+    font-size: 10.5px;
+    color: var(--text-faint);
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    padding: 0 4px;
+    border-radius: 3px;
+  }
+
+  /* Save-failure dialog content */
+  .save-fail .modal { width: 520px; }
+  .save-fail .field-list {
+    margin: 4px 0 0;
+    padding: 12px 14px;
+    background: var(--bg-subtle);
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .save-fail .field-list li {
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--text);
+    display: grid;
+    grid-template-columns: 110px 1fr;
+    gap: 12px;
+  }
+  .save-fail .field-list .k {
+    color: var(--text-muted);
+    font-size: 12.5px;
+    padding-top: 1px;
+  }
+  .save-fail .field-list .v {
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    color: var(--text-strong);
+    word-break: break-word;
+  }
+  .save-fail .err-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 8px;
+    margin-bottom: 6px;
+    border-radius: 999px;
+    background: var(--amber-bg);
+    border: 1px solid var(--amber-soft);
+    color: var(--amber);
+    font-size: 11px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  /* ====== Two-col chart layout ====== */
+  .chart-grid {
+    max-width: 1440px;
+    margin: 0 auto;
+    padding: 20px 32px 24px;
+    display: grid;
+    grid-template-columns: 1fr 420px;
+    gap: 24px;
+    align-items: flex-start;
+  }
+
+  /* ====== Visit form ====== */
+  .visit-form {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: var(--r-lg);
+    box-shadow: var(--shadow-xs);
+    overflow: hidden;
+  }
+  .vf-section {
+    padding: 18px 22px;
+    border-bottom: 1px solid var(--border);
+  }
+  .vf-section:last-child { border-bottom: none; }
+  .vf-section h4 {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-muted);
+    font-weight: 600;
+    margin-bottom: 12px;
+  }
+
+  .vf-row {
+    display: grid;
+    grid-template-columns: 140px 1fr;
+    gap: 16px;
+    align-items: flex-start;
+    margin-bottom: 12px;
+  }
+  .vf-row:last-child { margin-bottom: 0; }
+  .vf-row.full { grid-template-columns: 1fr; }
+  .vf-row > .label {
+    font-size: 12px;
+    color: var(--text-muted);
+    font-weight: 500;
+    padding-top: 8px;
+  }
+  .vf-row > .label .opt { color: var(--text-faint); font-weight: 400; margin-left: 4px; font-size: 11px; }
+
+  /* Vitals row */
+  .vitals-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+  }
+  .vital {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .vital label {
+    font-size: 11px;
+    color: var(--text-muted);
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .vital .wrap {
+    display: flex;
+    align-items: center;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--r-md);
+    padding: 0 12px;
+    transition: all 150ms ease;
+  }
+  .vital .wrap:focus-within { border-color: var(--primary); box-shadow: var(--focus-ring); }
+  .vital .wrap input {
+    border: none;
+    outline: none;
+    padding: 9px 0;
+    background: transparent;
+    font-family: var(--font-display);
+    font-size: 16px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    width: 100%;
+  }
+  .vital .wrap .unit { color: var(--text-faint); font-size: 12px; font-weight: 500; }
+  .vital .pct {
+    font-size: 11px;
+    color: var(--green);
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .food-checks { display: flex; gap: 14px; padding: 6px 0; }
+  .food-check {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 14px;
+    border: 1px solid var(--border-strong);
+    background: var(--bg-elevated);
+    border-radius: var(--r-md);
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 150ms ease;
+  }
+  .food-check input { accent-color: var(--primary); }
+  .food-check.checked {
+    border-color: var(--primary);
+    background: var(--primary-soft);
+    color: var(--teal-800);
+    font-weight: 500;
+  }
+
+  /* Diagnosis chips */
+  .dx-input-wrap {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--r-md);
+    padding: 6px 8px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+    min-height: 38px;
+  }
+  .dx-input-wrap:focus-within { border-color: var(--primary); box-shadow: var(--focus-ring); }
+  .dx-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--primary-soft);
+    border: 1px solid var(--teal-200);
+    color: var(--teal-900);
+    padding: 4px 4px 4px 8px;
+    border-radius: var(--r-sm);
+    font-size: 12px;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+  }
+  .dx-chip .code {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--teal-700);
+    background: var(--bg-elevated);
+    padding: 1px 4px;
+    border-radius: 3px;
+    font-weight: 600;
+  }
+  .dx-chip .x {
+    width: 16px; height: 16px;
+    display: grid; place-items: center;
+    border-radius: 4px;
+    color: var(--teal-700);
+    cursor: pointer;
+  }
+  .dx-chip .x:hover { background: rgba(15,118,110,0.12); }
+  .dx-chip.primary { background: var(--teal-700); color: white; border-color: var(--teal-700); }
+  .dx-chip.primary .code { background: var(--teal-800); color: var(--teal-100); }
+  .dx-chip.primary .x { color: var(--teal-100); }
+  .dx-input-wrap input { border: none; outline: none; background: transparent; flex: 1; min-width: 100px; padding: 4px; font-size: 13px; }
+
+  /* ICD-10 results dropdown (preview) */
+  .dx-dropdown {
+    margin-top: 8px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--r-md);
+    box-shadow: var(--shadow-md);
+    overflow: hidden;
+    display: none;
+  }
+  .dx-dropdown.open { display: block; }
+  .dx-dropdown .hint {
+    padding: 6px 14px;
+    background: var(--bg-subtle);
+    font-size: 11px;
+    color: var(--text-faint);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-weight: 500;
+    display: flex;
+    justify-content: space-between;
+  }
+  .dx-dropdown .opt {
+    padding: 8px 14px;
+    display: grid;
+    grid-template-columns: 64px 1fr auto;
+    gap: 14px;
+    align-items: center;
+    cursor: pointer;
+    border-bottom: 1px solid var(--border-soft);
+  }
+  .dx-dropdown .opt:last-child { border-bottom: none; }
+  .dx-dropdown .opt:hover, .dx-dropdown .opt.active { background: var(--primary-soft); }
+  .dx-dropdown .opt .code {
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    font-weight: 600;
+    color: var(--teal-700);
+  }
+  .dx-dropdown .opt .desc { font-size: 13px; color: var(--text); }
+  .dx-dropdown .opt .freq {
+    font-size: 10px;
+    color: var(--text-faint);
+    background: var(--bg-subtle);
+    padding: 1px 6px;
+    border-radius: 3px;
+  }
+  .dx-dropdown .opt.active .freq { background: var(--bg-elevated); }
+
+  /* Terapia */
+  .tx-wrap { position: relative; }
+  .tx-textarea {
+    width: 100%;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--r-md);
+    padding: 12px;
+    font-family: var(--font-mono);
+    font-size: 13px;
+    line-height: 1.55;
+    color: var(--text);
+    resize: vertical;
+    min-height: 110px;
+    outline: none;
+  }
+  .tx-textarea:focus { border-color: var(--primary); box-shadow: var(--focus-ring); }
+
+  .tx-autocomplete {
+    position: absolute;
+    left: 80px;
+    bottom: 12px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--r-md);
+    box-shadow: var(--shadow-lg);
+    width: 380px;
+    overflow: hidden;
+    display: none;
+  }
+  .tx-autocomplete.open { display: block; }
+  .tx-autocomplete .ac-head {
+    padding: 6px 12px;
+    background: var(--bg-subtle);
+    font-size: 11px;
+    color: var(--text-faint);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-weight: 500;
+    display: flex;
+    justify-content: space-between;
+  }
+  .tx-autocomplete .ac-item {
+    padding: 8px 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    border-bottom: 1px solid var(--border-soft);
+  }
+  .tx-autocomplete .ac-item:last-child { border-bottom: none; }
+  .tx-autocomplete .ac-item:hover, .tx-autocomplete .ac-item.active { background: var(--primary-soft); }
+  .tx-autocomplete .ac-item .text { font-family: var(--font-mono); font-size: 12px; }
+  .tx-autocomplete .ac-item .count {
+    font-size: 10px;
+    color: var(--text-faint);
+    background: var(--bg-subtle);
+    padding: 1px 6px;
+    border-radius: 3px;
+  }
+  .tx-autocomplete .ac-foot {
+    padding: 6px 12px;
+    background: var(--bg-subtle);
+    border-top: 1px solid var(--border);
+    font-size: 11px;
+    color: var(--text-faint);
+    display: flex;
+    gap: 12px;
+  }
+  .tx-autocomplete .ac-foot .k { display: inline-block; }
+  .tx-autocomplete .ac-foot .k kbd { font-size: 10px; padding: 0 4px; }
+
+  /* ====== Right column ====== */
+  .right-stack { display: flex; flex-direction: column; gap: 16px; }
+
+  /* Growth chart cards */
+  .growth-card {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: var(--r-lg);
+    overflow: hidden;
+    box-shadow: var(--shadow-xs);
+    cursor: pointer;
+    transition: transform 120ms ease, box-shadow 120ms ease;
+  }
+  .growth-card:hover { transform: translateY(-1px); box-shadow: var(--shadow-sm); }
+  .growth-head {
+    padding: 10px 14px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .growth-head .t { font-size: 12px; font-weight: 600; color: var(--text); }
+  .growth-head .pct {
+    font-family: var(--font-display);
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--green);
+    font-variant-numeric: tabular-nums;
+  }
+  .growth-svg {
+    display: block;
+    width: 100%;
+    height: 100px;
+    padding: 0 10px 10px;
+  }
+
+  /* US thumbnails */
+  .us-thumbs {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    padding: 12px;
+  }
+  .us-thumb {
+    aspect-ratio: 1;
+    background: #0c0a09;
+    border-radius: var(--r-sm);
+    overflow: hidden;
+    position: relative;
+    cursor: pointer;
+  }
+  .us-thumb svg { width: 100%; height: 100%; display: block; }
+  .us-thumb .date {
+    position: absolute;
+    bottom: 4px;
+    left: 6px;
+    font-size: 9px;
+    color: rgba(255,255,255,0.7);
+    font-family: var(--font-mono);
+  }
+  .us-empty {
+    padding: 10px;
+    text-align: center;
+    color: var(--text-faint);
+    font-size: 11px;
+  }
+
+  /* History list */
+  .history { padding: 4px 0; }
+  .hist-row {
+    display: grid;
+    grid-template-columns: 64px 1fr auto;
+    gap: 10px;
+    padding: 9px 14px;
+    border-bottom: 1px solid var(--border-soft);
+    cursor: pointer;
+    align-items: center;
+  }
+  .hist-row:last-child { border-bottom: none; }
+  .hist-row:hover { background: var(--bg-subtle); }
+  .hist-row.current { background: var(--primary-soft); border-left: 2px solid var(--primary); padding-left: 12px; }
+  .hist-row .date {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+  }
+  .hist-row .dx { font-size: 12px; color: var(--text); }
+  .hist-row .pay {
+    font-size: 11px;
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ====== Vërtetime list (right column) ====== */
+  .cert-list { padding: 4px 0; }
+  .cert-row {
+    display: grid;
+    grid-template-columns: 64px 1fr auto;
+    gap: 12px;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border-soft);
+    align-items: flex-start;
+    cursor: pointer;
+    transition: background 120ms ease;
+  }
+  .cert-row:last-child { border-bottom: none; }
+  .cert-row:hover { background: var(--primary-tint); }
+  .cert-row .issued {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-strong);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    padding-top: 1px;
+  }
+  .cert-row .body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .cert-row .range {
+    font-size: 12.5px;
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+    line-height: 1.35;
+  }
+  .cert-row .range .days {
+    color: var(--text-muted);
+    font-weight: 400;
+  }
+  .cert-row .dx {
+    font-size: 11.5px;
+    color: var(--text-muted);
+    line-height: 1.35;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .cert-row .actions {
+    display: flex;
+    gap: 2px;
+    opacity: 0.55;
+    transition: opacity 120ms ease;
+  }
+  .cert-row:hover .actions { opacity: 1; }
+  .cert-row .actions button {
+    width: 32px; height: 32px;
+    border-radius: var(--r-sm);
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    display: grid; place-items: center;
+    transition: all 120ms ease;
+  }
+  .cert-row .actions button:hover {
+    background: var(--bg-elevated);
+    color: var(--primary);
+    box-shadow: 0 0 0 1px var(--teal-200);
+  }
+  @media (pointer: coarse) {
+    .cert-row .actions button { width: 44px; height: 44px; }
+  }
+  .cert-empty {
+    padding: 16px 14px 18px;
+    font-size: 12.5px;
+    color: var(--text-muted);
+    font-style: italic;
+  }
+  .cert-more {
+    border-top: 1px solid var(--border-soft);
+    padding: 10px 14px;
+    text-align: center;
+  }
+  .cert-more a {
+    font-size: 12px;
+    color: var(--primary);
+    font-weight: 500;
+    cursor: pointer;
+  }
+  .cert-more a:hover { text-decoration: underline; }
+
+  /* ====== Cert preview dialog ====== */
+  .cert-prev-backdrop {
+    position: fixed; inset: 0;
+    background: rgba(28,25,23,0.55);
+    backdrop-filter: blur(2px);
+    display: none;
+    align-items: center; justify-content: center;
+    z-index: 110;
+    padding: 32px 24px;
+    overflow-y: auto;
+  }
+  .cert-prev-backdrop.open { display: flex; }
+  .cert-prev-modal {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: var(--r-lg);
+    box-shadow: 0 24px 64px rgba(28,25,23,0.32), 0 4px 12px rgba(28,25,23,0.12);
+    width: 100%; max-width: 560px;
+    overflow: hidden;
+    animation: cpIn 180ms ease-out;
+    display: flex; flex-direction: column;
+    max-height: calc(100vh - 64px);
+  }
+  @keyframes cpIn {
+    from { opacity: 0; transform: translateY(10px) scale(0.98); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+  }
+  .cert-prev-modal > header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 20px 12px;
+    border-bottom: 1px solid var(--border-soft);
+  }
+  .cert-prev-modal h3 {
+    font-family: var(--font-display); font-size: 15px; font-weight: 600;
+    letter-spacing: -0.005em; color: var(--text-strong); margin: 0;
+  }
+  .cert-prev-modal .cp-close {
+    border: none; background: transparent;
+    width: 30px; height: 30px; border-radius: 6px;
+    color: var(--text-muted); cursor: pointer;
+    font-size: 22px; line-height: 1;
+    display: grid; place-items: center;
+  }
+  .cert-prev-modal .cp-close:hover { background: var(--bg-subtle); color: var(--text); }
+
+  .cert-prev-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 22px 22px 8px;
+    background: var(--bg-subtle);
+  }
+
+  /* The certificate "paper" mini-render — mirrors print-certificate.html styling */
+  .cert-paper {
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    box-shadow: 0 4px 14px rgba(28,25,23,0.10);
+    padding: 26px 26px 22px;
+    font-family: 'Inter', system-ui, sans-serif;
+    font-size: 11.5px;
+    color: #1c1917;
+    line-height: 1.55;
+  }
+  .cert-paper .cp-letterhead {
+    text-align: center;
+    padding-bottom: 12px;
+    border-bottom: 2px solid #0F766E;
+    margin-bottom: 16px;
+  }
+  .cert-paper .cp-letterhead .mark { color: #0F766E; display: inline-block; margin-bottom: 6px; }
+  .cert-paper .cp-letterhead .name {
+    font-family: 'Inter Tight', sans-serif;
+    font-size: 14px;
+    font-weight: 700;
+    color: #0F766E;
+    letter-spacing: -0.005em;
+  }
+  .cert-paper .cp-letterhead .meta {
+    font-size: 9.5px;
+    color: #57534E;
+    margin-top: 4px;
+    font-variant-numeric: tabular-nums;
+  }
+  .cert-paper .cp-title {
+    text-align: center;
+    font-family: 'Inter Tight', sans-serif;
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    color: #0F766E;
+    margin: 14px 0 18px;
+  }
+  .cert-paper .cp-num {
+    display: flex; justify-content: space-between;
+    font-size: 10px; color: #57534E;
+    margin-bottom: 12px;
+  }
+  .cert-paper .cp-num strong { color: #1c1917; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .cert-paper .cp-body {
+    font-size: 12px;
+    line-height: 1.7;
+    text-align: justify;
+    color: #1c1917;
+  }
+  .cert-paper .cp-dx-box {
+    margin: 14px auto;
+    padding: 9px 14px;
+    border: 1.5px solid #0F766E;
+    border-radius: 3px;
+    text-align: center;
+    max-width: 84%;
+    background: rgba(204,251,241,0.18);
+  }
+  .cert-paper .cp-dx-box .lab {
+    font-size: 8.5px;
+    color: #0F766E;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-weight: 700;
+    margin-bottom: 3px;
+  }
+  .cert-paper .cp-dx-box .dx {
+    font-family: 'Inter Tight', sans-serif;
+    font-size: 13px;
+    font-style: italic;
+    font-weight: 600;
+  }
+  .cert-paper .cp-dx-box .code {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: #0F766E;
+    font-style: normal;
+    font-weight: 700;
+    margin-right: 6px;
+  }
+  .cert-paper .cp-period {
+    text-align: center;
+    margin-top: 10px;
+    font-size: 11.5px;
+  }
+  .cert-paper .cp-period strong { font-weight: 600; font-variant-numeric: tabular-nums; }
+  .cert-paper .cp-sig {
+    margin-top: 22px;
+    padding-top: 14px;
+    border-top: 1px solid #D6D3D1;
+    font-size: 10.5px;
+    line-height: 1.5;
+  }
+  .cert-paper .cp-sig .sig-name { font-weight: 600; font-size: 11.5px; color: #1c1917; }
+  .cert-paper .cp-sig .sig-cred { color: #57534E; }
+  .cert-paper .cp-sig .sig-date { color: #57534E; margin-top: 4px; font-variant-numeric: tabular-nums; }
+
+  .cert-prev-modal > footer {
+    padding: 12px 20px 16px;
+    display: flex; justify-content: flex-end; gap: 8px;
+    border-top: 1px solid var(--border-soft);
+    background: var(--bg-elevated);
+  }
+
+  /* ====== Sticky action bar ====== */
+  .action-bar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: var(--bg-elevated);
+    border-top: 1px solid var(--border);
+    padding: 12px 32px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    box-shadow: 0 -2px 8px rgba(28,25,23,0.04);
+    z-index: 30;
+  }
+  .action-bar .left-tools { display: flex; gap: 8px; }
+  .action-bar .right-tools { display: flex; gap: 8px; align-items: center; }
+  .action-bar .dirty-indicator {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-right: 12px;
+  }
+  .action-bar .dirty-indicator .dot { width: 8px; height: 8px; background: var(--accent-500); border-radius: 999px; }
+
+  /* Patient indicator chip in master strip */
+  .indicator-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 500;
+    background: var(--green-bg);
+    color: var(--green);
+    border: 1px solid var(--green-soft);
+  }
+  .indicator-chip .dot { width: 6px; height: 6px; background: var(--green); border-radius: 999px; }
+
+  /* Soft allergy reminder shown under the Terapia textarea — not a blocking validation */
+  .tx-allergy-reminder {
+    margin-top: 8px;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    background: var(--amber-bg);
+    border: 1px solid var(--amber-soft);
+    color: #78350F;
+    border-radius: var(--r-md);
+    font-size: 12px;
+    line-height: 1.4;
+    align-self: flex-start;
+  }
+  .tx-allergy-reminder .alg-icon {
+    width: 14px; height: 14px;
+    border-radius: 999px;
+    background: var(--amber);
+    color: white;
+    display: grid; place-items: center;
+    font-size: 9px;
+    font-weight: 700;
+    line-height: 1;
+  }
+  .tx-allergy-reminder strong { color: #78350F; font-weight: 600; }
+
+  /* Legacy diagnosis (free text from pre-migration Access) */
+  .dx-legacy {
+    background: var(--bg-subtle);
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    padding: 12px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .dx-legacy-text {
+    font-size: 14px;
+    font-family: var(--font-display);
+    color: var(--text-muted);
+    font-style: italic;
+    line-height: 1.4;
+  }
+  .dx-legacy-meta {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .legacy-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 10.5px;
+    font-weight: 600;
+    color: #92400E;
+    background: var(--amber-bg);
+    border: 1px solid var(--amber-soft);
+    padding: 2px 8px;
+    border-radius: 999px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .legacy-hint {
+    font-size: 11.5px;
+    color: var(--text-faint);
+    flex: 1;
+  }
+  .legacy-action { color: var(--primary); }
+
+  /* Tweaks panel (variants) — floating, bottom-right above action bar */
+  .tweaks-panel {
+    position: fixed;
+    right: 24px;
+    bottom: 84px;
+    width: 260px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: var(--r-lg);
+    box-shadow: var(--shadow-lg);
+    z-index: 40;
+    overflow: hidden;
+    display: none;
+  }
+  .tweaks-panel.open { display: block; }
+  .tweaks-head {
+    padding: 10px 14px;
+    background: var(--bg-subtle);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .tweaks-head .t {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-strong);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .tweaks-head .t .badge {
+    font-size: 9.5px;
+    font-weight: 600;
+    color: var(--teal-800);
+    background: var(--primary-soft);
+    border: 1px solid var(--teal-200);
+    padding: 1px 6px;
+    border-radius: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .tweaks-head .close {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    font-size: 18px;
+    line-height: 1;
+    width: 22px; height: 22px;
+    border-radius: 4px;
+    display: grid; place-items: center;
+    cursor: pointer;
+  }
+  .tweaks-head .close:hover { background: var(--bg-muted); color: var(--text); }
+  .tweaks-body { padding: 4px 0; }
+  .tweak-row {
+    padding: 9px 14px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    cursor: pointer;
+    transition: background 120ms ease;
+  }
+  .tweak-row:hover { background: var(--bg-subtle); }
+  .tweak-row .lab {
+    font-size: 12.5px;
+    color: var(--text);
+    flex: 1;
+    line-height: 1.35;
+  }
+  .tweak-row .lab .sub {
+    font-size: 11px;
+    color: var(--text-faint);
+    margin-top: 1px;
+    display: block;
+  }
+  .tweak-switch {
+    flex: 0 0 auto;
+    width: 30px; height: 18px;
+    background: var(--border-strong);
+    border-radius: 999px;
+    position: relative;
+    transition: background 150ms ease;
+  }
+  .tweak-switch::after {
+    content: '';
+    position: absolute;
+    top: 2px; left: 2px;
+    width: 14px; height: 14px;
+    background: white;
+    border-radius: 999px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.15);
+    transition: transform 150ms ease;
+  }
+  .tweak-row[aria-pressed="true"] .tweak-switch { background: var(--primary); }
+  .tweak-row[aria-pressed="true"] .tweak-switch::after { transform: translateX(12px); }
+
+  /* ====== WHO Growth Chart lightbox ======
+     Same design for all 3 (Pesha / Gjatësia / PK) — only data changes.
+     Modeled on the standard 5-percentile (P3 P15 P50 P85 P97) reference
+     curves used internationally for under-5 growth tracking. */
+  .who-backdrop {
+    position: fixed; inset: 0;
+    background: rgba(28,25,23,0.62);
+    backdrop-filter: blur(3px);
+    display: none;
+    align-items: center; justify-content: center;
+    z-index: 120;
+    padding: 24px;
+  }
+  .who-backdrop.open { display: flex; }
+  .who-modal {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: var(--r-lg);
+    box-shadow: 0 24px 64px rgba(28,25,23,0.38), 0 4px 12px rgba(28,25,23,0.14);
+    width: 100%;
+    max-width: 1040px;
+    max-height: calc(100vh - 48px);
+    display: flex; flex-direction: column;
+    overflow: hidden;
+    animation: whoIn 200ms cubic-bezier(.2,.7,.3,1);
+  }
+  @keyframes whoIn {
+    from { opacity: 0; transform: translateY(8px) scale(0.985); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+  }
+  .who-head {
+    display: flex; align-items: flex-start; justify-content: space-between;
+    gap: 16px;
+    padding: 18px 24px 14px;
+    border-bottom: 1px solid var(--border-soft);
+  }
+  .who-head .title-block { min-width: 0; }
+  .who-head h2 {
+    font-family: var(--font-display);
+    font-size: 18px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    color: var(--text-strong);
+    margin: 0 0 5px;
+    line-height: 1.2;
+  }
+  .who-head .who-meta {
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    font-size: 11.5px;
+    color: var(--text-muted);
+    line-height: 1.3;
+  }
+  .who-head .who-meta .badge {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-family: var(--font-mono);
+    font-size: 10px; font-weight: 600;
+    color: var(--teal-800);
+    background: var(--primary-soft);
+    border: 1px solid var(--teal-200);
+    padding: 2px 7px;
+    border-radius: 3px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+  .who-head .who-meta .sep { color: var(--border-strong); }
+  .who-head .tabs {
+    display: flex; gap: 4px;
+    background: var(--bg-subtle);
+    padding: 3px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+  }
+  .who-head .tabs button {
+    border: none;
+    background: transparent;
+    padding: 6px 12px;
+    font-size: 12px;
+    color: var(--text-muted);
+    border-radius: 5px;
+    cursor: pointer;
+    font-family: var(--font-ui);
+    transition: all 120ms ease;
+    white-space: nowrap;
+  }
+  .who-head .tabs button:hover { color: var(--text); }
+  .who-head .tabs button.active {
+    background: var(--bg-elevated);
+    color: var(--text-strong);
+    font-weight: 500;
+    box-shadow: 0 1px 2px rgba(28,25,23,0.08);
+  }
+  .who-head .sex-tabs button[data-sex="F"].active { color: #BE185D; }
+  .who-head .sex-tabs button[data-sex="M"].active { color: #1D4ED8; }
+  .who-meta .sex-note {
+    display: inline-flex;
+    align-items: center;
+    font-size: 10.5px;
+    font-weight: 500;
+    color: #92400E;
+    background: var(--amber-bg);
+    border: 1px solid var(--amber-soft);
+    padding: 1px 7px;
+    border-radius: 3px;
+  }
+  .who-head .close-btn {
+    border: none; background: transparent;
+    width: 30px; height: 30px; border-radius: 6px;
+    color: var(--text-muted); cursor: pointer;
+    font-size: 22px; line-height: 1;
+    display: grid; place-items: center;
+    flex-shrink: 0;
+  }
+  .who-head .close-btn:hover { background: var(--bg-subtle); color: var(--text); }
+
+  .who-body {
+    display: grid;
+    grid-template-columns: 1fr 240px;
+    overflow: hidden;
+    flex: 1; min-height: 0;
+  }
+  .who-chart-wrap {
+    padding: 18px 22px 22px;
+    overflow: auto;
+    background:
+      linear-gradient(to bottom, rgba(204,251,241,0.10), transparent 30%),
+      var(--bg-elevated);
+  }
+  .who-chart {
+    width: 100%;
+    height: auto;
+    max-width: 760px;
+    display: block;
+    margin: 0 auto;
+  }
+  /* SVG element styling */
+  .who-chart .axis line,
+  .who-chart .axis path { stroke: var(--border-strong); fill: none; }
+  .who-chart .axis text {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    fill: var(--text-muted);
+  }
+  .who-chart .grid line {
+    stroke: var(--border-soft);
+    stroke-width: 1;
+  }
+  .who-chart .grid line.major { stroke: var(--border); }
+  .who-chart .ax-title {
+    font-family: var(--font-ui);
+    font-size: 11px;
+    fill: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-weight: 500;
+  }
+  .who-chart .band-outer { fill: rgba(254, 243, 199, 0.45); }   /* P3-P15 + P85-P97 — caution */
+  .who-chart .band-mid   { fill: rgba(204, 251, 241, 0.55); }   /* P15-P50 + P50-P85 — normal */
+  .who-chart .pct-curve {
+    fill: none;
+    stroke-width: 1.4;
+  }
+  .who-chart .pct-curve.median { stroke: var(--teal-600); stroke-width: 2; }
+  .who-chart .pct-curve.outer { stroke: #d97706; opacity: 0.55; }
+  .who-chart .pct-curve.inner { stroke: var(--teal-500); opacity: 0.55; stroke-dasharray: 3 3; }
+  .who-chart .pct-label {
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    font-weight: 600;
+    fill: var(--text-muted);
+  }
+  .who-chart .pct-label.median { fill: var(--teal-700); }
+  .who-chart .pct-label.outer  { fill: #b45309; }
+  .who-chart .patient-line {
+    fill: none;
+    stroke: var(--primary-dark);
+    stroke-width: 2.2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .who-chart .patient-pt {
+    fill: var(--bg-elevated);
+    stroke: var(--primary-dark);
+    stroke-width: 2;
+  }
+  .who-chart .patient-pt.current {
+    fill: var(--primary-dark);
+    stroke: var(--bg-elevated);
+    stroke-width: 2.5;
+  }
+  .who-chart .pt-tag {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 600;
+    fill: var(--primary-dark);
+  }
+
+  /* Side panel */
+  .who-side {
+    border-left: 1px solid var(--border-soft);
+    background: var(--bg-subtle);
+    padding: 18px 18px 22px;
+    overflow-y: auto;
+    display: flex; flex-direction: column; gap: 16px;
+  }
+  .who-side h4 {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--text-faint);
+    font-weight: 600;
+    margin: 0 0 8px;
+  }
+  .who-current-pill {
+    background: var(--bg-elevated);
+    border: 1px solid var(--teal-200);
+    border-radius: var(--r-md);
+    padding: 12px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .who-current-pill .v {
+    font-family: var(--font-display);
+    font-size: 24px;
+    font-weight: 600;
+    color: var(--teal-900);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.01em;
+    line-height: 1;
+  }
+  .who-current-pill .v .u { font-size: 12px; font-weight: 400; color: var(--text-muted); margin-left: 4px; }
+  .who-current-pill .pct-tag {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 11.5px;
+    color: var(--teal-700);
+    font-weight: 500;
+    margin-top: 4px;
+  }
+  .who-current-pill .pct-tag .swatch {
+    width: 9px; height: 9px; border-radius: 999px; background: var(--teal-600);
+  }
+  .who-current-pill.warn .v { color: #92400E; }
+  .who-current-pill.warn .pct-tag { color: #b45309; }
+  .who-current-pill.warn .pct-tag .swatch { background: #d97706; }
+
+  .who-legend {
+    display: grid;
+    gap: 5px;
+  }
+  .who-legend-row {
+    display: flex; align-items: center; gap: 9px;
+    font-size: 11.5px;
+    color: var(--text);
+  }
+  .who-legend-row .key {
+    width: 22px;
+    flex-shrink: 0;
+    display: grid; place-items: center;
+  }
+  .who-legend-row .key .line {
+    width: 22px; height: 2px;
+    background: var(--teal-600);
+  }
+  .who-legend-row .key .line.dashed {
+    background:
+      repeating-linear-gradient(to right, var(--teal-500) 0 4px, transparent 4px 7px);
+    opacity: 0.7;
+  }
+  .who-legend-row .key .line.outer {
+    background:
+      repeating-linear-gradient(to right, #d97706 0 4px, transparent 4px 7px);
+    opacity: 0.7;
+  }
+  .who-legend-row .key .dot {
+    width: 8px; height: 8px;
+    background: var(--primary-dark);
+    border-radius: 999px;
+    border: 1.5px solid white;
+    box-shadow: 0 0 0 0.5px var(--primary-dark);
+  }
+  .who-legend-row .l { color: var(--text-muted); font-size: 11px; }
+
+  .who-data-table {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    overflow: hidden;
+  }
+  .who-data-table .row {
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    gap: 8px;
+    padding: 7px 10px;
+    border-bottom: 1px solid var(--border-soft);
+    font-size: 11.5px;
+    font-variant-numeric: tabular-nums;
+  }
+  .who-data-table .row.header {
+    background: var(--bg-subtle);
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    color: var(--text-faint);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-weight: 600;
+  }
+  .who-data-table .row:last-child { border-bottom: none; }
+  .who-data-table .row.current {
+    background: var(--primary-soft);
+    font-weight: 500;
+  }
+  .who-data-table .row .date { color: var(--text-muted); font-family: var(--font-mono); font-size: 10.5px; }
+  .who-data-table .row .val { color: var(--text-strong); font-weight: 500; }
+  .who-data-table .row .pct { color: var(--teal-700); font-family: var(--font-mono); font-size: 10.5px; }
+  .who-data-table .row.current .date,
+  .who-data-table .row.current .pct { color: var(--teal-800); }
+
+  .who-foot {
+    padding: 11px 24px;
+    border-top: 1px solid var(--border-soft);
+    background: var(--bg-subtle);
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 12px;
+    font-size: 11px;
+    color: var(--text-faint);
+    line-height: 1.45;
+  }
+  .who-foot .src {
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+  }
+  .who-foot .actions { display: flex; gap: 6px; }
+
+  @media (max-width: 880px) {
+    .who-body { grid-template-columns: 1fr; }
+    .who-side { border-left: none; border-top: 1px solid var(--border-soft); }
+  }
+</style>
+</head>
+<body>
+
+<!-- Top bar -->
+<header class="topbar">
+  <a href="index.html" class="topbar-brand">
+    <svg width="22" height="22" viewBox="0 0 64 64" fill="none" style="color: var(--primary);">
+      <path d="M32 54 C 12 40, 8 26, 18 18 C 24 14, 30 16, 32 22 C 34 16, 40 14, 46 18 C 56 26, 52 40, 32 54 Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M14 34 L 22 34 L 26 26 L 30 42 L 34 28 L 38 36 L 50 36" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+    </svg>
+    klinika<span class="dot-app">.</span>
+  </a>
+
+  <nav class="topbar-nav">
+    <a href="doctor.html" class="nav-link">Kalendari</a>
+    <a href="#" class="nav-link active">Pacientët</a>
+    <a href="#" class="nav-link">Raportet</a>
+  </nav>
+
+  <div class="topbar-spacer"></div>
+
+  <div class="topbar-search">
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+      <circle cx="7" cy="7" r="5"/><path d="M11 11l3 3" stroke-linecap="round"/>
+    </svg>
+    <input placeholder="Kërko pacient, vizitë, ICD-10... (⌘K ose /)" data-os-search-placeholder="Kërko pacient, vizitë, ICD-10... ({shortcut} ose /)" />
+    <kbd>⌘K</kbd>
+  </div>
+
+  <button class="topbar-user">
+    <div class="avatar">TS</div>
+    <span class="name">Dr. Taulant Shala</span>
+    <span class="chev">▾</span>
+  </button>
+</header>
+
+<!-- Master data strip -->
+<div class="master">
+  <div class="master-main">
+  <span class="m-id">#PT-04829</span>
+
+  <div class="m-name-block">
+    <div class="m-name">
+      Era Krasniqi
+      <span class="sex-pill">F</span>
+      <span class="indicator-chip"><span class="dot"></span>43 ditë</span>
+    </div>
+    <div class="m-sub">
+      <span><strong style="color: var(--text);">2v 9m</strong> · lindur 03.08.2023</span>
+      <span class="sep">·</span>
+      <span>Prizren · rr. Rilindja Kombëtare</span>
+      <span class="sep">·</span>
+      <span class="tnum">+383 44 123 456</span>
+    </div>
+  </div>
+
+  <div class="m-divider"></div>
+
+  <div class="m-stat">
+    <div class="l">Pesha lindjes</div>
+    <div class="v">3 280<span class="u">g</span></div>
+  </div>
+  <div class="m-stat">
+    <div class="l">Gjat. lindjes</div>
+    <div class="v">51<span class="u">cm</span></div>
+  </div>
+  <div class="m-stat">
+    <div class="l">PK lindjes</div>
+    <div class="v">34<span class="u">cm</span></div>
+  </div>
+
+  <div class="m-divider"></div>
+
+  <div class="m-stat">
+    <div class="l">Pesha sot</div>
+    <div class="v">13.6<span class="u">kg</span></div>
+  </div>
+  <div class="m-stat">
+    <div class="l">Vizita</div>
+    <div class="v">5</div>
+  </div>
+
+  <div class="m-spacer"></div>
+  </div><!-- /master-main -->
+
+  <!-- Patient-level alert (data-shape correction: doctor-level field).
+       Renamed from "Alergji" → "Alergji / Tjera" because the doctor uses
+       this slot for more than allergies — chronic conditions, behavioral
+       notes, family situations, anything worth persistently flagging.
+       Renders only when populated; otherwise the empty-state affordance shows. -->
+  <div class="master-allergies" id="allergyStrip" onclick="editAllergies()" title="Klik për të redaktuar">
+    <span class="alg-icon" aria-hidden="true">!</span>
+    <span class="alg-lab">Alergji / Tjera</span>
+    <span class="alg-val" id="allergyVal">Penicilinë, dhembet mjekun</span>
+    <button type="button" class="alg-edit" onclick="event.stopPropagation(); editAllergies()">Redakto</button>
+  </div>
+</div>
+
+<!-- Visit nav -->
+<div class="visit-nav">
+  <div class="left">
+    <button class="btn btn-ghost btn-sm" data-os-shortcut="" title="Vizita paraprake (←)">← Paraprake</button>
+    <div class="counter">Vizita <span style="color: var(--text-strong);">5</span> <span class="total">/ 5</span></div>
+    <select class="visit-jump">
+      <option>14.05.2026 — sot · në vijim</option>
+      <option>01.04.2026 — Tonsillitis acuta</option>
+      <option>22.02.2026 — Kontroll i rregullt</option>
+      <option>17.12.2025 — Bronkit akut</option>
+      <option>04.10.2025 — Kontroll i rregullt</option>
+    </select>
+    <button class="btn btn-ghost btn-sm" disabled style="opacity: 0.4;" title="Vizita e ardhshme (→)">Ardhshme →</button>
+    <div class="when">Nga vizita paraprake: <strong>43 ditë</strong></div>
+  </div>
+  <div class="right">
+    <!-- Auto-save state indicator moved to action bar -->
+  </div>
+</div>
+
+<!-- Two-column grid -->
+<div class="chart-grid">
+
+  <!-- LEFT: visit form -->
+  <!-- Field order follows clinical workflow per data-shape spec:
+       Ankesa → Ushqimi → Vitals (incl. Temperatura) →
+       Ekzaminime → Ultrazeri → Diagnoza → Terapia → Analizat → Kontrolla → Tjera → Pagesa -->
+  <section class="visit-form">
+
+    <!-- 1. Vizita — Ankesa, Ushqimi, Vitals -->
+    <div class="vf-section">
+      <h4>Vizita</h4>
+
+      <div class="vf-row">
+        <div class="label">Ankesa</div>
+        <textarea class="textarea">Kollë e thatë prej 3 ditësh. Temperaturë subfebrile mbrëmjeve. Ushqim i ruajtur, gjumë i shqetësuar. Pa diarre, pa të vjella.</textarea>
+      </div>
+
+      <div class="vf-row">
+        <div class="label">Ushqimi</div>
+        <div class="food-checks">
+          <label class="food-check"><input type="checkbox"> Gji</label>
+          <label class="food-check checked"><input type="checkbox" checked> Formulë</label>
+          <label class="food-check checked"><input type="checkbox" checked> Solid</label>
+        </div>
+      </div>
+
+      <div class="vf-row full" style="margin-top: 4px;">
+        <div class="vitals-grid">
+          <div class="vital">
+            <label>Pesha</label>
+            <div class="wrap"><input value="13.6"><span class="unit">kg</span></div>
+            <span class="pct">P50 · ↑ 0.4 nga 1 muaj</span>
+          </div>
+          <div class="vital">
+            <label>Gjatësia</label>
+            <div class="wrap"><input value="92"><span class="unit">cm</span></div>
+            <span class="pct">P50</span>
+          </div>
+          <div class="vital">
+            <label>Perimetri kokës</label>
+            <div class="wrap"><input value="48.2"><span class="unit">cm</span></div>
+            <span class="pct">P50</span>
+          </div>
+          <div class="vital">
+            <label>Temperatura</label>
+            <div class="wrap"><input value="37.2"><span class="unit">°C</span></div>
+            <span class="pct" style="color: var(--amber);">Subfebrile</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- 2. Ekzaminimi — Ekzaminime + Ultrazeri -->
+    <div class="vf-section">
+      <h4>Ekzaminimi</h4>
+      <div class="vf-row">
+        <div class="label">Ekzaminime</div>
+        <textarea class="textarea">Gjendje e përgjithshme e mirë, e gjallë. Tonsila mesatarisht të hipertrofuara, hiperemike. Auskultatorisht: respirim vezikular, pa rale. Cor: tone të rregullta, pa zhurmë. Abdomen palpator pa veçanti. ORL pa veçanti tjetër.</textarea>
+      </div>
+      <div class="vf-row">
+        <div class="label">Ultrazeri <span class="opt">opsionale</span></div>
+        <textarea class="textarea" placeholder="Gjetjet e ultrazerit, nëse ka..."></textarea>
+      </div>
+    </div>
+
+    <!-- 3. Diagnoza — ICD-10 chips (current) OR free text (migrated) -->
+    <div class="vf-section">
+      <h4>Diagnoza <span id="dxHeadSub" style="font-weight: 500; color: var(--text-faint); letter-spacing: 0.04em;">· ICD-10</span></h4>
+
+      <!-- Current state: structured ICD-10 chips -->
+      <div class="vf-row full" id="dxCurrent">
+        <div class="dx-input-wrap">
+          <span class="dx-chip primary">
+            <span class="code">J03.9</span>
+            Tonsillitis acuta
+            <span class="x">×</span>
+          </span>
+          <span class="dx-chip">
+            <span class="code">R05</span>
+            Tussis
+            <span class="x">×</span>
+          </span>
+          <input id="dx-input" placeholder="Kërko ICD-10 (kod ose përshkrim)..." value="bron">
+        </div>
+        <div class="dx-dropdown open">
+          <div class="hint"><span>ICD-10 · përputhje për "bron"</span><span>↑↓ për të lëvizur · Enter për të zgjedhur</span></div>
+          <div class="opt active">
+            <div class="code">J20.9</div>
+            <div class="desc">Bronchitis acuta</div>
+            <div></div>
+          </div>
+          <div class="opt">
+            <div class="code">J21.0</div>
+            <div class="desc">Bronchiolitis acuta</div>
+            <div></div>
+          </div>
+          <div class="opt">
+            <div class="code">J45.9</div>
+            <div class="desc">Asthma bronchiale</div>
+            <div></div>
+          </div>
+          <div class="opt">
+            <div class="code">J42</div>
+            <div class="desc">Bronchitis chronica</div>
+            <div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Migrated state: legacy free-text diagnosis from MS Access source.
+           Toggled via Tweaks; coexists with the structured ICD-10 chips above. -->
+      <div class="vf-row full" id="dxLegacy" style="display: none;">
+        <div class="dx-legacy">
+          <div class="dx-legacy-text">GEA, Pharyngitis acuta. Idem.</div>
+          <div class="dx-legacy-meta">
+            <span class="legacy-badge">
+              <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5">
+                <circle cx="6" cy="6" r="5"/>
+                <path d="M6 3v3.5L8 8" stroke-linecap="round"/>
+              </svg>
+              shkruar para migrimit
+            </span>
+            <span class="legacy-hint">Mund të zëvendësohet me ICD-10 nëse dëshirohet.</span>
+            <button type="button" class="btn btn-ghost btn-sm legacy-action">Zëvendëso me ICD-10</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 4. Terapia (+ allergy reminder beneath) -->
+    <div class="vf-section">
+      <h4>Terapia</h4>
+      <div class="vf-row full">
+        <div class="tx-wrap">
+<textarea class="tx-textarea">Spray.Axxa 2× në ditë, 5 ditë
+Ibuprofen susp. 100mg/5ml — 5ml × 3, p.r.n.
+Pi shumë lëngje. Pushim.
+>rez. nëse vazhdon mbi 5 ditë</textarea>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- 5. Plani — Analizat, Kontrolla, Tjera -->
+    <div class="vf-section">
+      <h4>Plani</h4>
+      <div class="vf-row">
+        <div class="label">Analizat</div>
+        <textarea class="textarea" rows="2" placeholder="Asnjë analizë e kërkuar"></textarea>
+      </div>
+      <div class="vf-row">
+        <div class="label">Kontrolla</div>
+        <textarea class="textarea" rows="2">Kontroll pas 7 ditësh nëse kollë vazhdon. Kërkohet rikthim me ankesa.</textarea>
+      </div>
+      <div class="vf-row">
+        <div class="label">Tjera <span class="opt">opsionale</span></div>
+        <div style="display: flex; flex-direction: column; gap: 4px;">
+          <textarea class="textarea" id="tjeraField" rows="2" placeholder="Shënime të tjera ose informacione plotësuese">Prindi raporton se në klasë janë 4 fëmijë me kollë. Të vërehet evolucioni.</textarea>
+          <span style="font-size: 11px; color: var(--text-faint);">Shënime të tjera ose informacione plotësuese.</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 6. Pagesa — internal billing code -->
+    <div class="vf-section">
+      <h4>Pagesa</h4>
+      <div class="vf-row">
+        <div class="label">Kategoria</div>
+        <select class="select" style="max-width: 120px;">
+          <option selected>A</option>
+          <option>B</option>
+          <option>C</option>
+          <option>D</option>
+          <option>E</option>
+        </select>
+      </div>
+    </div>
+  </section>
+
+  <!-- RIGHT: clinical context -->
+  <aside class="right-stack">
+
+    <!-- Growth charts — WHO percentile curves are clinically valuable in early
+         infancy. Hidden when patient is ≥ 24 months; a small link appears
+         instead so the historical view stays reachable. -->
+    <div class="panel" id="growthPanel">
+      <div class="panel-head"><h3>Diagramet e rritjes · WHO</h3><span class="meta">5 pikë</span></div>
+
+      <div class="growth-card" onclick="openWhoChart('weight')">
+        <div class="growth-head"><span class="t">Pesha sipas moshës</span><span class="pct">P50</span></div>
+        <svg class="growth-svg" viewBox="0 0 380 100" preserveAspectRatio="none">
+          <!-- Percentile bands -->
+          <path d="M 0,72 C 80,68 160,62 240,55 S 380,40 380,40 L 380,100 L 0,100 Z" fill="rgba(204,251,241,0.4)"/>
+          <path d="M 0,82 C 80,78 160,74 240,68 S 380,54 380,54" stroke="rgba(20,184,166,0.25)" stroke-width="1" fill="none" stroke-dasharray="2 3"/>
+          <path d="M 0,62 C 80,58 160,52 240,44 S 380,28 380,28" stroke="rgba(20,184,166,0.25)" stroke-width="1" fill="none" stroke-dasharray="2 3"/>
+          <path d="M 0,90 C 80,87 160,84 240,80 S 380,68 380,68" stroke="rgba(20,184,166,0.2)" stroke-width="1" fill="none" stroke-dasharray="2 3"/>
+          <path d="M 0,55 C 80,50 160,42 240,32 S 380,18 380,18" stroke="rgba(20,184,166,0.2)" stroke-width="1" fill="none" stroke-dasharray="2 3"/>
+          <!-- P50 -->
+          <path d="M 0,72 C 80,68 160,62 240,55 S 380,40 380,40" stroke="var(--teal-400)" stroke-width="1.5" fill="none"/>
+          <!-- Patient path -->
+          <path d="M 30,75 L 110,68 L 180,60 L 250,52 L 340,42" stroke="var(--primary-dark)" stroke-width="2" fill="none" stroke-linecap="round"/>
+          <g fill="var(--primary-dark)">
+            <circle cx="30" cy="75" r="3"/>
+            <circle cx="110" cy="68" r="3"/>
+            <circle cx="180" cy="60" r="3"/>
+            <circle cx="250" cy="52" r="3"/>
+            <circle cx="340" cy="42" r="4" stroke="white" stroke-width="1.5"/>
+          </g>
+        </svg>
+      </div>
+
+      <div style="height: 1px; background: var(--border);"></div>
+
+      <div class="growth-card" onclick="openWhoChart('length')">
+        <div class="growth-head"><span class="t">Gjatësia sipas moshës</span><span class="pct">P50</span></div>
+        <svg class="growth-svg" viewBox="0 0 380 100" preserveAspectRatio="none">
+          <path d="M 0,75 C 80,70 160,62 240,52 S 380,32 380,32 L 380,100 L 0,100 Z" fill="rgba(204,251,241,0.4)"/>
+          <path d="M 0,75 C 80,70 160,62 240,52 S 380,32 380,32" stroke="var(--teal-400)" stroke-width="1.5" fill="none"/>
+          <path d="M 0,85 C 80,80 160,74 240,66 S 380,48 380,48" stroke="rgba(20,184,166,0.25)" stroke-width="1" fill="none" stroke-dasharray="2 3"/>
+          <path d="M 0,65 C 80,60 160,50 240,38 S 380,18 380,18" stroke="rgba(20,184,166,0.25)" stroke-width="1" fill="none" stroke-dasharray="2 3"/>
+          <path d="M 30,82 L 110,72 L 180,62 L 250,50 L 340,36" stroke="var(--primary-dark)" stroke-width="2" fill="none" stroke-linecap="round"/>
+          <g fill="var(--primary-dark)">
+            <circle cx="30" cy="82" r="3"/><circle cx="110" cy="72" r="3"/>
+            <circle cx="180" cy="62" r="3"/><circle cx="250" cy="50" r="3"/>
+            <circle cx="340" cy="36" r="4" stroke="white" stroke-width="1.5"/>
+          </g>
+        </svg>
+      </div>
+
+      <div style="height: 1px; background: var(--border);"></div>
+
+      <div class="growth-card" onclick="openWhoChart('hc')">
+        <div class="growth-head"><span class="t">Perimetri kokës</span><span class="pct" style="color: var(--amber);">P40</span></div>
+        <svg class="growth-svg" viewBox="0 0 380 100" preserveAspectRatio="none">
+          <path d="M 0,70 C 80,55 160,40 240,32 S 380,24 380,24 L 380,100 L 0,100 Z" fill="rgba(204,251,241,0.35)"/>
+          <path d="M 0,70 C 80,55 160,40 240,32 S 380,24 380,24" stroke="var(--teal-400)" stroke-width="1.5" fill="none"/>
+          <path d="M 30,80 L 110,62 L 180,50 L 250,46 L 340,42" stroke="var(--primary-dark)" stroke-width="2" fill="none" stroke-linecap="round"/>
+          <g fill="var(--primary-dark)">
+            <circle cx="30" cy="80" r="3"/><circle cx="110" cy="62" r="3"/>
+            <circle cx="180" cy="50" r="3"/><circle cx="250" cy="46" r="3"/>
+            <circle cx="340" cy="42" r="4" stroke="white" stroke-width="1.5"/>
+          </g>
+        </svg>
+      </div>
+    </div>
+
+    <!-- Compact historical-charts link — shown for patients ≥ 24 months who
+         have growth data from their earlier infancy. Click opens the same WHO
+         lightbox used by the sparklines. -->
+    <div class="panel" id="growthHistLink" style="display: none;">
+      <a href="#" onclick="event.preventDefault(); openWhoChart('weight');"
+         style="display:flex; align-items:center; justify-content:space-between; padding: 12px 16px; color: var(--text); transition: background 120ms ease;"
+         onmouseover="this.style.background='var(--bg-subtle)'"
+         onmouseout="this.style.background='transparent'">
+        <span style="display:flex; flex-direction:column; gap:2px;">
+          <span style="font-size:13px; font-weight:600; color: var(--text-strong);">Shiko grafikët historikë</span>
+          <span style="font-size:11.5px; color: var(--text-muted);">5 matje 0–24 muaj · WHO percentilet</span>
+        </span>
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="color: var(--text-muted);">
+          <path d="M5 3l5 5-5 5"/>
+        </svg>
+      </a>
+    </div>
+
+    <!-- Ultrasound -->
+    <div class="panel">
+      <div class="panel-head">
+        <h3>Ultrazeri</h3>
+        <button class="btn btn-ghost btn-sm">+ Lidh studim</button>
+      </div>
+      <div class="us-thumbs">
+        <div class="us-thumb">
+          <svg viewBox="0 0 100 100" preserveAspectRatio="xMidYMid slice">
+            <rect width="100" height="100" fill="#0c0a09"/>
+            <ellipse cx="50" cy="55" rx="35" ry="25" fill="#1c1917" opacity="0.9"/>
+            <ellipse cx="50" cy="55" rx="22" ry="14" fill="#292524"/>
+            <circle cx="48" cy="50" r="3" fill="#57534E"/>
+            <path d="M 10,80 Q 50,60 90,80" stroke="#44403c" stroke-width="0.5" fill="none" opacity="0.4"/>
+          </svg>
+          <div class="date">04.10.2025</div>
+        </div>
+        <div class="us-thumb">
+          <svg viewBox="0 0 100 100" preserveAspectRatio="xMidYMid slice">
+            <rect width="100" height="100" fill="#0c0a09"/>
+            <path d="M 50 10 L 90 90 L 10 90 Z" fill="#1c1917"/>
+            <path d="M 50 25 L 75 85 L 25 85 Z" fill="#292524"/>
+            <ellipse cx="50" cy="65" rx="10" ry="6" fill="#57534E"/>
+          </svg>
+          <div class="date">22.02.2026</div>
+        </div>
+        <div class="us-thumb">
+          <svg viewBox="0 0 100 100" preserveAspectRatio="xMidYMid slice">
+            <rect width="100" height="100" fill="#0c0a09"/>
+            <ellipse cx="50" cy="55" rx="40" ry="30" fill="#1c1917"/>
+            <ellipse cx="40" cy="55" rx="14" ry="10" fill="#292524"/>
+            <ellipse cx="60" cy="60" rx="9" ry="6" fill="#292524"/>
+          </svg>
+          <div class="date">01.04.2026</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- History -->
+    <div class="panel">
+      <div class="panel-head"><h3>Historia e shkurtër</h3><span class="meta">5 vizita</span></div>
+      <div class="history">
+        <div class="hist-row current">
+          <div class="date">14.05.26</div>
+          <div class="dx"><strong style="color: var(--text-strong); font-weight: 600;">J03.9</strong> Tonsillitis acuta · në vijim</div>
+          <div class="pay">A</div>
+        </div>
+        <div class="hist-row">
+          <div class="date">01.04.26</div>
+          <div class="dx">J03.9 Tonsillitis acuta</div>
+          <div class="pay">A · 15€</div>
+        </div>
+        <div class="hist-row">
+          <div class="date">22.02.26</div>
+          <div class="dx">Z00.1 Kontroll i rregullt</div>
+          <div class="pay">B · 10€</div>
+        </div>
+        <div class="hist-row">
+          <div class="date">17.12.25</div>
+          <div class="dx">J20.9 Bronchitis acuta</div>
+          <div class="pay">A · 15€</div>
+        </div>
+        <div class="hist-row">
+          <div class="date">04.10.25</div>
+          <div class="dx">Z00.1 Kontroll i rregullt</div>
+          <div class="pay">E · 0€</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Vërtetime — issued certificates history -->
+    <div class="panel">
+      <div class="panel-head"><h3>Vërtetime</h3><span class="meta" id="certCount">3</span></div>
+      <div class="cert-list" id="certList"></div>
+    </div>
+
+  </aside>
+</div>
+
+<!-- WHO Growth Chart lightbox — single modal, switches data by chart type -->
+<div class="who-backdrop" id="whoBackdrop" onclick="if(event.target===this)closeWhoChart()">
+  <div class="who-modal" role="dialog" aria-labelledby="whoTitle">
+    <div class="who-head">
+      <div class="title-block">
+        <h2 id="whoTitle">Pesha sipas moshës</h2>
+        <div class="who-meta">
+          <span class="badge">WHO 0–2 vjet</span>
+          <span id="whoSexLabel">Vajzë</span>
+          <span class="sex-note" id="whoSexNote" style="display:none;"></span>
+          <span class="sep">·</span>
+          <span>Era Krasniqi · 2v 9m</span>
+          <span class="sep">·</span>
+          <span>5 matje</span>
+        </div>
+      </div>
+      <div style="display:flex; gap:8px; align-items:center;">
+        <div class="tabs sex-tabs" role="tablist" aria-label="Sex">
+          <button data-sex="F" onclick="setWhoSex('F')">♀ Vajzë</button>
+          <button data-sex="M" onclick="setWhoSex('M')">♂ Djalë</button>
+        </div>
+        <div class="tabs" role="tablist" aria-label="Metric">
+          <button data-metric="weight" onclick="openWhoChart('weight')">Pesha</button>
+          <button data-metric="length" onclick="openWhoChart('length')">Gjatësia</button>
+          <button data-metric="hc"     onclick="openWhoChart('hc')">PK</button>
+        </div>
+      </div>
+      <button class="close-btn" onclick="closeWhoChart()" aria-label="Mbyll">×</button>
+    </div>
+
+    <div class="who-body">
+      <div class="who-chart-wrap">
+        <svg class="who-chart" id="whoChart" viewBox="0 0 760 460" preserveAspectRatio="xMidYMid meet"></svg>
+      </div>
+
+      <aside class="who-side">
+        <div>
+          <h4>Matja e sotme</h4>
+          <div class="who-current-pill" id="whoCurrent">
+            <div class="v" id="whoCurVal">—</div>
+            <div class="pct-tag"><span class="swatch"></span><span id="whoCurPct">—</span></div>
+          </div>
+        </div>
+
+        <div>
+          <h4>Legjenda</h4>
+          <div class="who-legend">
+            <div class="who-legend-row"><span class="key"><span class="line outer"></span></span><span>P3 / P97 <span class="l">— kufijtë</span></span></div>
+            <div class="who-legend-row"><span class="key"><span class="line dashed"></span></span><span>P15 / P85</span></div>
+            <div class="who-legend-row"><span class="key"><span class="line"></span></span><span>P50 <span class="l">— mesatarja</span></span></div>
+            <div class="who-legend-row"><span class="key"><span class="dot"></span></span><span>Era K. <span class="l">— pacientja</span></span></div>
+          </div>
+        </div>
+
+        <div>
+          <h4>Të dhënat</h4>
+          <div class="who-data-table" id="whoDataTable"></div>
+        </div>
+      </aside>
+    </div>
+
+    <div class="who-foot">
+      <span class="src">Standardet e rritjes · WHO Child Growth Standards (referencë)</span>
+      <div class="actions">
+        <button class="btn btn-secondary btn-sm" onclick="window.print()">Printo</button>
+        <button class="btn btn-primary btn-sm" onclick="closeWhoChart()">Mbyll</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Tweaks panel — exposes the data-shape variants for review -->
+<div class="tweaks-panel" id="tweaksPanel">
+  <div class="tweaks-head">
+    <div class="t">Tweaks <span class="badge">Variantet</span></div>
+    <button class="close" onclick="closeTweaks()" aria-label="Mbyll">×</button>
+  </div>
+  <div class="tweaks-body">
+    <div class="tweak-row" id="tw-allergies" aria-pressed="true" onclick="toggleTweak('allergies')">
+      <div class="lab">Shënim për pacientin<span class="sub">Alergji, gjendje kronike, sjellje, etj.</span></div>
+      <span class="tweak-switch" aria-hidden="true"></span>
+    </div>
+    <div class="tweak-row" id="tw-toddler" aria-pressed="true" onclick="toggleTweak('toddler')">
+      <div class="lab">Pacient &lt; 24 muaj<span class="sub">Diagramet WHO; mbi 2 vjeç fshihen</span></div>
+      <span class="tweak-switch" aria-hidden="true"></span>
+    </div>
+    <div class="tweak-row" id="tw-legacy" aria-pressed="false" onclick="toggleTweak('legacy')">
+      <div class="lab">Vizitë e migruar (Dg si tekst)<span class="sub">Tregon trajtimin "shkruar para migrimit"</span></div>
+      <span class="tweak-switch" aria-hidden="true"></span>
+    </div>
+    <div class="tweak-row" id="tw-tjera" aria-pressed="true" onclick="toggleTweak('tjera')">
+      <div class="lab">Tjera (e plotësuar)<span class="sub">Shënim i brendshëm — nuk del në print</span></div>
+      <span class="tweak-switch" aria-hidden="true"></span>
+    </div>
+  </div>
+</div>
+
+<!-- Sticky action bar -->
+<div class="action-bar">
+  <div class="left-tools">
+    <button class="btn btn-danger btn-sm">Fshij vizitën</button>
+    <button class="btn btn-secondary btn-sm" onclick="saveAndNew()" data-os-shortcut="new-visit" data-title-prefix="Ruaj dhe vizitë e re">
+      + Vizitë e re <span class="kbd-hint" style="font-family: var(--font-ui); font-size: 10.5px; color: var(--text-faint); border: 1px solid var(--border); background: var(--bg-elevated); padding: 0 4px; border-radius: 3px; margin-left: 6px;">⌘↩</span>
+    </button>
+    <button type="button" class="manual-save" onclick="save()" data-os-shortcut="save" data-title-prefix="Ruaj vizitën">
+      Ruaj <span class="kbd-hint">⌘S</span>
+    </button>
+    <!-- Auto-save state indicator (5 states). JS toggles data-state. -->
+    <div class="autosave" id="autosave" data-state="idle" aria-live="polite">
+      <span class="for-idle">
+        <span class="as-ico">
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 6.5l2.5 2.5 4.5-5"/></svg>
+        </span>
+        <span class="as-text">U ruajt <span class="ts" id="as-ts">2 min më parë</span></span>
+      </span>
+      <span class="for-dirty">
+        <span class="as-ico"></span>
+        <span class="as-text">Po shkruhet…</span>
+      </span>
+      <span class="for-saving">
+        <span class="as-ico"><span class="as-spin"></span></span>
+        <span class="as-text">Po ruhet…</span>
+      </span>
+      <span class="for-saved-flash">
+        <span class="as-ico">
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 6.5l2.5 2.5 4.5-5"/></svg>
+        </span>
+        <span class="as-text">U ruajt</span>
+      </span>
+      <span class="for-error" title="Lidhja me serverin u ndal. Klinika do t’i ruajë ndryshimet sapo lidhja të rikthehet.">
+        <span class="as-ico">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7 2.5l5.5 9.5h-11z"/><path d="M7 6.5v2.5M7 10.6v.01"/></svg>
+        </span>
+        <span class="as-text">Ruajtja dështoi</span>
+        <button type="button" class="as-retry" onclick="asRetry()">Ruaj tani</button>
+      </span>
+    </div>
+  </div>
+  <div class="right-tools">
+    <a href="print-visit.html" class="btn btn-secondary btn-sm">Shiko raportin</a>
+    <a href="print-visit.html?print=1" class="btn btn-secondary btn-sm">Printo raportin</a>
+    <button class="btn btn-secondary btn-sm" onclick="openCertModal()">Vërtetim</button>
+    <a href="print-history.html" class="btn btn-secondary btn-sm">Histori e plotë</a>
+  </div>
+</div>
+
+<div class="toast" id="toast"><div class="check">✓</div><span>Vizita u ruajt.</span></div>
+
+<!-- ============ Demo: auto-save state cycler ============
+     Floating dev affordance so the 5 states can be inspected without
+     waiting on debouncers. Hidden in real builds. -->
+<div id="demoStates" style="position: fixed; bottom: 72px; right: 24px; z-index: 40; display: flex; flex-direction: column; gap: 6px; background: var(--bg-elevated); border: 1px solid var(--border); border-radius: var(--r-md); box-shadow: var(--shadow-md); padding: 10px 12px; font-size: 11px;">
+  <div style="font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-faint); font-weight: 600;">Demo · gjendjet</div>
+  <div style="display: flex; gap: 4px; flex-wrap: wrap; max-width: 220px;">
+    <button class="btn btn-ghost btn-sm" style="padding: 3px 8px; font-size: 11px;" onclick="demoState('idle')">Idle</button>
+    <button class="btn btn-ghost btn-sm" style="padding: 3px 8px; font-size: 11px;" onclick="demoState('dirty')">Dirty</button>
+    <button class="btn btn-ghost btn-sm" style="padding: 3px 8px; font-size: 11px;" onclick="demoState('saving')">Saving</button>
+    <button class="btn btn-ghost btn-sm" style="padding: 3px 8px; font-size: 11px;" onclick="demoState('saved-flash')">Saved</button>
+    <button class="btn btn-ghost btn-sm" style="padding: 3px 8px; font-size: 11px; color: var(--amber);" onclick="demoState('error')">Error</button>
+  </div>
+  <button class="btn btn-secondary btn-sm" style="padding: 4px 8px; font-size: 11px; margin-top: 2px;" onclick="__demoShowDialog()">Hap dialogun e dështimit</button>
+</div>
+
+<!-- ============ Save-failure dialog ============
+     Surfaces ONLY when the doctor tries to leave the visit while in error
+     state with unsaved changes. Lists field names with unsaved values so
+     the stakes are visible. -->
+<div class="modal-overlay save-fail" id="saveFailDialog" style="display:none;" onclick="if(event.target===this) closeSaveFailDialog()">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="saveFailTitle">
+    <div class="modal-header">
+      <span class="err-tag">Lidhja me serverin</span>
+      <h2 id="saveFailTitle">Ruajtja dështoi</h2>
+      <div class="sub">Disa ndryshime nuk u ruajtën në server. Çfarë dëshironi të bëni?</div>
+    </div>
+    <div class="modal-body">
+      <div style="font-size:12px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600;">Fushat me ndryshime</div>
+      <ul class="field-list"></ul>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeSaveFailDialog()">Anulo</button>
+      <button class="btn btn-secondary" onclick="failDialogDiscard()">Hiq ndryshimet</button>
+      <button class="btn btn-primary" onclick="failDialogRetry()">Ruaj tani</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ Vërtetim preview dialog ============ -->
+<div class="cert-prev-backdrop" id="certPrevBackdrop" onclick="if(event.target===this) closeCertPreview()">
+  <div class="cert-prev-modal" role="dialog" aria-labelledby="certPrevTitle">
+    <header>
+      <h3 id="certPrevTitle">Vërtetim · 14.05.2026</h3>
+      <button class="cp-close" onclick="closeCertPreview()" aria-label="Mbyll">×</button>
+    </header>
+    <div class="cert-prev-body">
+      <div class="cert-paper" id="certPaper">
+        <header class="cp-letterhead">
+          <div class="mark">
+            <svg width="22" height="22" viewBox="0 0 64 64" fill="none">
+              <path d="M32 54 C 12 40, 8 26, 18 18 C 24 14, 30 16, 32 22 C 34 16, 40 14, 46 18 C 56 26, 52 40, 32 54 Z" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M10 34 L 22 34 L 26 28 L 30 40 L 34 30 L 38 36 L 54 36" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+              <circle cx="54" cy="36" r="2.6" fill="currentColor"/>
+            </svg>
+          </div>
+          <div class="name">OSP DONETA-MED</div>
+          <div class="meta">Ambulanca Specialistike Pediatrike · Prizren, Kosovë<br>
+            Tel: 045 83 00 83 · 043 543 123 · 10:00 – 18:00</div>
+        </header>
+
+        <h1 class="cp-title">VëRTETIM</h1>
+
+        <div class="cp-num">
+          <span>Nr. <strong id="cpNum">2026-0142</strong></span>
+          <span>Data: <strong id="cpIssued">14.05.2026</strong></span>
+        </div>
+
+        <div class="cp-body">
+          Me të cilën vërtetohet se nxënësja <strong id="cpPatient">Rita Hoxha</strong>, e lindur më <strong id="cpDob">12.02.2024</strong> në <strong>Prizren</strong>, ka munguar në shkollë / kopsht për arsye shëndetësore.
+
+          <div class="cp-dx-box">
+            <div class="lab">Diagnoza</div>
+            <div class="dx"><span class="code" id="cpCode">J03.9</span><span id="cpDx">Tonsillopharyngitis acuta</span></div>
+          </div>
+
+          <div class="cp-period">
+            Ky vërtetim i lëshohet për të arsyetuar mungesat<br>
+            për periudhën <strong id="cpRange">13.05.2026 – 17.05.2026</strong> (<strong id="cpDays">5</strong> ditë).
+          </div>
+        </div>
+
+        <div class="cp-sig">
+          <div class="sig-name">Dr. Taulant Shala</div>
+          <div class="sig-cred">pediatër · DonetaMED</div>
+          <div class="sig-date" id="cpSigDate">14.05.2026 · Prizren</div>
+        </div>
+      </div>
+    </div>
+    <footer>
+      <button class="btn btn-secondary" onclick="closeCertPreview()">Mbyll</button>
+      <button class="btn btn-primary" onclick="printCurrentCert()">Printo vërtetimin</button>
+    </footer>
+  </div>
+</div>
+
+<!-- ============ Certificate date-range modal ============ -->
+<div class="cert-modal-backdrop" id="certBackdrop" onclick="if(event.target===this) closeCertModal()">
+  <div class="cert-modal" role="dialog" aria-labelledby="certModalTitle">
+    <header>
+      <div>
+        <div class="cm-eyebrow">Era Krasniqi · 2 vjeçe 9 muaj</div>
+        <h3 id="certModalTitle">Vërtetim për mungesë në shkollë / kopsht</h3>
+      </div>
+      <button class="cm-close" onclick="closeCertModal()" aria-label="Mbyll">×</button>
+    </header>
+
+    <div class="cm-body">
+      <p class="cm-hint">Zgjidh periudhën gjatë së cilës pacienti do të mungojë. Datat futen automatikisht në vërtetim.</p>
+
+      <div class="cm-range">
+        <label class="cm-field">
+          <span>Nga</span>
+          <input type="date" id="certFrom" class="input">
+        </label>
+        <span class="cm-arrow" aria-hidden="true">→</span>
+        <label class="cm-field">
+          <span>Deri</span>
+          <input type="date" id="certTo" class="input">
+        </label>
+      </div>
+
+      <div class="cm-presets">
+        <span class="cm-presets-lab">Të shpejta:</span>
+        <button type="button" onclick="setCertRange(0)">Sot</button>
+        <button type="button" onclick="setCertRange(2)">3 ditë</button>
+        <button type="button" onclick="setCertRange(4)">5 ditë</button>
+        <button type="button" onclick="setCertRange(6)">1 javë</button>
+        <button type="button" onclick="setCertRange(9)">10 ditë</button>
+      </div>
+
+      <div class="cm-summary" id="certSummary">
+        <div class="cm-sum-row">
+          <span class="cm-sum-lab">Periudha</span>
+          <span class="cm-sum-val" id="certPeriod">—</span>
+        </div>
+        <div class="cm-sum-row">
+          <span class="cm-sum-lab">Kohëzgjatja</span>
+          <span class="cm-sum-val"><strong id="certDays">—</strong> ditë</span>
+        </div>
+      </div>
+    </div>
+
+    <footer>
+      <button class="btn btn-ghost" onclick="closeCertModal()">Anulo</button>
+      <button class="btn btn-secondary" id="certViewBtn" onclick="generateCert(false)">Shiko vërtetimin</button>
+      <button class="btn btn-primary" id="certPrintBtn" onclick="generateCert(true)">Printo vërtetimin</button>
+    </footer>
+  </div>
+</div>
+
+<style>
+  .cert-modal-backdrop {
+    position: fixed; inset: 0;
+    background: rgba(28,25,23,0.45);
+    backdrop-filter: blur(2px);
+    display: none;
+    align-items: center; justify-content: center;
+    z-index: 100;
+    padding: 24px;
+  }
+  .cert-modal-backdrop.open { display: flex; }
+  .cert-modal {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    box-shadow: 0 24px 64px rgba(28,25,23,0.28), 0 4px 12px rgba(28,25,23,0.12);
+    width: 100%; max-width: 480px;
+    overflow: hidden;
+    animation: cmIn 180ms ease-out;
+  }
+  @keyframes cmIn {
+    from { opacity: 0; transform: translateY(10px) scale(0.98); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+  }
+  .cert-modal header {
+    display: flex; align-items: flex-start; justify-content: space-between;
+    gap: 12px;
+    padding: 18px 22px 14px;
+    border-bottom: 1px solid var(--border-soft);
+  }
+  .cert-modal .cm-eyebrow {
+    font-family: var(--font-mono); font-size: 10.5px;
+    color: var(--text-muted); letter-spacing: 0.06em;
+    text-transform: uppercase; margin-bottom: 4px;
+  }
+  .cert-modal h3 {
+    font-family: var(--font-display); font-size: 16px; font-weight: 600;
+    letter-spacing: -0.01em; color: var(--text-strong); margin: 0;
+  }
+  .cert-modal .cm-close {
+    border: none; background: transparent;
+    width: 28px; height: 28px; border-radius: 6px;
+    font-size: 22px; line-height: 1;
+    color: var(--text-muted); cursor: pointer;
+    display: grid; place-items: center;
+  }
+  .cert-modal .cm-close:hover { background: var(--bg-subtle); color: var(--text); }
+
+  .cm-body { padding: 18px 22px 4px; display: grid; gap: 16px; }
+  .cm-hint { font-size: 12.5px; color: var(--text-muted); line-height: 1.55; margin: 0; }
+
+  .cm-range {
+    display: grid; grid-template-columns: 1fr auto 1fr;
+    align-items: end; gap: 10px;
+  }
+  .cm-field { display: flex; flex-direction: column; gap: 5px; }
+  .cm-field span {
+    font-family: var(--font-mono); font-size: 10.5px;
+    color: var(--text-muted); letter-spacing: 0.06em; text-transform: uppercase;
+  }
+  .cm-field input.input {
+    font-variant-numeric: tabular-nums;
+    font-family: var(--font-ui);
+    padding: 9px 11px;
+  }
+  .cm-arrow {
+    padding-bottom: 11px;
+    color: var(--text-faint);
+    font-size: 14px;
+  }
+
+  .cm-presets {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+  }
+  .cm-presets-lab {
+    font-family: var(--font-mono); font-size: 10.5px;
+    color: var(--text-faint); letter-spacing: 0.06em; text-transform: uppercase;
+    margin-right: 4px;
+  }
+  .cm-presets button {
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--text);
+    font-size: 11.5px;
+    font-family: var(--font-ui);
+    padding: 4px 10px;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: all 120ms ease;
+  }
+  .cm-presets button:hover {
+    background: var(--teal-50);
+    border-color: var(--teal-300);
+    color: var(--teal-800);
+  }
+  .cm-presets button.active {
+    background: var(--teal-50);
+    border-color: var(--teal-500);
+    color: var(--teal-800);
+    font-weight: 500;
+  }
+
+  .cm-summary {
+    background: var(--teal-50);
+    border: 1px solid var(--teal-200);
+    border-radius: 8px;
+    padding: 10px 14px;
+    display: grid; gap: 4px;
+  }
+  .cm-sum-row {
+    display: flex; align-items: baseline; justify-content: space-between;
+    font-size: 12.5px;
+  }
+  .cm-sum-lab {
+    font-family: var(--font-mono); font-size: 10.5px;
+    color: var(--teal-700); letter-spacing: 0.06em; text-transform: uppercase;
+  }
+  .cm-sum-val { color: var(--teal-900); font-variant-numeric: tabular-nums; }
+  .cm-sum-val strong { font-weight: 600; }
+
+  .cert-modal footer {
+    padding: 14px 22px 18px;
+    margin-top: 4px;
+    display: flex; justify-content: flex-end; gap: 8px;
+    border-top: 1px solid var(--border-soft);
+    background: var(--bg-subtle);
+  }
+</style>
+
+<script>
+  /* =========================================================================
+     Auto-save state machine for the visit form.
+     States: idle | dirty | saving | saved-flash | error
+     Triggers (per spec):
+       - 1.5s debounce after typing stops
+       - immediate on blur / nav / action button / 30s idle / beforeunload
+     The error state is the only one that surfaces the failure modal — and
+     only when the doctor tries to *leave* the visit (nav / print / close).
+     ========================================================================= */
+  const AS = {
+    el: document.getElementById('autosave'),
+    tsEl: document.getElementById('as-ts'),
+    state: 'idle',
+    lastSaved: new Date(Date.now() - 2 * 60 * 1000), // demo: 2 min ago
+    dirty: false,
+    debounceTimer: null,
+    idleTimer: null,
+    flashTimer: null,
+    // Demo toggle: flip via Tweaks or via ?fail=1 to see the error state.
+    forceFail: new URLSearchParams(location.search).get('fail') === '1',
+    // Live list of unsaved-field labels for the error dialog. In the real
+    // app this would track field id → display label + serialized value.
+    unsaved: [],
+  };
+
+  function asSet(state) {
+    AS.state = state;
+    AS.el.setAttribute('data-state', state);
+  }
+
+  function fmtTimeSince(d) {
+    const s = Math.max(0, Math.floor((Date.now() - d.getTime()) / 1000));
+    if (s < 30) return 'tani';
+    const m = Math.floor(s / 60);
+    if (m < 1)  return 'pak më parë';
+    if (m < 60) return m + ' min më parë';
+    const h = Math.floor(m / 60);
+    if (h < 24) return 'para ' + h + ' or' + (h === 1 ? 'e' : 'ësh');
+    return 'dje';
+  }
+  function refreshIdleTs() {
+    if (AS.state === 'idle') AS.tsEl.textContent = fmtTimeSince(AS.lastSaved);
+  }
+  setInterval(refreshIdleTs, 20 * 1000);
+  refreshIdleTs();
+
+  function markDirty(fieldLabel, value) {
+    AS.dirty = true;
+    if (fieldLabel && !AS.unsaved.find(f => f.k === fieldLabel)) {
+      AS.unsaved.push({ k: fieldLabel, v: value || '' });
+    } else if (fieldLabel) {
+      AS.unsaved.find(f => f.k === fieldLabel).v = value || '';
+    }
+    if (AS.state !== 'saving' && AS.state !== 'error') asSet('dirty');
+    clearTimeout(AS.debounceTimer);
+    AS.debounceTimer = setTimeout(doSave, 1500);
+    clearTimeout(AS.idleTimer);
+    AS.idleTimer = setTimeout(() => { if (AS.dirty) doSave(); }, 30 * 1000);
+  }
+
+  function doSave() {
+    if (!AS.dirty) return;
+    clearTimeout(AS.debounceTimer);
+    asSet('saving');
+    // Fake network: ~700ms. If forceFail, transition to error.
+    setTimeout(() => {
+      if (AS.forceFail) {
+        asSet('error');
+        return;
+      }
+      AS.dirty = false;
+      AS.unsaved = [];
+      AS.lastSaved = new Date();
+      asSet('saved-flash');
+      clearTimeout(AS.flashTimer);
+      AS.flashTimer = setTimeout(() => {
+        asSet('idle');
+        refreshIdleTs();
+      }, 1000);
+    }, 700);
+  }
+
+  // Public — used by manual Ruaj button, keyboard, error-pill retry
+  function save() {
+    if (AS.state === 'error') { /* retry */ AS.forceFail = false; }
+    if (!AS.dirty && AS.state !== 'error') {
+      // No-op visible feedback: brief flash on the indicator
+      asSet('saved-flash');
+      clearTimeout(AS.flashTimer);
+      AS.flashTimer = setTimeout(() => asSet('idle'), 800);
+      return;
+    }
+    doSave();
+  }
+  function asRetry() { AS.forceFail = false; doSave(); }
+  function saveAndNew() {
+    save();
+    // In real app: after save resolves, navigate / open a fresh visit.
+    setTimeout(() => showToast('Vizitë e re u krijua'), 900);
+  }
+
+  // Toast helper (reuses existing element)
+  function showToast(msg) {
+    const t = document.getElementById('toast');
+    t.querySelector('span').textContent = msg;
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 1800);
+  }
+
+  // Wire up auto-save triggers on every clinical field in the visit form.
+  function wireAutosave() {
+    const form = document.querySelector('.visit-form');
+    if (!form) return;
+    form.querySelectorAll('textarea, input[type=text], input:not([type]), select, input[type=number]').forEach(el => {
+      const labelEl = el.closest('.vf-row')?.querySelector('.label')
+                   || el.closest('.vital')?.querySelector('label');
+      const label = labelEl ? labelEl.textContent.trim().replace(/\s*interne$/i, '') : 'Fushë';
+      el.addEventListener('input', () => markDirty(label, el.value));
+      el.addEventListener('blur',  () => { if (AS.dirty) doSave(); });
+    });
+    // Checkboxes (Ushqimi)
+    form.querySelectorAll('input[type=checkbox]').forEach(el => {
+      el.addEventListener('change', () => { markDirty('Ushqimi', ''); doSave(); });
+    });
+  }
+  document.addEventListener('DOMContentLoaded', wireAutosave);
+
+  // Save before unload if dirty.
+  window.addEventListener('beforeunload', (e) => {
+    if (AS.state === 'error' && AS.unsaved.length) {
+      e.preventDefault();
+      e.returnValue = '';
+    } else if (AS.dirty) {
+      doSave();
+    }
+  });
+
+  // Save when clicking ANY action button outside the form (Vërtetim, Printo, etc.)
+  document.querySelectorAll('.action-bar button, .action-bar a').forEach(b => {
+    b.addEventListener('click', () => {
+      if (AS.state === 'error' && AS.unsaved.length) {
+        openSaveFailDialog('leaving');
+      } else if (AS.dirty) {
+        doSave();
+      }
+    }, true);
+  });
+
+  // OS-aware keyboard shortcuts (delegate to shortcuts.js custom events).
+  window.addEventListener('klinika:save', save);
+  window.addEventListener('klinika:save-new', saveAndNew);
+
+  /* ----- Save-failure modal ----- */
+  function openSaveFailDialog(reason) {
+    const dlg = document.getElementById('saveFailDialog');
+    const list = dlg.querySelector('.field-list');
+    list.innerHTML = '';
+    const items = AS.unsaved.length ? AS.unsaved : [
+      { k: 'Diagnoza', v: 'Tonsillitis acuta' },
+      { k: 'Terapia',  v: 'Sir. Paracetamol s. 3×5ml' },
+    ];
+    items.forEach(it => {
+      const li = document.createElement('li');
+      li.innerHTML = `<span class="k">${it.k}</span><span class="v">${it.v || '—'}</span>`;
+      list.appendChild(li);
+    });
+    dlg.querySelector('.err-tag').textContent =
+      reason === 'conflict' ? 'Konflikt redaktimi' : 'Lidhja me serverin';
+    dlg.style.display = 'grid';
+  }
+  function closeSaveFailDialog() { document.getElementById('saveFailDialog').style.display = 'none'; }
+  function failDialogRetry()    { closeSaveFailDialog(); asRetry(); }
+  function failDialogDiscard()  {
+    if (!confirm('Të sigurt? Ndryshimet do të humbasin.')) return;
+    AS.dirty = false; AS.unsaved = []; AS.forceFail = false;
+    asSet('idle'); AS.lastSaved = new Date(); refreshIdleTs();
+    closeSaveFailDialog();
+  }
+
+  // Demo: clicking the error pill's "Ruaj tani" already retries.
+  // For demo purposes, expose a tweak to flip into error state.
+  window.__demoFail = () => { AS.forceFail = true; AS.dirty = true; AS.unsaved = [
+    { k: 'Diagnoza', v: 'Tonsillitis acuta' },
+    { k: 'Terapia',  v: 'Sir. Paracetamol s. 3×5ml' },
+  ]; doSave(); };
+  window.__demoShowDialog = () => openSaveFailDialog('connection');
+
+  // Direct state cycler for the demo strip.
+  function demoState(s) {
+    clearTimeout(AS.debounceTimer);
+    clearTimeout(AS.flashTimer);
+    if (s === 'idle') {
+      AS.dirty = false; AS.unsaved = [];
+      AS.lastSaved = new Date(Date.now() - 2*60*1000);
+      asSet('idle'); refreshIdleTs();
+    } else if (s === 'dirty') {
+      AS.dirty = true;
+      AS.unsaved = [
+        { k: 'Diagnoza', v: 'Tonsillitis acuta' },
+        { k: 'Terapia',  v: 'Sir. Paracetamol s. 3×5ml' },
+      ];
+      asSet('dirty');
+    } else if (s === 'saving') {
+      asSet('saving');
+    } else if (s === 'saved-flash') {
+      AS.lastSaved = new Date();
+      asSet('saved-flash');
+      AS.flashTimer = setTimeout(() => { asSet('idle'); refreshIdleTs(); }, 1500);
+    } else if (s === 'error') {
+      AS.unsaved = [
+        { k: 'Diagnoza', v: 'Tonsillitis acuta' },
+        { k: 'Terapia',  v: 'Sir. Paracetamol s. 3×5ml' },
+      ];
+      asSet('error');
+    }
+  }
+
+  function discard() {
+    if (confirm('Të heqësh të gjitha ndryshimet e paruajtura?')) location.reload();
+  }
+
+  // -------- Certificate date-range modal --------
+  function pad(n) { return String(n).padStart(2, '0'); }
+  function toISO(d) { return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
+  function fromISO(s) {
+    const [y, m, d] = s.split('-').map(Number);
+    return new Date(y, m - 1, d);
+  }
+  function fmtSq(d) {
+    return pad(d.getDate()) + '.' + pad(d.getMonth() + 1) + '.' + d.getFullYear();
+  }
+
+  function openCertModal() {
+    const today = new Date();
+    document.getElementById('certFrom').value = toISO(today);
+    setCertRange(4); // default: 5 days (today + 4 = inclusive 5)
+    document.getElementById('certBackdrop').classList.add('open');
+    setTimeout(() => document.getElementById('certFrom').focus(), 50);
+  }
+  function closeCertModal() {
+    document.getElementById('certBackdrop').classList.remove('open');
+  }
+
+  function setCertRange(offsetDays) {
+    const fromEl = document.getElementById('certFrom');
+    if (!fromEl.value) fromEl.value = toISO(new Date());
+    const from = fromISO(fromEl.value);
+    const to = new Date(from);
+    to.setDate(from.getDate() + offsetDays);
+    document.getElementById('certTo').value = toISO(to);
+    refreshCertSummary();
+    // mark preset active
+    const buttons = document.querySelectorAll('.cm-presets button');
+    buttons.forEach((b, i) => b.classList.toggle('active', i === [0,2,4,6,9].indexOf(offsetDays)));
+  }
+
+  function refreshCertSummary() {
+    const fromV = document.getElementById('certFrom').value;
+    const toV = document.getElementById('certTo').value;
+    const periodEl = document.getElementById('certPeriod');
+    const daysEl = document.getElementById('certDays');
+    const printBtn = document.getElementById('certPrintBtn');
+    const viewBtn = document.getElementById('certViewBtn');
+    if (!fromV || !toV) {
+      periodEl.textContent = '—'; daysEl.textContent = '—';
+      printBtn.disabled = true; viewBtn.disabled = true;
+      return;
+    }
+    const from = fromISO(fromV), to = fromISO(toV);
+    if (to < from) {
+      periodEl.textContent = 'Data e fundit para fillimit';
+      periodEl.style.color = 'var(--red, #b91c1c)';
+      daysEl.textContent = '—';
+      printBtn.disabled = true; viewBtn.disabled = true;
+      return;
+    }
+    periodEl.style.color = '';
+    const days = Math.round((to - from) / 86400000) + 1;
+    periodEl.textContent = fmtSq(from) + ' – ' + fmtSq(to);
+    daysEl.textContent = days;
+    printBtn.disabled = false; viewBtn.disabled = false;
+  }
+
+  document.addEventListener('input', (e) => {
+    if (e.target && (e.target.id === 'certFrom' || e.target.id === 'certTo')) {
+      // user edited dates → drop preset highlight
+      document.querySelectorAll('.cm-presets button').forEach(b => b.classList.remove('active'));
+      refreshCertSummary();
+    }
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && document.getElementById('certBackdrop').classList.contains('open')) {
+      closeCertModal();
+    }
+  });
+
+  function generateCert(printNow) {
+    const from = document.getElementById('certFrom').value;
+    const to = document.getElementById('certTo').value;
+    if (!from || !to) return;
+    const params = new URLSearchParams({ from, to });
+    if (printNow) params.set('print', '1');
+    location.href = 'print-certificate.html?' + params.toString();
+  }
+
+  // ============================================================
+  // Vërtetime history (right column) — sample data + render + preview
+  // ============================================================
+  const PATIENT = { name: 'Rita Hoxha', dob: '12.02.2024', dobLong: '12 shkurt 2024' };
+
+  const CERTS = [
+    {
+      id: '2026-0142', issued: '14.05.2026',
+      from: '13.05.2026', to: '17.05.2026', days: 5,
+      code: 'J03.9', dx: 'Tonsillopharyngitis acuta',
+      rangeLabel: '13–17 maj 2026'
+    },
+    {
+      id: '2026-0081', issued: '12.03.2026',
+      from: '12.03.2026', to: '14.03.2026', days: 3,
+      code: 'H66.9', dx: 'Otitis media',
+      rangeLabel: '12–14 mars 2026'
+    },
+    {
+      id: '2026-0007', issued: '05.01.2026',
+      from: '05.01.2026', to: '08.01.2026', days: 4,
+      code: 'J20.9', dx: 'Bronkit akut',
+      rangeLabel: '5–8 janar 2026'
+    },
+  ];
+
+  function renderCerts() {
+    const list = document.getElementById('certList');
+    const count = document.getElementById('certCount');
+    if (!list || !count) return;
+
+    count.textContent = CERTS.length || '';
+
+    if (CERTS.length === 0) {
+      list.innerHTML = '<div class="cert-empty">Asnjë vërtetim i lëshuar për këtë pacient.</div>';
+      return;
+    }
+
+    const sorted = [...CERTS].sort((a, b) => {
+      // dd.mm.yyyy → yyyy-mm-dd for compare
+      const toISO = s => s.split('.').reverse().join('-');
+      return toISO(b.issued).localeCompare(toISO(a.issued));
+    });
+
+    const visible = sorted.slice(0, 5);
+    list.innerHTML = visible.map((c, i) => `
+      <div class="cert-row" data-idx="${i}" onclick="openCertPreview(${i})">
+        <div class="issued">${c.issued}</div>
+        <div class="body">
+          <div class="range">${c.rangeLabel} <span class="days">· ${c.days} ditë</span></div>
+          <div class="dx" title="${c.code} · ${c.dx}">${c.code} · ${c.dx}</div>
+        </div>
+        <div class="actions" onclick="event.stopPropagation()">
+          <button title="Shiko vërtetimin" aria-label="Shiko vërtetimin" onclick="openCertPreview(${i})">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+              <path d="M1.5 8s2.5-4.5 6.5-4.5S14.5 8 14.5 8s-2.5 4.5-6.5 4.5S1.5 8 1.5 8z"/>
+              <circle cx="8" cy="8" r="2"/>
+            </svg>
+          </button>
+          <button title="Printo vërtetimin" aria-label="Printo vërtetimin" onclick="reprintCert(${i})">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+              <path d="M4 5V2h8v3M4 11H2.5V6.5A1 1 0 0 1 3.5 5.5h9a1 1 0 0 1 1 1V11H12" stroke-linecap="round" stroke-linejoin="round"/>
+              <rect x="4" y="9" width="8" height="5" rx="0.5"/>
+              <path d="M11.5 7.5h.01" stroke-linecap="round"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+    `).join('');
+
+    if (sorted.length > 5) {
+      list.innerHTML += `<div class="cert-more"><a onclick="alert('TBD: open the full vërtetime list\\n(${sorted.length} total)')">Shfaq të gjithë (${sorted.length})</a></div>`;
+    }
+
+    // store sorted for preview lookup
+    window.__sortedCerts = sorted;
+  }
+
+  function openCertPreview(idx) {
+    const c = (window.__sortedCerts || CERTS)[idx];
+    if (!c) return;
+    document.getElementById('certPrevTitle').textContent = `Vërtetim · ${c.issued}`;
+    document.getElementById('cpNum').textContent = c.id;
+    document.getElementById('cpIssued').textContent = c.issued;
+    document.getElementById('cpPatient').textContent = PATIENT.name;
+    document.getElementById('cpDob').textContent = PATIENT.dob;
+    document.getElementById('cpCode').textContent = c.code;
+    document.getElementById('cpDx').textContent = c.dx;
+    document.getElementById('cpRange').textContent = c.from + ' – ' + c.to;
+    document.getElementById('cpDays').textContent = c.days;
+    document.getElementById('cpSigDate').textContent = c.issued + ' · Prizren';
+    // remember which cert is open for the reprint button
+    window.__activeCert = c;
+    document.getElementById('certPrevBackdrop').classList.add('open');
+  }
+
+  function closeCertPreview() {
+    document.getElementById('certPrevBackdrop').classList.remove('open');
+  }
+
+  function reprintCert(idx) {
+    const c = (window.__sortedCerts || CERTS)[idx];
+    if (!c) return;
+    const toISO = s => s.split('.').reverse().join('-');
+    location.href = `print-certificate.html?from=${toISO(c.from)}&to=${toISO(c.to)}&print=1`;
+  }
+
+  function printCurrentCert() {
+    const c = window.__activeCert;
+    if (!c) return;
+    const toISO = s => s.split('.').reverse().join('-');
+    location.href = `print-certificate.html?from=${toISO(c.from)}&to=${toISO(c.to)}&print=1`;
+  }
+
+  // Close preview on Esc
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && document.getElementById('certPrevBackdrop').classList.contains('open')) {
+      closeCertPreview();
+    }
+  });
+
+  renderCerts();
+
+  // ============================================================
+  // WHO Growth Chart lightbox
+  // Same chart design for all 3 metrics — data swaps based on type & sex.
+  // Reference: WHO Child Growth Standards (0–2 yrs, sex-specific).
+  // Clinic tracks WHO curves only through age 24 mo; older patients use
+  // the link in the right column to revisit this same view historically.
+  // Curve values are smoothed reference approximations for the
+  // 3rd / 15th / 50th / 85th / 97th percentiles — suitable for UI
+  // demonstration, not for clinical calculation.
+  // ============================================================
+  const WHO_AGES = [0, 3, 6, 9, 12, 18, 24]; // months
+
+  // Patient sex drives the default; the lightbox lets reviewers
+  // flip for comparison.
+  const PATIENT_SEX = 'F'; // 'F' = girl, 'M' = boy
+  let whoState = { type: 'weight', sex: PATIENT_SEX };
+
+  const WHO_META = {
+    weight: { title: 'Pesha sipas moshës',          yLabel: 'Pesha (kg)',    unit: 'kg', yMin: 2,  yMax: 16, yStep: 2 },
+    length: { title: 'Gjatësia sipas moshës',       yLabel: 'Gjatësia (cm)', unit: 'cm', yMin: 44, yMax: 96, yStep: 4 },
+    hc:     { title: 'Perimetri i kokës sipas moshës', yLabel: 'PK (cm)',    unit: 'cm', yMin: 30, yMax: 52, yStep: 2 },
+  };
+
+  // Reference curves [P3, P15, P50, P85, P97] at WHO_AGES — by sex
+  const WHO_REF = {
+    weight: {
+      F: {
+        P3:  [2.4, 4.6, 5.8, 6.6, 7.0, 7.8, 8.6],
+        P15: [2.8, 5.1, 6.5, 7.3, 7.7, 8.6, 9.5],
+        P50: [3.2, 5.9, 7.3, 8.2, 8.9, 10.2, 11.5],
+        P85: [3.7, 6.9, 8.4, 9.4, 10.2, 11.7, 13.2],
+        P97: [4.2, 7.5, 9.2, 10.3, 11.2, 12.8, 14.4],
+      },
+      M: {
+        P3:  [2.5, 5.0, 6.4, 7.2, 7.7, 8.4, 9.2],
+        P15: [2.9, 5.6, 7.0, 7.9, 8.4, 9.3, 10.2],
+        P50: [3.3, 6.4, 7.9, 8.9, 9.6, 10.9, 12.2],
+        P85: [3.9, 7.5, 9.1, 10.3, 11.1, 12.5, 13.9],
+        P97: [4.4, 8.0, 9.8, 11.1, 12.0, 13.5, 15.1],
+      },
+    },
+    length: {
+      F: {
+        P3:  [45.4, 55.6, 61.2, 65.3, 68.9, 74.9, 80.0],
+        P15: [47.2, 57.5, 63.5, 67.7, 71.8, 78.2, 83.6],
+        P50: [49.1, 59.8, 65.7, 70.1, 74.0, 80.7, 86.4],
+        P85: [51.0, 62.1, 67.9, 72.5, 76.2, 83.2, 89.2],
+        P97: [52.9, 64.0, 70.0, 74.7, 78.3, 85.5, 91.7],
+      },
+      M: {
+        P3:  [46.1, 57.3, 63.3, 67.5, 71.0, 76.9, 81.7],
+        P15: [47.9, 59.2, 65.5, 69.9, 73.6, 79.9, 85.0],
+        P50: [49.9, 61.4, 67.6, 72.0, 75.7, 82.3, 87.8],
+        P85: [51.8, 63.5, 69.8, 74.4, 78.1, 85.0, 90.9],
+        P97: [53.7, 65.5, 71.9, 76.6, 80.5, 87.6, 93.8],
+      },
+    },
+    hc: {
+      F: {
+        P3:  [31.7, 36.3, 39.5, 41.2, 42.2, 43.6, 44.7],
+        P15: [32.7, 37.4, 40.6, 42.4, 43.3, 44.8, 45.9],
+        P50: [33.9, 38.7, 41.9, 43.7, 44.6, 46.1, 47.2],
+        P85: [35.1, 40.0, 43.2, 45.0, 46.0, 47.5, 48.6],
+        P97: [36.1, 41.1, 44.3, 46.1, 47.0, 48.5, 49.6],
+      },
+      M: {
+        P3:  [32.1, 37.6, 41.0, 42.9, 44.0, 45.4, 46.4],
+        P15: [33.0, 38.7, 42.1, 44.0, 45.1, 46.5, 47.4],
+        P50: [34.5, 40.0, 43.4, 45.3, 46.4, 47.8, 48.7],
+        P85: [36.0, 41.3, 44.7, 46.6, 47.6, 49.1, 50.0],
+        P97: [36.9, 42.4, 45.8, 47.6, 48.7, 50.2, 51.0],
+      },
+    },
+  };
+
+  // Patient measurement points by metric — well-baby visits during the
+  // 0–24 month window. Era was born 03.08.2023; last WHO tracking visit
+  // was the 24-month checkup on 04.08.2025. After that the clinic stops
+  // plotting WHO percentiles (this view becomes the "historical" link).
+  const WHO_PTS = {
+    weight: [
+      { date: '03.08.23', age: 0,  v: 3.28 },
+      { date: '07.11.23', age: 3,  v: 5.8 },
+      { date: '05.02.24', age: 6,  v: 7.4 },
+      { date: '06.08.24', age: 12, v: 9.6 },
+      { date: '04.08.25', age: 24, v: 12.1, current: true },
+    ],
+    length: [
+      { date: '03.08.23', age: 0,  v: 51 },
+      { date: '07.11.23', age: 3,  v: 60 },
+      { date: '05.02.24', age: 6,  v: 66 },
+      { date: '06.08.24', age: 12, v: 74 },
+      { date: '04.08.25', age: 24, v: 86, current: true },
+    ],
+    hc: [
+      { date: '03.08.23', age: 0,  v: 34 },
+      { date: '07.11.23', age: 3,  v: 38.5 },
+      { date: '05.02.24', age: 6,  v: 42 },
+      { date: '06.08.24', age: 12, v: 45 },
+      { date: '04.08.25', age: 24, v: 47.3, current: true },
+    ],
+  };
+
+  // Compute approximate percentile of a value given the ref curves
+  // (linear interpolation across the 5 published percentiles).
+  function estimatePercentile(value, age, ref) {
+    // pick closest age column (good enough for the prototype)
+    let i = 0;
+    for (let k = 0; k < WHO_AGES.length; k++) {
+      if (Math.abs(WHO_AGES[k] - age) < Math.abs(WHO_AGES[i] - age)) i = k;
+    }
+    const ps = [3, 15, 50, 85, 97];
+    const vs = [ref.P3[i], ref.P15[i], ref.P50[i], ref.P85[i], ref.P97[i]];
+    if (value <= vs[0]) return '<P3';
+    if (value >= vs[4]) return '>P97';
+    for (let k = 0; k < 4; k++) {
+      if (value >= vs[k] && value <= vs[k+1]) {
+        const t = (value - vs[k]) / (vs[k+1] - vs[k]);
+        const p = ps[k] + t * (ps[k+1] - ps[k]);
+        return 'P' + Math.round(p);
+      }
+    }
+    return '—';
+  }
+
+  function classifyPct(label) {
+    if (label === '—') return 'ok';
+    if (label.startsWith('<') || label.startsWith('>')) return 'warn';
+    const n = parseInt(label.replace('P',''), 10);
+    if (isNaN(n)) return 'ok';
+    if (n < 15 || n > 85) return 'warn';
+    return 'ok';
+  }
+
+  function openWhoChart(type) {
+    whoState.type = type;
+    // sex defaults to patient sex on open; preserve if toggled mid-session
+    if (!whoState.sex) whoState.sex = PATIENT_SEX;
+    refreshWhoChart();
+    document.getElementById('whoBackdrop').classList.add('open');
+  }
+
+  function setWhoSex(sex) {
+    whoState.sex = sex;
+    refreshWhoChart();
+  }
+
+  function refreshWhoChart() {
+    const { type, sex } = whoState;
+    const meta = WHO_META[type];
+    const ref = WHO_REF[type][sex];
+    const pts = WHO_PTS[type].map(p => ({
+      ...p,
+      pct: estimatePercentile(p.v, p.age, ref),
+    }));
+
+    // header
+    document.getElementById('whoTitle').textContent = meta.title;
+    document.querySelectorAll('.who-head .tabs button[data-metric]').forEach(b => {
+      b.classList.toggle('active', b.dataset.metric === type);
+    });
+    document.querySelectorAll('.who-head .sex-tabs button').forEach(b => {
+      b.classList.toggle('active', b.dataset.sex === sex);
+    });
+    const sexLabel = sex === 'F' ? 'Vajzë' : 'Djalë';
+    document.getElementById('whoSexLabel').textContent = sexLabel;
+    const sexNote = document.getElementById('whoSexNote');
+    if (sex !== PATIENT_SEX) {
+      sexNote.style.display = 'inline-flex';
+      sexNote.textContent = '⚠ jo sipas pacientes';
+    } else {
+      sexNote.style.display = 'none';
+    }
+
+    // current pill
+    const cur = pts.find(p => p.current) || pts[pts.length - 1];
+    const tone = classifyPct(cur.pct);
+    document.getElementById('whoCurVal').innerHTML = cur.v + '<span class="u">' + meta.unit + '</span>';
+    document.getElementById('whoCurPct').textContent =
+      cur.pct + ' · ' + (tone === 'warn' ? 'jashtë qendrës' : 'brenda normales');
+    document.getElementById('whoCurrent').classList.toggle('warn', tone === 'warn');
+
+    renderWhoChart(meta, ref, pts);
+    renderWhoTable(meta, pts);
+  }
+
+  function closeWhoChart() {
+    document.getElementById('whoBackdrop').classList.remove('open');
+  }
+
+  function renderWhoChart(meta, ref, pts) {
+    const W = 760, H = 460;
+    const M = { top: 24, right: 56, bottom: 46, left: 56 };
+    const PW = W - M.left - M.right;
+    const PH = H - M.top - M.bottom;
+    const xMin = 0, xMax = 24;
+
+    const xScale = x => M.left + (x - xMin) / (xMax - xMin) * PW;
+    const yScale = y => M.top + (meta.yMax - y) / (meta.yMax - meta.yMin) * PH;
+
+    const xTicks = [];
+    for (let m = 0; m <= 24; m += 3) xTicks.push(m);
+    const yTicks = [];
+    for (let v = meta.yMin; v <= meta.yMax; v += meta.yStep) yTicks.push(v);
+
+    function pathFor(series) {
+      let d = '';
+      for (let i = 0; i < WHO_AGES.length; i++) {
+        const x = xScale(WHO_AGES[i]);
+        const y = yScale(series[i]);
+        d += (i === 0 ? 'M ' : ' L ') + x.toFixed(1) + ' ' + y.toFixed(1);
+      }
+      return d;
+    }
+    function bandPath(top, bot) {
+      let d = '';
+      for (let i = 0; i < WHO_AGES.length; i++) {
+        d += (i === 0 ? 'M ' : ' L ') + xScale(WHO_AGES[i]).toFixed(1) + ' ' + yScale(top[i]).toFixed(1);
+      }
+      for (let i = WHO_AGES.length - 1; i >= 0; i--) {
+        d += ' L ' + xScale(WHO_AGES[i]).toFixed(1) + ' ' + yScale(bot[i]).toFixed(1);
+      }
+      d += ' Z';
+      return d;
+    }
+
+    let svg = '';
+    svg += `<defs><clipPath id="who-plot"><rect x="${M.left}" y="${M.top}" width="${PW}" height="${PH}"/></clipPath></defs>`;
+    svg += `<rect x="${M.left}" y="${M.top}" width="${PW}" height="${PH}" fill="white" stroke="none"/>`;
+
+    svg += `<g clip-path="url(#who-plot)">`;
+    svg += `<path class="band-outer" d="${bandPath(ref.P15, ref.P3)}"/>`;
+    svg += `<path class="band-mid"   d="${bandPath(ref.P85, ref.P15)}"/>`;
+    svg += `<path class="band-outer" d="${bandPath(ref.P97, ref.P85)}"/>`;
+    svg += `</g>`;
+
+    svg += `<g class="grid">`;
+    yTicks.forEach(v => {
+      const y = yScale(v);
+      svg += `<line x1="${M.left}" x2="${M.left + PW}" y1="${y}" y2="${y}"/>`;
+    });
+    xTicks.forEach(m => {
+      const x = xScale(m);
+      const major = (m === 0 || m === 12 || m === 24);
+      svg += `<line class="${major ? 'major' : ''}" x1="${x}" x2="${x}" y1="${M.top}" y2="${M.top + PH}"/>`;
+    });
+    svg += `</g>`;
+
+    svg += `<g clip-path="url(#who-plot)">`;
+    svg += `<path class="pct-curve outer"  d="${pathFor(ref.P3)}"/>`;
+    svg += `<path class="pct-curve inner"  d="${pathFor(ref.P15)}"/>`;
+    svg += `<path class="pct-curve median" d="${pathFor(ref.P50)}"/>`;
+    svg += `<path class="pct-curve inner"  d="${pathFor(ref.P85)}"/>`;
+    svg += `<path class="pct-curve outer"  d="${pathFor(ref.P97)}"/>`;
+    svg += `</g>`;
+
+    const labelX = M.left + PW + 4;
+    const last = WHO_AGES.length - 1;
+    svg += `<text class="pct-label outer"  x="${labelX}" y="${yScale(ref.P3[last])+3}">P3</text>`;
+    svg += `<text class="pct-label"        x="${labelX}" y="${yScale(ref.P15[last])+3}">P15</text>`;
+    svg += `<text class="pct-label median" x="${labelX}" y="${yScale(ref.P50[last])+3}">P50</text>`;
+    svg += `<text class="pct-label"        x="${labelX}" y="${yScale(ref.P85[last])+3}">P85</text>`;
+    svg += `<text class="pct-label outer"  x="${labelX}" y="${yScale(ref.P97[last])+3}">P97</text>`;
+
+    svg += `<g class="axis">`;
+    svg += `<line x1="${M.left}" x2="${M.left}" y1="${M.top}" y2="${M.top + PH}"/>`;
+    yTicks.forEach(v => {
+      const y = yScale(v);
+      svg += `<line x1="${M.left - 4}" x2="${M.left}" y1="${y}" y2="${y}"/>`;
+      svg += `<text x="${M.left - 8}" y="${y + 3}" text-anchor="end">${v}</text>`;
+    });
+    svg += `<line x1="${M.left}" x2="${M.left + PW}" y1="${M.top + PH}" y2="${M.top + PH}"/>`;
+    xTicks.forEach(m => {
+      const x = xScale(m);
+      const major = (m === 0 || m === 12 || m === 24);
+      svg += `<line x1="${x}" x2="${x}" y1="${M.top + PH}" y2="${M.top + PH + (major ? 6 : 3)}"/>`;
+      svg += `<text x="${x}" y="${M.top + PH + 16}" text-anchor="middle">${m}</text>`;
+      if (major && m > 0) {
+        const yrs = m / 12;
+        svg += `<text x="${x}" y="${M.top + PH + 30}" text-anchor="middle" style="font-weight:600; fill: var(--text-muted)">${yrs}v</text>`;
+      }
+    });
+    svg += `</g>`;
+
+    svg += `<text class="ax-title" x="${M.left}" y="${M.top - 8}">${meta.yLabel}</text>`;
+    svg += `<text class="ax-title" x="${M.left + PW}" y="${M.top + PH + 38}" text-anchor="end">Mosha (muaj)</text>`;
+
+    let ptD = '';
+    pts.forEach((p, i) => {
+      const x = xScale(p.age), y = yScale(p.v);
+      ptD += (i === 0 ? 'M ' : ' L ') + x.toFixed(1) + ' ' + y.toFixed(1);
+    });
+    svg += `<g clip-path="url(#who-plot)">`;
+    svg += `<path class="patient-line" d="${ptD}"/>`;
+    pts.forEach(p => {
+      const x = xScale(p.age), y = yScale(p.v);
+      svg += `<circle class="patient-pt ${p.current ? 'current' : ''}" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${p.current ? 6 : 4}"/>`;
+    });
+    svg += `</g>`;
+
+    const cur = pts.find(p => p.current);
+    if (cur) {
+      const x = xScale(cur.age), y = yScale(cur.v);
+      const tagX = Math.min(x + 12, M.left + PW - 86);
+      const tagY = Math.max(y - 10, M.top + 14);
+      svg += `<g>
+        <rect x="${tagX}" y="${tagY - 11}" width="82" height="22" rx="4" fill="var(--bg-elevated)" stroke="var(--primary-dark)" stroke-width="1"/>
+        <text class="pt-tag" x="${tagX + 6}" y="${tagY + 4}">${cur.v} ${meta.unit} · ${cur.pct}</text>
+      </g>`;
+    }
+
+    document.getElementById('whoChart').innerHTML = svg;
+  }
+
+  function renderWhoTable(meta, pts) {
+    const el = document.getElementById('whoDataTable');
+    let html = `<div class="row header"><span>Data</span><span>${meta.unit}</span><span>Pct</span></div>`;
+    [...pts].reverse().forEach(p => {
+      html += `<div class="row${p.current ? ' current' : ''}">
+        <span class="date">${p.date}</span>
+        <span class="val">${p.v}</span>
+        <span class="pct">${p.pct}</span>
+      </div>`;
+    });
+    el.innerHTML = html;
+  }
+
+  // Esc to close
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && document.getElementById('whoBackdrop').classList.contains('open')) {
+      closeWhoChart();
+    }
+  });
+
+  // ============================================================
+  // Tweaks panel — variant state for review
+  // ============================================================
+  const TWEAK_STATE = /*EDITMODE-BEGIN*/{
+    "allergies": true,
+    "toddler": true,
+    "legacy": false,
+    "tjera": false
+  }/*EDITMODE-END*/;
+  const ALLERGY_TEXT = 'Penicilinë, dhembet mjekun';
+
+  function applyTweaks() {
+    // 1. Master-strip allergies sub-strip
+    const strip = document.getElementById('allergyStrip');
+    if (TWEAK_STATE.allergies) {
+      strip.classList.remove('empty');
+      strip.innerHTML = `
+        <span class="alg-icon" aria-hidden="true">!</span>
+        <span class="alg-lab">Alergji / Tjera</span>
+        <span class="alg-val" id="allergyVal">${ALLERGY_TEXT}</span>
+        <button type="button" class="alg-edit" onclick="event.stopPropagation(); editAllergies()">Redakto</button>
+      `;
+      strip.setAttribute('title', 'Klik për të redaktuar');
+    } else {
+      strip.classList.add('empty');
+      strip.innerHTML = `<button type="button" class="alg-add" onclick="event.stopPropagation(); addAllergies()">+ Shto shënim</button>`;
+      strip.setAttribute('title', 'Asnjë shënim — klik për të shtuar');
+    }
+
+    // 2. Terapia reminder
+    const rem = document.getElementById('txAllergyReminder');
+    if (rem) rem.style.display = TWEAK_STATE.allergies ? 'inline-flex' : 'none';
+
+    // 3. Legacy vs current diagnosis
+    const cur = document.getElementById('dxCurrent');
+    const leg = document.getElementById('dxLegacy');
+    const head = document.getElementById('dxHeadSub');
+    if (TWEAK_STATE.legacy) {
+      cur.style.display = 'none';
+      leg.style.display = 'block';
+      head.textContent = '· tekst i lirë (migruar)';
+      head.style.color = 'var(--amber)';
+    } else {
+      cur.style.display = '';
+      leg.style.display = 'none';
+      head.textContent = '· ICD-10';
+      head.style.color = '';
+    }
+
+    // 4. Tjera
+    const tj = document.getElementById('tjeraField');
+    if (tj) {
+      tj.value = TWEAK_STATE.tjera
+        ? 'Prindi raporton se në klasë janë 4 fëmijë me kollë. Të vërehet evolucioni.'
+        : '';
+    }
+
+    // Reflect on switches
+    for (const k of ['allergies', 'toddler', 'legacy', 'tjera']) {
+      const r = document.getElementById('tw-' + k);
+      if (r) r.setAttribute('aria-pressed', String(!!TWEAK_STATE[k]));
+    }
+
+    // 5. Toddler vs older child — growth charts visibility
+    applyToddlerState(!!TWEAK_STATE.toddler);
+  }
+
+  function applyToddlerState(isToddler) {
+    const panel = document.getElementById('growthPanel');
+    const link  = document.getElementById('growthHistLink');
+    if (panel) panel.style.display = isToddler ? '' : 'none';
+    if (link)  link.style.display  = isToddler ? 'none' : '';
+  }
+
+  function toggleTweak(key) {
+    TWEAK_STATE[key] = !TWEAK_STATE[key];
+    applyTweaks();
+    window.parent.postMessage({ type: '__edit_mode_set_keys', edits: { [key]: TWEAK_STATE[key] } }, '*');
+  }
+
+  function editAllergies() {
+    const val = prompt('Alergji / Tjera — çdo gjë e rëndësishme për këtë pacient (alergji, gjendje kronike, ose tjera):', document.getElementById('allergyVal')?.textContent || ALLERGY_TEXT);
+    if (val === null) return;
+    if (val.trim() === '') {
+      TWEAK_STATE.allergies = false;
+    } else {
+      TWEAK_STATE.allergies = true;
+      document.getElementById('allergyVal') && (document.getElementById('allergyVal').textContent = val);
+      const txv = document.getElementById('txAllergyVal'); if (txv) txv.textContent = val;
+    }
+    applyTweaks();
+  }
+  function addAllergies() {
+    const val = prompt('Alergji / Tjera — çdo gjë e rëndësishme për këtë pacient (alergji, gjendje kronike, ose tjera):', '');
+    if (!val || !val.trim()) return;
+    TWEAK_STATE.allergies = true;
+    applyTweaks();
+    setTimeout(() => {
+      const v = document.getElementById('allergyVal'); if (v) v.textContent = val;
+      const txv = document.getElementById('txAllergyVal'); if (txv) txv.textContent = val;
+    }, 0);
+  }
+
+  function closeTweaks() {
+    document.getElementById('tweaksPanel').classList.remove('open');
+    window.parent.postMessage({ type: '__edit_mode_dismissed' }, '*');
+  }
+
+  // Edit-mode protocol
+  window.addEventListener('message', (e) => {
+    if (!e.data) return;
+    if (e.data.type === '__activate_edit_mode') {
+      document.getElementById('tweaksPanel').classList.add('open');
+    } else if (e.data.type === '__deactivate_edit_mode') {
+      document.getElementById('tweaksPanel').classList.remove('open');
+    }
+  });
+  window.parent.postMessage({ type: '__edit_mode_available' }, '*');
+
+  // Initial apply
+  applyTweaks();
+</script>
+
+<script src="shortcuts.js"></script>
+
+</body>
+</html>

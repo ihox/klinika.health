@@ -1,0 +1,1977 @@
+<!DOCTYPE html>
+<html lang="sq">
+<head>
+<meta charset="UTF-8">
+<title>Klinika · Update — MFA + Profili im + Audit</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="styles.css">
+<style>
+  /* ────────────────────────────────────────────────────────────────
+     Review canvas (Figma-ish) — vertical sections, h-scroll artboards.
+     Uses Klinika tokens; introduces no new visual patterns for the
+     designs themselves (just the canvas chrome).
+     ──────────────────────────────────────────────────────────────── */
+  body {
+    background: #F0EEE9;
+    background-image:
+      linear-gradient(rgba(28,25,23,0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(28,25,23,0.04) 1px, transparent 1px);
+    background-size: 32px 32px;
+    min-height: 100vh;
+  }
+
+  .canvas-head {
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 48px 32px 8px;
+  }
+  .canvas-head .crumb {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--text-faint);
+    font-weight: 600;
+    margin-bottom: 12px;
+  }
+  .canvas-head h1 {
+    font-size: 34px;
+    letter-spacing: -0.025em;
+    margin-bottom: 8px;
+  }
+  .canvas-head .lede {
+    color: var(--text-muted);
+    font-size: 15px;
+    max-width: 720px;
+    line-height: 1.55;
+  }
+  .canvas-head .lede strong { color: var(--text); font-weight: 600; }
+  .canvas-head .meta-row {
+    display: flex;
+    gap: 14px;
+    margin-top: 18px;
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+  .canvas-head .meta-row .dot { color: var(--border-strong); }
+
+  .section {
+    margin-top: 56px;
+    padding: 0 32px;
+  }
+  .section-head {
+    max-width: 1280px;
+    margin: 0 auto 24px;
+    padding-left: 8px;
+    border-left: 3px solid var(--primary);
+  }
+  .section-head .ix {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--primary-dark);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    font-weight: 600;
+  }
+  .section-head h2 {
+    font-size: 24px;
+    letter-spacing: -0.02em;
+    margin: 4px 0 6px;
+  }
+  .section-head .sub {
+    color: var(--text-muted);
+    font-size: 13.5px;
+    max-width: 720px;
+    line-height: 1.55;
+  }
+
+  .row-scroll {
+    display: flex;
+    gap: 40px;
+    align-items: flex-start;
+    overflow-x: auto;
+    overflow-y: visible;
+    padding: 12px 32px 36px;
+    margin: 0 -32px;
+    scrollbar-color: var(--border-strong) transparent;
+  }
+  .row-scroll::-webkit-scrollbar { height: 10px; }
+  .row-scroll::-webkit-scrollbar-track { background: transparent; }
+  .row-scroll::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 6px; }
+
+  .ab {
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .ab-label {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    font-size: 11.5px;
+    color: rgba(60,50,40,0.8);
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    padding-left: 2px;
+  }
+  .ab-label .ix {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: rgba(60,50,40,0.5);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-weight: 500;
+  }
+  .ab-label .dim {
+    margin-left: auto;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: rgba(60,50,40,0.4);
+    font-weight: 400;
+  }
+  .ab-frame {
+    background: var(--bg-elevated);
+    border-radius: 6px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.06), 0 8px 24px rgba(0,0,0,0.06);
+    overflow: hidden;
+    position: relative;
+  }
+
+  /* Post-it style note */
+  .note {
+    background: #FEF4A8;
+    border-radius: 4px;
+    padding: 14px 16px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.06), 0 6px 16px rgba(0,0,0,0.05);
+    font-size: 12.5px;
+    line-height: 1.5;
+    color: #5A4A2A;
+    max-width: 240px;
+    transform: rotate(-1deg);
+  }
+  .note .nt { display: block; font-weight: 700; margin-bottom: 4px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; }
+  .note + .note { margin-top: 18px; transform: rotate(0.8deg); }
+
+  /* ──────────────────────────────────────────
+     Mock browser/device frames used by artboards
+     ────────────────────────────────────────── */
+  .frame-browser {
+    width: 480px;
+  }
+  .frame-browser .topbar-fake {
+    height: 36px;
+    background: var(--bg-subtle);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0 12px;
+  }
+  .frame-browser .topbar-fake .dot {
+    width: 10px; height: 10px; border-radius: 999px;
+    background: var(--border-strong);
+  }
+  .frame-browser .topbar-fake .url {
+    margin-left: 8px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    padding: 3px 10px;
+    border-radius: 4px;
+    font-size: 11px;
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    flex: 1;
+  }
+
+  /* ──────────────────────────────────────────
+     MFA screen (mirrors admin-login.html style)
+     ────────────────────────────────────────── */
+  .mfa-page {
+    padding: 36px 32px 32px;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 18px;
+  }
+  .mfa-brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+  .mfa-brand .word {
+    font-family: var(--font-display);
+    font-size: 18px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    color: var(--text-strong);
+  }
+  .mfa-brand .word .ext { color: var(--text-faint); font-weight: 400; }
+  .mfa-title {
+    font-family: var(--font-display);
+    font-size: 22px;
+    font-weight: 600;
+    letter-spacing: -0.025em;
+    margin-bottom: 4px;
+  }
+  .mfa-sub {
+    color: var(--text-muted);
+    font-size: 13px;
+    line-height: 1.5;
+  }
+  .mfa-sub .email-mask {
+    color: var(--text);
+    font-weight: 500;
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    background: var(--bg-subtle);
+    padding: 1px 6px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+  }
+
+  .otp-row {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 8px;
+    margin-top: 4px;
+  }
+  .otp-row .otp {
+    text-align: center;
+    font-family: var(--font-mono);
+    font-size: 22px;
+    font-weight: 600;
+    padding: 14px 0;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--r-md);
+    background: var(--bg-elevated);
+    color: var(--text-strong);
+    line-height: 1;
+  }
+  .otp-row .otp.empty { color: var(--text-faint); }
+  .otp-row .otp.focused { border-color: var(--primary); box-shadow: var(--focus-ring); }
+  .otp-row.error .otp {
+    border-color: var(--amber);
+    background: #FFFBEB;
+    color: var(--amber);
+  }
+
+  .err-line {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12.5px;
+    color: var(--amber);
+    margin-top: -4px;
+  }
+  .err-line svg { flex-shrink: 0; }
+
+  .checkbox-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--text);
+    user-select: none;
+  }
+  .checkbox-row input { accent-color: var(--primary); width: 14px; height: 14px; }
+
+  .resend-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 12px;
+    color: var(--text-muted);
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+  }
+  .resend-row .link { color: var(--text-faint); font-weight: 500; }
+  .resend-row .link.active { color: var(--primary); }
+  .resend-row .link.active:hover { color: var(--primary-dark); text-decoration: underline; }
+
+  .verify-success-ring {
+    width: 48px; height: 48px;
+    background: var(--green-bg);
+    border: 2px solid var(--green-soft);
+    border-radius: 999px;
+    display: grid; place-items: center;
+    color: var(--green);
+    margin: 4px auto 8px;
+  }
+
+  /* ──────────────────────────────────────────
+     Email mockup frame
+     ────────────────────────────────────────── */
+  .email-frame {
+    width: 480px;
+    background: #f3f1ec;
+    padding: 16px;
+    border-radius: 6px;
+  }
+  .email-subject-bar {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: 6px 6px 0 0;
+    padding: 12px 16px;
+    border-bottom: none;
+  }
+  .email-subject-bar .from {
+    font-size: 11px;
+    color: var(--text-faint);
+    letter-spacing: 0.02em;
+  }
+  .email-subject-bar .from strong { color: var(--text-muted); font-weight: 500; }
+  .email-subject-bar .subject {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-strong);
+    margin-top: 4px;
+    letter-spacing: -0.01em;
+  }
+  .email-body {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: 0 0 6px 6px;
+    padding: 28px 32px 24px;
+    font-size: 13.5px;
+    line-height: 1.7;
+    color: var(--text);
+  }
+  .email-body p { margin-bottom: 14px; }
+  .email-body .code-block {
+    background: var(--bg-subtle);
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    padding: 18px 24px;
+    text-align: center;
+    margin: 16px 0 20px;
+  }
+  .email-body .code-block .code {
+    font-family: var(--font-mono);
+    font-size: 32px;
+    font-weight: 600;
+    letter-spacing: 0.2em;
+    color: var(--text-strong);
+  }
+  .email-body .code-block .help {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 8px;
+    letter-spacing: 0.02em;
+  }
+  .email-body .device-card {
+    background: var(--bg-subtle);
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    padding: 14px 18px;
+    margin: 8px 0 20px;
+    display: grid;
+    grid-template-columns: auto 1fr;
+    column-gap: 16px;
+    row-gap: 6px;
+    font-size: 13px;
+  }
+  .email-body .device-card .k { color: var(--text-muted); font-weight: 500; }
+  .email-body .device-card .v { color: var(--text-strong); font-family: var(--font-mono); font-size: 12.5px; }
+  .email-body .sig {
+    margin-top: 24px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+    font-size: 12px;
+    color: var(--text-faint);
+  }
+  .email-body .sig .b { color: var(--text-muted); font-weight: 500; }
+
+  /* ──────────────────────────────────────────
+     "Profili im" page
+     ────────────────────────────────────────── */
+  .profile-page { width: 880px; }
+  .profile-page .topbar {
+    height: 52px;
+    padding: 0 24px;
+  }
+  .profile-page .pp-body {
+    padding: 28px 40px 40px;
+    max-width: 720px;
+    margin: 0 auto;
+  }
+  .profile-page h1.pg-title {
+    font-size: 26px;
+    letter-spacing: -0.02em;
+    margin-bottom: 24px;
+  }
+  .profile-page .identity {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: var(--r-lg);
+    padding: 20px 24px;
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 20px;
+    align-items: center;
+    box-shadow: var(--shadow-xs);
+  }
+  .profile-page .identity .avatar-lg {
+    width: 56px; height: 56px;
+    background: var(--teal-700);
+    color: white;
+    border-radius: 999px;
+    display: grid; place-items: center;
+    font-size: 18px;
+    font-weight: 600;
+    font-family: var(--font-display);
+  }
+  .profile-page .identity .nm {
+    font-family: var(--font-display);
+    font-size: 18px;
+    font-weight: 600;
+    letter-spacing: -0.015em;
+  }
+  .profile-page .identity .em {
+    font-size: 13px;
+    color: var(--text-muted);
+    margin-top: 2px;
+  }
+  .profile-page .identity .role-row {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-top: 6px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .profile-page .identity .role-row .role-tag {
+    background: var(--primary-soft);
+    color: var(--teal-800);
+    font-weight: 600;
+    padding: 1px 7px;
+    border-radius: 4px;
+    font-size: 11px;
+    border: 1px solid var(--teal-200);
+  }
+  .profile-page .identity .meta-col {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--text-muted);
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+  .profile-page .identity .meta-col .k {
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--text-faint);
+    font-weight: 600;
+  }
+  .profile-page .identity .meta-col .v {
+    font-size: 12.5px;
+    color: var(--text);
+    font-weight: 500;
+  }
+
+  .pp-section {
+    margin-top: 36px;
+  }
+  .pp-section > .h {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 18px;
+  }
+  .pp-section > .h h3 {
+    font-size: 15px;
+    font-weight: 600;
+  }
+  .pp-section > .h .h-meta {
+    font-size: 12px;
+    color: var(--text-faint);
+  }
+
+  .pwd-form {
+    display: grid;
+    grid-template-columns: 200px 1fr;
+    row-gap: 14px;
+    column-gap: 24px;
+    align-items: center;
+  }
+  .pwd-form .label {
+    font-size: 13px;
+    color: var(--text-muted);
+    font-weight: 500;
+  }
+  .pwd-form .input-wrap { position: relative; }
+  .pwd-form .input-wrap .match {
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 18px; height: 18px;
+    background: var(--green-bg);
+    color: var(--green);
+    border-radius: 999px;
+    display: grid; place-items: center;
+    font-size: 11px;
+  }
+  .pwd-form .strength-cell {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: -4px;
+    margin-bottom: -4px;
+  }
+  .strength-bars {
+    display: flex;
+    gap: 4px;
+  }
+  .strength-bars .bar {
+    width: 28px; height: 4px;
+    background: var(--bg-muted);
+    border-radius: 2px;
+  }
+  .strength-bars .bar.on-1 { background: var(--red); }
+  .strength-bars .bar.on-2 { background: var(--amber); }
+  .strength-bars .bar.on-3 { background: var(--amber); }
+  .strength-bars .bar.on-4 { background: var(--green); }
+  .strength-bars .bar.on-5 { background: var(--green); }
+  .strength-label {
+    font-size: 12px;
+    color: var(--text-muted);
+    min-width: 80px;
+  }
+  .strength-label.s-1 { color: var(--red); }
+  .strength-label.s-2, .strength-label.s-3 { color: var(--amber); }
+  .strength-label.s-4, .strength-label.s-5 { color: var(--green); }
+  .pwd-form .submit-row {
+    grid-column: 1 / -1;
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 6px;
+  }
+
+  /* Trusted devices list */
+  .device-row {
+    display: grid;
+    grid-template-columns: 36px 1fr auto;
+    gap: 14px;
+    align-items: center;
+    padding: 14px 4px;
+    border-bottom: 1px solid var(--border-soft);
+  }
+  .device-row:last-of-type { border-bottom: none; }
+  .device-row .ico {
+    width: 36px; height: 36px;
+    background: var(--bg-subtle);
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    display: grid; place-items: center;
+    color: var(--text-muted);
+  }
+  .device-row .lab .top {
+    font-size: 13.5px;
+    font-weight: 500;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .device-row .lab .top .me-pill {
+    font-size: 10px;
+    font-weight: 600;
+    background: var(--primary-soft);
+    color: var(--teal-800);
+    padding: 1px 6px;
+    border-radius: 4px;
+    border: 1px solid var(--teal-200);
+    text-transform: lowercase;
+    letter-spacing: 0.02em;
+  }
+  .device-row .lab .bot {
+    font-size: 11.5px;
+    color: var(--text-faint);
+    margin-top: 3px;
+    font-variant-numeric: tabular-nums;
+  }
+  .device-row .lab .bot .dot { color: var(--border-strong); }
+  .device-row .act .link {
+    font-size: 12px;
+    color: var(--text-muted);
+    padding: 6px 10px;
+    border-radius: var(--r-sm);
+  }
+  .device-row .act .link:hover { background: var(--bg-subtle); color: var(--red); }
+
+  .devices-foot {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 12px;
+  }
+
+  .empty-state {
+    padding: 32px 16px;
+    text-align: center;
+    color: var(--text-faint);
+    border: 1px dashed var(--border-strong);
+    border-radius: var(--r-md);
+    background: var(--bg-subtle);
+  }
+  .empty-state .ic {
+    color: var(--text-faint);
+    margin-bottom: 6px;
+  }
+  .empty-state .t {
+    font-size: 13px;
+    color: var(--text-muted);
+  }
+  .empty-state .s {
+    font-size: 11.5px;
+    color: var(--text-faint);
+    margin-top: 4px;
+  }
+
+  .pp-info {
+    margin-top: 28px;
+    padding: 12px 16px;
+    background: var(--bg-subtle);
+    border-radius: var(--r-md);
+    display: flex;
+    gap: 10px;
+    font-size: 12.5px;
+    color: var(--text-muted);
+    line-height: 1.5;
+  }
+  .pp-info .i {
+    width: 16px; height: 16px;
+    border-radius: 999px;
+    background: var(--text-faint);
+    color: white;
+    display: grid; place-items: center;
+    font-size: 10px;
+    font-weight: 700;
+    font-family: var(--font-display);
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+
+  /* User menu dropdown artboard */
+  .menu-frame {
+    width: 320px;
+    padding: 16px;
+    background: linear-gradient(180deg, var(--bg-subtle), var(--bg-elevated));
+  }
+  .menu-trigger {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 10px 4px 4px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    width: fit-content;
+    margin-bottom: 8px;
+    box-shadow: var(--shadow-xs);
+  }
+  .menu-trigger .avatar {
+    width: 28px; height: 28px;
+    background: var(--teal-700);
+    color: white;
+    border-radius: 999px;
+    font-weight: 600;
+    font-size: 11px;
+    display: grid; place-items: center;
+  }
+  .menu-trigger .name { font-size: 13px; font-weight: 500; }
+  .menu-trigger .chev { color: var(--text-faint); font-size: 10px; }
+  .user-menu {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    box-shadow: var(--shadow-lg);
+    padding: 6px;
+    width: 240px;
+    margin-left: 12px;
+  }
+  .user-menu .mi {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    border-radius: var(--r-sm);
+    font-size: 13px;
+    color: var(--text);
+  }
+  .user-menu .mi:hover { background: var(--bg-subtle); }
+  .user-menu .mi.active { background: var(--bg-subtle); font-weight: 500; }
+  .user-menu .mi.danger { color: var(--red); }
+  .user-menu .mi svg { color: var(--text-muted); flex-shrink: 0; }
+  .user-menu .mi.danger svg { color: var(--red); }
+  .user-menu .div {
+    height: 1px;
+    background: var(--border);
+    margin: 4px 2px;
+  }
+  .user-menu .mi .badge-admin {
+    margin-left: auto;
+    font-size: 10px;
+    color: var(--text-faint);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    font-weight: 600;
+  }
+  .user-menu .ctx {
+    padding: 6px 10px 4px;
+    font-size: 11px;
+    color: var(--text-faint);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-weight: 600;
+  }
+
+  /* Confirm modal mock */
+  .confirm-modal {
+    width: 460px;
+    background: var(--bg-elevated);
+    border-radius: var(--r-xl);
+    box-shadow: var(--shadow-modal);
+    overflow: hidden;
+    border: 1px solid var(--border);
+  }
+  .confirm-modal h3 { font-size: 17px; margin-bottom: 8px; padding: 20px 24px 4px; }
+  .confirm-modal .b { padding: 0 24px 18px; font-size: 13.5px; color: var(--text-muted); line-height: 1.55; }
+  .confirm-modal .f {
+    padding: 14px 24px;
+    border-top: 1px solid var(--border);
+    background: var(--bg-subtle);
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+  }
+
+  /* ──────────────────────────────────────────
+     Visit form header w/ audit indicator
+     ────────────────────────────────────────── */
+  .vh-frame { width: 720px; padding: 24px 28px; background: var(--bg); }
+  .vh-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 24px;
+  }
+  .vh-title {
+    font-family: var(--font-display);
+    font-size: 22px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    color: var(--text-strong);
+  }
+  .vh-title .sub {
+    display: block;
+    font-family: var(--font-ui);
+    font-size: 12px;
+    color: var(--text-muted);
+    font-weight: 500;
+    letter-spacing: 0;
+    margin-top: 4px;
+  }
+  .vh-meta {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 6px;
+    text-align: right;
+    flex-shrink: 0;
+  }
+  .vh-saved {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+  .vh-saved .ic {
+    width: 14px; height: 14px;
+    border-radius: 999px;
+    background: var(--green-bg);
+    color: var(--green);
+    display: grid; place-items: center;
+  }
+  .vh-edit {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11.5px;
+    color: var(--text-faint);
+    font-variant-numeric: tabular-nums;
+    cursor: pointer;
+    padding: 3px 6px;
+    margin: -3px -6px 0;
+    border-radius: 4px;
+    transition: all 120ms ease;
+    text-decoration: none;
+  }
+  .vh-edit:hover {
+    background: var(--bg-subtle);
+    color: var(--text-muted);
+  }
+  .vh-edit svg { color: currentColor; opacity: 0.7; }
+  .vh-edit .pill {
+    background: var(--bg-subtle);
+    color: var(--text-muted);
+    font-weight: 500;
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-size: 11px;
+    border: 1px solid var(--border);
+  }
+
+  /* form mock fields after the header */
+  .vh-mock-fields {
+    margin-top: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .vh-mock-fields .fld {
+    display: grid;
+    grid-template-columns: 100px 1fr;
+    gap: 12px;
+    align-items: start;
+  }
+  .vh-mock-fields .fld .l {
+    font-size: 12px;
+    color: var(--text-muted);
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding-top: 4px;
+  }
+  .vh-mock-fields .fld .v {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--r-md);
+    padding: 8px 12px;
+    font-size: 13px;
+    line-height: 1.45;
+    color: var(--text);
+  }
+
+  /* ──────────────────────────────────────────
+     Change history modal
+     ────────────────────────────────────────── */
+  .hist-modal {
+    width: 620px;
+    background: var(--bg-elevated);
+    border-radius: var(--r-xl);
+    box-shadow: var(--shadow-modal);
+    overflow: hidden;
+    border: 1px solid var(--border);
+  }
+  .hist-modal > header {
+    padding: 18px 24px 14px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+  }
+  .hist-modal > header h3 {
+    font-size: 16px;
+    font-weight: 600;
+  }
+  .hist-modal > header .sub {
+    font-size: 12.5px;
+    color: var(--text-muted);
+    margin-top: 3px;
+  }
+  .hist-modal > header .x {
+    color: var(--text-faint);
+    font-size: 18px;
+    width: 28px; height: 28px;
+    display: grid; place-items: center;
+    border-radius: var(--r-sm);
+  }
+  .hist-modal > header .x:hover { background: var(--bg-subtle); color: var(--text); }
+
+  .hist-body {
+    padding: 14px 24px 22px;
+    max-height: 460px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 22px;
+  }
+  .hist-event {
+    display: grid;
+    grid-template-columns: 24px 1fr;
+    gap: 14px;
+  }
+  .hist-event .rail {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  .hist-event .rail .dot {
+    width: 9px; height: 9px;
+    background: var(--text-muted);
+    border-radius: 999px;
+    margin-top: 5px;
+    border: 2px solid var(--bg-elevated);
+    box-shadow: 0 0 0 1px var(--border-strong);
+  }
+  .hist-event:first-child .rail .dot { background: var(--primary); box-shadow: 0 0 0 1px var(--primary); }
+  .hist-event:last-child .rail .dot { background: var(--bg-elevated); border-color: var(--bg-elevated); box-shadow: 0 0 0 1px var(--border-strong); }
+  .hist-event .rail .line {
+    flex: 1;
+    width: 1px;
+    background: var(--border);
+    margin-top: 4px;
+    min-height: 8px;
+  }
+  .hist-event:last-child .rail .line { background: transparent; }
+
+  .hist-event .body .who {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+  }
+  .hist-event .body .when {
+    font-size: 11.5px;
+    color: var(--text-faint);
+    font-variant-numeric: tabular-nums;
+    margin-left: 6px;
+    font-weight: 400;
+  }
+  .hist-event .body .ip {
+    font-size: 11px;
+    color: var(--text-faint);
+    font-family: var(--font-mono);
+    margin-left: 8px;
+  }
+  .hist-event .body .field-diff {
+    margin-top: 10px;
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    overflow: hidden;
+    background: var(--bg-elevated);
+  }
+  .hist-event .body .field-diff + .field-diff { margin-top: 10px; }
+  .hist-event .body .field-diff .fld-head {
+    background: var(--bg-subtle);
+    padding: 6px 12px;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+    font-weight: 600;
+    border-bottom: 1px solid var(--border);
+  }
+  .hist-event .body .field-diff .diff-row {
+    padding: 10px 12px;
+    font-size: 13px;
+    line-height: 1.5;
+    display: grid;
+    grid-template-columns: 56px 1fr;
+    gap: 10px;
+  }
+  .hist-event .body .field-diff .diff-row + .diff-row {
+    border-top: 1px solid var(--border-soft);
+  }
+  .hist-event .body .field-diff .diff-row .key {
+    font-size: 11px;
+    color: var(--text-faint);
+    text-transform: lowercase;
+    letter-spacing: 0.02em;
+    padding-top: 1px;
+    font-weight: 500;
+  }
+  .hist-event .body .field-diff .diff-row.then .val {
+    color: var(--text-faint);
+    text-decoration: line-through;
+    text-decoration-color: var(--border-strong);
+    text-decoration-thickness: 1px;
+  }
+  .hist-event .body .field-diff .diff-row.now .val {
+    color: var(--text-strong);
+    font-weight: 500;
+  }
+  .hist-event .body .creation-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 8px;
+    font-size: 12px;
+    color: var(--text-muted);
+    background: var(--bg-subtle);
+    padding: 4px 10px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+  }
+  .hist-event .body .creation-pill svg { color: var(--primary); }
+
+  .hist-modal > footer {
+    padding: 12px 24px;
+    border-top: 1px solid var(--border);
+    background: var(--bg-subtle);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .hist-modal > footer .lf {
+    font-size: 11.5px;
+    color: var(--text-faint);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .hist-modal > footer .lf svg { color: var(--text-faint); }
+
+  /* Vërtetim section */
+  .reconfirm {
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 24px 28px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: var(--r-lg);
+    box-shadow: var(--shadow-xs);
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 18px;
+    align-items: start;
+  }
+  .reconfirm .ic {
+    width: 36px; height: 36px;
+    background: var(--primary-soft);
+    color: var(--primary-dark);
+    border-radius: 999px;
+    display: grid; place-items: center;
+  }
+  .reconfirm h3 { font-size: 15px; margin-bottom: 4px; }
+  .reconfirm p { font-size: 13px; color: var(--text-muted); line-height: 1.55; max-width: 720px; }
+  .reconfirm code {
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    background: var(--bg-subtle);
+    border: 1px solid var(--border);
+    padding: 1px 6px;
+    border-radius: 4px;
+    color: var(--text);
+  }
+
+  /* misc */
+  .check-tick {
+    width: 12px; height: 12px;
+    display: inline-block;
+  }
+
+  /* Inline mini-icons via SVG */
+  .ico-svg { display: inline-block; vertical-align: middle; }
+
+  .pp-actions-row {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+</style>
+</head>
+<body>
+
+<!-- ─────────────────────────────────────────── HEAD ─────────────────────────────────────────── -->
+<div class="canvas-head">
+  <div class="crumb">Update · 14.05.2026 · Iteration 06</div>
+  <h1>MFA on new devices · Profili im · Audit inline indicator</h1>
+  <div class="lede">
+    A focused refinement set covering authentication, the personal profile page,
+    and a small inline addition to the visit form for change history. <strong>No new
+    visual patterns</strong> — every artboard reuses tokens and components already
+    defined in <code style="font-family: var(--font-mono); font-size: 12.5px;">styles.css</code>.
+  </div>
+  <div class="meta-row">
+    <span>Klinika v1.0</span><span class="dot">·</span>
+    <span>9 deliverables</span><span class="dot">·</span>
+    <span>Albanian copy (sq-AL)</span><span class="dot">·</span>
+    <span>Designer: TS</span>
+  </div>
+</div>
+
+<!-- ─────────────────────────────────────────── §1 MFA ─────────────────────────────────────────── -->
+<section class="section">
+  <div class="section-head">
+    <div class="ix">§1 · Authentication</div>
+    <h2>MFA — email code on new devices</h2>
+    <div class="sub">
+      Every login from an unrecognized device asks for a 6-digit code sent to the user's email.
+      Once verified with "mos pyet përsëri", the device is trusted for 30 days. Mirrors the
+      visual language of the existing login screen — same logo placement, same field styling,
+      same form scale.
+    </div>
+  </div>
+
+  <div class="row-scroll">
+
+    <!-- 1.1 default verification screen -->
+    <div class="ab">
+      <div class="ab-label"><span class="ix">1.1</span> Verification screen <span class="dim">480 · default</span></div>
+      <div class="ab-frame frame-browser">
+        <div class="topbar-fake">
+          <span class="dot" style="background: #FCA5A5;"></span>
+          <span class="dot" style="background: #FCD34D;"></span>
+          <span class="dot" style="background: #86EFAC;"></span>
+          <span class="url">app.klinika.health/hyrje/verifikim</span>
+        </div>
+        <div class="mfa-page">
+          <div class="mfa-brand">
+            <svg width="28" height="28" viewBox="0 0 64 64" fill="none" style="color: var(--primary);">
+              <path d="M32 54 C 12 40, 8 26, 18 18 C 24 14, 30 16, 32 22 C 34 16, 40 14, 46 18 C 56 26, 52 40, 32 54 Z" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M12 34 L 22 34 L 26 28 L 30 40 L 34 30 L 38 36 L 52 36" stroke="var(--teal-800)" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+            </svg>
+            <span class="word">klinika<span class="ext">.</span></span>
+          </div>
+          <div>
+            <div class="mfa-title">Verifikoni se jeni ju</div>
+            <div class="mfa-sub">
+              Ne dërguam një kod 6-shifror në
+              <span class="email-mask">t…t@donetamed.com</span>
+            </div>
+          </div>
+
+          <div class="field" style="margin-top: 4px;">
+            <label class="field-label">Kodi</label>
+            <div class="otp-row">
+              <div class="otp">4</div>
+              <div class="otp">8</div>
+              <div class="otp">2</div>
+              <div class="otp">6</div>
+              <div class="otp focused">1</div>
+              <div class="otp empty">_</div>
+            </div>
+          </div>
+
+          <label class="checkbox-row">
+            <input type="checkbox" checked>
+            Mos pyet përsëri në këtë pajisje
+          </label>
+
+          <button class="btn btn-primary btn-lg" type="button" style="margin-top: 4px;">Verifiko</button>
+
+          <div class="resend-row">
+            <span>Nuk e morët kodin?</span>
+            <a class="link" href="#">Dërgoje përsëri (30s)</a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 1.2 Verifying state -->
+    <div class="ab">
+      <div class="ab-label"><span class="ix">1.2</span> Verifying <span class="dim">post-submit</span></div>
+      <div class="ab-frame frame-browser">
+        <div class="topbar-fake">
+          <span class="dot" style="background: var(--border-strong);"></span>
+          <span class="dot" style="background: var(--border-strong);"></span>
+          <span class="dot" style="background: var(--border-strong);"></span>
+          <span class="url">app.klinika.health/hyrje/verifikim</span>
+        </div>
+        <div class="mfa-page">
+          <div class="mfa-brand">
+            <svg width="28" height="28" viewBox="0 0 64 64" fill="none" style="color: var(--primary);"><path d="M32 54 C 12 40, 8 26, 18 18 C 24 14, 30 16, 32 22 C 34 16, 40 14, 46 18 C 56 26, 52 40, 32 54 Z" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 34 L 22 34 L 26 28 L 30 40 L 34 30 L 38 36 L 52 36" stroke="var(--teal-800)" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
+            <span class="word">klinika<span class="ext">.</span></span>
+          </div>
+          <div>
+            <div class="mfa-title">Verifikoni se jeni ju</div>
+            <div class="mfa-sub">Ne dërguam një kod 6-shifror në <span class="email-mask">t…t@donetamed.com</span></div>
+          </div>
+          <div class="field" style="margin-top: 4px;">
+            <label class="field-label">Kodi</label>
+            <div class="otp-row">
+              <div class="otp">4</div>
+              <div class="otp">8</div>
+              <div class="otp">2</div>
+              <div class="otp">6</div>
+              <div class="otp">1</div>
+              <div class="otp">3</div>
+            </div>
+          </div>
+          <label class="checkbox-row">
+            <input type="checkbox" checked>
+            Mos pyet përsëri në këtë pajisje
+          </label>
+          <button class="btn btn-primary btn-lg" type="button" style="margin-top: 4px; opacity: 0.92;" disabled>
+            <span class="spin" style="width: 12px; height: 12px; border: 2px solid rgba(255,255,255,0.4); border-top-color: white; border-radius: 999px; display: inline-block; animation: spin 700ms linear infinite;"></span>
+            Po verifikohet…
+          </button>
+          <div class="resend-row">
+            <span>Nuk e morët kodin?</span>
+            <span class="link">Dërgoje përsëri (12s)</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 1.3 Success state -->
+    <div class="ab">
+      <div class="ab-label"><span class="ix">1.3</span> Success <span class="dim">~500ms before redirect</span></div>
+      <div class="ab-frame frame-browser">
+        <div class="topbar-fake">
+          <span class="dot" style="background: var(--border-strong);"></span>
+          <span class="dot" style="background: var(--border-strong);"></span>
+          <span class="dot" style="background: var(--border-strong);"></span>
+          <span class="url">app.klinika.health/hyrje/verifikim</span>
+        </div>
+        <div class="mfa-page" style="text-align: center; align-items: center; padding-top: 64px; padding-bottom: 64px;">
+          <div class="mfa-brand" style="margin: 0 auto 24px;">
+            <svg width="28" height="28" viewBox="0 0 64 64" fill="none" style="color: var(--primary);"><path d="M32 54 C 12 40, 8 26, 18 18 C 24 14, 30 16, 32 22 C 34 16, 40 14, 46 18 C 56 26, 52 40, 32 54 Z" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 34 L 22 34 L 26 28 L 30 40 L 34 30 L 38 36 L 52 36" stroke="var(--teal-800)" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
+            <span class="word">klinika<span class="ext">.</span></span>
+          </div>
+          <div class="verify-success-ring">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M5 12.5l4.5 4.5L20 7"/>
+            </svg>
+          </div>
+          <div class="mfa-title" style="font-size: 18px;">U verifikua</div>
+          <div class="mfa-sub" style="margin-top: 4px;">Po ju dërgojmë te kartelat…</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 1.4 Wrong code -->
+    <div class="ab">
+      <div class="ab-label"><span class="ix">1.4</span> Wrong code <span class="dim">attempt 1 / 3</span></div>
+      <div class="ab-frame frame-browser">
+        <div class="topbar-fake">
+          <span class="dot" style="background: var(--border-strong);"></span>
+          <span class="dot" style="background: var(--border-strong);"></span>
+          <span class="dot" style="background: var(--border-strong);"></span>
+          <span class="url">app.klinika.health/hyrje/verifikim</span>
+        </div>
+        <div class="mfa-page">
+          <div class="mfa-brand">
+            <svg width="28" height="28" viewBox="0 0 64 64" fill="none" style="color: var(--primary);"><path d="M32 54 C 12 40, 8 26, 18 18 C 24 14, 30 16, 32 22 C 34 16, 40 14, 46 18 C 56 26, 52 40, 32 54 Z" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 34 L 22 34 L 26 28 L 30 40 L 34 30 L 38 36 L 52 36" stroke="var(--teal-800)" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
+            <span class="word">klinika<span class="ext">.</span></span>
+          </div>
+          <div>
+            <div class="mfa-title">Verifikoni se jeni ju</div>
+            <div class="mfa-sub">Ne dërguam një kod 6-shifror në <span class="email-mask">t…t@donetamed.com</span></div>
+          </div>
+          <div class="field" style="margin-top: 4px;">
+            <label class="field-label">Kodi</label>
+            <div class="otp-row error">
+              <div class="otp">9</div>
+              <div class="otp">1</div>
+              <div class="otp">4</div>
+              <div class="otp">8</div>
+              <div class="otp">2</div>
+              <div class="otp">7</div>
+            </div>
+            <div class="err-line">
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="7" cy="7" r="5.5"/><path d="M7 4v3.5M7 9.6v.01"/>
+              </svg>
+              Kod i pasaktë. Provoni përsëri. <span style="color: var(--text-faint); margin-left: 6px;">(2 përpjekje të mbetura)</span>
+            </div>
+          </div>
+          <label class="checkbox-row">
+            <input type="checkbox" checked>
+            Mos pyet përsëri në këtë pajisje
+          </label>
+          <button class="btn btn-primary btn-lg" type="button" style="margin-top: 4px;">Verifiko</button>
+          <div class="resend-row">
+            <span>Nuk e morët kodin?</span>
+            <a class="link active" href="#">Dërgoje përsëri</a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 1.5 Expired code -->
+    <div class="ab">
+      <div class="ab-label"><span class="ix">1.5</span> Expired code <span class="dim">&gt; 15 min</span></div>
+      <div class="ab-frame frame-browser">
+        <div class="topbar-fake">
+          <span class="dot" style="background: var(--border-strong);"></span>
+          <span class="dot" style="background: var(--border-strong);"></span>
+          <span class="dot" style="background: var(--border-strong);"></span>
+          <span class="url">app.klinika.health/hyrje/verifikim</span>
+        </div>
+        <div class="mfa-page">
+          <div class="mfa-brand">
+            <svg width="28" height="28" viewBox="0 0 64 64" fill="none" style="color: var(--primary);"><path d="M32 54 C 12 40, 8 26, 18 18 C 24 14, 30 16, 32 22 C 34 16, 40 14, 46 18 C 56 26, 52 40, 32 54 Z" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 34 L 22 34 L 26 28 L 30 40 L 34 30 L 38 36 L 52 36" stroke="var(--teal-800)" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
+            <span class="word">klinika<span class="ext">.</span></span>
+          </div>
+          <div>
+            <div class="mfa-title">Kodi ka skaduar</div>
+            <div class="mfa-sub">Kodi vlen për 15 minuta. Mund të kërkoni një kod të ri tani.</div>
+          </div>
+          <div class="field" style="margin-top: 4px;">
+            <label class="field-label" style="color: var(--text-faint);">Kodi (i skaduar)</label>
+            <div class="otp-row" style="opacity: 0.5;">
+              <div class="otp">4</div>
+              <div class="otp">8</div>
+              <div class="otp">2</div>
+              <div class="otp">6</div>
+              <div class="otp">1</div>
+              <div class="otp">3</div>
+            </div>
+          </div>
+          <button class="btn btn-primary btn-lg" type="button" style="margin-top: 4px;">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px;"><path d="M2 7a5 5 0 0 1 8.5-3.5L12 5"/><path d="M12 2v3h-3"/></svg>
+            Dërgo kod të ri
+          </button>
+          <div class="resend-row">
+            <a href="#" class="link" style="color: var(--text-muted);">← Kthehu te hyrja</a>
+            <span class="link" style="color: var(--text-faint);">Kodi i mëparshëm: dërguar 17 min më parë</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 1.6 Too many attempts -->
+    <div class="ab">
+      <div class="ab-label"><span class="ix">1.6</span> Too many attempts <span class="dim">3 wrong → login</span></div>
+      <div class="ab-frame frame-browser">
+        <div class="topbar-fake">
+          <span class="dot" style="background: var(--border-strong);"></span>
+          <span class="dot" style="background: var(--border-strong);"></span>
+          <span class="dot" style="background: var(--border-strong);"></span>
+          <span class="url">app.klinika.health/hyrje</span>
+        </div>
+        <div class="mfa-page">
+          <div class="mfa-brand">
+            <svg width="28" height="28" viewBox="0 0 64 64" fill="none" style="color: var(--primary);"><path d="M32 54 C 12 40, 8 26, 18 18 C 24 14, 30 16, 32 22 C 34 16, 40 14, 46 18 C 56 26, 52 40, 32 54 Z" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 34 L 22 34 L 26 28 L 30 40 L 34 30 L 38 36 L 52 36" stroke="var(--teal-800)" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
+            <span class="word">klinika<span class="ext">.</span></span>
+          </div>
+
+          <div style="display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px; background: var(--amber-bg); border: 1px solid var(--amber-soft); border-radius: var(--r-md);">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="var(--amber)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0; margin-top: 1px;">
+              <path d="M8 2.5l6 10.5H2z"/><path d="M8 6.5v3M8 11.5v.01"/>
+            </svg>
+            <div style="font-size: 12.5px; color: #78350F; line-height: 1.5;">
+              <strong style="color: var(--amber); font-weight: 600;">Tepër përpjekje.</strong> Filloni prej fillimit — hyni përsëri me email + fjalëkalim.
+            </div>
+          </div>
+
+          <div>
+            <div class="mfa-title">Mirë se erdhët</div>
+            <div class="mfa-sub">Hyni në llogarinë tuaj për të vazhduar.</div>
+          </div>
+
+          <div class="field">
+            <label class="field-label">Email</label>
+            <input class="input" value="taulant@donetamed.al" readonly>
+          </div>
+          <div class="field">
+            <label class="field-label">Fjalëkalimi</label>
+            <input class="input" value="" placeholder="••••••••••" readonly>
+          </div>
+          <button class="btn btn-primary btn-lg" type="button" style="margin-top: 4px;">Hyr</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="note">
+      <span class="nt">Decisions taken</span>
+      • Default-checked "mos pyet" — most users will leave it on; new-device alert email is the safety net.<br>
+      • Email mask uses Unicode horizontal ellipsis <code style="font-family: var(--font-mono);">t…t@</code> (single character), not three dots.<br>
+      • Resend countdown is 30s; we expose it as the button label, not a separate timer.
+    </div>
+
+  </div>
+</section>
+
+
+<!-- ─────────────────────────────────────────── §2 EMAIL ─────────────────────────────────────────── -->
+<section class="section">
+  <div class="section-head">
+    <div class="ix">§2 · Transactional emails</div>
+    <h2>Verification code &amp; new-device alert</h2>
+    <div class="sub">
+      Plain text-style emails sent via clinic SMTP (or Resend fallback). No images, no
+      buttons-as-CTAs, no clinical letterhead — just brand mark in the footer and the
+      code prominent. Same template chrome for both messages so the brand is consistent.
+    </div>
+  </div>
+
+  <div class="row-scroll">
+
+    <!-- 2.1 Verification code email -->
+    <div class="ab">
+      <div class="ab-label"><span class="ix">2.1</span> Verification code email</div>
+      <div class="ab-frame email-frame">
+        <div class="email-subject-bar">
+          <div class="from"><strong>Nga:</strong> Klinika &lt;noreply@klinika.health&gt;</div>
+          <div class="from"><strong>Për:</strong> Taulant Shala &lt;taulant@donetamed.com&gt;</div>
+          <div class="subject">Kodi i verifikimit · Klinika</div>
+        </div>
+        <div class="email-body">
+          <p>Përshëndetje Taulant,</p>
+          <p>Kodi juaj i verifikimit për Klinika është:</p>
+          <div class="code-block">
+            <div class="code">482&nbsp;613</div>
+            <div class="help">Vlen për 15 minuta</div>
+          </div>
+          <p style="color: var(--text-muted); font-size: 12.5px; line-height: 1.6;">
+            Nëse nuk po hyni në Klinika, injoroni këtë email
+            dhe kontaktoni admin-in e klinikës.
+          </p>
+          <div class="sig">
+            <div class="b">Klinika</div>
+            <div>klinika.health · email automatik, mos përgjigjuni</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 2.2 New device alert email -->
+    <div class="ab">
+      <div class="ab-label"><span class="ix">2.2</span> New-device alert email</div>
+      <div class="ab-frame email-frame">
+        <div class="email-subject-bar">
+          <div class="from"><strong>Nga:</strong> Klinika &lt;noreply@klinika.health&gt;</div>
+          <div class="from"><strong>Për:</strong> Taulant Shala &lt;taulant@donetamed.com&gt;</div>
+          <div class="subject">Pajisje e re u lidh me llogarinë · Klinika</div>
+        </div>
+        <div class="email-body">
+          <p>Përshëndetje Taulant,</p>
+          <p>Një pajisje e re u lidh me llogarinë tuaj në Klinika:</p>
+          <div class="device-card">
+            <div class="k">Pajisja</div><div class="v">Chrome · macOS</div>
+            <div class="k">Vendi</div><div class="v">Prishtinë · Kosovë</div>
+            <div class="k">IP</div><div class="v">94.140.•.•</div>
+            <div class="k">Koha</div><div class="v">14.05.2026 · 09:23</div>
+          </div>
+          <p style="font-size: 13px;">Nëse keni qenë ju, asgjë për t'u bërë.</p>
+          <p style="color: var(--text-muted); font-size: 12.5px; line-height: 1.6;">
+            Nëse jo, kontaktoni menjëherë admin-in e klinikës dhe
+            ndryshoni fjalëkalimin nga <strong style="color: var(--text);">Profili im</strong>.
+          </p>
+          <div class="sig">
+            <div class="b">Klinika</div>
+            <div>klinika.health · email automatik, mos përgjigjuni</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="note">
+      <span class="nt">Email rendering</span>
+      All styles are inline-safe and degrade to plain text in clients that strip CSS
+      (Outlook desktop, some mobile clients). Code block falls back to monospace; device
+      table falls back to label/value pairs on separate lines.
+    </div>
+
+  </div>
+</section>
+
+
+<!-- ─────────────────────────────────────────── §3 PROFILE ─────────────────────────────────────────── -->
+<section class="section">
+  <div class="section-head">
+    <div class="ix">§3 · Personal profile</div>
+    <h2>Profili im</h2>
+    <div class="sub">
+      Each clinic user (doctor, receptionist, clinic admin) gets a personal profile page
+      reached from the user menu in the top nav. Holds password change, trusted devices,
+      and session controls. Read-only fields (name, email, signature) point at the clinic admin.
+    </div>
+  </div>
+
+  <div class="row-scroll">
+
+    <!-- 3.1 User menu dropdown -->
+    <div class="ab">
+      <div class="ab-label"><span class="ix">3.1</span> User menu dropdown <span class="dim">entry point</span></div>
+      <div class="ab-frame menu-frame" style="padding: 24px 32px 200px;">
+        <div class="menu-trigger">
+          <div class="avatar">TS</div>
+          <span class="name">Dr. Taulant Shala</span>
+          <span class="chev">▴</span>
+        </div>
+        <div class="user-menu">
+          <div class="ctx">Dr. Taulant Shala · DonetaMED</div>
+          <a class="mi" href="#" style="background: var(--primary-soft); color: var(--teal-800); font-weight: 500;">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="6" r="2.5"/><path d="M3 13.5a5 5 0 0 1 10 0"/></svg>
+            Profili im
+          </a>
+          <a class="mi" href="clinic-settings.html">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="2"/><path d="M8 1.5v2M8 12.5v2M14.5 8h-2M3.5 8h-2M12.5 3.5l-1.4 1.4M4.9 11.1l-1.4 1.4M12.5 12.5l-1.4-1.4M4.9 4.9L3.5 3.5"/></svg>
+            Cilësimet e klinikës
+            <span class="badge-admin">Admin</span>
+          </a>
+          <a class="mi" href="#">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="6.5"/><path d="M6 6.5a2 2 0 1 1 3 1.6c-.6.4-1 .9-1 1.4M8 12v.01"/></svg>
+            Ndihmë
+          </a>
+          <div class="div"></div>
+          <a class="mi danger" href="#">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10 4.5V3a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h5a1 1 0 0 0 1-1v-1.5M7 8h7M11.5 5.5L14 8l-2.5 2.5"/></svg>
+            Dil
+          </a>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3.2 Full page -->
+    <div class="ab">
+      <div class="ab-label"><span class="ix">3.2</span> Profili im — full page</div>
+      <div class="ab-frame profile-page">
+        <header class="topbar">
+          <div class="topbar-brand">
+            <svg width="22" height="22" viewBox="0 0 64 64" fill="none" style="color: var(--primary);"><path d="M32 54 C 12 40, 8 26, 18 18 C 24 14, 30 16, 32 22 C 34 16, 40 14, 46 18 C 56 26, 52 40, 32 54 Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 34 L 22 34 L 26 28 L 30 40 L 34 30 L 38 36 L 52 36" stroke="var(--teal-800)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
+            <span>klinika<span class="dot-app">.</span></span>
+          </div>
+          <nav class="topbar-nav">
+            <a href="#" class="nav-link">Sot</a>
+            <a href="#" class="nav-link">Kalendari</a>
+            <a href="#" class="nav-link">Pacientët</a>
+            <a href="#" class="nav-link">Raportet</a>
+            <a href="#" class="nav-link">Cilësimet</a>
+          </nav>
+          <div class="topbar-spacer"></div>
+          <button class="topbar-user">
+            <div class="avatar">TS</div>
+            <span class="name">Dr. Taulant Shala</span>
+            <span class="chev">▾</span>
+          </button>
+        </header>
+
+        <div class="pp-body">
+          <h1 class="pg-title">Profili im</h1>
+
+          <div class="identity">
+            <div class="avatar-lg">TS</div>
+            <div>
+              <div class="nm">Dr. Taulant Shala</div>
+              <div class="em">taulant@donetamed.com</div>
+              <div class="role-row">
+                <span class="role-tag">Mjek</span>
+                <span>·</span>
+                <span>DonetaMED · Prizren</span>
+              </div>
+            </div>
+            <div class="meta-col">
+              <div><div class="k">I lidhur që nga</div><div class="v">02.05.2026</div></div>
+              <div><div class="k">Hyrja e fundit</div><div class="v">14.05.2026 · 14:23</div></div>
+            </div>
+          </div>
+
+          <!-- Password change -->
+          <div class="pp-section">
+            <div class="h">
+              <h3>Ndrysho fjalëkalimin</h3>
+              <span class="h-meta">Të paktën 10 karaktere</span>
+            </div>
+            <div class="pwd-form">
+              <div class="label">Fjalëkalimi aktual</div>
+              <div><input class="input" type="password" value="••••••••••" placeholder="Fjalëkalimi aktual"></div>
+
+              <div class="label">Fjalëkalimi i ri</div>
+              <div><input class="input" type="password" value="••••••••••••" placeholder="Të paktën 10 karaktere"></div>
+
+              <div class="label" style="color: var(--text-faint);">Force i fjalëkalimit</div>
+              <div class="strength-cell">
+                <div class="strength-bars">
+                  <span class="bar on-3"></span><span class="bar on-3"></span><span class="bar on-3"></span><span class="bar"></span><span class="bar"></span>
+                </div>
+                <span class="strength-label s-3">Mesatar</span>
+              </div>
+
+              <div class="label">Konfirmo</div>
+              <div class="input-wrap">
+                <input class="input" type="password" value="••••••••••••" placeholder="Përsërit fjalëkalimin e ri" style="padding-right: 36px;">
+                <span class="match">✓</span>
+              </div>
+
+              <div class="submit-row">
+                <button class="btn btn-secondary">Anulo</button>
+                <button class="btn btn-primary">Ruaj</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Trusted devices -->
+          <div class="pp-section">
+            <div class="h">
+              <h3>Pajisjet e besueshme</h3>
+              <span class="h-meta">3 pajisje · besimi vlen 30 ditë</span>
+            </div>
+
+            <div class="device-row">
+              <div class="ico">
+                <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="14" height="9" rx="1"/><path d="M6 15h6M9 12v3"/></svg>
+              </div>
+              <div class="lab">
+                <div class="top">Chrome · macOS <span class="me-pill">në Prishtinë</span></div>
+                <div class="bot">Që nga 02.05.2026 <span class="dot">·</span> hyrja e fundit 14.05.2026 09:23 <span class="dot">·</span> IP 94.140.•.•</div>
+              </div>
+              <div class="act"><a class="link" href="#">Hiq besimin</a></div>
+            </div>
+
+            <div class="device-row">
+              <div class="ico">
+                <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="2" width="10" height="14" rx="1.5"/><path d="M9 13.5v.01"/></svg>
+              </div>
+              <div class="lab">
+                <div class="top">Safari · iPad <span class="me-pill">në klinikë</span></div>
+                <div class="bot">Që nga 05.05.2026 <span class="dot">·</span> hyrja e fundit 12.05.2026 17:51</div>
+              </div>
+              <div class="act"><a class="link" href="#">Hiq besimin</a></div>
+            </div>
+
+            <div class="device-row">
+              <div class="ico" style="background: var(--primary-soft); color: var(--primary-dark); border-color: var(--teal-200);">
+                <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="14" height="9" rx="1"/><path d="M6 15h6M9 12v3"/></svg>
+              </div>
+              <div class="lab">
+                <div class="top">Firefox · Windows <span class="me-pill" style="background: var(--green-bg); color: var(--green); border-color: var(--green-soft);">kjo pajisje</span></div>
+                <div class="bot">Që nga 12.05.2026 <span class="dot">·</span> shtëpia · Prizren</div>
+              </div>
+              <div class="act"><a class="link" href="#">Hiq besimin</a></div>
+            </div>
+
+            <div class="devices-foot">
+              <button class="btn btn-secondary btn-sm">Hiq besimin për të gjitha</button>
+            </div>
+          </div>
+
+          <!-- Veprime -->
+          <div class="pp-section">
+            <div class="h">
+              <h3>Veprime</h3>
+              <span class="h-meta">Sesionet aktive: 2</span>
+            </div>
+            <div class="pp-actions-row">
+              <button class="btn btn-secondary btn-sm">Dilni nga të gjitha sesionet e tjera</button>
+            </div>
+          </div>
+
+          <div class="pp-info">
+            <span class="i">i</span>
+            <div>Për të ndryshuar <strong style="color: var(--text);">emrin</strong>, <strong style="color: var(--text);">email-in</strong> ose <strong style="color: var(--text);">nënshkrimin</strong> tuaj, kontaktoni administratorin e klinikës.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3.3 Trusted devices: empty state -->
+    <div class="ab">
+      <div class="ab-label"><span class="ix">3.3</span> Trusted devices · empty state</div>
+      <div class="ab-frame" style="width: 520px; padding: 28px;">
+        <div class="pp-section" style="margin: 0;">
+          <div class="h">
+            <h3>Pajisjet e besueshme</h3>
+            <span class="h-meta">0 pajisje</span>
+          </div>
+          <div class="empty-state">
+            <svg class="ic" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 3l8 3.5v5c0 4.4-3.4 8-8 9.5-4.6-1.5-8-5.1-8-9.5v-5L12 3z"/>
+              <path d="M9 11.5l2 2 4-4"/>
+            </svg>
+            <div class="t">Asnjë pajisje e besueshme deri tani.</div>
+            <div class="s">Pas hyrjes së parë me kod, pajisja juaj do të shfaqet këtu.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3.4 Password strength · all 5 states -->
+    <div class="ab">
+      <div class="ab-label"><span class="ix">3.4</span> Password strength · 5 states</div>
+      <div class="ab-frame" style="width: 480px; padding: 24px 28px;">
+        <div style="font-size: 12px; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.07em; font-weight: 600; margin-bottom: 14px;">Force i fjalëkalimit</div>
+
+        <div style="display: flex; flex-direction: column; gap: 14px;">
+          <!-- Empty -->
+          <div style="display: flex; align-items: center; gap: 14px;">
+            <div class="strength-bars">
+              <span class="bar"></span><span class="bar"></span><span class="bar"></span><span class="bar"></span><span class="bar"></span>
+            </div>
+            <span class="strength-label">—</span>
+            <span style="font-family: var(--font-mono); font-size: 11px; color: var(--text-faint); margin-left: auto;">empty</span>
+          </div>
+          <!-- Weak -->
+          <div style="display: flex; align-items: center; gap: 14px;">
+            <div class="strength-bars">
+              <span class="bar on-1"></span><span class="bar"></span><span class="bar"></span><span class="bar"></span><span class="bar"></span>
+            </div>
+            <span class="strength-label s-1">I dobët</span>
+            <span style="font-family: var(--font-mono); font-size: 11px; color: var(--text-faint); margin-left: auto;">≤ 6 chars</span>
+          </div>
+          <!-- Fair -->
+          <div style="display: flex; align-items: center; gap: 14px;">
+            <div class="strength-bars">
+              <span class="bar on-2"></span><span class="bar on-2"></span><span class="bar"></span><span class="bar"></span><span class="bar"></span>
+            </div>
+            <span class="strength-label s-2">I dobët</span>
+            <span style="font-family: var(--font-mono); font-size: 11px; color: var(--text-faint); margin-left: auto;">7–8</span>
+          </div>
+          <!-- Medium -->
+          <div style="display: flex; align-items: center; gap: 14px;">
+            <div class="strength-bars">
+              <span class="bar on-3"></span><span class="bar on-3"></span><span class="bar on-3"></span><span class="bar"></span><span class="bar"></span>
+            </div>
+            <span class="strength-label s-3">Mesatar</span>
+            <span style="font-family: var(--font-mono); font-size: 11px; color: var(--text-faint); margin-left: auto;">9–11</span>
+          </div>
+          <!-- Strong -->
+          <div style="display: flex; align-items: center; gap: 14px;">
+            <div class="strength-bars">
+              <span class="bar on-4"></span><span class="bar on-4"></span><span class="bar on-4"></span><span class="bar on-4"></span><span class="bar"></span>
+            </div>
+            <span class="strength-label s-4">I fortë</span>
+            <span style="font-family: var(--font-mono); font-size: 11px; color: var(--text-faint); margin-left: auto;">12–15 + mix</span>
+          </div>
+          <!-- Very strong -->
+          <div style="display: flex; align-items: center; gap: 14px;">
+            <div class="strength-bars">
+              <span class="bar on-5"></span><span class="bar on-5"></span><span class="bar on-5"></span><span class="bar on-5"></span><span class="bar on-5"></span>
+            </div>
+            <span class="strength-label s-5">Shumë i fortë</span>
+            <span style="font-family: var(--font-mono); font-size: 11px; color: var(--text-faint); margin-left: auto;">16+ + mix</span>
+          </div>
+        </div>
+
+        <div style="font-size: 11.5px; color: var(--text-faint); margin-top: 18px; line-height: 1.5; border-top: 1px solid var(--border); padding-top: 12px;">
+          Force-i llogaritet nga gjatësia + variateti i karaktereve (shkronja të mëdha/vogla, numra, simbole).
+          Ruajtja bllokohet nën <strong style="color: var(--text-muted);">"Mesatar"</strong>.
+        </div>
+      </div>
+    </div>
+
+    <!-- 3.5 Logout other sessions confirm -->
+    <div class="ab">
+      <div class="ab-label"><span class="ix">3.5</span> Logout other sessions · confirm</div>
+      <div class="ab-frame" style="width: 480px; padding: 28px; background: rgba(28,25,23,0.08);">
+        <div class="confirm-modal">
+          <h3>Dilni nga sesionet e tjera?</h3>
+          <div class="b">
+            Të gjitha sesionet e tjera përveç këtij do të mbyllen menjëherë.
+            Pajisjet e besueshme mbeten të besueshme — hyrja tjetër nga to nuk
+            do të kërkojë kod të ri.
+          </div>
+          <div class="f">
+            <button class="btn btn-ghost">Anulo</button>
+            <button class="btn btn-primary">Po, mbyllni sesionet</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="note">
+      <span class="nt">Why two separate actions</span>
+      <strong>Hiq besimin</strong> revokes the device-trust cookie (next login from there needs MFA).<br>
+      <strong>Dilni nga sesionet</strong> kills the auth token (current logged-in tab gets booted).<br>
+      Doctors confuse these — keeping them visually distinct &amp; phrased separately.
+    </div>
+
+  </div>
+</section>
+
+
+<!-- ─────────────────────────────────────────── §4 AUDIT ─────────────────────────────────────────── -->
+<section class="section">
+  <div class="section-head">
+    <div class="ix">§4 · Audit log</div>
+    <h2>Inline indicator on the visit form</h2>
+    <div class="sub">
+      A single muted line beneath the existing autosave indicator on each visit,
+      showing who last edited it and when. Clickable; opens the full change history
+      modal for that visit. Appears only on edited visits — brand-new visits show nothing.
+    </div>
+  </div>
+
+  <div class="row-scroll">
+
+    <!-- 4.1 Visit header with indicator -->
+    <div class="ab">
+      <div class="ab-label"><span class="ix">4.1</span> Visit header · with indicator</div>
+      <div class="ab-frame vh-frame">
+        <div class="vh-row">
+          <div>
+            <div class="vh-title">
+              Vizita e 14.05.2026
+              <span class="sub">vizita 5 nga 5 · Era Krasniqi</span>
+            </div>
+          </div>
+          <div class="vh-meta">
+            <span class="vh-saved">
+              <span class="ic">
+                <svg width="9" height="9" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 6.5l2.5 2.5 4.5-5"/></svg>
+              </span>
+              U ruajt 2 min më parë
+            </span>
+            <a class="vh-edit" href="#" title="Shiko historinë e ndryshimeve">
+              <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="6" cy="6" r="5"/><path d="M6 3v3l2 1.5"/>
+              </svg>
+              Modifikuar nga <strong style="font-weight: 500; color: var(--text-muted);">Dr. Taulant</strong> · 14.05.2026 13:47
+            </a>
+          </div>
+        </div>
+
+        <div class="vh-mock-fields">
+          <div class="fld"><div class="l">Ankesa</div><div class="v">Kollë e thatë prej 3 ditësh. Temperaturë subfebrile mbrëmjeve.</div></div>
+          <div class="fld"><div class="l">Diagnoza</div><div class="v"><span style="font-family: var(--font-mono); font-size: 11.5px; background: var(--primary-soft); color: var(--teal-800); padding: 1px 6px; border-radius: 3px; margin-right: 6px;">J03.9</span>Tonsillopharyngitis acuta</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 4.2 First-edit (no indicator) -->
+    <div class="ab">
+      <div class="ab-label"><span class="ix">4.2</span> Brand-new visit · no indicator</div>
+      <div class="ab-frame vh-frame">
+        <div class="vh-row">
+          <div>
+            <div class="vh-title">
+              Vizita e 14.05.2026
+              <span class="sub">vizita 5 nga 5 · Era Krasniqi · në vijim</span>
+            </div>
+          </div>
+          <div class="vh-meta">
+            <span class="vh-saved" style="color: var(--accent-600);">
+              <span class="ic" style="background: var(--accent-100); color: var(--accent-600);">
+                <span style="width: 5px; height: 5px; background: currentColor; border-radius: 999px;"></span>
+              </span>
+              Po shkruhet…
+            </span>
+            <span style="font-size: 11px; color: var(--text-faint); font-style: italic;">— pa ndryshime të mëparshme —</span>
+          </div>
+        </div>
+
+        <div class="vh-mock-fields">
+          <div class="fld"><div class="l">Ankesa</div><div class="v" style="color: var(--text-faint); font-style: italic;">Po plotësohet…</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 4.3 Change history modal -->
+    <div class="ab">
+      <div class="ab-label"><span class="ix">4.3</span> Change history modal</div>
+      <div class="ab-frame" style="width: 720px; padding: 32px; background: rgba(28,25,23,0.08);">
+        <div class="hist-modal">
+          <header>
+            <div>
+              <h3>Historia e ndryshimeve</h3>
+              <div class="sub">Vizita e 14.05.2026 · Era Krasniqi · 2 ngjarje</div>
+            </div>
+            <button class="x" aria-label="Mbyll">×</button>
+          </header>
+
+          <div class="hist-body">
+            <!-- Most recent event -->
+            <div class="hist-event">
+              <div class="rail"><span class="dot"></span><span class="line"></span></div>
+              <div class="body">
+                <div>
+                  <span class="who">Dr. Taulant Shala</span>
+                  <span class="when">14.05.2026 · 13:47</span>
+                  <span class="ip">94.140.•.•</span>
+                </div>
+
+                <div class="field-diff">
+                  <div class="fld-head">Diagnoza</div>
+                  <div class="diff-row then">
+                    <div class="key">më parë</div>
+                    <div class="val"><span style="font-family: var(--font-mono); font-size: 11.5px; background: var(--bg-subtle); padding: 1px 5px; border-radius: 3px; margin-right: 6px;">J03.9</span>Tonsillitis acuta</div>
+                  </div>
+                  <div class="diff-row now">
+                    <div class="key">tani</div>
+                    <div class="val"><span style="font-family: var(--font-mono); font-size: 11.5px; background: var(--primary-soft); color: var(--teal-800); padding: 1px 5px; border-radius: 3px; margin-right: 6px;">J03.9</span>Tonsillopharyngitis acuta</div>
+                  </div>
+                </div>
+
+                <div class="field-diff">
+                  <div class="fld-head">Terapia</div>
+                  <div class="diff-row then">
+                    <div class="key">më parë</div>
+                    <div class="val">Paracetamol 250mg s.3x</div>
+                  </div>
+                  <div class="diff-row now">
+                    <div class="key">tani</div>
+                    <div class="val">Paracetamol 250mg s.3x<br>Ibuprofen susp. 100mg/5ml s.n.</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Creation event -->
+            <div class="hist-event">
+              <div class="rail"><span class="dot"></span><span class="line"></span></div>
+              <div class="body">
+                <div>
+                  <span class="who">Dr. Taulant Shala</span>
+                  <span class="when">14.05.2026 · 11:23</span>
+                  <span class="ip">94.140.•.•</span>
+                </div>
+                <div class="creation-pill">
+                  <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 1.5v9M1.5 6h9"/></svg>
+                  Krijuar (vizita e re)
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <footer>
+            <span class="lf">
+              <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="8" height="6" rx="1"/><path d="M4 5V3.5a2 2 0 0 1 4 0V5"/></svg>
+              Vetëm-lexim · ruhet sipas politikës së auditit
+            </span>
+            <button class="btn btn-secondary">Mbyll</button>
+          </footer>
+        </div>
+      </div>
+    </div>
+
+    <div class="note">
+      <span class="nt">Diff styling</span>
+      No green/red — strike-through on the old value, slight weight bump on the new.
+      Reads as a quiet "this changed", not a code review. IP appears next to the
+      timestamp in mono — clinic admins need it for audit.
+    </div>
+
+  </div>
+</section>
+
+
+<!-- ─────────────────────────────────────────── §5 VËRTETIM RE-CONFIRM ─────────────────────────────────────────── -->
+<section class="section">
+  <div class="section-head">
+    <div class="ix">§5 · Re-confirmation</div>
+    <h2>Vërtetim history stays simplified</h2>
+    <div class="sub">
+      Just confirming the earlier decision: <strong>view + reprint only</strong>.
+      No voiding, no duplicate warnings, no audit metadata exposed in the row.
+    </div>
+  </div>
+
+  <div class="reconfirm" style="margin-top: 8px;">
+    <div class="ic">
+      <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M3 9l4 4 8-8"/>
+      </svg>
+    </div>
+    <div>
+      <h3>No change needed in current mockups</h3>
+      <p>
+        The chart's <code>Vërtetim history</code> section already shows the simplified pattern:
+        one row per certificate, eye + printer icons on the right, opens the preview modal
+        with only <code>[Mbyll]</code> and <code>[Printo]</code>. No voiding flow, no warnings.
+        If anything still references the older voiding spec, defer to
+        <code>klinika-vertetim-history-simple.md</code>.
+      </p>
+    </div>
+  </div>
+
+</section>
+
+<div style="height: 80px;"></div>
+
+<style>
+  @keyframes spin { from { transform: rotate(0); } to { transform: rotate(360deg); } }
+</style>
+
+</body>
+</html>

@@ -1,0 +1,721 @@
+<!DOCTYPE html>
+<html lang="sq">
+<head>
+<meta charset="UTF-8">
+<title>Klinika — Raporti i vizitës</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="styles.css">
+<style>
+  body { background: #E7E5E4; min-height: 100vh; }
+
+  /* ====== Preview toolbar ====== */
+  .preview-bar {
+    position: sticky;
+    top: 0;
+    background: var(--bg-elevated);
+    border-bottom: 1px solid var(--border);
+    padding: 12px 24px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    z-index: 10;
+    box-shadow: var(--shadow-xs);
+  }
+  .pb-back { display: flex; align-items: center; gap: 6px; color: var(--text-muted); font-size: 13px; }
+  .pb-back:hover { color: var(--text); }
+  .pb-title {
+    font-family: var(--font-display);
+    font-size: 15px;
+    font-weight: 600;
+  }
+  .pb-sub { font-size: 12px; color: var(--text-muted); }
+  .pb-spacer { flex: 1; }
+
+  .seg-control {
+    display: inline-flex;
+    background: var(--bg-subtle);
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    padding: 3px;
+    gap: 2px;
+  }
+  .seg-control .seg {
+    padding: 5px 10px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-muted);
+    border-radius: var(--r-sm);
+    cursor: pointer;
+  }
+  .seg-control .seg.active {
+    background: var(--bg-elevated);
+    color: var(--text-strong);
+    box-shadow: var(--shadow-xs);
+  }
+  .seg-label { font-size: 11px; color: var(--text-faint); margin-right: 6px; text-transform: uppercase; letter-spacing: 0.05em; }
+
+  /* ====== Paper ====== */
+  .paper-area {
+    padding: 32px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 18px;
+  }
+
+  /* ====== US page-2 specifics ====== */
+  .us-page .doc-body { gap: 5mm; }
+  .us-notes {
+    border: 1px solid #D6D3D1;
+    border-radius: 3px;
+    padding: 4mm 5mm;
+  }
+  .us-notes .lab {
+    font-size: 7.5pt;
+    font-weight: 700;
+    color: #0F766E;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 2.5mm;
+  }
+  .us-notes .lab .full { color: #78716C; font-weight: 500; margin-left: 4px; }
+  .us-notes .body {
+    font-size: 9.5pt;
+    line-height: 1.55;
+    color: #1c1917;
+  }
+  .us-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4mm;
+  }
+  .us-cell {
+    border: 1px solid #E7E5E4;
+    border-radius: 3px;
+    padding: 2mm;
+    background: white;
+    display: flex;
+    flex-direction: column;
+    gap: 1.5mm;
+  }
+  .us-cell .img {
+    height: 38mm;
+    border-radius: 2px;
+    overflow: hidden;
+    background: #0c0a09;
+    display: grid; place-items: stretch;
+  }
+  .us-cell .img svg { width: 100%; height: 100%; display: block; }
+  .us-cell .cap {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 7pt;
+    color: #57534E;
+  }
+  .us-cell .cap strong { color: #1c1917; font-weight: 600; }
+
+  /* Compact letterhead on continuation pages */
+  .letterhead.compact {
+    padding-bottom: 4mm;
+    margin-bottom: 4mm;
+  }
+  .letterhead.compact .name { font-size: 11pt; }
+  .letterhead.compact .name .formal { font-size: 6.5pt; }
+  .letterhead.compact .lh-patient { font-size: 7pt; }
+  .page-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 7pt;
+    color: #78716C;
+    background: #F5F5F4;
+    border: 1px solid #E7E5E4;
+    padding: 1.5px 6px;
+    border-radius: 999px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+
+  /* Hide page 2 entirely when no ultrasound linked */
+  .paper.us-page { display: flex; }
+  body[data-us="none"] .paper.us-page { display: none; }
+  body[data-us="none"] .paper-area { gap: 0; }
+  .paper {
+    width: 148mm;
+    min-height: 210mm;
+    background: white;
+    box-shadow: 0 8px 24px rgba(28,25,23,0.16), 0 2px 8px rgba(28,25,23,0.08);
+    padding: 14mm 14mm 12mm;
+    font-family: 'Inter', system-ui, sans-serif;
+    font-size: 9pt;
+    color: #1c1917;
+    line-height: 1.4;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ====== Letterhead ====== */
+  .letterhead {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 16px;
+    padding-bottom: 8mm;
+    border-bottom: 2px solid #0F766E;
+    margin-bottom: 6mm;
+  }
+  .lh-clinic .name {
+    font-family: 'Inter Tight', 'Inter', sans-serif;
+    font-size: 14pt;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    color: #0F766E;
+    line-height: 1.05;
+  }
+  .lh-clinic .name .formal {
+    display: block;
+    font-size: 7.5pt;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    color: #57534E;
+    text-transform: uppercase;
+    margin-bottom: 2px;
+  }
+  .lh-clinic .meta {
+    margin-top: 5px;
+    font-size: 7.5pt;
+    color: #57534E;
+    line-height: 1.5;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .lh-patient {
+    text-align: right;
+    font-size: 7.5pt;
+    font-variant-numeric: tabular-nums;
+  }
+  .lh-patient table {
+    border-collapse: collapse;
+    margin-left: auto;
+  }
+  .lh-patient td {
+    padding: 1px 0 1px 10px;
+    text-align: right;
+  }
+  .lh-patient td.l {
+    color: #78716C;
+    font-weight: 500;
+    padding-right: 4px;
+  }
+  .lh-patient td.v { color: #1c1917; font-weight: 600; }
+
+  /* ====== Patient header ====== */
+  .pt-banner {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    margin-bottom: 5mm;
+  }
+  .pt-banner .name {
+    font-family: 'Inter Tight', sans-serif;
+    font-size: 16pt;
+    font-weight: 600;
+    letter-spacing: -0.015em;
+    line-height: 1;
+  }
+  .pt-banner .age {
+    font-size: 8.5pt;
+    color: #57534E;
+    margin-top: 3px;
+  }
+  .pt-banner .when {
+    text-align: right;
+    font-size: 8pt;
+    color: #57534E;
+    font-variant-numeric: tabular-nums;
+  }
+  .pt-banner .when strong { color: #1c1917; font-weight: 600; }
+
+  /* ====== Body ====== */
+  .doc-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 4mm;
+  }
+
+  .box {
+    border: 1px solid #D6D3D1;
+    border-radius: 3px;
+    padding: 4mm 5mm;
+  }
+  .box .lab {
+    font-size: 7.5pt;
+    font-weight: 700;
+    color: #0F766E;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 2.5mm;
+  }
+  .box .lab .full { color: #78716C; font-weight: 500; margin-left: 4px; }
+
+  .dx-list { display: flex; flex-direction: column; gap: 2mm; }
+  .dx-line {
+    display: grid;
+    grid-template-columns: 22mm 1fr;
+    gap: 6mm;
+    font-size: 10pt;
+    align-items: baseline;
+  }
+  .dx-line .code {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 600;
+    color: #0F766E;
+    font-size: 9.5pt;
+  }
+  .dx-line .desc { font-style: italic; }
+  .dx-line.primary {
+    padding-bottom: 2mm;
+    border-bottom: 1px dashed #E7E5E4;
+  }
+  .dx-line.primary .desc { font-weight: 600; font-style: normal; }
+
+  .tx-content {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9pt;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    color: #1c1917;
+  }
+  .tx-content .accent { color: #0F766E; font-weight: 600; }
+
+  /* Quick vitals strip on the report */
+  .vitals-strip {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    border: 1px solid #D6D3D1;
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  .vitals-strip .cell {
+    padding: 3mm 4mm;
+    border-right: 1px solid #E7E5E4;
+  }
+  .vitals-strip .cell:last-child { border-right: none; }
+  .vitals-strip .l {
+    font-size: 7pt;
+    color: #78716C;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-weight: 500;
+  }
+  .vitals-strip .v {
+    font-family: 'Inter Tight', sans-serif;
+    font-size: 11pt;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    margin-top: 1mm;
+  }
+  .vitals-strip .v .u { font-size: 8pt; color: #78716C; font-weight: 400; margin-left: 1px; }
+
+  /* Allergy alert — same prominence as on-screen. Renders only when populated. */
+  .alg-alert {
+    display: flex;
+    align-items: center;
+    gap: 3mm;
+    padding: 2.5mm 4mm;
+    background: #FEF3C7;
+    border: 1px solid #FDE68A;
+    border-left: 3px solid #B45309;
+    border-radius: 3px;
+    font-size: 9pt;
+    color: #78350F;
+    line-height: 1.35;
+    page-break-inside: avoid;
+  }
+  .alg-alert .alg-icon {
+    flex: 0 0 auto;
+    width: 4mm; height: 4mm;
+    border-radius: 999px;
+    background: #B45309;
+    color: white;
+    display: grid; place-items: center;
+    font-size: 7pt;
+    font-weight: 700;
+    line-height: 1;
+  }
+  .alg-alert .alg-lab {
+    font-size: 7.5pt;
+    font-weight: 700;
+    color: #B45309;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+  .alg-alert .alg-val { font-weight: 600; }
+
+  /* ====== Footer (signature + stamp) ====== */
+  .doc-footer {
+    margin-top: auto;
+    padding-top: 8mm;
+    display: grid;
+    grid-template-columns: 1fr 50mm;
+    gap: 10mm;
+    align-items: flex-end;
+  }
+  .sig-col { font-size: 8.5pt; }
+  .sig-col .sig-img {
+    height: 16mm;
+    margin-bottom: 2mm;
+    color: #1c1917;
+  }
+  .sig-col .sig-line {
+    border-top: 1px solid #1c1917;
+    padding-top: 1.5mm;
+    width: 50mm;
+  }
+  .sig-col .name { font-weight: 600; font-size: 9pt; }
+  .sig-col .cred { color: #57534E; font-size: 8pt; }
+  .sig-col .date { color: #57534E; font-size: 8pt; margin-top: 5mm; font-variant-numeric: tabular-nums; }
+
+  .stamp-area {
+    height: 50mm;
+    border: 1px dashed #D6D3D1;
+    border-radius: 3px;
+    display: grid;
+    place-items: center;
+    color: #A8A29E;
+    font-size: 8pt;
+    text-align: center;
+    background: repeating-linear-gradient(45deg, transparent 0, transparent 8px, rgba(28,25,23,0.015) 8px, rgba(28,25,23,0.015) 9px);
+  }
+  .stamp-area .lab {
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-weight: 500;
+  }
+  .stamp-area .sub {
+    font-size: 7pt;
+    color: #C4C0BC;
+    margin-top: 2mm;
+    font-style: italic;
+  }
+
+  /* ====== Print rules ====== */
+  @page {
+    size: A5 portrait;
+    margin: 0;
+  }
+  @media print {
+    body { background: white; }
+    .preview-bar { display: none; }
+    .paper-area { padding: 0; }
+    .paper { box-shadow: none; width: 148mm; min-height: 210mm; padding: 14mm 14mm 12mm; margin: 0; }
+    .stamp-area { border: none; background: none; }
+    .stamp-area .lab, .stamp-area .sub { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Preview toolbar -->
+<div class="preview-bar">
+  <a href="chart.html" class="pb-back btn btn-ghost btn-sm">← Kthehu</a>
+  <div>
+    <div class="pb-title">Raporti i vizitës</div>
+    <div class="pb-sub">Era Krasniqi · 14.05.2026 · A5</div>
+  </div>
+  <div class="pb-spacer"></div>
+
+  <div style="display: flex; align-items: center; gap: 12px;">
+    <span class="seg-label">Ultrazëri</span>
+    <div class="seg-control">
+      <span class="seg active" onclick="setUs('with', this)">Me 4 imazhe</span>
+      <span class="seg" onclick="setUs('none', this)">Pa ultrazër</span>
+    </div>
+  </div>
+
+  <div style="display: flex; align-items: center; gap: 12px;">
+    <span class="seg-label">Nënshkrimi</span>
+    <div class="seg-control">
+      <span class="seg active">Skanuar</span>
+      <span class="seg">Manual</span>
+    </div>
+  </div>
+  <div style="display: flex; align-items: center; gap: 12px;">
+    <span class="seg-label">Zmadhim</span>
+    <div class="seg-control">
+      <span class="seg">75%</span>
+      <span class="seg active">100%</span>
+      <span class="seg">150%</span>
+    </div>
+  </div>
+
+  <button class="btn btn-secondary btn-sm">PDF</button>
+  <button class="btn btn-primary btn-sm" onclick="window.print()">Printo</button>
+</div>
+
+<!-- Paper -->
+<div class="paper-area">
+  <article class="paper">
+
+    <!-- Letterhead -->
+    <header class="letterhead">
+      <div class="lh-clinic">
+        <div class="name">
+          <span class="formal">Ambulanca Specialistike Pediatrike</span>
+          DONETA-med
+        </div>
+        <div class="meta">
+          Rr. Adem Jashari, Prizren, Kosovë<br>
+          045 83 00 83 · 043 543 123 · 10:00 – 18:00
+        </div>
+      </div>
+      <div class="lh-patient">
+        <table>
+          <tr><td class="l">Kod · ID</td><td class="v"><span style="font-family: 'Inter Tight', sans-serif; font-weight:700; color:#0F766E;">A</span> · 15626</td></tr>
+          <tr><td class="l">DL</td><td class="v">03.08.2023</td></tr>
+          <tr><td class="l">Vendi</td><td class="v">Prizren</td></tr>
+          <tr><td class="l">Pesha lindjes</td><td class="v">3 280 g</td></tr>
+          <tr><td class="l">Gjat. lindjes</td><td class="v">51 cm</td></tr>
+          <tr><td class="l">PK lindjes</td><td class="v">34 cm</td></tr>
+        </table>
+      </div>
+    </header>
+
+    <!-- Patient banner -->
+    <div class="pt-banner">
+      <div>
+        <div class="name">Era Krasniqi</div>
+        <div class="age">vajzë · 2 vjeç 9 muaj</div>
+      </div>
+      <div class="when">
+        <div><strong>14.05.2026</strong></div>
+        <div>Vizita 5 nga 5 · 14:20</div>
+      </div>
+    </div>
+
+    <!-- Alergji / Tjera is OMITTED from visit reports per canonical visibility table.
+         It is an internal-only doctor field and never appears on any printed document. -->
+
+    <!-- Vitals -->
+    <div class="vitals-strip">
+      <div class="cell">
+        <div class="l">Pesha</div>
+        <div class="v">13.6<span class="u">kg</span></div>
+      </div>
+      <div class="cell">
+        <div class="l">Gjatësia</div>
+        <div class="v">92<span class="u">cm</span></div>
+      </div>
+      <div class="cell">
+        <div class="l">PK</div>
+        <div class="v">48.2<span class="u">cm</span></div>
+      </div>
+      <div class="cell">
+        <div class="l">Temp.</div>
+        <div class="v">37.2<span class="u">°C</span></div>
+      </div>
+    </div>
+
+    <!-- Body -->
+    <div class="doc-body">
+      <div class="box">
+        <div class="lab">Dg <span class="full">· Diagnoza</span></div>
+        <div class="dx-list">
+          <div class="dx-line primary">
+            <span class="code">J03.9</span>
+            <span class="desc">Tonsillitis acuta</span>
+          </div>
+          <div class="dx-line">
+            <span class="code">R05</span>
+            <span class="desc">Tussis</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="box">
+        <div class="lab">Th <span class="full">· Terapia</span></div>
+<div class="tx-content">Spray.Axxa 2× në ditë, 5 ditë
+Ibuprofen susp. 100mg/5ml — 5ml × 3, p.r.n.
+Pi shumë lëngje. Pushim.
+<span class="accent">>rez.</span> nëse vazhdon mbi 5 ditë</div>
+      </div>
+
+      <!-- Tjera and Kontrolla are internal-only clinical notes.
+           Never rendered on print — visible only in the doctor's chart view.
+           See field-visibility table in the spec for full canonical reference. -->
+    </div>
+
+    <!-- Footer -->
+    <footer class="doc-footer">
+      <div class="sig-col">
+        <!-- Scanned signature -->
+        <svg class="sig-img" viewBox="0 0 200 60" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M 8 42 Q 15 18 32 26 Q 42 32 36 42 Q 28 50 38 38 Q 50 24 64 36 Q 72 44 80 30 Q 90 14 100 28 Q 108 38 118 26 Q 130 12 144 30 Q 152 42 160 30 L 178 14"
+                opacity="0.85"/>
+          <path d="M 22 48 L 156 48" stroke-width="0.8" opacity="0.3"/>
+        </svg>
+        <div class="sig-line"></div>
+        <div class="name">Dr. Taulant Shala</div>
+        <div class="cred">pediatër · DonetaMED</div>
+        <div class="date">14.05.2026 · Prizren</div>
+      </div>
+
+      <div class="stamp-area">
+        <div>
+          <div class="lab">Vendi i vulës</div>
+          <div class="sub">vendoset manualisht</div>
+        </div>
+      </div>
+    </footer>
+  </article>
+
+  <!-- ===================================================
+       Page 2 — Ultrasound (only renders when linked).
+       Toggle in preview toolbar drives data-us on <body>.
+       =================================================== -->
+  <article class="paper us-page">
+    <!-- Compact letterhead repeats for continuity — each printed page is
+         independently signed/stamped per Kosovo practice. -->
+    <header class="letterhead compact">
+      <div class="lh-clinic">
+        <div class="name">
+          <span class="formal">Ambulanca Specialistike Pediatrike</span>
+          DONETA-med
+        </div>
+        <div class="meta">
+          Era Krasniqi · ID 15626 · 14.05.2026
+        </div>
+      </div>
+      <div class="lh-patient" style="display:flex; align-items:flex-end;">
+        <span class="page-tag">Faqe 2 · Ultrazëri</span>
+      </div>
+    </header>
+
+    <div class="doc-body">
+      <!-- Free-text findings come first — they are the clinical content,
+           the images are evidence beneath them. -->
+      <div class="us-notes">
+        <div class="lab">US <span class="full">· Gjetjet e ultrazërit</span></div>
+        <div class="body">
+          Abdomen pa peshtjellim. Mëlqia me strukt. homogjene, EV pa dilatim.
+          Bilateral renal: dim. në normë, pa kalcifikate ose dilatim të sistemit
+          kupoplikatorial. Tëshi i frytë pa veshje. <em>Konkluzion:</em>
+          gjetje të rregullta për moshën.
+        </div>
+      </div>
+
+      <!-- 2×2 image grid — up to 4 images per A5. Heuristic: study has
+           >4 → first 4 in DICOM order; no image-picker in v1. -->
+      <div class="us-grid">
+        <div class="us-cell">
+          <div class="img">
+            <svg viewBox="0 0 200 100" preserveAspectRatio="xMidYMid slice">
+              <rect width="200" height="100" fill="#0c0a09"/>
+              <path d="M 100 5 L 195 95 L 5 95 Z" fill="#161311"/>
+              <ellipse cx="100" cy="60" rx="42" ry="22" fill="#27241f"/>
+              <ellipse cx="88" cy="58" rx="14" ry="8" fill="#3a342c"/>
+              <circle cx="112" cy="63" r="5" fill="#4a4338"/>
+              <text x="8" y="12" fill="#a8a29e" font-family="JetBrains Mono, monospace" font-size="6">DM-15626 / US ABD</text>
+              <text x="160" y="12" fill="#a8a29e" font-family="JetBrains Mono, monospace" font-size="6">14.05.26</text>
+            </svg>
+          </div>
+          <div class="cap"><strong>Imazh 1</strong><span>Mëlqia · long.</span></div>
+        </div>
+
+        <div class="us-cell">
+          <div class="img">
+            <svg viewBox="0 0 200 100" preserveAspectRatio="xMidYMid slice">
+              <rect width="200" height="100" fill="#0c0a09"/>
+              <path d="M 100 5 L 195 95 L 5 95 Z" fill="#161311"/>
+              <ellipse cx="100" cy="55" rx="36" ry="24" fill="#27241f"/>
+              <ellipse cx="100" cy="55" rx="18" ry="12" fill="#36302a"/>
+              <ellipse cx="100" cy="55" rx="6" ry="4" fill="#4a4338"/>
+              <text x="8" y="12" fill="#a8a29e" font-family="JetBrains Mono, monospace" font-size="6">DM-15626 / US ABD</text>
+              <text x="160" y="12" fill="#a8a29e" font-family="JetBrains Mono, monospace" font-size="6">14.05.26</text>
+            </svg>
+          </div>
+          <div class="cap"><strong>Imazh 2</strong><span>Veshkë dj. trans.</span></div>
+        </div>
+
+        <div class="us-cell">
+          <div class="img">
+            <svg viewBox="0 0 200 100" preserveAspectRatio="xMidYMid slice">
+              <rect width="200" height="100" fill="#0c0a09"/>
+              <path d="M 100 5 L 195 95 L 5 95 Z" fill="#161311"/>
+              <ellipse cx="90" cy="60" rx="22" ry="34" fill="#27241f"/>
+              <ellipse cx="90" cy="60" rx="11" ry="20" fill="#36302a"/>
+              <path d="M 70 90 Q 100 78 130 88" stroke="#4a4338" stroke-width="0.6" fill="none"/>
+              <text x="8" y="12" fill="#a8a29e" font-family="JetBrains Mono, monospace" font-size="6">DM-15626 / US ABD</text>
+              <text x="160" y="12" fill="#a8a29e" font-family="JetBrains Mono, monospace" font-size="6">14.05.26</text>
+            </svg>
+          </div>
+          <div class="cap"><strong>Imazh 3</strong><span>Veshkë maj. long.</span></div>
+        </div>
+
+        <div class="us-cell">
+          <div class="img">
+            <svg viewBox="0 0 200 100" preserveAspectRatio="xMidYMid slice">
+              <rect width="200" height="100" fill="#0c0a09"/>
+              <path d="M 100 5 L 195 95 L 5 95 Z" fill="#161311"/>
+              <ellipse cx="105" cy="60" rx="34" ry="18" fill="#27241f"/>
+              <ellipse cx="100" cy="60" rx="8" ry="5" fill="#3a342c"/>
+              <ellipse cx="118" cy="63" rx="5" ry="3" fill="#4a4338"/>
+              <text x="8" y="12" fill="#a8a29e" font-family="JetBrains Mono, monospace" font-size="6">DM-15626 / US ABD</text>
+              <text x="160" y="12" fill="#a8a29e" font-family="JetBrains Mono, monospace" font-size="6">14.05.26</text>
+            </svg>
+          </div>
+          <div class="cap"><strong>Imazh 4</strong><span>Tëshi i frytë</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Each printed page is independently signed/stamped — Kosovo practice. -->
+    <footer class="doc-footer">
+      <div class="sig-col">
+        <svg class="sig-img" viewBox="0 0 200 60" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M 8 42 Q 15 18 32 26 Q 42 32 36 42 Q 28 50 38 38 Q 50 24 64 36 Q 72 44 80 30 Q 90 14 100 28 Q 108 38 118 26 Q 130 12 144 30 Q 152 42 160 30 L 178 14"
+                opacity="0.85"/>
+          <path d="M 22 48 L 156 48" stroke-width="0.8" opacity="0.3"/>
+        </svg>
+        <div class="sig-line"></div>
+        <div class="name">Dr. Taulant Shala</div>
+        <div class="cred">pediatër · DonetaMED</div>
+        <div class="date">14.05.2026 · Prizren</div>
+      </div>
+      <div class="stamp-area">
+        <div>
+          <div class="lab">Vendi i vulës</div>
+          <div class="sub">vendoset manualisht</div>
+        </div>
+      </div>
+    </footer>
+  </article>
+</div>
+
+<script>
+  // Page-2 ultrasound visibility — default "with". A real visit would
+  // read this off the visit record; the toggle in the preview bar lets
+  // reviewers compare "with US" vs "without US" without leaving the file.
+  function setUs(state, btn) {
+    document.body.dataset.us = state;
+    if (btn) {
+      btn.parentElement.querySelectorAll('.seg').forEach(s => s.classList.remove('active'));
+      btn.classList.add('active');
+    }
+  }
+  document.body.dataset.us = 'with';
+
+  // Auto-print when arriving with ?print=1 (from chart.html "Printo raportin")
+  if (new URLSearchParams(location.search).get('print') === '1') {
+    window.addEventListener('load', () => {
+      setTimeout(() => window.print(), 250);
+    });
+  }
+</script>
+
+</body>
+</html>

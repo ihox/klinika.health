@@ -1,0 +1,2167 @@
+<!DOCTYPE html>
+<html lang="sq">
+<head>
+<meta charset="UTF-8">
+<title>Klinika — Kalendari</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="styles.css">
+<style>
+  /* ---- Stats cards ---- */
+  .stats-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 20px;
+  }
+  .stat-card {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: var(--r-lg);
+    padding: 18px 20px;
+    box-shadow: var(--shadow-xs);
+  }
+  .stat-card.accent { border-color: var(--teal-200); background: linear-gradient(180deg, var(--primary-tint) 0%, var(--bg-elevated) 60%); }
+  .stat-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-muted);
+    font-weight: 500;
+    margin-bottom: 8px;
+  }
+  .stat-row { display: flex; align-items: baseline; gap: 16px; }
+  .stat-num {
+    font-family: var(--font-display);
+    font-size: 36px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    line-height: 1;
+  }
+  .stat-sub { font-size: 13px; color: var(--text-muted); }
+  .stat-foot {
+    margin-top: 14px;
+    font-size: 12px;
+    color: var(--text-muted);
+    display: flex;
+    gap: 16px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+  }
+  .stat-foot strong { color: var(--text); font-weight: 600; }
+
+  .next-card { display: flex; align-items: center; justify-content: space-between; }
+  .next-info .name { font-family: var(--font-display); font-size: 22px; font-weight: 600; letter-spacing: -0.015em; }
+  .next-info .meta { font-size: 13px; color: var(--text-muted); margin-top: 2px; }
+  .next-time {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+  .next-time .clock {
+    font-family: var(--font-display);
+    font-size: 28px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+  }
+  .next-time .countdown {
+    font-size: 12px;
+    color: var(--primary-dark);
+    background: var(--primary-soft);
+    padding: 2px 8px;
+    border-radius: 999px;
+    margin-top: 4px;
+    font-weight: 500;
+  }
+
+  /* ---- Calendar ---- */
+  .cal-card { background: var(--bg-elevated); border: 1px solid var(--border); border-radius: var(--r-lg); overflow: hidden; box-shadow: var(--shadow-xs); }
+
+  .cal-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-elevated);
+  }
+  .cal-range {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .cal-range .title {
+    font-family: var(--font-display);
+    font-size: 17px;
+    font-weight: 600;
+    letter-spacing: -0.015em;
+  }
+  .cal-range .nav-btn {
+    width: 32px; height: 32px;
+    border-radius: var(--r-sm);
+    border: 1px solid var(--border-strong);
+    background: var(--bg-elevated);
+    color: var(--text-muted);
+    display: grid; place-items: center;
+    transition: all 150ms ease;
+  }
+  .cal-range .nav-btn:hover { background: var(--bg-subtle); color: var(--text); }
+  .cal-toolbar .right-tools { display: flex; gap: 8px; align-items: center; }
+
+  /* Search field above calendar */
+  .quick-search {
+    margin: 16px 20px 0;
+    position: relative;
+  }
+  .quick-search input {
+    width: 100%;
+    padding: 11px 14px 11px 40px;
+    border-radius: var(--r-md);
+    border: 1px solid var(--border-strong);
+    background: var(--bg-elevated);
+    font-size: 14px;
+    outline: none;
+    transition: all 150ms ease;
+  }
+  .quick-search input:focus { border-color: var(--primary); box-shadow: var(--focus-ring); }
+  .quick-search .icon {
+    position: absolute;
+    left: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-faint);
+  }
+  .quick-search .kbd-hint {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 11px;
+    color: var(--text-faint);
+    display: flex;
+    gap: 4px;
+  }
+
+  /* Calendar grid */
+  .cal-grid {
+    display: grid;
+    grid-template-columns: 56px repeat(6, 1fr);
+    border-top: 1px solid var(--border);
+    margin-top: 16px;
+  }
+  .cal-head { background: var(--bg-subtle); }
+  .cal-head .col-head {
+    padding: 10px 12px;
+    text-align: left;
+    border-right: 1px solid var(--border);
+    font-variant-numeric: tabular-nums;
+  }
+  .cal-head .col-head:last-child { border-right: none; }
+  .cal-head .col-head .dow {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-muted);
+    font-weight: 500;
+  }
+  .cal-head .col-head .date {
+    font-family: var(--font-display);
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--text);
+    margin-top: 2px;
+  }
+  .cal-head .col-head.today .dow { color: var(--primary-dark); }
+  .cal-head .col-head.today .date { color: var(--primary-dark); }
+  .cal-head .time-col-head { background: var(--bg-subtle); border-right: 1px solid var(--border); }
+
+  .cal-body { display: contents; }
+
+  .time-axis {
+    border-right: 1px solid var(--border);
+    position: relative;
+  }
+  .time-axis .hour {
+    height: 120px; /* 120px per hour = 2px per minute */
+    position: relative;
+    border-top: 1.5px solid var(--border-strong);
+  }
+  .time-axis .hour:first-child { border-top: none; }
+  .time-axis .hour .label {
+    position: absolute;
+    top: -7px;
+    right: 8px;
+    font-size: 11px;
+    color: var(--text-faint);
+    font-variant-numeric: tabular-nums;
+    background: var(--bg-elevated);
+    padding: 0 4px;
+  }
+  .time-axis .hour:first-child .label { top: 4px; }
+
+  .day-col {
+    position: relative;
+    border-right: 1px solid var(--border);
+    background:
+      /* 10-min faint divisions */
+      repeating-linear-gradient(
+        to bottom,
+        transparent 0,
+        transparent 19px,
+        var(--border-soft) 19px,
+        var(--border-soft) 20px
+      ),
+      /* hour line — bolder */
+      repeating-linear-gradient(
+        to bottom,
+        transparent 0,
+        transparent 118px,
+        var(--border-strong) 118px,
+        var(--border-strong) 120px
+      );
+  }
+  .day-col:last-child { border-right: none; }
+  .day-col.today { background-color: rgba(204,251,241,0.18); background-blend-mode: multiply; }
+
+  .appt {
+    position: absolute;
+    left: 6px;
+    right: 6px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--teal-200);
+    border-left: 3px solid var(--primary);
+    border-radius: var(--r-sm);
+    padding: 3px 7px;
+    box-shadow: var(--shadow-xs);
+    overflow: hidden;
+    cursor: pointer;
+    transition: transform 120ms ease, box-shadow 120ms ease, opacity 120ms ease;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    user-select: none;
+  }
+  .appt:hover { transform: translateY(-1px); box-shadow: var(--shadow-sm); z-index: 5; }
+  /* Future appts are draggable */
+  .appt:not(.completed):not(.noshow) { cursor: grab; }
+  .appt:not(.completed):not(.noshow):active { cursor: grabbing; }
+  .appt.is-dragging { opacity: 0.35; transform: scale(0.98); }
+
+  /* Drop preview ghost on the target column */
+  .drop-preview {
+    position: absolute;
+    left: 6px; right: 6px;
+    background: var(--teal-50);
+    border: 1.5px solid var(--primary);
+    border-radius: var(--r-sm);
+    color: var(--primary-dark);
+    font-size: 10.5px;
+    font-weight: 500;
+    padding: 3px 7px;
+    display: none;
+    align-items: center;
+    gap: 5px;
+    pointer-events: none;
+    z-index: 4;
+    box-shadow: 0 2px 8px rgba(13,148,136,0.15);
+    font-variant-numeric: tabular-nums;
+  }
+  .drop-preview.show { display: flex; }
+  .drop-preview.invalid {
+    background: var(--red-bg);
+    border-color: var(--red);
+    color: var(--red);
+  }
+  .appt .name {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-size: 11.5px;
+    font-weight: 600;
+    color: var(--text-strong);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.15;
+  }
+  .appt .meta {
+    flex: 0 0 auto;
+    font-size: 10.5px;
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+    display: none;
+    align-items: center;
+    gap: 4px;
+    line-height: 1.1;
+    white-space: nowrap;
+  }
+  .appt:hover .meta { display: flex; }
+  .appt .meta .dot { width: 5px; height: 5px; border-radius: 999px; }
+
+  .appt.completed {
+    background: var(--green-bg);
+    border-color: var(--green-soft);
+    border-left-color: var(--green);
+    opacity: 0.85;
+  }
+  .appt.completed .name { color: var(--green); }
+  .appt.completed .meta::before { content: '✓'; color: var(--green); font-weight: 700; margin-right: 2px; }
+
+  .appt.noshow {
+    background: var(--bg-elevated);
+    border: 1px dashed var(--red-soft);
+    border-left: 3px solid var(--red);
+    opacity: 0.7;
+  }
+  .appt.noshow .name { color: var(--red); text-decoration: line-through; text-decoration-thickness: 1px; }
+  .appt.noshow .meta::before { content: 'MS'; background: var(--red-bg); color: var(--red); font-size: 9px; padding: 1px 4px; border-radius: 3px; font-weight: 700; margin-right: 4px; }
+
+  .appt.scheduled-warm {
+    border-left-color: var(--accent-500);
+    border-color: #FED7AA;
+  }
+
+  /* Now line */
+  .now-line {
+    position: absolute;
+    left: -2px;
+    right: 0;
+    height: 2px;
+    background: var(--primary);
+    z-index: 10;
+    pointer-events: none;
+  }
+  .now-line::before {
+    content: '';
+    position: absolute;
+    left: -4px;
+    top: -4px;
+    width: 10px;
+    height: 10px;
+    background: var(--primary);
+    border-radius: 999px;
+    box-shadow: 0 0 0 2px var(--bg-elevated);
+  }
+  .now-line::after {
+    content: attr(data-time);
+    position: absolute;
+    left: -56px;
+    top: -8px;
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--primary);
+    background: var(--bg-elevated);
+    padding: 1px 4px;
+    border-radius: 3px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Empty slot hover */
+  .slot-marker {
+    position: absolute;
+    left: 6px; right: 6px;
+    border: 1px dashed var(--teal-300);
+    background: rgba(204,251,241,0.5);
+    border-radius: var(--r-sm);
+    color: var(--primary-dark);
+    font-size: 11px;
+    padding: 4px 6px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+    z-index: 3;
+    transition: background 120ms ease, border-color 120ms ease, transform 120ms ease;
+  }
+  .slot-marker:hover {
+    background: var(--teal-100);
+    border-color: var(--teal-500);
+    border-style: solid;
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-xs);
+  }
+
+  /* ===========================================================
+     Universal tappable empty cells + hover ghost
+     =========================================================== */
+  /* Closed-hours band inside a day (lunch break / split shift) — driven by
+     clinic settings. Renders as a thin striped "Mbyllur" overlay so the
+     receptionist can see where the day is closed without trying to book
+     into the gap. */
+  .closed-band {
+    position: absolute;
+    left: 0;
+    right: 0;
+    background:
+      repeating-linear-gradient(
+        135deg,
+        transparent 0,
+        transparent 6px,
+        rgba(28,25,23,0.04) 6px,
+        rgba(28,25,23,0.04) 7px
+      ),
+      var(--bg-subtle);
+    border-top: 1px dashed var(--border-strong);
+    border-bottom: 1px dashed var(--border-strong);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    color: var(--text-faint);
+    font-size: 10.5px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    pointer-events: none;
+    z-index: 1;
+  }
+  .closed-band .lab {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    color: var(--text-muted);
+    letter-spacing: 0.06em;
+  }
+  .day-col {
+    cursor: pointer;
+  }
+  .day-col.closed {
+    cursor: not-allowed;
+    background: var(--bg-subtle);
+    background-image: repeating-linear-gradient(
+      135deg,
+      transparent 0,
+      transparent 6px,
+      rgba(0,0,0,0.025) 6px,
+      rgba(0,0,0,0.025) 7px
+    );
+  }
+  .ghost-slot {
+    position: absolute;
+    left: 6px; right: 6px;
+    border: 1px dashed var(--teal-400);
+    background: rgba(204,251,241,0.55);
+    border-radius: var(--r-sm);
+    color: var(--primary-dark);
+    font-size: 11px;
+    font-weight: 500;
+    padding: 3px 6px;
+    display: none;
+    align-items: center;
+    gap: 5px;
+    pointer-events: none;
+    z-index: 2;
+    box-shadow: 0 1px 2px rgba(13,148,136,0.08);
+    font-variant-numeric: tabular-nums;
+  }
+  .ghost-slot .plus {
+    width: 14px; height: 14px;
+    border-radius: 3px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--teal-300);
+    display: grid; place-items: center;
+    font-weight: 700;
+    color: var(--primary);
+    font-size: 12px;
+    line-height: 1;
+  }
+  .ghost-slot.show { display: flex; }
+  .day-col.flash {
+    animation: cellFlash 320ms ease-out;
+  }
+  @keyframes cellFlash {
+    0% { background-color: rgba(13,148,136,0.18); }
+    100% { background-color: transparent; }
+  }
+
+  /* ===========================================================
+     Patient-picker popover (anchored to slot)
+     =========================================================== */
+  .picker-popover {
+    position: fixed;
+    width: 320px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: var(--r-lg);
+    box-shadow: 0 18px 48px rgba(28,25,23,0.22), 0 2px 6px rgba(28,25,23,0.08);
+    z-index: 90;
+    overflow: hidden;
+    display: none;
+    flex-direction: column;
+    animation: ppIn 140ms ease-out;
+  }
+  .picker-popover.open { display: flex; }
+  @keyframes ppIn {
+    from { opacity: 0; transform: translateY(-4px) scale(0.98); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+  }
+  .pp-header {
+    display: flex; align-items: flex-start; justify-content: space-between;
+    gap: 10px;
+    padding: 12px 14px 10px;
+    border-bottom: 1px solid var(--border-soft);
+    background: var(--bg-subtle);
+  }
+  .pp-context .eyebrow {
+    font-family: var(--font-mono); font-size: 10px;
+    color: var(--text-muted); letter-spacing: 0.06em;
+    text-transform: uppercase; margin-bottom: 2px;
+  }
+  .pp-context .ctx {
+    font-family: var(--font-display); font-size: 13.5px; font-weight: 600;
+    color: var(--text-strong); letter-spacing: -0.005em;
+    font-variant-numeric: tabular-nums;
+  }
+  .pp-close {
+    border: none; background: transparent;
+    width: 24px; height: 24px; border-radius: 4px;
+    font-size: 18px; line-height: 1;
+    color: var(--text-muted); cursor: pointer;
+    display: grid; place-items: center;
+    flex-shrink: 0;
+  }
+  .pp-close:hover { background: var(--bg-muted); color: var(--text); }
+
+  .pp-search {
+    padding: 10px 12px;
+    position: relative;
+    border-bottom: 1px solid var(--border-soft);
+  }
+  .pp-search .icon {
+    position: absolute;
+    left: 22px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-faint);
+  }
+  .pp-search input {
+    width: 100%;
+    padding: 8px 10px 8px 32px;
+    font-size: 13px;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--r-md);
+    background: var(--bg);
+    outline: none;
+    transition: all 120ms ease;
+  }
+  .pp-search input:focus { border-color: var(--primary); box-shadow: var(--focus-ring); }
+
+  .pp-results {
+    max-height: 220px;
+    overflow-y: auto;
+    padding: 4px 0;
+  }
+  .pp-result {
+    padding: 8px 14px;
+    display: flex; align-items: center; justify-content: space-between;
+    cursor: pointer;
+    transition: background 100ms ease;
+  }
+  .pp-result:hover, .pp-result.focused { background: var(--bg-subtle); }
+  .pp-result .name { font-size: 13px; font-weight: 600; color: var(--text-strong); }
+  .pp-result .dob { font-size: 11.5px; color: var(--text-muted); font-variant-numeric: tabular-nums; margin-top: 1px; }
+  .pp-result .visits {
+    font-size: 10px;
+    color: var(--text-muted);
+    padding: 2px 6px;
+    background: var(--bg-subtle);
+    border-radius: 3px;
+    font-variant-numeric: tabular-nums;
+    flex-shrink: 0;
+  }
+  .pp-empty {
+    padding: 16px 14px;
+    text-align: center;
+    color: var(--text-faint);
+    font-size: 12px;
+    font-style: italic;
+  }
+  .pp-add {
+    padding: 10px 14px;
+    background: var(--bg-subtle);
+    border-top: 1px solid var(--border);
+    color: var(--primary-dark);
+    font-size: 12.5px;
+    font-weight: 500;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: background 120ms ease;
+  }
+  .pp-add:hover { background: var(--primary-soft); }
+  .pp-add .plus {
+    width: 18px; height: 18px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--teal-300);
+    border-radius: 4px;
+    display: grid; place-items: center;
+    color: var(--primary);
+    font-weight: 700;
+    font-size: 13px;
+    line-height: 1;
+  }
+  .pp-add .query { color: var(--text-strong); }
+
+  /* Time select placeholder styling */
+  .bm-field select.select.is-empty {
+    color: var(--text-faint);
+  }
+  .bm-field select.select option:disabled {
+    color: var(--text-faint);
+    font-style: italic;
+  }
+
+  /* ===========================================================
+     Booking dialog
+     =========================================================== */
+  .booking-backdrop {
+    position: fixed; inset: 0;
+    background: rgba(28,25,23,0.45);
+    backdrop-filter: blur(2px);
+    display: none;
+    align-items: center; justify-content: center;
+    z-index: 100;
+    padding: 24px;
+  }
+  .booking-backdrop.open { display: flex; }
+  .booking-modal {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: var(--r-lg);
+    box-shadow: 0 24px 64px rgba(28,25,23,0.28), 0 4px 12px rgba(28,25,23,0.12);
+    width: 100%; max-width: 520px;
+    overflow: hidden;
+    animation: bmIn 180ms ease-out;
+    display: flex; flex-direction: column;
+  }
+  @keyframes bmIn {
+    from { opacity: 0; transform: translateY(10px) scale(0.98); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+  }
+  .booking-modal > header {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 12px;
+    padding: 18px 22px 14px;
+    border-bottom: 1px solid var(--border-soft);
+  }
+  .booking-modal h3 {
+    font-family: var(--font-display); font-size: 17px; font-weight: 600;
+    letter-spacing: -0.01em; color: var(--text-strong); margin: 0;
+  }
+  .bm-close {
+    border: none; background: transparent;
+    width: 32px; height: 32px; border-radius: 6px;
+    font-size: 22px; line-height: 1;
+    color: var(--text-muted); cursor: pointer;
+    display: grid; place-items: center;
+  }
+  .bm-close:hover { background: var(--bg-subtle); color: var(--text); }
+
+  .bm-body { padding: 18px 22px 4px; display: grid; gap: 18px; }
+
+  /* Patient confirmation row */
+  .bm-patient {
+    background: var(--bg-subtle);
+    border: 1px solid var(--border-soft);
+    border-radius: var(--r-md);
+    padding: 12px 14px;
+  }
+  .bm-pat-eyebrow {
+    font-family: var(--font-mono); font-size: 10.5px;
+    color: var(--text-muted); letter-spacing: 0.06em;
+    text-transform: uppercase; margin-bottom: 6px;
+  }
+  .bm-pat-row { display: flex; align-items: center; gap: 12px; }
+  .bm-pat-avatar {
+    width: 38px; height: 38px;
+    border-radius: 999px;
+    background: var(--teal-700); color: white;
+    display: grid; place-items: center;
+    font-family: var(--font-display); font-weight: 600; font-size: 14px;
+  }
+  .bm-pat-name {
+    font-family: var(--font-display); font-size: 15px; font-weight: 600;
+    color: var(--text-strong); letter-spacing: -0.005em;
+  }
+  .bm-pat-meta {
+    font-size: 12px; color: var(--text-muted);
+    font-variant-numeric: tabular-nums; margin-top: 1px;
+  }
+
+  /* Date / time row */
+  .bm-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .bm-field { display: flex; flex-direction: column; gap: 5px; }
+  .bm-field > span {
+    font-family: var(--font-mono); font-size: 10.5px;
+    color: var(--text-muted); letter-spacing: 0.06em; text-transform: uppercase;
+  }
+  .bm-field input.input, .bm-field select.select {
+    font-variant-numeric: tabular-nums;
+    padding: 10px 12px;
+    font-size: 14px;
+  }
+
+  /* Duration selector */
+  .bm-dur .bm-dur-label {
+    font-family: var(--font-mono); font-size: 10.5px;
+    color: var(--text-muted); letter-spacing: 0.06em; text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+  .bm-dur-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+  }
+  .dur-card {
+    appearance: none;
+    background: var(--bg-elevated);
+    border: 1.5px solid var(--border-strong);
+    border-radius: var(--r-md);
+    padding: 14px 16px;
+    min-height: 64px;
+    display: flex; align-items: center; justify-content: space-between;
+    cursor: pointer;
+    font-family: var(--font-ui);
+    color: var(--text);
+    transition: all 130ms ease;
+    text-align: left;
+  }
+  .dur-card:hover:not(:disabled):not(.is-selected) {
+    border-color: var(--teal-300);
+    background: var(--teal-50);
+  }
+  .dur-card .dur-num {
+    font-family: var(--font-display); font-size: 22px; font-weight: 600;
+    letter-spacing: -0.015em; color: var(--text-strong);
+    font-variant-numeric: tabular-nums;
+  }
+  .dur-card .dur-num span {
+    font-family: var(--font-ui); font-size: 13px; font-weight: 500;
+    color: var(--text-muted); margin-left: 4px;
+    letter-spacing: 0;
+  }
+  .dur-card .dur-radio {
+    width: 22px; height: 22px;
+    border-radius: 999px;
+    border: 1.5px solid var(--border-strong);
+    background: var(--bg-elevated);
+    flex-shrink: 0;
+    position: relative;
+    transition: all 130ms ease;
+  }
+  .dur-card.is-selected {
+    border-color: var(--primary);
+    background: var(--teal-50);
+  }
+  .dur-card.is-selected .dur-num { color: var(--primary-dark); }
+  .dur-card.is-selected .dur-radio {
+    border-color: var(--primary);
+    background: var(--primary);
+  }
+  .dur-card.is-selected .dur-radio::after {
+    content: ''; position: absolute;
+    left: 50%; top: 50%;
+    width: 8px; height: 8px;
+    background: white;
+    border-radius: 999px;
+    transform: translate(-50%, -50%);
+  }
+  .dur-card:disabled,
+  .dur-card.is-disabled {
+    cursor: not-allowed;
+    background: var(--bg-subtle);
+    border-color: var(--border);
+    border-style: dashed;
+    color: var(--text-faint);
+  }
+  .dur-card:disabled .dur-num,
+  .dur-card.is-disabled .dur-num { color: var(--text-faint); }
+  .dur-card:disabled .dur-num span,
+  .dur-card.is-disabled .dur-num span { color: var(--text-faint); }
+  .dur-card:disabled .dur-radio,
+  .dur-card.is-disabled .dur-radio { border-style: dashed; }
+
+  /* Inline notices */
+  .bm-notice {
+    display: none;
+    gap: 10px;
+    padding: 10px 14px;
+    border-radius: var(--r-md);
+    font-size: 12.5px;
+    line-height: 1.55;
+    align-items: flex-start;
+  }
+  .bm-notice.show { display: flex; }
+  .bm-notice .ico { flex-shrink: 0; margin-top: 1px; }
+  .bm-notice strong { font-weight: 600; }
+  .bm-notice.info {
+    background: var(--teal-50);
+    border: 1px solid var(--teal-200);
+    color: var(--teal-900);
+  }
+  .bm-notice.info .ico { color: var(--primary); }
+  .bm-notice.warn {
+    background: #FFFBEB;
+    border: 1px solid #FDE68A;
+    color: #92400E;
+  }
+  .bm-notice.warn .ico { color: var(--accent-500); }
+  .bm-notice .sub {
+    color: inherit; opacity: 0.78;
+    font-size: 11.5px; margin-top: 2px;
+  }
+
+  .booking-modal > footer {
+    padding: 14px 22px 18px;
+    margin-top: 4px;
+    display: flex; justify-content: flex-end; gap: 8px;
+    border-top: 1px solid var(--border-soft);
+    background: var(--bg-subtle);
+  }
+
+  /* Search dropdown */
+  .search-results {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0; right: 0;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--r-md);
+    box-shadow: var(--shadow-lg);
+    overflow: hidden;
+    z-index: 20;
+  }
+  .search-results .res-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px;
+    cursor: pointer;
+    border-bottom: 1px solid var(--border-soft);
+  }
+  .search-results .res-item:hover { background: var(--bg-subtle); }
+  .search-results .res-item .name { font-size: 13px; font-weight: 600; }
+  .search-results .res-item .dob { font-size: 12px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+  .search-results .res-item .age { font-size: 11px; color: var(--text-faint); }
+  .search-results .add-new {
+    padding: 10px 14px;
+    background: var(--bg-subtle);
+    border-top: 1px solid var(--border);
+    color: var(--primary-dark);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .search-results .add-new:hover { background: var(--primary-soft); }
+  .search-results .add-new .plus {
+    width: 18px; height: 18px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--teal-300);
+    border-radius: 4px;
+    display: grid; place-items: center;
+    color: var(--primary);
+    font-weight: 700;
+  }
+
+  /* Legend */
+  .legend { display: flex; gap: 14px; font-size: 11px; color: var(--text-muted); }
+  .legend .item { display: flex; align-items: center; gap: 5px; }
+  .legend .sw { width: 10px; height: 10px; border-radius: 2px; }
+
+  /* ===========================================================
+     Appointment action popover (click an appt → reschedule / no-show)
+     =========================================================== */
+  .appt-actions {
+    position: fixed;
+    z-index: 60;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    box-shadow: 0 16px 40px rgba(28,25,23,0.18), 0 2px 6px rgba(28,25,23,0.08);
+    min-width: 240px;
+    display: none;
+    flex-direction: column;
+    overflow: hidden;
+    animation: aaIn 130ms ease-out;
+  }
+  @keyframes aaIn {
+    from { opacity: 0; transform: translateY(-4px) scale(0.98); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+  }
+  .appt-actions.open { display: flex; }
+  .aa-head {
+    padding: 11px 14px 9px;
+    border-bottom: 1px solid var(--border-soft);
+    background: var(--bg-subtle);
+  }
+  .aa-head .when {
+    font-family: var(--font-mono); font-size: 10.5px;
+    color: var(--text-muted); letter-spacing: 0.06em; text-transform: uppercase;
+  }
+  .aa-head .who {
+    font-family: var(--font-display); font-size: 14px; font-weight: 600;
+    color: var(--text-strong); letter-spacing: -0.005em; margin-top: 2px;
+  }
+  .aa-action {
+    appearance: none;
+    background: transparent;
+    border: none;
+    text-align: left;
+    width: 100%;
+    padding: 10px 14px;
+    font-family: var(--font-ui);
+    font-size: 13px;
+    color: var(--text);
+    display: flex; align-items: center; gap: 10px;
+    cursor: pointer;
+    transition: background 100ms ease;
+  }
+  .aa-action:hover { background: var(--bg-subtle); }
+  .aa-action.danger { color: var(--red); }
+  .aa-action.danger:hover { background: var(--red-bg); }
+  .aa-action.completed-hint { color: var(--text-muted); cursor: default; padding-top: 8px; padding-bottom: 8px; font-size: 12px; gap: 8px; }
+  .aa-action.completed-hint:hover { background: transparent; }
+  .aa-action .ico {
+    width: 16px; height: 16px;
+    color: currentColor;
+    flex-shrink: 0;
+  }
+  .aa-divider { height: 1px; background: var(--border-soft); }
+
+  .bottom-pad { height: 16px; }
+</style>
+</head>
+<body>
+
+<!-- Top bar -->
+<header class="topbar">
+  <a href="index.html" class="topbar-brand">
+    <svg width="22" height="22" viewBox="0 0 64 64" fill="none" style="color: var(--primary);">
+      <path d="M32 54 C 12 40, 8 26, 18 18 C 24 14, 30 16, 32 22 C 34 16, 40 14, 46 18 C 56 26, 52 40, 32 54 Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M14 34 L 22 34 L 26 26 L 30 42 L 34 28 L 38 36 L 50 36" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+    </svg>
+    klinika<span class="dot-app">.</span>
+  </a>
+
+  <nav class="topbar-nav">
+    <a href="receptionist.html" class="nav-link active">Kalendari</a>
+    <a href="#" class="nav-link">Pacientët</a>
+    <a href="clinic-settings.html" class="nav-link">Cilësimet</a>
+  </nav>
+
+  <div class="topbar-spacer"></div>
+
+  <div class="topbar-search">
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+      <circle cx="7" cy="7" r="5"/><path d="M11 11l3 3" stroke-linecap="round"/>
+    </svg>
+    <input placeholder="Kërko pacient... (⌘K ose /)" data-os-search-placeholder="Kërko pacient... ({shortcut} ose /)" />
+    <kbd>⌘K</kbd>
+  </div>
+
+  <button class="topbar-user">
+    <div class="avatar">AR</div>
+    <span class="name">Anila R.</span>
+    <span class="chev">▾</span>
+  </button>
+</header>
+
+<main class="page">
+  <!-- Greeting -->
+  <div class="page-header">
+    <div>
+      <div class="greeting">Mirëdita, Anila.</div>
+      <div class="subtitle">E martë, 14 maj 2026 · DonetaMED, Prizren</div>
+    </div>
+    <div class="row" style="gap: 8px;">
+      <button class="btn btn-secondary btn-sm">Eksporto ditën</button>
+      <button class="btn btn-primary btn-sm">+ Termin i ri</button>
+    </div>
+  </div>
+
+  <!-- Stats -->
+  <section class="stats-row">
+    <div class="stat-card">
+      <div class="stat-label">Sot</div>
+      <div class="stat-row">
+        <div class="stat-num">14</div>
+        <div class="stat-sub">termine të planifikuara</div>
+      </div>
+      <div class="stat-foot">
+        <span><strong>5</strong> të kryera</span>
+        <span><strong>1</strong> mungesë</span>
+        <span><strong>8</strong> në pritje</span>
+        <span class="muted">10:00 → 17:40</span>
+      </div>
+    </div>
+
+    <div class="stat-card accent next-card">
+      <div class="next-info">
+        <div class="stat-label">Termini i ardhshëm</div>
+        <div class="name">Era Krasniqi</div>
+        <div class="meta">DL 03.08.2023 · 15 min · kontroll i rregullt</div>
+      </div>
+      <div class="next-time">
+        <div class="clock">14:20</div>
+        <div class="countdown">pas 12 minutash</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Calendar -->
+  <section class="cal-card">
+    <div class="cal-toolbar">
+      <div class="cal-range">
+        <button class="nav-btn" aria-label="Java e kaluar">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M10 3l-5 5 5 5"/></svg>
+        </button>
+        <div class="title">14 — 20 maj 2026</div>
+        <button class="nav-btn" aria-label="Java tjetër">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M6 3l5 5-5 5"/></svg>
+        </button>
+        <button class="btn btn-ghost btn-sm" style="margin-left: 8px;">Sot</button>
+      </div>
+
+      <div class="right-tools">
+        <div class="legend">
+          <div class="item"><div class="sw" style="background: var(--primary);"></div>Planifikuar</div>
+          <div class="item"><div class="sw" style="background: var(--green);"></div>Kryer</div>
+          <div class="item"><div class="sw" style="background: var(--red); opacity:.8"></div>Mungesë</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Search above grid -->
+    <div class="quick-search" id="search-wrap">
+      <span class="icon">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+          <circle cx="7" cy="7" r="5"/><path d="M11 11l3 3" stroke-linecap="round"/>
+        </svg>
+      </span>
+      <input id="patient-search" placeholder="Kërko pacient për të caktuar termin... (/ për të fokusuar)" data-os-search-placeholder="Kërko pacient për të caktuar termin... ({shortcut} ose /)" oninput="onSearch(this.value)" onfocus="onSearch(this.value)">
+      <div class="kbd-hint"><kbd class="kbd">/</kbd></div>
+
+      <div class="search-results" id="results" style="display: none;">
+        <div class="res-item" onclick="openBooking('Rita Hoxha', '12.02.2024')">
+          <div>
+            <div class="name">Rita Hoxha</div>
+            <div class="dob">12.02.2024 · 2v 3m</div>
+          </div>
+          <span class="chip chip-teal"><span class="dot"></span>14 viz.</span>
+        </div>
+        <div class="res-item" onclick="openBooking('Rita Hoxhaj', '15.02.2024')">
+          <div>
+            <div class="name">Rita Hoxhaj</div>
+            <div class="dob">15.02.2024 · 2v 2m</div>
+          </div>
+          <span class="chip">3 viz.</span>
+        </div>
+        <div class="res-item" onclick="openBooking('Rinor Hoxha', '07.11.2022')">
+          <div>
+            <div class="name">Rinor Hoxha</div>
+            <div class="dob">07.11.2022 · 3v 6m</div>
+          </div>
+          <span class="chip">9 viz.</span>
+        </div>
+        <div class="add-new" onclick="quickAdd()">
+          <span class="plus">+</span>
+          Shto pacient të ri: <strong style="color: var(--text-strong); margin-left: 2px;">"<span id="qa-text">Rita</span>"</strong>
+        </div>
+      </div>
+    </div>
+
+    <!-- Grid — today + next 5 open days. Sunday skipped per clinic settings. -->
+    <div class="cal-grid">
+      <div class="cal-head time-col-head"></div>
+      <div class="cal-head col-head today"><div class="dow">Mar · sot</div><div class="date">14</div></div>
+      <div class="cal-head col-head"><div class="dow">Mër</div><div class="date">15</div></div>
+      <div class="cal-head col-head"><div class="dow">Enj</div><div class="date">16</div></div>
+      <div class="cal-head col-head"><div class="dow">Pre</div><div class="date">17</div></div>
+      <div class="cal-head col-head"><div class="dow">Sht</div><div class="date">18</div></div>
+      <div class="cal-head col-head"><div class="dow">Hën</div><div class="date">20</div><div style="font-size: 9px; color: var(--text-faint); margin-top: 2px; font-style: italic;">java tjetër</div></div>
+
+      <!-- Body -->
+      <div class="time-axis">
+        <div class="hour"><span class="label">10:00</span></div>
+        <div class="hour"><span class="label">11:00</span></div>
+        <div class="hour"><span class="label">12:00</span></div>
+        <div class="hour"><span class="label">13:00</span></div>
+        <div class="hour"><span class="label">14:00</span></div>
+        <div class="hour"><span class="label">15:00</span></div>
+        <div class="hour"><span class="label">16:00</span></div>
+        <div class="hour"><span class="label">17:00</span></div>
+      </div>
+
+      <!-- Mon 12 column removed — we render today + 5 open days, not a fixed week view.
+           Per clinic settings, Sunday is closed; the next day after Saturday is Monday 20.
+           See "Mon 20" column below, which appears after Sat in the grid. -->
+
+      <!-- Tue 14 (today) -->
+      <div class="day-col today" data-iso="2026-05-14" data-day="14.05.2026" data-dow="E martë, 14 maj">
+        <div class="appt completed" style="top: 0px; height: 30px;">
+          <div class="name">Era Berisha</div>
+          <div class="meta">10:00 · 15 min</div>
+        </div>
+        <div class="appt completed" style="top: 60px; height: 20px;">
+          <div class="name">Dion Hoxha</div>
+          <div class="meta">10:30 · 10 min</div>
+        </div>
+        <div class="appt completed" style="top: 140px; height: 30px;">
+          <div class="name">Aria Kelmendi</div>
+          <div class="meta">11:10 · 15 min</div>
+        </div>
+        <div class="appt noshow" style="top: 260px; height: 20px;">
+          <div class="name">Ben Krasniqi</div>
+          <div class="meta">12:10</div>
+        </div>
+        <div class="appt completed" style="top: 340px; height: 30px;">
+          <div class="name">Lena Hoti</div>
+          <div class="meta">12:50 · 15 min</div>
+        </div>
+        <!-- Upcoming -->
+        <div class="appt" style="top: 520px; height: 30px;">
+          <div class="name">Era Krasniqi</div>
+          <div class="meta"><span class="dot" style="background: var(--primary);"></span>14:20 · 15 min</div>
+        </div>
+        <div class="appt" style="top: 580px; height: 20px;">
+          <div class="name">Mira Hoxhaj</div>
+          <div class="meta"><span class="dot" style="background: var(--primary);"></span>14:50 · 10 min</div>
+        </div>
+        <div class="appt scheduled-warm" style="top: 660px; height: 30px;">
+          <div class="name">Endi Krasniqi</div>
+          <div class="meta"><span class="dot" style="background: var(--accent-500);"></span>15:30 · 15 min · pacient i ri</div>
+        </div>
+        <div class="appt" style="top: 780px; height: 30px;">
+          <div class="name">Lori Gashi</div>
+          <div class="meta"><span class="dot" style="background: var(--primary);"></span>16:30 · 15 min</div>
+        </div>
+        <div class="appt" style="top: 860px; height: 20px;">
+          <div class="name">Sara Berisha</div>
+          <div class="meta"><span class="dot" style="background: var(--primary);"></span>17:10 · 10 min</div>
+        </div>
+
+        <!-- Now line at ~14:08 -->
+        <div class="now-line" style="top: 496px;" data-time="14:08"></div>
+      </div>
+
+      <!-- Wed 15 — single continuous open band (no split hours). -->
+      <div class="day-col" data-iso="2026-05-15" data-day="15.05.2026" data-dow="E mërkurë, 15 maj">
+        <div class="appt" style="top: 0px; height: 30px;">
+          <div class="name">Klea Hoxha</div>
+          <div class="meta">10:00 · 15 min</div>
+        </div>
+        <div class="appt" style="top: 60px; height: 20px;">
+          <div class="name">Andi Berisha</div>
+          <div class="meta">10:30 · 10 min</div>
+        </div>
+        <div class="appt" style="top: 180px; height: 30px;">
+          <div class="name">Erza Kelmendi</div>
+          <div class="meta">11:30 · 15 min</div>
+        </div>
+
+        <!-- Closed band removed: each open day is one continuous band per spec. -->
+
+        <div class="appt scheduled-warm" style="top: 500px; height: 30px;">
+          <div class="name">Aldi Vata</div>
+          <div class="meta">14:10 · 15 min · pacient i ri</div>
+        </div>
+        <div class="appt" style="top: 580px; height: 30px;">
+          <div class="name">Mevlude Hoxha</div>
+          <div class="meta">14:50 · 15 min</div>
+        </div>
+        <div class="appt" style="top: 720px; height: 20px;">
+          <div class="name">Lirim Gashi</div>
+          <div class="meta">16:00 · 10 min</div>
+        </div>
+      </div>
+
+      <!-- Thu 16 -->
+      <div class="day-col" data-iso="2026-05-16" data-day="16.05.2026" data-dow="E enjte, 16 maj">
+        <div class="appt" style="top: 40px; height: 30px;">
+          <div class="name">Bora Hoti</div>
+          <div class="meta">10:20 · 15 min</div>
+        </div>
+        <div class="appt" style="top: 140px; height: 20px;">
+          <div class="name">Egzon Berisha</div>
+          <div class="meta">11:10 · 10 min</div>
+        </div>
+        <div class="appt" style="top: 240px; height: 30px;">
+          <div class="name">Liridon Krasniqi</div>
+          <div class="meta">12:00 · 15 min</div>
+        </div>
+        <!-- Empty slot suggestion — blocked scenario (next 5 min already booked) -->
+        <div class="appt" style="top: 360px; height: 30px;">
+          <div class="name">Anjeza Hoxha</div>
+          <div class="meta">13:00 · 15 min</div>
+        </div>
+        <div class="appt" style="top: 580px; height: 20px;">
+          <div class="name">Sokol Berisha</div>
+          <div class="meta">14:50 · 10 min</div>
+        </div>
+        <div class="appt" style="top: 720px; height: 30px;">
+          <div class="name">Edon Kelmendi</div>
+          <div class="meta">16:00 · 15 min</div>
+        </div>
+      </div>
+
+      <!-- Fri 17 -->
+      <div class="day-col" data-iso="2026-05-17" data-day="17.05.2026" data-dow="E premte, 17 maj">
+        <div class="appt" style="top: 0px; height: 30px;">
+          <div class="name">Vlerë Krasniqi</div>
+          <div class="meta">10:00 · 15 min · pacient i ri</div>
+        </div>
+        <div class="appt" style="top: 120px; height: 20px;">
+          <div class="name">Petrit Hoxha</div>
+          <div class="meta">11:00 · 10 min</div>
+        </div>
+        <div class="appt" style="top: 240px; height: 30px;">
+          <div class="name">Albulena Berisha</div>
+          <div class="meta">12:00 · 15 min</div>
+        </div>
+        <div class="appt" style="top: 400px; height: 30px;">
+          <div class="name">Egzona Vata</div>
+          <div class="meta">13:20 · 15 min</div>
+        </div>
+        <div class="appt" style="top: 580px; height: 20px;">
+          <div class="name">Donat Gashi</div>
+          <div class="meta">14:50 · 10 min</div>
+        </div>
+
+        <!-- Empty slot suggestion — clean fit scenario -->
+        
+      </div>
+
+      <!-- Sat 18 -->
+      <div class="day-col" data-iso="2026-05-18" data-day="18.05.2026" data-dow="E shtunë, 18 maj">
+        <div class="appt" style="top: 80px; height: 30px;">
+          <div class="name">Albi Hoti</div>
+          <div class="meta">10:40 · 15 min</div>
+        </div>
+        <div class="appt" style="top: 200px; height: 20px;">
+          <div class="name">Vesa Krasniqi</div>
+          <div class="meta">11:40 · 10 min</div>
+        </div>
+        <div class="appt" style="top: 360px; height: 30px;">
+          <div class="name">Krenar Hoxha</div>
+          <div class="meta">13:00 · 15 min</div>
+        </div>
+        <div class="appt" style="top: 580px; height: 30px;">
+          <div class="name">Yll Berisha</div>
+          <div class="meta">14:50 · 15 min</div>
+        </div>
+      </div>
+
+      <!-- Mon 20 — next week's Monday (Sunday 19 skipped: clinic closed) -->
+      <div class="day-col" data-iso="2026-05-20" data-day="20.05.2026" data-dow="E hënë, 20 maj">
+        <div class="appt" style="top: 0px; height: 30px;">
+          <div class="name">Bes Kelmendi</div>
+          <div class="meta">10:00 · 15 min</div>
+        </div>
+        <div class="appt scheduled-warm" style="top: 120px; height: 30px;">
+          <div class="name">Drilon Hoti</div>
+          <div class="meta">11:00 · 15 min · pacient i ri</div>
+        </div>
+        <div class="appt" style="top: 280px; height: 30px;">
+          <div class="name">Era Krasniqi</div>
+          <div class="meta">12:20 · 15 min</div>
+        </div>
+        <div class="appt" style="top: 460px; height: 20px;">
+          <div class="name">Lulzim Berisha</div>
+          <div class="meta">13:50 · 10 min</div>
+        </div>
+        <div class="appt" style="top: 620px; height: 30px;">
+          <div class="name">Petra Krasniqi</div>
+          <div class="meta">15:10 · 15 min</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="bottom-pad"></div>
+  </section>
+</main>
+
+<!-- Booking dialog -->
+<div class="booking-backdrop" id="bookingBackdrop" onclick="if(event.target===this) closeBooking()">
+  <div class="booking-modal" role="dialog" aria-labelledby="bookingTitle">
+    <header>
+      <h3 id="bookingTitle">Cakto termin</h3>
+      <button class="bm-close" onclick="closeBooking()" aria-label="Mbyll">×</button>
+    </header>
+
+    <div class="bm-body">
+      <!-- Patient row — read-only confirmation -->
+      <div class="bm-patient">
+        <div class="bm-pat-eyebrow">Pacienti</div>
+        <div class="bm-pat-row">
+          <div class="bm-pat-avatar" id="bookAvatar">RH</div>
+          <div>
+            <div class="bm-pat-name" id="bookPatName">Rita Hoxha</div>
+            <div class="bm-pat-meta" id="bookPatMeta">DL 12.02.2024 · 2v 3m</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Date / time -->
+      <div class="bm-row">
+        <label class="bm-field">
+          <span>Data</span>
+          <input type="date" id="bookDate" class="input">
+        </label>
+        <label class="bm-field">
+          <span>Ora</span>
+          <select id="bookTime" class="select"></select>
+        </label>
+      </div>
+
+      <!-- Duration — no default; large touch targets -->
+      <div class="bm-dur">
+        <div class="bm-dur-label">Kohëzgjatja</div>
+        <div class="bm-dur-grid">
+          <button type="button" class="dur-card" data-dur="10" id="dur10" onclick="selectDur(10)">
+            <span class="dur-num">10<span> min</span></span>
+            <span class="dur-radio"></span>
+          </button>
+          <button type="button" class="dur-card" data-dur="15" id="dur15" onclick="selectDur(15)">
+            <span class="dur-num">15<span> min</span></span>
+            <span class="dur-radio"></span>
+          </button>
+        </div>
+
+        <!-- Inline notices (one or none) -->
+        <div class="bm-notice info" id="noticeExtend" style="margin-top: 10px;">
+          <svg class="ico" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6">
+            <circle cx="8" cy="8" r="6.5"/>
+            <path d="M8 7v4M8 5h.01" stroke-linecap="round"/>
+          </svg>
+          <div>Ky termin do të zgjasë deri <strong id="extendEnd">10:45</strong>. Të vazhdojmë?</div>
+        </div>
+
+        <div class="bm-notice warn" id="noticeBlocked" style="margin-top: 10px;">
+          <svg class="ico" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6">
+            <path d="M8 1.5L14.5 13.5h-13z" stroke-linejoin="round"/>
+            <path d="M8 6.5v3.5M8 12h.01" stroke-linecap="round"/>
+          </svg>
+          <div>
+            <strong>15 minuta nuk është e disponueshme në këtë orar.</strong>
+            <div class="sub">Zgjidh 10 minuta ose ndrysho orarin.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <footer>
+      <button class="btn btn-ghost" onclick="closeBooking()">Anulo</button>
+      <button class="btn btn-primary" id="bookConfirmBtn" disabled onclick="confirmBooking()">Cakto termin</button>
+    </footer>
+  </div>
+</div>
+
+<!-- Patient picker popover (Path 1 — anchored to slot) -->
+<div class="picker-popover" id="pickerPopover" role="dialog" aria-labelledby="pickerCtx">
+  <div class="pp-header">
+    <div class="pp-context">
+      <div class="eyebrow">Cakto për</div>
+      <div class="ctx" id="pickerCtx">E martë, 14 maj · 10:30</div>
+    </div>
+    <button class="pp-close" onclick="closePicker()" aria-label="Mbyll">×</button>
+  </div>
+  <div class="pp-search">
+    <span class="icon">
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+        <circle cx="7" cy="7" r="5"/><path d="M11 11l3 3" stroke-linecap="round"/>
+      </svg>
+    </span>
+    <input id="pickerSearch" placeholder="Kërko pacient..." oninput="onPickerSearch(this.value)" onkeydown="onPickerKey(event)" autocomplete="off">
+  </div>
+  <div class="pp-results" id="pickerResults"></div>
+  <div class="pp-add" onclick="pickerAddNew()">
+    <span class="plus">+</span>
+    Shto pacient të ri<span class="query" id="pickerQueryEcho" style="margin-left: 4px;"></span>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"><div class="check">✓</div><span>U ruajt.</span></div>
+
+<!-- Appointment action popover -->
+<div class="appt-actions" id="apptActions" role="menu" aria-label="Veprime për terminin">
+  <div class="aa-head">
+    <div class="when" id="aaWhen">—</div>
+    <div class="who" id="aaWho">—</div>
+  </div>
+  <button type="button" class="aa-action" id="aaReschedule" onclick="apptReschedule()">
+    <svg class="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="2" y="3" width="12" height="11" rx="1.5"/>
+      <path d="M2 6h12M5 1.5v3M11 1.5v3"/>
+      <path d="M10 10l-2 2-1.2-1.2"/>
+    </svg>
+    Riprogramo terminin
+  </button>
+  <button type="button" class="aa-action danger" id="aaNoshow" onclick="apptMarkNoshow()">
+    <svg class="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="8" cy="8" r="6"/>
+      <path d="M5 5l6 6M11 5l-6 6"/>
+    </svg>
+    Shëno si mungesë
+  </button>
+  <div class="aa-divider"></div>
+  <button type="button" class="aa-action" onclick="closeApptActions()">
+    <svg class="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M4 4l8 8M12 4l-8 8"/>
+    </svg>
+    Mbyll
+  </button>
+</div>
+
+<script>
+  // ============================================================
+  // Sample patient list (the only patients in this prototype)
+  // ============================================================
+  const PATIENTS = [
+    { name: 'Rita Hoxha',    dob: '12.02.2024', age: '2v 3m',  visits: 14 },
+    { name: 'Rita Hoxhaj',   dob: '15.02.2024', age: '2v 2m',  visits: 3 },
+    { name: 'Rinor Hoxha',   dob: '07.11.2022', age: '3v 6m',  visits: 9 },
+    { name: 'Era Krasniqi',  dob: '03.08.2023', age: '2v 9m',  visits: 6 },
+    { name: 'Leon Berisha',  dob: '20.01.2025', age: '1v 4m',  visits: 4 },
+    { name: 'Nora Gashi',    dob: '11.09.2024', age: '1v 8m',  visits: 2 },
+    { name: 'Drini Kelmendi',dob: '04.06.2023', age: '2v 11m', visits: 8 },
+    { name: 'Ema Hoxhaj',    dob: '28.03.2024', age: '2v 2m',  visits: 5 },
+  ];
+
+  // ============================================================
+  // Build BUSY_BY_DAY from the calendar DOM
+  // Each entry: { startMin, endMin } where minutes are from 10:00 (=0)
+  // ============================================================
+  const PX_PER_MIN = 2; // 120px per hour = 2px per minute
+  const DAY_START_MIN = 10 * 60;
+  const DAY_END_MIN   = 18 * 60;
+
+  function parseAppt(el) {
+    const top = parseFloat(el.style.top) || 0;
+    const h   = parseFloat(el.style.height) || 28;
+    return { startMin: top / PX_PER_MIN, endMin: (top + h) / PX_PER_MIN };
+  }
+  function buildBusyMap() {
+    const map = {};
+    document.querySelectorAll('.day-col').forEach(col => {
+      const iso = col.dataset.iso;
+      if (!iso) return;
+      map[iso] = [...col.querySelectorAll('.appt')].map(parseAppt)
+        .sort((a, b) => a.startMin - b.startMin);
+    });
+    return map;
+  }
+  let BUSY_BY_DAY = {};
+  window.addEventListener('DOMContentLoaded', () => {
+    BUSY_BY_DAY = buildBusyMap();
+    // Make future appts draggable + tag them with their iso for drop targeting
+    document.querySelectorAll('.day-col .appt').forEach(el => {
+      if (el.classList.contains('completed') || el.classList.contains('noshow')) return;
+      el.setAttribute('draggable', 'true');
+      const col = el.closest('.day-col');
+      if (col) el.dataset.fromIso = col.dataset.iso;
+    });
+  });
+
+  function minToTime(m) {
+    const total = DAY_START_MIN + m;
+    const h = Math.floor(total / 60), mm = total % 60;
+    return String(h).padStart(2,'0') + ':' + String(mm).padStart(2,'0');
+  }
+  function timeToMin(t) {
+    const [h, m] = t.split(':').map(Number);
+    return (h * 60 + m) - DAY_START_MIN;
+  }
+
+  // Given a tentative start in minutes and a day-iso, find the gap to the next appt
+  function gapToNextAppt(iso, startMin) {
+    const busy = BUSY_BY_DAY[iso] || [];
+    for (const slot of busy) {
+      if (slot.startMin >= startMin) return slot.startMin - startMin;
+    }
+    return DAY_END_MIN - DAY_START_MIN - startMin; // gap until close of day
+  }
+
+  // Compute scenario for a given iso + time + intended duration
+  function computeScenario(iso, time) {
+    const startMin = timeToMin(time);
+    const busy = BUSY_BY_DAY[iso] || [];
+    // Reject if overlaps an existing appt
+    for (const slot of busy) {
+      if (startMin >= slot.startMin && startMin < slot.endMin) return 'unavailable';
+    }
+    const gap = gapToNextAppt(iso, startMin);
+    if (gap < 10) return 'unavailable';
+    if (gap < 15) return 'blocked';      // 10 fits, 15 doesn't
+    if (gap < 20) return 'extend';       // 15 fits exactly to next appt (informational)
+    return 'clean';
+  }
+
+  // ============================================================
+  // Empty-slot hover + click on the calendar
+  // ============================================================
+  let ghostEl = null;
+  function ensureGhost() {
+    if (!ghostEl) {
+      ghostEl = document.createElement('div');
+      ghostEl.className = 'ghost-slot';
+      ghostEl.innerHTML = '<span class="plus">+</span><span class="lbl"></span>';
+    }
+    return ghostEl;
+  }
+
+  function clickedTimeFromEvent(col, evt) {
+    const r = col.getBoundingClientRect();
+    const y = evt.clientY - r.top;
+    const rawMin = y / PX_PER_MIN;
+    if (rawMin < 0) return { startMin: 0, top: 0 };
+
+    const iso = col.dataset.iso;
+    const busy = BUSY_BY_DAY[iso] || [];
+
+    // Candidate snap points: every 10 min on the grid, PLUS each appt end
+    // (so the slot right after a 15-min appt is reachable).
+    const candidates = new Set();
+    for (let m = 0; m <= (DAY_END_MIN - DAY_START_MIN); m += 10) candidates.add(m);
+    busy.forEach(s => { if (s.endMin >= 0) candidates.add(s.endMin); });
+
+    // Pick the closest candidate that doesn't fall inside an existing appt.
+    const valid = [...candidates]
+      .filter(m => !busy.some(s => m >= s.startMin && m < s.endMin))
+      .sort((a, b) => Math.abs(a - rawMin) - Math.abs(b - rawMin));
+    const snappedMin = valid.length ? valid[0] : Math.max(0, Math.round(rawMin / 10) * 10);
+    return { startMin: snappedMin, top: snappedMin * PX_PER_MIN };
+  }
+
+  document.querySelectorAll('.day-col').forEach(col => {
+    col.addEventListener('mousemove', (e) => {
+      if (e.target.closest('.appt')) {
+        if (ghostEl) ghostEl.classList.remove('show');
+        return;
+      }
+      const { startMin, top } = clickedTimeFromEvent(col, e);
+      if (startMin < 0 || startMin > (DAY_END_MIN - DAY_START_MIN - 10)) {
+        if (ghostEl) ghostEl.classList.remove('show');
+        return;
+      }
+      const iso = col.dataset.iso;
+      const time = minToTime(startMin);
+      const scenario = computeScenario(iso, time);
+      if (scenario === 'unavailable') {
+        if (ghostEl) ghostEl.classList.remove('show');
+        return;
+      }
+      const g = ensureGhost();
+      if (g.parentElement !== col) col.appendChild(g);
+      g.style.top = top + 'px';
+      g.style.height = '18px';
+      g.querySelector('.lbl').textContent = 'Termin i ri · ' + time;
+      g.classList.add('show');
+    });
+    col.addEventListener('mouseleave', () => {
+      if (ghostEl) ghostEl.classList.remove('show');
+    });
+    col.addEventListener('click', (e) => {
+      const apptEl = e.target.closest('.appt');
+      if (apptEl) { openApptActions(apptEl); return; }
+      const { startMin } = clickedTimeFromEvent(col, e);
+      if (startMin < 0 || startMin > (DAY_END_MIN - DAY_START_MIN - 10)) return;
+      const iso = col.dataset.iso;
+      const time = minToTime(startMin);
+      const scenario = computeScenario(iso, time);
+      if (scenario === 'unavailable') {
+        showToast('Ky orar është i zënë.');
+        return;
+      }
+      col.classList.add('flash');
+      setTimeout(() => col.classList.remove('flash'), 320);
+      openPicker({
+        anchorEvent: e,
+        iso,
+        day: col.dataset.day,
+        dow: col.dataset.dow,
+        time,
+        scenario,
+      });
+    });
+  });
+
+  // ============================================================
+  // Patient picker popover (Path 1)
+  // ============================================================
+  let pickerCtx = null;
+  let pickerFocused = -1;
+  let pickerResults = [];
+
+  function openPicker(ctx) {
+    pickerCtx = ctx;
+    document.getElementById('pickerCtx').textContent = (ctx.dow || ctx.day) + ' · ' + ctx.time;
+    const input = document.getElementById('pickerSearch');
+    input.value = '';
+    document.getElementById('pickerQueryEcho').textContent = '';
+    renderPickerResults('');
+    const pop = document.getElementById('pickerPopover');
+    pop.classList.add('open');
+    // Position near click, fit in viewport
+    requestAnimationFrame(() => {
+      const e = ctx.anchorEvent;
+      const w = pop.offsetWidth, h = pop.offsetHeight;
+      let x = e.clientX + 8;
+      let y = e.clientY + 8;
+      if (x + w > window.innerWidth - 12) x = window.innerWidth - w - 12;
+      if (y + h > window.innerHeight - 12) y = e.clientY - h - 8;
+      if (y < 12) y = 12;
+      pop.style.left = x + 'px';
+      pop.style.top = y + 'px';
+      input.focus();
+    });
+  }
+  function closePicker() {
+    document.getElementById('pickerPopover').classList.remove('open');
+    pickerCtx = null;
+  }
+
+  function renderPickerResults(query) {
+    const q = (query || '').trim().toLowerCase();
+    const norm = s => s.toLowerCase()
+      .replace(/ë/g,'e').replace(/ç/g,'c').replace(/ã/g,'a');
+    const matches = q.length === 0
+      ? PATIENTS.slice(0, 6)
+      : PATIENTS.filter(p => norm(p.name).includes(norm(q))).slice(0, 8);
+    pickerResults = matches;
+    pickerFocused = matches.length > 0 ? 0 : -1;
+    const list = document.getElementById('pickerResults');
+    if (matches.length === 0) {
+      list.innerHTML = '<div class="pp-empty">Asnjë pacient i njohur</div>';
+    } else {
+      list.innerHTML = matches.map((p, i) => `
+        <div class="pp-result${i===0 ? ' focused':''}" data-idx="${i}" onclick="pickerSelect(${i})">
+          <div>
+            <div class="name">${p.name}</div>
+            <div class="dob">${p.dob} · ${p.age}</div>
+          </div>
+          <span class="visits">${p.visits} viz.</span>
+        </div>
+      `).join('');
+    }
+    document.getElementById('pickerQueryEcho').textContent = q ? ` · "${q}"` : '';
+  }
+
+  function onPickerSearch(v) {
+    renderPickerResults(v);
+  }
+  function onPickerKey(e) {
+    if (e.key === 'Escape') { e.preventDefault(); closePicker(); return; }
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      pickerFocused = Math.min(pickerResults.length - 1, pickerFocused + 1);
+      updatePickerFocus();
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      pickerFocused = Math.max(0, pickerFocused - 1);
+      updatePickerFocus();
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (pickerResults[pickerFocused]) pickerSelect(pickerFocused);
+      else pickerAddNew();
+    }
+  }
+  function updatePickerFocus() {
+    document.querySelectorAll('.pp-result').forEach((el, i) => {
+      el.classList.toggle('focused', i === pickerFocused);
+    });
+  }
+  function pickerSelect(idx) {
+    const p = pickerResults[idx];
+    if (!p) return;
+    const ctx = pickerCtx;
+    closePicker();
+    openBookingDialog({
+      name: p.name, dob: 'DL ' + p.dob + ' · ' + p.age,
+      iso: ctx.iso, time: ctx.time,
+      lockTime: false,
+      scenario: ctx.scenario,
+    });
+  }
+  function pickerAddNew() {
+    const q = document.getElementById('pickerSearch').value.trim() || 'Pacient i ri';
+    const ctx = pickerCtx;
+    closePicker();
+    openBookingDialog({
+      name: q, dob: '— (i sapo shtuar)',
+      iso: ctx.iso, time: ctx.time,
+      lockTime: false,
+      scenario: ctx.scenario,
+    });
+  }
+
+  // ============================================================
+  // Global patient search (Path 2 — time NOT pre-filled)
+  // ============================================================
+  function onSearch(q) {
+    const r = document.getElementById('results');
+    const text = (q || '').trim();
+    if (text.length >= 2) {
+      r.style.display = 'block';
+      document.getElementById('qa-text').textContent = text;
+    } else {
+      r.style.display = 'none';
+    }
+  }
+  function openBooking(name, dob) {
+    document.getElementById('results').style.display = 'none';
+    // Path 2: date = today, time empty, scenario auto-computed on time-pick
+    openBookingDialog({
+      name, dob: 'DL ' + dob,
+      iso: '2026-05-14', time: null,
+      lockTime: false,
+      scenario: 'clean',
+    });
+  }
+  function quickAdd() {
+    document.getElementById('results').style.display = 'none';
+    const q = document.getElementById('patient-search').value.trim() || 'Pacient i ri';
+    openBookingDialog({
+      name: q, dob: '— (i sapo shtuar)',
+      iso: '2026-05-14', time: null,
+      lockTime: false,
+      scenario: 'clean',
+    });
+  }
+
+  // ============================================================
+  // Booking dialog
+  // ============================================================
+  let bookingState = {
+    duration: null,
+    scenario: 'clean',
+    iso: null,
+    time: null,
+  };
+
+  function buildTimeOptions(iso, selected) {
+    const sel = document.getElementById('bookTime');
+    sel.innerHTML = '';
+    // Placeholder when no time chosen
+    const placeholder = document.createElement('option');
+    placeholder.value = '';
+    placeholder.textContent = 'Zgjidh orarin...';
+    placeholder.disabled = true;
+    if (!selected) placeholder.selected = true;
+    sel.appendChild(placeholder);
+
+    const busy = BUSY_BY_DAY[iso] || [];
+    // Standard 10-min slots from 10:00 — 17:50, PLUS any appointment end-times
+    // that aren't on a 10-min boundary (so a 15-min appt ending on :35 is bookable).
+    const offGrid = busy
+      .map(s => s.endMin)
+      .filter(m => m % 10 !== 0 && m >= 0 && m < (DAY_END_MIN - DAY_START_MIN));
+    const slots = new Set();
+    for (let m = 0; m < (DAY_END_MIN - DAY_START_MIN); m += 10) slots.add(m);
+    offGrid.forEach(m => slots.add(m));
+    const ordered = [...slots].sort((a, b) => a - b);
+
+    for (const m of ordered) {
+      const t = minToTime(m);
+      const opt = document.createElement('option');
+      opt.value = t; opt.textContent = t;
+      // Mark as busy if it overlaps an existing appt
+      const overlaps = busy.some(s => m >= s.startMin && m < s.endMin);
+      if (overlaps) {
+        opt.disabled = true;
+        opt.textContent = t + ' · i zënë';
+      }
+      if (t === selected) opt.selected = true;
+      sel.appendChild(opt);
+    }
+    sel.classList.toggle('is-empty', !selected);
+  }
+
+  function addMinutes(t, mins) {
+    const [h, m] = t.split(':').map(Number);
+    const total = h * 60 + m + mins;
+    const hh = Math.floor(total / 60), mm = total % 60;
+    return String(hh).padStart(2,'0') + ':' + String(mm).padStart(2,'0');
+  }
+
+  function initials(name) {
+    return name.split(/\s+/).filter(Boolean).slice(0, 2).map(p => p[0].toUpperCase()).join('');
+  }
+
+  function openBookingDialog({ name, dob, iso, time, scenario }) {
+    bookingState = { duration: null, scenario: scenario || 'clean', iso, time };
+
+    document.getElementById('bookPatName').textContent = name;
+    document.getElementById('bookPatMeta').textContent = dob;
+    document.getElementById('bookAvatar').textContent = initials(name) || '?';
+    document.getElementById('bookDate').value = iso;
+
+    buildTimeOptions(iso, time);
+    applyScenarioVisuals();
+
+    document.getElementById('bookConfirmBtn').disabled = true;
+    document.getElementById('bookingBackdrop').classList.add('open');
+  }
+
+  function applyScenarioVisuals() {
+    const d10 = document.getElementById('dur10');
+    const d15 = document.getElementById('dur15');
+    d10.classList.remove('is-selected');
+    d15.classList.remove('is-selected');
+    d15.disabled = false; d15.classList.remove('is-disabled');
+    document.getElementById('noticeExtend').classList.remove('show');
+    document.getElementById('noticeBlocked').classList.remove('show');
+
+    if (!bookingState.time) return; // nothing to evaluate until time chosen
+
+    if (bookingState.scenario === 'blocked') {
+      d15.disabled = true; d15.classList.add('is-disabled');
+      document.getElementById('noticeBlocked').classList.add('show');
+    }
+  }
+
+  function closeBooking() {
+    document.getElementById('bookingBackdrop').classList.remove('open');
+  }
+
+  function selectDur(mins) {
+    if (mins === 15 && bookingState.scenario === 'blocked') return;
+    if (!bookingState.time) return; // can't pick duration without time
+    bookingState.duration = mins;
+
+    document.getElementById('dur10').classList.toggle('is-selected', mins === 10);
+    document.getElementById('dur15').classList.toggle('is-selected', mins === 15);
+
+    const showExtend = (mins === 15 && bookingState.scenario === 'extend');
+    const extendEl = document.getElementById('noticeExtend');
+    extendEl.classList.toggle('show', showExtend);
+    if (showExtend) {
+      document.getElementById('extendEnd').textContent = addMinutes(bookingState.time, 15);
+    }
+
+    document.getElementById('bookConfirmBtn').disabled = false;
+  }
+
+  // Time / date changes — re-detect scenario for the new combo
+  document.addEventListener('change', (e) => {
+    if (e.target && e.target.id === 'bookTime') {
+      bookingState.time = e.target.value;
+      e.target.classList.remove('is-empty');
+      bookingState.duration = null;
+      bookingState.scenario = computeScenario(bookingState.iso, bookingState.time);
+      applyScenarioVisuals();
+      document.getElementById('bookConfirmBtn').disabled = true;
+    }
+    if (e.target && e.target.id === 'bookDate') {
+      bookingState.iso = e.target.value;
+      bookingState.time = null;
+      bookingState.duration = null;
+      buildTimeOptions(bookingState.iso, null);
+      bookingState.scenario = 'clean';
+      applyScenarioVisuals();
+      document.getElementById('bookConfirmBtn').disabled = true;
+    }
+  });
+
+  function confirmBooking() {
+    if (!bookingState.duration || !bookingState.time) return;
+    const name = document.getElementById('bookPatName').textContent;
+    const time = bookingState.time;
+    const dateStr = bookingState.iso;
+    const months = ['janar','shkurt','mars','prill','maj','qershor','korrik','gusht','shtator','tetor','nëntor','dhjetor'];
+    let datePretty = dateStr;
+    if (dateStr && /^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+      const [y, m, d] = dateStr.split('-').map(Number);
+      datePretty = d + ' ' + months[m - 1];
+    }
+    closeBooking();
+    showToast(`Termini u caktua për ${datePretty}, ora ${time} (${bookingState.duration} min) · ${name}`);
+  }
+
+  function showToast(msg) {
+    const t = document.getElementById('toast');
+    t.querySelector('span').textContent = msg;
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 2600);
+  }
+
+  // ============================================================
+  // Appointment action popover (reschedule / mark no-show)
+  // ============================================================
+  let activeApptEl = null;
+  function openApptActions(apptEl) {
+    activeApptEl = apptEl;
+    const col = apptEl.closest('.day-col');
+    const name = apptEl.querySelector('.name')?.textContent.trim() || '';
+    const meta = apptEl.querySelector('.meta')?.textContent.trim() || '';
+    const day  = col?.dataset.day || '';
+    const dow  = col?.dataset.dow || '';
+    const isCompleted = apptEl.classList.contains('completed');
+    const isNoshow    = apptEl.classList.contains('noshow');
+
+    document.getElementById('aaWho').textContent = name;
+    document.getElementById('aaWhen').textContent = (dow ? dow + ' · ' : '') + (meta || day);
+
+    // Past visits can't be rescheduled / re-marked; the noshow can be undone
+    const rescheduleBtn = document.getElementById('aaReschedule');
+    const noshowBtn = document.getElementById('aaNoshow');
+    rescheduleBtn.style.display = isCompleted ? 'none' : 'flex';
+    if (isNoshow) {
+      noshowBtn.innerHTML = `
+        <svg class="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M2 8l4 4 8-8"/>
+        </svg>
+        Hiq mungesën`;
+      noshowBtn.classList.remove('danger');
+    } else if (isCompleted) {
+      noshowBtn.style.display = 'none';
+    } else {
+      noshowBtn.style.display = 'flex';
+      noshowBtn.classList.add('danger');
+      noshowBtn.innerHTML = `
+        <svg class="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="8" cy="8" r="6"/>
+          <path d="M5 5l6 6M11 5l-6 6"/>
+        </svg>
+        Shëno si mungesë`;
+    }
+
+    // Position the popover next to the appointment (prefer right side)
+    const pop = document.getElementById('apptActions');
+    pop.classList.add('open');
+    const r = apptEl.getBoundingClientRect();
+    const popR = pop.getBoundingClientRect();
+    let left = r.right + 8;
+    let top = r.top;
+    if (left + popR.width > window.innerWidth - 12) {
+      left = Math.max(12, r.left - popR.width - 8);
+    }
+    if (top + popR.height > window.innerHeight - 12) {
+      top = Math.max(12, window.innerHeight - popR.height - 12);
+    }
+    pop.style.left = left + 'px';
+    pop.style.top  = top + 'px';
+  }
+  function closeApptActions() {
+    document.getElementById('apptActions').classList.remove('open');
+    activeApptEl = null;
+  }
+  function apptReschedule() {
+    if (!activeApptEl) return;
+    const col = activeApptEl.closest('.day-col');
+    const name = activeApptEl.querySelector('.name')?.textContent.trim() || '';
+    const meta = activeApptEl.querySelector('.meta')?.textContent.trim() || '';
+    const tm = meta.match(/(\d{1,2}:\d{2})/);
+    const dm = meta.match(/(\d{1,2})\s*min/i);
+    const time = tm ? tm[1] : '';
+    const dur = dm ? +dm[1] : null;
+    const iso = col?.dataset.iso || '';
+    closeApptActions();
+    // Open booking dialog pre-filled. Carry duration via bookingState after open.
+    openBookingDialog({
+      name,
+      dob: 'DL — (riprogramim)',
+      day: col?.dataset.day || '',
+      iso,
+      time,
+      scenario: 'reschedule'
+    });
+    if (dur === 10 || dur === 15) {
+      // Pre-select original duration (it's already free since we're moving)
+      setTimeout(() => selectDur(dur), 30);
+    }
+    showToast(`Po riprogramohet termini i ${name}`);
+  }
+  function apptMarkNoshow() {
+    if (!activeApptEl) return;
+    const name = activeApptEl.querySelector('.name')?.textContent.trim() || '';
+    const wasNoshow = activeApptEl.classList.contains('noshow');
+    activeApptEl.classList.toggle('noshow');
+    activeApptEl.classList.remove('completed', 'scheduled-warm');
+    closeApptActions();
+    showToast(wasNoshow ? `Mungesa u hoq për ${name}` : `${name} u shënua si mungesë`);
+  }
+  // Close popover on outside click / Esc
+  document.addEventListener('click', (e) => {
+    const pop = document.getElementById('apptActions');
+    if (!pop.classList.contains('open')) return;
+    if (e.target.closest('.appt-actions')) return;
+    if (e.target.closest('.appt')) return;
+    closeApptActions();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && document.getElementById('apptActions').classList.contains('open')) {
+      closeApptActions();
+    }
+  });
+
+  // ============================================================
+  // Drag-and-drop reschedule for future appointments
+  // ============================================================
+  let dragState = null; // { apptEl, durMin, fromIso, fromTop, name }
+  function ensureDropPreview(col) {
+    let p = col.querySelector(':scope > .drop-preview');
+    if (!p) {
+      p = document.createElement('div');
+      p.className = 'drop-preview';
+      col.appendChild(p);
+    }
+    return p;
+  }
+  function hideAllPreviews() {
+    document.querySelectorAll('.drop-preview.show').forEach(p => p.classList.remove('show'));
+  }
+
+  // Find the nearest snap target in a column, optionally excluding one appt (the one being moved)
+  function snapForDrag(col, evt, excludeEl) {
+    const r = col.getBoundingClientRect();
+    const y = evt.clientY - r.top;
+    const rawMin = Math.max(0, y / PX_PER_MIN);
+
+    const iso = col.dataset.iso;
+    let busy = BUSY_BY_DAY[iso] || [];
+    if (excludeEl && excludeEl.dataset.fromIso === iso) {
+      const exTop = parseFloat(excludeEl.style.top) || 0;
+      const exH   = parseFloat(excludeEl.style.height) || 0;
+      const exStart = exTop / PX_PER_MIN, exEnd = (exTop + exH) / PX_PER_MIN;
+      busy = busy.filter(s => !(s.startMin === exStart && s.endMin === exEnd));
+    }
+
+    const candidates = new Set();
+    // 5-min granularity for drag — finer than the click-to-book grid (10 min)
+    for (let m = 0; m <= (DAY_END_MIN - DAY_START_MIN); m += 5) candidates.add(m);
+    busy.forEach(s => { if (s.endMin >= 0) candidates.add(s.endMin); });
+
+    const valid = [...candidates]
+      .filter(m => !busy.some(s => m >= s.startMin && m < s.endMin))
+      .sort((a, b) => Math.abs(a - rawMin) - Math.abs(b - rawMin));
+    const startMin = valid.length ? valid[0] : Math.round(rawMin / 5) * 5;
+    return { startMin, busy };
+  }
+
+  document.addEventListener('dragstart', (e) => {
+    const el = e.target.closest && e.target.closest('.appt[draggable="true"]');
+    if (!el) return;
+    const col = el.closest('.day-col');
+    const top = parseFloat(el.style.top) || 0;
+    const height = parseFloat(el.style.height) || 0;
+    dragState = {
+      apptEl: el,
+      durMin: height / PX_PER_MIN,
+      fromIso: col.dataset.iso,
+      fromTop: top,
+      name: el.querySelector('.name')?.textContent.trim() || '',
+    };
+    el.classList.add('is-dragging');
+    e.dataTransfer.effectAllowed = 'move';
+    // Firefox requires data
+    try { e.dataTransfer.setData('text/plain', dragState.name); } catch (_) {}
+  });
+
+  document.addEventListener('dragend', (e) => {
+    if (dragState) dragState.apptEl.classList.remove('is-dragging');
+    hideAllPreviews();
+    dragState = null;
+  });
+
+  document.querySelectorAll('.day-col').forEach(col => {
+    col.addEventListener('dragover', (e) => {
+      if (!dragState) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      const { startMin, busy } = snapForDrag(col, e, dragState.apptEl);
+      const endMin = startMin + dragState.durMin;
+      const fitsBefore = endMin <= (DAY_END_MIN - DAY_START_MIN);
+      const overlaps = busy.some(s => !(endMin <= s.startMin || startMin >= s.endMin));
+      const valid = fitsBefore && !overlaps;
+
+      const p = ensureDropPreview(col);
+      p.style.top = (startMin * PX_PER_MIN) + 'px';
+      p.style.height = (dragState.durMin * PX_PER_MIN) + 'px';
+      p.classList.toggle('invalid', !valid);
+      p.textContent = (valid ? minToTime(startMin) + ' · ' + dragState.durMin + ' min' : 'I zënë');
+      hideAllPreviews();
+      p.classList.add('show');
+    });
+    col.addEventListener('dragleave', (e) => {
+      // Only hide if leaving the column itself, not crossing internal child boundaries
+      if (e.relatedTarget && col.contains(e.relatedTarget)) return;
+      const p = col.querySelector(':scope > .drop-preview');
+      if (p) p.classList.remove('show');
+    });
+    col.addEventListener('drop', (e) => {
+      if (!dragState) return;
+      e.preventDefault();
+      const { startMin, busy } = snapForDrag(col, e, dragState.apptEl);
+      const endMin = startMin + dragState.durMin;
+      const fitsBefore = endMin <= (DAY_END_MIN - DAY_START_MIN);
+      const overlaps = busy.some(s => !(endMin <= s.startMin || startMin >= s.endMin));
+      hideAllPreviews();
+      if (!fitsBefore || overlaps) {
+        showToast('Orari i zgjedhur është i zënë.');
+        return;
+      }
+
+      const newIso = col.dataset.iso;
+      const newDay = col.dataset.day;
+      const newTime = minToTime(startMin);
+
+      // Move the DOM node into the new column (if different)
+      const oldCol = dragState.apptEl.closest('.day-col');
+      if (oldCol !== col) {
+        col.appendChild(dragState.apptEl);
+        dragState.apptEl.dataset.fromIso = newIso;
+      }
+      dragState.apptEl.style.top = (startMin * PX_PER_MIN) + 'px';
+
+      // Update meta text (preserve duration label and "pacient i ri" tag)
+      const metaEl = dragState.apptEl.querySelector('.meta');
+      if (metaEl) {
+        const wasNewPatient = /pacient i ri/i.test(metaEl.textContent);
+        const dotEl = metaEl.querySelector('.dot');
+        metaEl.innerHTML = '';
+        if (dotEl) metaEl.appendChild(dotEl);
+        let txt = newTime + ' · ' + dragState.durMin + ' min';
+        if (wasNewPatient) txt += ' · pacient i ri';
+        metaEl.appendChild(document.createTextNode(txt));
+      }
+
+      // Refresh busy map so subsequent drags use the new position
+      BUSY_BY_DAY = buildBusyMap();
+
+      const name = dragState.name;
+      showToast(`${name} u zhvendos në ${newDay} ${newTime}`);
+    });
+  });
+
+  // ============================================================
+  // Outside-click + keyboard handling
+  // ============================================================
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('#search-wrap')) {
+      document.getElementById('results').style.display = 'none';
+    }
+    const pop = document.getElementById('pickerPopover');
+    if (pop.classList.contains('open') &&
+        !e.target.closest('#pickerPopover') &&
+        !e.target.closest('.day-col')) {
+      closePicker();
+    }
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === '/' && document.activeElement.tagName !== 'INPUT') {
+      e.preventDefault();
+      document.getElementById('patient-search').focus();
+    }
+    if (e.key === 'Escape') {
+      if (document.getElementById('pickerPopover').classList.contains('open')) closePicker();
+      else if (document.getElementById('bookingBackdrop').classList.contains('open')) closeBooking();
+    }
+  });
+</script>
+
+</body>
+<script src="shortcuts.js"></script>
+</html>

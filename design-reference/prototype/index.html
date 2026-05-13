@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="sq">
+<head>
+<meta charset="UTF-8">
+<title>Klinika — Hyr</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="styles.css">
+<style>
+  body {
+    min-height: 100vh;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    background: var(--bg);
+  }
+
+  .login-left {
+    display: grid;
+    place-items: center;
+    padding: 40px;
+  }
+
+  .login-card {
+    width: 100%;
+    max-width: 380px;
+  }
+
+  .brand-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 40px;
+  }
+  .brand-row .mark { color: var(--primary); }
+  .brand-row .word {
+    font-family: var(--font-display);
+    font-size: 20px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    color: var(--text-strong);
+  }
+  .brand-row .word .ext { color: var(--text-faint); font-weight: 400; }
+
+  .login-title {
+    font-family: var(--font-display);
+    font-size: 28px;
+    font-weight: 600;
+    letter-spacing: -0.025em;
+    margin-bottom: 6px;
+  }
+  .login-sub {
+    color: var(--text-muted);
+    font-size: 14px;
+    margin-bottom: 32px;
+  }
+
+  .login-form { display: flex; flex-direction: column; gap: 16px; }
+
+  .row-between { display: flex; justify-content: space-between; align-items: center; }
+
+  .checkbox-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--text-muted);
+    cursor: pointer;
+    user-select: none;
+  }
+  .checkbox-row input { accent-color: var(--primary); width: 14px; height: 14px; }
+
+  .link-muted { font-size: 13px; color: var(--primary); font-weight: 500; }
+  .link-muted:hover { color: var(--primary-dark); text-decoration: underline; }
+
+  .role-switch {
+    margin-top: 8px;
+    background: var(--bg-subtle);
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    padding: 4px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2px;
+  }
+  .role-btn {
+    padding: 8px 12px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-muted);
+    border-radius: var(--r-sm);
+    text-align: center;
+    transition: all 150ms ease;
+  }
+  .role-btn:hover { color: var(--text); }
+  .role-btn.active {
+    background: var(--bg-elevated);
+    color: var(--text-strong);
+    box-shadow: var(--shadow-xs);
+  }
+
+  .login-footer {
+    margin-top: 48px;
+    font-size: 12px;
+    color: var(--text-faint);
+    display: flex;
+    gap: 16px;
+  }
+
+  /* --- Right side hero --- */
+  .login-right {
+    background:
+      radial-gradient(ellipse 80% 60% at 70% 30%, rgba(45,212,191,0.10), transparent 60%),
+      radial-gradient(ellipse 80% 60% at 30% 80%, rgba(251,191,36,0.06), transparent 60%),
+      linear-gradient(135deg, var(--teal-800) 0%, var(--teal-900) 100%);
+    position: relative;
+    overflow: hidden;
+    color: white;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 56px;
+  }
+
+  .login-right h2 {
+    font-family: var(--font-display);
+    font-size: 36px;
+    font-weight: 600;
+    line-height: 1.15;
+    letter-spacing: -0.025em;
+    color: white;
+    max-width: 480px;
+  }
+  .login-right h2 em {
+    font-style: normal;
+    color: var(--teal-300);
+  }
+
+  .login-right .tag {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--teal-200);
+    font-weight: 500;
+    margin-bottom: 16px;
+  }
+
+  .hero-illust {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0.9;
+  }
+
+  .clinic-tag {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 13px;
+    color: var(--teal-100);
+  }
+  .clinic-tag .dot { width: 6px; height: 6px; background: var(--teal-300); border-radius: 999px; }
+
+  /* Logo draw animation — heart traces, pulse follows, life-dot pops, then beats */
+  @keyframes drawHeart {
+    from { stroke-dashoffset: 240; }
+    to   { stroke-dashoffset: 0; }
+  }
+  @keyframes drawPulse {
+    from { stroke-dashoffset: 110; }
+    to   { stroke-dashoffset: 0; }
+  }
+  @keyframes dotIn {
+    from { opacity: 0; transform: scale(0.3); }
+    to   { opacity: 1; transform: scale(1); }
+  }
+  @keyframes beat {
+    0%, 100% { transform: scale(1); }
+    20%      { transform: scale(1.06); }
+    40%      { transform: scale(0.98); }
+    60%      { transform: scale(1.04); }
+    80%      { transform: scale(1); }
+  }
+  .logo-anim {
+    transform-origin: center;
+    animation: beat 1400ms ease-in-out 1500ms infinite;
+  }
+  .logo-anim .heart-shape {
+    stroke-dasharray: 240;
+    stroke-dashoffset: 240;
+    animation: drawHeart 800ms ease-out 100ms forwards;
+  }
+  .logo-anim .pulse-line {
+    stroke-dasharray: 110;
+    stroke-dashoffset: 110;
+    animation: drawPulse 700ms ease-out 700ms forwards;
+  }
+  .logo-anim .pulse-dot {
+    opacity: 0;
+    transform-origin: 54px 36px;
+    animation: dotIn 320ms ease-out 1300ms forwards;
+  }
+
+  @media (max-width: 900px) {
+    body { grid-template-columns: 1fr; }
+    .login-right { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<!-- LEFT: form -->
+<div class="login-left">
+  <div class="login-card">
+    <div class="brand-row">
+      <svg class="mark logo-anim" width="36" height="36" viewBox="0 0 64 64" fill="none" aria-hidden="true" style="color: var(--primary);">
+        <path class="heart-shape" d="M32 54 C 12 40, 8 26, 18 18 C 24 14, 30 16, 32 22 C 34 16, 40 14, 46 18 C 56 26, 52 40, 32 54 Z" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+        <path class="pulse-line" d="M10 34 L 22 34 L 26 28 L 30 40 L 34 30 L 38 36 L 54 36" stroke="var(--teal-800)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+        <circle class="pulse-dot" cx="54" cy="36" r="2.8" fill="var(--accent-500)"/>
+      </svg>
+      <span class="word">klinika<span class="ext">.</span></span>
+    </div>
+
+    <div class="login-title">Mirë se erdhët</div>
+    <div class="login-sub">Hyni në llogarinë tuaj për të vazhduar.</div>
+
+    <form class="login-form" onsubmit="event.preventDefault(); goToRole();">
+      <div class="field">
+        <label class="field-label" for="email">Email</label>
+        <input class="input" id="email" type="email" value="taulant@donetamed.al" autocomplete="username">
+      </div>
+
+      <div class="field">
+        <label class="field-label" for="pwd">Fjalëkalimi</label>
+        <input class="input" id="pwd" type="password" value="••••••••••" autocomplete="current-password">
+      </div>
+
+      <div class="row-between">
+        <label class="checkbox-row">
+          <input type="checkbox" checked>
+          Më mbaj të kyçur (në këtë pajisje)
+        </label>
+        <a class="link-muted" href="#">Harruat fjalëkalimin?</a>
+      </div>
+
+      <div class="role-switch" role="tablist" aria-label="Roli i hyrjes">
+        <button type="button" class="role-btn active" data-role="doctor" onclick="setRole(this)">Mjeku</button>
+        <button type="button" class="role-btn" data-role="reception" onclick="setRole(this)">Recepsioni</button>
+      </div>
+
+      <button class="btn btn-primary btn-lg" type="submit" style="margin-top: 8px;">Hyr</button>
+    </form>
+
+    <div class="login-footer">
+      <span>DonetaMED · Prizren</span>
+      <span>·</span>
+      <span>v1.0</span>
+      <span>·</span>
+      <a href="root.html" style="color: var(--text-muted);">klinika.health</a>
+      <span>·</span>
+      <a href="admin-login.html" style="color: var(--text-muted);">Admin</a>
+    </div>
+  </div>
+</div>
+
+<!-- RIGHT: hero -->
+<div class="login-right">
+  <svg class="hero-illust" viewBox="0 0 600 800" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+    <!-- WHO-style percentile curves -->
+    <g stroke="rgba(204,251,241,0.18)" stroke-width="1.5" fill="none" stroke-linecap="round">
+      <path d="M -20 700 Q 150 600 320 500 T 640 280"/>
+      <path d="M -20 740 Q 150 650 320 560 T 640 350"/>
+      <path d="M -20 770 Q 150 700 320 620 T 640 410"/>
+      <path d="M -20 660 Q 150 540 320 430 T 640 200"/>
+      <path d="M -20 620 Q 150 480 320 360 T 640 130"/>
+    </g>
+    <!-- Bold patient curve overlay -->
+    <path d="M -20 720 Q 150 620 320 510 T 640 270"
+          stroke="rgba(94,234,212,0.85)" stroke-width="3" fill="none" stroke-linecap="round"/>
+    <!-- Data points -->
+    <g fill="rgba(94,234,212,0.95)">
+      <circle cx="80" cy="660" r="5"/>
+      <circle cx="200" cy="580" r="5"/>
+      <circle cx="320" cy="510" r="5"/>
+      <circle cx="440" cy="420" r="5"/>
+      <circle cx="560" cy="320" r="5"/>
+    </g>
+    <!-- Grid baseline -->
+    <line x1="0" y1="780" x2="600" y2="780" stroke="rgba(204,251,241,0.2)" stroke-width="1"/>
+    <line x1="20" y1="0" x2="20" y2="800" stroke="rgba(204,251,241,0.2)" stroke-width="1"/>
+  </svg>
+
+  <div style="position: relative; z-index: 1;">
+    <div class="tag">Pediatër · Kosovo</div>
+    <h2>Softueri për<br><em>klinikat moderne</em>.</h2>
+  </div>
+
+  <div class="clinic-tag" style="position: relative; z-index: 1;">
+    <span class="dot"></span>
+    Përdoret nga DonetaMED prej maj 2026
+  </div>
+</div>
+
+<script>
+  let currentRole = 'doctor';
+  function setRole(btn) {
+    document.querySelectorAll('.role-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    currentRole = btn.dataset.role;
+  }
+  function goToRole() {
+    if (currentRole === 'reception') {
+      window.location.href = 'receptionist.html';
+    } else {
+      window.location.href = 'doctor.html';
+    }
+  }
+</script>
+
+</body>
+</html>

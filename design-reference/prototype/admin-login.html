@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="sq">
+<head>
+<meta charset="UTF-8">
+<title>Klinika · Platform Admin — Hyr</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="styles.css">
+<style>
+  body {
+    min-height: 100vh;
+    display: grid;
+    place-items: center;
+    background: var(--bg);
+    padding: 40px 24px;
+  }
+
+  /* Platform-admin identity stripe — same hue, just unmistakable */
+  body::before {
+    content: '';
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, var(--teal-700) 0%, var(--teal-500) 50%, var(--teal-700) 100%);
+    z-index: 100;
+  }
+
+  .admin-card {
+    width: 100%;
+    max-width: 400px;
+  }
+
+  .brand-row {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    margin-bottom: 8px;
+  }
+  .brand-row .word {
+    font-family: var(--font-display);
+    font-size: 20px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    color: var(--text-strong);
+  }
+  .brand-row .word .ext { color: var(--text-faint); font-weight: 400; }
+  .brand-row .pill {
+    font-family: var(--font-ui);
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--teal-800);
+    background: var(--primary-soft);
+    border: 1px solid var(--teal-200);
+    padding: 2px 8px;
+    border-radius: 999px;
+    letter-spacing: 0.02em;
+  }
+
+  .admin-title {
+    font-family: var(--font-display);
+    font-size: 24px;
+    font-weight: 600;
+    letter-spacing: -0.025em;
+    margin-top: 28px;
+    margin-bottom: 4px;
+  }
+  .admin-sub {
+    color: var(--text-muted);
+    font-size: 13px;
+    margin-bottom: 28px;
+  }
+
+  .admin-form { display: flex; flex-direction: column; gap: 14px; }
+
+  .mfa-step {
+    display: none;
+  }
+  .mfa-step.active { display: flex; flex-direction: column; gap: 14px; }
+  .login-step.hidden { display: none; }
+
+  .otp-row {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 8px;
+  }
+  .otp-row input {
+    text-align: center;
+    font-family: var(--font-mono);
+    font-size: 20px;
+    font-weight: 600;
+    padding: 12px 0;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--r-md);
+    background: var(--bg-elevated);
+    color: var(--text-strong);
+    outline: none;
+    transition: border-color 150ms ease, box-shadow 150ms ease;
+  }
+  .otp-row input:focus { border-color: var(--primary); box-shadow: var(--focus-ring); }
+
+  .mfa-help {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--text-muted);
+    padding: 10px 12px;
+    background: var(--bg-subtle);
+    border-radius: var(--r-md);
+  }
+  .mfa-help .icon {
+    width: 16px; height: 16px;
+    color: var(--text-faint);
+    flex-shrink: 0;
+  }
+
+  .login-footer {
+    margin-top: 36px;
+    padding-top: 20px;
+    border-top: 1px solid var(--border);
+    font-size: 12px;
+    color: var(--text-faint);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .login-footer .back {
+    color: var(--text-muted);
+  }
+  .login-footer .back:hover { color: var(--primary); }
+
+  .shield-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--text-muted);
+    font-size: 12px;
+  }
+  .shield-row svg { color: var(--primary); }
+
+  .step-progress {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 24px;
+  }
+  .step-progress .seg {
+    flex: 1;
+    height: 3px;
+    background: var(--bg-muted);
+    border-radius: 2px;
+  }
+  .step-progress .seg.active { background: var(--primary); }
+  .step-progress .seg.done { background: var(--teal-300); }
+</style>
+</head>
+<body>
+
+<div class="admin-card">
+  <div class="brand-row">
+    <svg width="22" height="22" viewBox="0 0 64 64" fill="none" style="color: var(--primary);">
+      <path d="M32 54 C 12 40, 8 26, 18 18 C 24 14, 30 16, 32 22 C 34 16, 40 14, 46 18 C 56 26, 52 40, 32 54 Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M14 34 L 22 34 L 26 26 L 30 42 L 34 28 L 38 36 L 50 36" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+    </svg>
+    <span class="word">klinika<span class="ext">.</span></span>
+    <span class="pill">Platform Admin</span>
+  </div>
+
+  <div class="admin-title" id="title">Hyr në panel</div>
+  <div class="admin-sub" id="subt">Akses i kufizuar për administratorët e platformës.</div>
+
+  <div class="step-progress">
+    <div class="seg active" id="seg1"></div>
+    <div class="seg" id="seg2"></div>
+  </div>
+
+  <!-- Step 1: email + password -->
+  <form class="admin-form login-step" id="step1" onsubmit="event.preventDefault(); toMfa();">
+    <div class="field">
+      <label class="field-label" for="email">Email</label>
+      <input class="input" id="email" type="email" value="you@klinika.health" autocomplete="username">
+    </div>
+
+    <div class="field">
+      <label class="field-label" for="pwd">Fjalëkalimi</label>
+      <input class="input" id="pwd" type="password" value="••••••••••••" autocomplete="current-password">
+    </div>
+
+    <button class="btn btn-primary btn-lg" type="submit" style="margin-top: 4px;">Vazhdo</button>
+  </form>
+
+  <!-- Step 2: MFA -->
+  <form class="mfa-step" id="step2" onsubmit="event.preventDefault(); finish();">
+    <div class="field">
+      <label class="field-label">Kodi nga aplikacioni i autentifikimit</label>
+      <div class="otp-row">
+        <input maxlength="1" value="4">
+        <input maxlength="1" value="8">
+        <input maxlength="1" value="2">
+        <input maxlength="1" value="1">
+        <input maxlength="1" value="0">
+        <input maxlength="1" value="6">
+      </div>
+    </div>
+
+    <div class="mfa-help">
+      <svg class="icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+        <rect x="3" y="6" width="10" height="8" rx="1.5"/>
+        <path d="M5 6V4a3 3 0 016 0v2"/>
+      </svg>
+      Hyni kodin 6-shifror nga Google Authenticator ose 1Password.
+    </div>
+
+    <button class="btn btn-primary btn-lg" type="submit">Hyr në panel</button>
+
+    <a href="#" onclick="event.preventDefault(); toLogin();" style="font-size: 12px; color: var(--text-muted); text-align: center;">← Kthehu te email + fjalëkalimi</a>
+  </form>
+
+  <div class="login-footer">
+    <a class="back" href="root.html">← Klinika.health</a>
+    <div class="shield-row">
+      <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6">
+        <path d="M8 2L3 4v4c0 3 2.5 5.5 5 6.5 2.5-1 5-3.5 5-6.5V4L8 2z"/>
+      </svg>
+      Mbrojtur me MFA · audit log
+    </div>
+  </div>
+</div>
+
+<script>
+  function toMfa() {
+    document.getElementById('step1').classList.add('hidden');
+    document.getElementById('step2').classList.add('active');
+    document.getElementById('title').textContent = 'Verifikim me dy hapa';
+    document.getElementById('subt').textContent = 'Hyni kodin nga aplikacioni juaj i autentifikimit.';
+    document.getElementById('seg1').classList.replace('active', 'done');
+    document.getElementById('seg2').classList.add('active');
+  }
+  function toLogin() {
+    document.getElementById('step1').classList.remove('hidden');
+    document.getElementById('step2').classList.remove('active');
+    document.getElementById('title').textContent = 'Hyr në panel';
+    document.getElementById('subt').textContent = 'Akses i kufizuar për administratorët e platformës.';
+    document.getElementById('seg2').classList.remove('active');
+    document.getElementById('seg1').classList.replace('done', 'active');
+  }
+  function finish() {
+    window.location.href = 'admin.html';
+  }
+
+  // OTP auto-advance
+  const otps = document.querySelectorAll('.otp-row input');
+  otps.forEach((o, i) => {
+    o.addEventListener('input', () => {
+      if (o.value && i < otps.length - 1) otps[i + 1].focus();
+    });
+    o.addEventListener('keydown', (e) => {
+      if (e.key === 'Backspace' && !o.value && i > 0) otps[i - 1].focus();
+    });
+  });
+</script>
+
+</body>
+</html>
