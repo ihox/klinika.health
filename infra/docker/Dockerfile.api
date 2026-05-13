@@ -1,0 +1,29 @@
+## Klinika api — NestJS 10
+##
+## Dev image: hot-reload via bind-mount in docker-compose.dev.yml.
+
+FROM node:20.18-bookworm-slim AS dev
+
+ENV TZ=Europe/Belgrade \
+    PNPM_HOME=/root/.local/share/pnpm \
+    PATH=/root/.local/share/pnpm:$PATH
+
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends ca-certificates tzdata \
+ && ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone \
+ && rm -rf /var/lib/apt/lists/* \
+ && corepack enable \
+ && corepack prepare pnpm@9.12.0 --activate
+
+WORKDIR /workspace
+
+COPY pnpm-workspace.yaml package.json ./
+COPY apps/api/package.json ./apps/api/
+
+RUN pnpm install --filter @klinika/api --frozen-lockfile=false
+
+COPY apps/api ./apps/api
+
+WORKDIR /workspace/apps/api
+EXPOSE 3001
+CMD ["pnpm", "dev"]

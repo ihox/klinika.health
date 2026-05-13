@@ -1,1 +1,41 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build artifacts
+.next/
+dist/
+build/
+out/
+*.tsbuildinfo
+
+# Test artifacts
+coverage/
+test-results/
+playwright-report/
+playwright/.cache/
+
+# Env files (never commit)
+.env
+.env.local
+.env.*.local
+
+# Patient data and Access source (never commit)
+*.accdb
 docs/PEDIATRIA.accdb
+/storage/
+storage/
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Misc local artifacts
+health.zip

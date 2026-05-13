@@ -1,0 +1,91 @@
+# Local development stack for Klinika.
+# Run from the repo root with: make dev
+#
+# All services run TZ=Europe/Belgrade per ADR-006.
+
+name: klinika
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: klinika-postgres
+    restart: unless-stopped
+    environment:
+      TZ: Europe/Belgrade
+      PGTZ: Europe/Belgrade
+      POSTGRES_DB: ${POSTGRES_DB:-klinika}
+      POSTGRES_USER: ${POSTGRES_USER:-klinika}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-klinika}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-klinika} -d ${POSTGRES_DB:-klinika}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile.api
+    container_name: klinika-api
+    restart: unless-stopped
+    environment:
+      TZ: Europe/Belgrade
+      NODE_ENV: development
+      API_PORT: 3001
+      API_HOST: 0.0.0.0
+      DATABASE_URL: ${DATABASE_URL:-postgresql://klinika:klinika@postgres:5432/klinika?schema=public}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3000}
+    ports:
+      - "3001:3001"
+    volumes:
+      - ../../apps/api:/workspace/apps/api
+      - api-node-modules:/workspace/apps/api/node_modules
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  web:
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile.web
+    container_name: klinika-web
+    restart: unless-stopped
+    environment:
+      TZ: Europe/Belgrade
+      NODE_ENV: development
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:3001}
+    ports:
+      - "3000:3000"
+    volumes:
+      - ../../apps/web:/workspace/apps/web
+      - ../../design-reference:/workspace/design-reference
+      - web-node-modules:/workspace/apps/web/node_modules
+      - web-next-cache:/workspace/apps/web/.next
+    depends_on:
+      - api
+
+  orthanc:
+    image: orthancteam/orthanc:24.7.3
+    container_name: klinika-orthanc
+    restart: unless-stopped
+    environment:
+      TZ: Europe/Belgrade
+      ORTHANC__REGISTERED_USERS: |
+        {"${ORTHANC_USERNAME:-klinika}": "${ORTHANC_PASSWORD:-klinika}"}
+      ORTHANC__AUTHENTICATION_ENABLED: "true"
+    ports:
+      - "${ORTHANC_HTTP_PORT:-8042}:8042"
+      - "${ORTHANC_DICOM_PORT:-4242}:4242"
+    volumes:
+      - orthanc-data:/var/lib/orthanc/db
+
+volumes:
+  postgres-data:
+  orthanc-data:
+  api-node-modules:
+  web-node-modules:
+  web-next-cache:

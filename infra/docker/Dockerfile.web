@@ -1,0 +1,33 @@
+## Klinika web — Next.js 15 (App Router)
+##
+## Dev image: hot-reload via bind-mount in docker-compose.dev.yml.
+## We install only what's needed for `next dev` here.
+
+FROM node:20.18-bookworm-slim AS dev
+
+ENV TZ=Europe/Belgrade \
+    PNPM_HOME=/root/.local/share/pnpm \
+    PATH=/root/.local/share/pnpm:$PATH
+
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends ca-certificates tzdata \
+ && ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone \
+ && rm -rf /var/lib/apt/lists/* \
+ && corepack enable \
+ && corepack prepare pnpm@9.12.0 --activate
+
+WORKDIR /workspace
+
+# Copy workspace manifests for cached install.
+COPY pnpm-workspace.yaml package.json ./
+COPY apps/web/package.json ./apps/web/
+
+RUN pnpm install --filter @klinika/web --frozen-lockfile=false
+
+# Source is bind-mounted in dev — the COPY here is a fallback for `docker run`.
+COPY apps/web ./apps/web
+COPY design-reference ./design-reference
+
+WORKDIR /workspace/apps/web
+EXPOSE 3000
+CMD ["pnpm", "dev"]

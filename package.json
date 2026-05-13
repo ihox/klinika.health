@@ -1,0 +1,25 @@
+{
+  "name": "klinika",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Klinika — multi-tenant SaaS for pediatric clinics",
+  "packageManager": "pnpm@9.12.0",
+  "engines": {
+    "node": ">=20.11.0",
+    "pnpm": ">=9.0.0"
+  },
+  "scripts": {
+    "dev:web": "pnpm --filter @klinika/web dev",
+    "dev:api": "pnpm --filter @klinika/api dev",
+    "build": "pnpm -r build",
+    "lint": "pnpm -r lint",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "test:e2e": "pnpm --filter @klinika/web test:e2e",
+    "test:e2e:headed": "pnpm --filter @klinika/web test:e2e:headed",
+    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md,yml,yaml}\""
+  },
+  "devDependencies": {
+    "prettier": "3.3.3"
+  }
+}

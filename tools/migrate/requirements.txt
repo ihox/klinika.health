@@ -1,0 +1,5 @@
+# Python 3.12 — Access (.accdb) -> Postgres migration tool.
+# Populated in a later slice. See docs/data-migration.md.
+pandas==2.2.3
+psycopg[binary]==3.2.3
+PyYAML==6.0.2
