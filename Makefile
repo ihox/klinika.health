@@ -22,8 +22,10 @@ ps:
 
 db-migrate:
 	pnpm --filter @klinika/api exec prisma migrate deploy
-	$(COMPOSE) exec -T postgres psql -U klinika -d klinika -v ON_ERROR_STOP=1 \
-		< apps/api/prisma/migrations/manual/001_rls_indexes_triggers.sql
+	@for f in apps/api/prisma/migrations/manual/*.sql; do \
+		echo "applying $$f"; \
+		$(COMPOSE) exec -T postgres psql -U klinika -d klinika -v ON_ERROR_STOP=1 < "$$f"; \
+	done
 
 db-reset:
 	$(COMPOSE) exec postgres psql -U klinika -d postgres -c "DROP DATABASE IF EXISTS klinika;"

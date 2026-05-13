@@ -135,6 +135,10 @@ model User {
   vertetimeIssued     Vertetim[]         @relation("VertetimIssuedBy")
   dicomLinksCreated   VisitDicomLink[]   @relation("DicomLinkLinkedBy")
   prescriptionLines   PrescriptionLine[]
+  authSessions        AuthSession[]
+  trustedDevices      AuthTrustedDevice[]
+  mfaCodes            AuthMfaCode[]
+  passwordResets      AuthPasswordResetToken[]
 
   @@index([clinicId])
   @@map("users")
@@ -509,4 +513,158 @@ model TelemetryAlert {
   @@index([dedupeKey])
   @@index([severity, notifiedAt])
   @@map("telemetry_alerts")
+}
+
+// ---------------------------------------------------------------------------
+// Authentication (Better-Auth-style; see ADR-004)
+// ---------------------------------------------------------------------------
+//
+// The cookie/token sent to the browser is a long random string (256 bits,
+// nanoid). The DB stores SHA-256 of that token so a leaked dump can't be
+// used to assume sessions. Same pattern for MFA codes, password reset
+// tokens, and trusted-device tokens.
+//
+// `clinicId` is denormalised onto auth rows so the rate limiter and
+// audit log can scope without joining `users` (which RLS protects). Auth
+// tables stay outside the per-clinic RLS policy because login itself
+// happens before the clinic context is established; cross-tenant access
+// is prevented at the application layer by joining `users.clinicId` to
+// the subdomain-derived clinic_id on every authenticated request.
+
+/// Server-side session record. The cookie holds the raw token; this
+/// table holds its hash plus the metadata for the user-visible "active
+/// sessions" list and for revocation. `extendedTtl` reflects the
+/// "Më mbaj të kyçur" checkbox — when true, the session lasts 30 days
+/// instead of the default 8 hours.
+model AuthSession {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId         String    @map("user_id") @db.Uuid
+  clinicId       String    @map("clinic_id") @db.Uuid
+  tokenHash      String    @unique @map("token_hash")
+  expiresAt      DateTime  @map("expires_at") @db.Timestamptz(6)
+  extendedTtl    Boolean   @default(false) @map("extended_ttl")
+  ipAddress      String    @map("ip_address") @db.Inet
+  userAgent      String    @map("user_agent")
+  deviceLabel    String    @map("device_label")
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  lastUsedAt     DateTime  @default(now()) @map("last_used_at") @db.Timestamptz(6)
+  revokedAt      DateTime? @map("revoked_at") @db.Timestamptz(6)
+  revokedReason  String?   @map("revoked_reason")
+
+  user User @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("auth_sessions")
+}
+
+/// Trusted device — a long-lived cookie that bypasses email MFA on
+/// subsequent logins from the same browser for 30 days. The cookie is
+/// scoped per user (the cookie value identifies the user; the user types
+/// password every time). On every login, we look up by `(userId,
+/// tokenHash)` and only skip MFA if the row is unrevoked and unexpired.
+model AuthTrustedDevice {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId      String    @map("user_id") @db.Uuid
+  clinicId    String    @map("clinic_id") @db.Uuid
+  tokenHash   String    @unique @map("token_hash")
+  label       String
+  expiresAt   DateTime  @map("expires_at") @db.Timestamptz(6)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  lastSeenAt  DateTime  @default(now()) @map("last_seen_at") @db.Timestamptz(6)
+  ipAddress   String    @map("ip_address") @db.Inet
+  userAgent   String    @map("user_agent")
+  revokedAt   DateTime? @map("revoked_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("auth_trusted_devices")
+}
+
+/// Email-delivered MFA code. 6-digit code, hashed at rest, 15-minute
+/// TTL, max 3 verification attempts. `pendingSessionId` is an opaque
+/// handle returned to the browser after a successful password check so
+/// the verify page can submit the code without re-sending the password.
+model AuthMfaCode {
+  id               String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId           String    @map("user_id") @db.Uuid
+  clinicId         String    @map("clinic_id") @db.Uuid
+  pendingSessionId String    @unique @map("pending_session_id")
+  codeHash         String    @map("code_hash")
+  expiresAt        DateTime  @map("expires_at") @db.Timestamptz(6)
+  attempts         Int       @default(0)
+  consumedAt       DateTime? @map("consumed_at") @db.Timestamptz(6)
+  rememberDevice   Boolean   @default(true) @map("remember_device")
+  extendedTtl      Boolean   @default(false) @map("extended_ttl")
+  ipAddress        String    @map("ip_address") @db.Inet
+  userAgent        String    @map("user_agent")
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("auth_mfa_codes")
+}
+
+/// Append-only record of every login attempt, success or failure.
+/// Drives the per-email rate limit and supports incident forensics
+/// without storing the password attempt itself.
+model AuthLoginAttempt {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  emailLower  String   @map("email_lower")
+  ipAddress   String   @map("ip_address") @db.Inet
+  userAgent   String   @map("user_agent")
+  success     Boolean
+  reason      String?
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([emailLower, createdAt])
+  @@index([ipAddress, createdAt])
+  @@map("auth_login_attempts")
+}
+
+/// Single-use password reset token. 1-hour TTL. Hashed at rest. The
+/// token is delivered in the email link as `?t=<raw>`; the user clicks
+/// it, then types the new password.
+model AuthPasswordResetToken {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId      String    @map("user_id") @db.Uuid
+  tokenHash   String    @unique @map("token_hash")
+  expiresAt   DateTime  @map("expires_at") @db.Timestamptz(6)
+  consumedAt  DateTime? @map("consumed_at") @db.Timestamptz(6)
+  ipAddress   String    @map("ip_address") @db.Inet
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("auth_password_reset_tokens")
+}
+
+// ---------------------------------------------------------------------------
+// Rate limiting (CLAUDE.md §9)
+// ---------------------------------------------------------------------------
+
+/// Sliding-window rate limit counter. `scope` is the bucket name
+/// (`auth.login.ip`, `auth.login.email`, `auth.mfa.send`, `api.user`,
+/// etc.), `key` is the bucket value (IP, email lowercase, user id),
+/// `windowEndsAt` is when this row's count resets. The rate-limit
+/// middleware upserts on `(scope, key)` and rejects when `count` >
+/// the configured limit for that scope.
+model RateLimit {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  scope        String
+  key          String
+  count        Int      @default(0)
+  windowEndsAt DateTime @map("window_ends_at") @db.Timestamptz(6)
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@unique([scope, key], name: "rate_limit_scope_key_unique")
+  @@index([windowEndsAt])
+  @@map("rate_limits")
 }

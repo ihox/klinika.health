@@ -308,3 +308,99 @@ string, not a UUID FK).
 
 Operator procedures for the three most common alerts (tenant offline,
 backup failed, disk full) live in [`runbook.md`](runbook.md).
+
+## Slice 04 — authentication
+
+See [ADR-004](decisions/004-authentication.md) for the why, and CLAUDE.md
+§5.1, §7, §9 for the standing rules this slice implements.
+
+### Stack
+
+* **Better-Auth** (1.2.8) is pinned as the auth dependency and surfaces
+  its Argon2 password helpers + 2FA primitives. Because we need
+  multi-tenant subdomain routing, audit log integration, and Albanian
+  email templates, **the HTTP handlers themselves are NestJS code** in
+  [`apps/api/src/modules/auth/`](../apps/api/src/modules/auth/) — Better-Auth
+  is used as a library, not as a router. The Better-Auth instance
+  itself is built in [`better-auth.config.ts`](../apps/api/src/modules/auth/better-auth.config.ts)
+  so the version pin is checked at compile time.
+* **argon2** (0.41.1) for password hashing (`argon2id`, m=19456, t=2, p=1).
+* **resend** for transactional email (capturing sender used in dev/test
+  when `RESEND_API_KEY` is unset).
+* **zod** for request validation; types flow to the frontend via
+  inferred Zod types.
+
+### Tables
+
+[`20260513170000_auth`](../apps/api/prisma/migrations/20260513170000_auth/)
+adds six tables:
+
+| Table | Purpose | TTL |
+|---|---|---|
+| `auth_sessions` | Session cookies (SHA-256 of token at rest) | 8 h short / 30 d long |
+| `auth_trusted_devices` | Device-trust cookies that skip MFA | 30 d |
+| `auth_mfa_codes` | 6-digit email codes (hashed) | 15 m |
+| `auth_login_attempts` | Append-only forensic record | 90 d |
+| `auth_password_reset_tokens` | Single-use reset tokens | 60 m |
+| `rate_limits` | Sliding-window counters | up to 1 h |
+
+Manual migration
+[`002_auth_rls.sql`](../apps/api/prisma/migrations/manual/002_auth_rls.sql)
+adds Row-Level Security on the three tenant-scoped auth tables and the
+`purge_expired_auth()` cleanup function.
+
+### Flow
+
+```
+              donetamed.klinika.health
+              ┌──────────────────────────────────────────┐
+[1] POST /api/auth/login (email + password)            [3] cookie set:
+    └─→ verify pwd → audit attempt                       klinika_session=…
+        ├─ trusted-device cookie matches user → ────────▶│
+        │  issue session (skip MFA)
+        └─ no trusted cookie → issue MFA challenge
+           └─→ email 6-digit code to user
+[2] POST /api/auth/mfa/verify                          [4] also:
+    └─→ verify code (hash compare)                       klinika_trust=…
+        └─ check + mark code consumed                    (if mos pyet checked)
+           └─→ issue session
+```
+
+### Multi-tenancy enforcement
+
+[`ClinicResolutionMiddleware`](../apps/api/src/common/middleware/clinic-resolution.middleware.ts)
+resolves `donetamed.klinika.health` → `clinic_id` on every request,
+populates `req.ctx`, and exposes it via the `@Ctx()` decorator.
+[`ClinicScopeGuard`](../apps/api/src/common/guards/clinic-scope.guard.ts)
+asserts the context is present (or the request is on `admin.klinika.health`
+for platform admins). The auth flow joins `users.clinicId` against
+`ctx.clinicId` so a user from clinic A cannot log in on clinic B's
+subdomain — integration-tested in
+[`auth.integration.spec.ts`](../apps/api/src/modules/auth/auth.integration.spec.ts).
+
+### Rate limiting
+
+[`RateLimitService`](../apps/api/src/modules/rate-limit/rate-limit.service.ts)
+uses Postgres `ON CONFLICT` upserts so the limit can't be bypassed by
+parallel requests. Configured limits (CLAUDE.md §9):
+
+| Endpoint | Limit |
+|---|---|
+| `POST /api/auth/login` | 5/min/IP + 10/hour/email |
+| `POST /api/auth/mfa/send` (resend) | 3/min/email |
+| `POST /api/auth/mfa/verify` | 5/min/pendingSessionId |
+| `POST /api/auth/password-reset/request` | 3/hour/email |
+
+### Audit events
+
+Every auth event writes to `audit_log`:
+
+* `auth.login.success` / `auth.login.failed`
+* `auth.mfa.sent` / `auth.mfa.verified`
+* `auth.device.trusted` / `auth.device.revoked`
+* `auth.password.changed` / `auth.password.reset.requested`
+* `auth.sessions.revoked` / `auth.logout`
+
+`changes` is NULL for these (the action verb is the signal; no
+field-diff applies).
+
