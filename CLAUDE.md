@@ -280,6 +280,31 @@ export const modKeyDisplay = isMac ? '⌘' : 'Ctrl';
 
 Every shortcut handler uses this. Every tooltip and shortcut display calls `formatShortcut(action)` which returns the correct symbol per OS. Never hardcode `Cmd+S` or `Ctrl+S` anywhere.
 
+### 5.8 Role checks
+
+Users have a `roles TEXT[]` column with values from `{ doctor, receptionist, clinic_admin }`. The schema enforces at the DB level: `cardinality(roles) BETWEEN 1 AND 3` and `roles <@ ARRAY['doctor', 'receptionist', 'clinic_admin']`. Application code never reads a single-role field — all authorization is array membership: `user.roles.includes('doctor')`.
+
+The `@Roles(...)` decorator accepts multiple roles with **OR semantics**: `@Roles('doctor', 'clinic_admin')` passes when the caller holds at least one of those roles. `ctx.roles` for clinic sessions is the user's `users.roles` array; for admin sessions the guard sets it to `['platform_admin']`. Two helpers live at `apps/api/src/common/request-context/role-helpers.ts`:
+
+- `hasClinicalAccess(roles)` — true iff the user has `doctor` or `clinic_admin`. Use this everywhere the old `ctx.role === 'doctor' || ctx.role === 'clinic_admin'` appeared.
+- `isReceptionistOnly(roles)` — true iff the user has `receptionist` AND lacks both `doctor` and `clinic_admin`. The receptionist privacy boundary (§1.2) triggers ONLY on this predicate — anyone with clinical access sees full patient data, even if they also hold the receptionist role.
+
+**Canonical role labels (Albanian, single source of truth in `apps/web/lib/role-labels.ts`):**
+- `doctor` → "Mjeku"
+- `receptionist` → "Recepsioniste"
+- `clinic_admin` → "Administrator i klinikës"
+
+**Canonical role → menu mapping** (`apps/web/components/clinic-top-nav.tsx`):
+- `receptionist` grants: Kalendari
+- `doctor` grants: Pamja e ditës, Pacientët
+- `clinic_admin` grants: Cilësimet
+
+A user sees the UNION of items their roles grant. Display order left-to-right: Kalendari, Pamja e ditës, Pacientët, Cilësimet.
+
+**Login redirect priority** (`homePathForRoles`): doctor > clinic_admin > receptionist > /profili-im (degenerate). Platform admins always go to /admin (separate auth path, unaffected). The smoke-test cell "Erëblirë (receptionist + clinic_admin) lands on /cilesimet" follows from this priority.
+
+**Within-scope 403**: a user navigating to a route their role doesn't grant lands on `/forbidden` (the `RouteGate` component wraps gated pages). The cross-scope 404 (apex hitting `/cilesimet`, tenant hitting `/admin`) is unchanged — that's middleware-level (ADR-005).
+
 ---
 
 ## 6. Forbidden patterns
