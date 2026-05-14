@@ -107,6 +107,7 @@ export function DashboardView(): ReactElement {
     source.addEventListener('visit.updated', onEvent);
     source.addEventListener('visit.status_changed', onEvent);
     source.addEventListener('visit.deleted', onEvent);
+    source.addEventListener('visit.restored', onEvent);
     source.onerror = () => {
       // Browser auto-reconnects; we keep polling as fallback.
     };

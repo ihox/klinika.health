@@ -146,7 +146,7 @@ async function mockApi(
   }, FIXED_INSTANT_ISO);
 
   // Block the SSE stream; the dashboard polls as fallback.
-  await page.route('**/api/appointments/stream', (route: Route) =>
+  await page.route('**/api/visits/calendar/stream', (route: Route) =>
     route.fulfill({ status: 204, body: '' }),
   );
 
