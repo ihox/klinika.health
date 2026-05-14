@@ -95,17 +95,18 @@ export function DashboardView(): ReactElement {
     return () => document.removeEventListener('visibilitychange', onVis);
   }, [load]);
 
-  // Real-time freshness: SSE from the appointments module fires when
+  // Real-time freshness: SSE from the visits-calendar module fires when
   // the receptionist changes a status (or another doctor's visit save
   // flips a row to completed). We don't filter event types here —
   // every event is cheap to reload from a single dashboard endpoint.
   useEffect(() => {
-    const url = `/api/appointments/stream`;
+    const url = `/api/visits/calendar/stream`;
     const source = new EventSource(url, { withCredentials: true });
     const onEvent = (): void => void load();
-    source.addEventListener('appointment.created', onEvent);
-    source.addEventListener('appointment.updated', onEvent);
-    source.addEventListener('appointment.deleted', onEvent);
+    source.addEventListener('visit.created', onEvent);
+    source.addEventListener('visit.updated', onEvent);
+    source.addEventListener('visit.status_changed', onEvent);
+    source.addEventListener('visit.deleted', onEvent);
     source.onerror = () => {
       // Browser auto-reconnects; we keep polling as fallback.
     };

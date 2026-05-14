@@ -1,22 +1,15 @@
 // Pure conflict-detection helper for the booking dialog's availability
-// view. Extracted from AppointmentsService so it can be unit-tested
-// without spinning up Prisma — the live service composes this with a
-// single round-trip to fetch the day's appointments.
-//
-// Three statuses match the design prototype:
-//   - `fits`    — clean fit, no warnings
-//   - `extends` — fits without overlap but the booking spills past the
-//                 natural slot unit (smallest configured duration);
-//                 UI shows a calm "Të vazhdojmë?" notice
-//   - `blocked` — out-of-hours OR overlaps with an existing appointment
+// view. Extracted from the service so it can be unit-tested without
+// Prisma — the live service composes this with a single round-trip to
+// fetch the day's scheduled visits.
 
 import type { HoursConfig } from '../clinic-settings/clinic-settings.dto';
 import type {
   AvailabilityOption,
   AvailabilityReason,
   AvailabilityStatus,
-} from './appointments.dto';
-import { fitsInsideHours, minutesToTime, toMinutes } from './appointments.hours';
+} from './visits-calendar.dto';
+import { fitsInsideHours, minutesToTime, toMinutes } from './visits-calendar.hours';
 
 export interface OccupiedInterval {
   /** Local start minutes since midnight (Europe/Belgrade). */
@@ -34,7 +27,7 @@ export interface AvailabilityResult {
  * Compute the per-duration verdicts for an anchor (date, time) given
  * the clinic's hours and the existing same-day intervals.
  *
- * `occupied` MUST already exclude the appointment being edited so the
+ * `occupied` MUST already exclude the visit being edited so the
  * receptionist can re-save without self-conflicting.
  */
 export function computeAvailability(

@@ -12,7 +12,6 @@ import { AuditModule } from './common/audit/audit.module';
 import { ClinicResolutionMiddleware } from './common/middleware/clinic-resolution.middleware';
 import { RolesGuard } from './common/guards/roles.guard';
 import { AdminModule } from './modules/admin/admin.module';
-import { AppointmentsModule } from './modules/appointments/appointments.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { ClinicSettingsModule } from './modules/clinic-settings/clinic-settings.module';
 import { DicomModule } from './modules/dicom/dicom.module';
@@ -49,7 +48,6 @@ import { LoggingModule } from './common/logging/logger.module';
     PrintModule,
     DicomModule,
     Icd10Module,
-    AppointmentsModule,
     DoctorDashboardModule,
     LoggingModule,
   ],

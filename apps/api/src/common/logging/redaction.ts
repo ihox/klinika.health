@@ -59,7 +59,6 @@ const NESTING_PREFIXES = [
   '',
   'patient.',
   'visit.',
-  'appointment.',
   'body.',
   'req.body.',
   'request.body.',

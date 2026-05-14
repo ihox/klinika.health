@@ -1,4 +1,4 @@
-// Working-hours helpers for the appointments module.
+// Working-hours helpers for the calendar surface.
 //
 // We treat a clinic day as either fully closed (UI shows "Mbyllur") or a
 // single continuous open band defined by `start`/`end`. A configured
@@ -7,7 +7,7 @@
 // continuous band per spec` annotation in receptionist.html.
 
 import type { HoursConfig } from '../clinic-settings/clinic-settings.dto';
-import { weekdayOf } from './appointments.tz';
+import { weekdayOf } from './visits-calendar.tz';
 
 export interface OpenWindow {
   date: string; // ISO yyyy-mm-dd

@@ -6,7 +6,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import {
   localClockToUtc,
   utcToLocalParts,
-} from '../appointments/appointments.tz';
+} from '../visits/visits-calendar.tz';
 import { parsePaymentCodesOrDefault } from '../clinic-settings/clinic-settings.service';
 import type { PaymentCodes } from '../clinic-settings/clinic-settings.dto';
 import {
