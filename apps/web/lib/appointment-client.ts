@@ -62,6 +62,27 @@ export interface UpdateAppointmentInput {
   status?: AppointmentStatus;
 }
 
+export type AvailabilityStatus = 'fits' | 'extends' | 'blocked';
+export type AvailabilityReason =
+  | 'closed_day'
+  | 'before_open'
+  | 'after_close'
+  | 'conflict';
+
+export interface AvailabilityOption {
+  durationMinutes: number;
+  status: AvailabilityStatus;
+  endsAt: string | null;
+  reason: AvailabilityReason | null;
+}
+
+export interface AppointmentAvailabilityResponse {
+  date: string;
+  time: string;
+  slotUnitMinutes: number;
+  options: AvailabilityOption[];
+}
+
 export const appointmentClient = {
   list: (from: string, to: string) =>
     apiFetch<AppointmentListResponse>(
@@ -75,6 +96,16 @@ export const appointmentClient = {
 
   unmarkedPast: () =>
     apiFetch<{ appointments: AppointmentDto[] }>('/api/appointments/unmarked-past'),
+
+  availability: (params: { date: string; time: string; excludeAppointmentId?: string }) => {
+    const qs = new URLSearchParams({ date: params.date, time: params.time });
+    if (params.excludeAppointmentId) {
+      qs.set('excludeAppointmentId', params.excludeAppointmentId);
+    }
+    return apiFetch<AppointmentAvailabilityResponse>(
+      `/api/appointments/availability?${qs.toString()}`,
+    );
+  },
 
   create: (input: CreateAppointmentInput) =>
     apiFetch<{ appointment: AppointmentDto }>('/api/appointments', {

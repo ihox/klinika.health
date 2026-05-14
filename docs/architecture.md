@@ -29,6 +29,7 @@
 15. Observability
 16. Data lifecycle and backups
 17. Slice 08 — receptionist calendar and appointment lifecycle
+18. Slice 09 — booking dialog and conflict-aware flows
 
 ## Slice 01 — skeleton
 
@@ -699,6 +700,7 @@ a TODO. Each mark emits an `appointment.updated` audit row.
 |-------------------------------------------------------|------------------------------------|-----------------------------------|
 | `GET /api/appointments?from=...&to=...`               | doctor / receptionist / admin      | `{ appointments, serverTime }`    |
 | `GET /api/appointments/stats?date=...`                | doctor / receptionist / admin      | `AppointmentStatsResponse`        |
+| `GET /api/appointments/availability?date=...&time=...&excludeAppointmentId=...` | doctor / receptionist / admin | `AppointmentAvailabilityResponse` |
 | `GET /api/appointments/unmarked-past`                 | doctor / receptionist / admin      | `{ appointments }`                |
 | `POST /api/appointments`                              | doctor / receptionist / admin      | `{ appointment }`                 |
 | `PATCH /api/appointments/:id`                         | doctor / receptionist / admin      | `{ appointment }`                 |
@@ -711,5 +713,140 @@ and reinforced by Postgres RLS on `appointments`. The SSE bus filters
 by `clinicId` before delivering events so a receptionist on tenant A
 never sees an event from tenant B even if a future refactor forgets
 to pass scope down.
+
+
+## Slice 09 — booking dialog and conflict-aware flows
+
+The booking dialog is the single chokepoint for every appointment
+mutation a receptionist can initiate. Both flow paths converge on it,
+and the edit-existing flow re-uses the same component in `mode: 'edit'`
+so the conflict-detection rules cannot diverge between create and
+reschedule.
+
+### Two entry paths, one dialog
+
+```
+PATH 1 · slot-first (~80%)            PATH 2 · patient-first (~20%)
+─────────────────────────             ─────────────────────────────
+   tap empty slot                        focus "/" global search
+        │                                       │
+        ▼                                       ▼
+  PatientPicker popover                  GlobalPatientSearch dropdown
+  (anchored at click coord)              (debounced 200ms)
+        │                                       │
+        ├─ pick existing patient ──────┬────────┤
+        │                              │        │
+        │                              ▼        │
+        │                       BookingDialog   │
+        │   ┌──────────────────────┬────────────┤
+        │   │ initialDate = slot    initialDate = today
+        │   │ initialTime = slot    initialTime = ''
+        │   │ prefilledFromSlot     prefilledFromSlot = false
+        │   └────────────────────────────────────
+        │                              │
+        ├─ "+ Shto pacient të ri" ─────┤
+        │       │                      │
+        │       ▼                      ▼
+        │   QuickAddPatientModal   QuickAddPatientModal
+        │       │                      │
+        │       └──── on save ─────────┘
+        │             returns to BookingDialog with the new patient
+        │
+        └─── BookingDialog → POST /api/appointments
+                                  │
+                                  ▼
+                       30s undo toast (soft-delete on Anulo)
+```
+
+Both paths land in the same `BookingDialog` component. The only
+runtime difference is what's pre-filled — date+time from the tapped
+slot in Path 1, or today's date + empty time in Path 2. The
+`prefilledFromSlot` flag drives the teal tint on the pre-filled
+fields so the receptionist can see at a glance what the dialog
+remembered for her.
+
+### Three conflict states
+
+For every (date, time) anchor the dialog asks
+`GET /api/appointments/availability` and receives one
+`AvailabilityOption` per configured duration:
+
+```
+status     when                                   UI affordance
+─────────  ─────────────────────────────────────  ─────────────────────────
+fits       no overlap, ≤ slot unit (10 min)       clean teal selection,
+                                                  "Cakto termin" enabled
+extends    no overlap, > slot unit, fits hours    calm teal inline notice:
+                                                  "Ky termin do të zgjasë
+                                                  deri HH:MM. Të vazhdojmë?"
+blocked    overlap OR out-of-hours                option rendered with
+                                                  dashed border + amber
+                                                  "Kjo kohëzgjatje nuk
+                                                  është e disponueshme..."
+```
+
+The `extends` vs `fits` split is purely a UI signal — both are
+bookable. `slotUnitMinutes` is the smallest configured duration (10
+min for DonetaMED's `[10, 15, 20, 30]`); a duration ≤ that unit reads
+as a clean fit even when an adjacent appointment exists.
+
+The pure helper [`computeAvailability`](../apps/api/src/modules/appointments/appointments.availability.ts)
+is the single source of truth for the rule — exercised by
+`appointments.availability.spec.ts` and re-used by
+`AppointmentsService.availability` after one Postgres round-trip to
+fetch the day's intervals.
+
+### Deliberate friction: no default duration
+
+The duration grid starts with NO option selected. Both options render
+in the neutral border, and `[Cakto termin]` stays disabled until the
+receptionist actively taps one. This prevents the "I never even read
+the slot length" failure mode that a 15-min auto-select would create.
+Changing the time after picking a duration ALSO resets the choice —
+forcing the receptionist to reconfirm that the new time still fits
+the original plan.
+
+### Edit flow
+
+The action menu on an appointment card surfaces "Riprogramo terminin",
+which opens the same dialog in `mode: 'edit'` with every field
+pre-filled. The dialog sends `PATCH /api/appointments/:id` with the
+new date/time/duration and re-uses the same conflict detection — the
+existing row is excluded via `excludeAppointmentId` so re-saving an
+unchanged appointment cannot self-conflict.
+
+The patient field is read-only in edit mode. Rationale: if the user
+got the patient wrong, soft-delete + create-new keeps the audit log
+clean (no patientId-change diff that future readers would have to
+untangle).
+
+### Confirmation toast with 30s undo
+
+Successful create surfaces a confirmation toast bottom-right:
+
+```
+Termini u caktua për 14 maj, ora 10:30 (15 min)        [Anulo]
+```
+
+Hitting `Anulo` within 30 seconds soft-deletes the just-created
+appointment — same `restorableUntil` window the post-delete undo uses
+(ADR-008). After 30 seconds the toast dismisses. The edit flow uses a
+plain confirmation toast (no undo) since reschedules are easier to
+roll back: the receptionist can just reschedule again.
+
+### Endpoints touched in this slice
+
+| Endpoint                                                            | Role          | Notes                          |
+|---------------------------------------------------------------------|---------------|--------------------------------|
+| `GET /api/appointments/availability?date=&time=&excludeAppointmentId=` | recept./doctor | Returns per-duration `fits / extends / blocked` verdicts |
+| `POST /api/appointments`                                            | recept./doctor | Same as slice-08; create from booking dialog |
+| `PATCH /api/appointments/:id`                                       | recept./doctor | Same as slice-08; edit from booking dialog |
+
+`AppointmentAvailabilityResponse` is consumed by the dialog and
+mirrored on the frontend in
+[`appointment-client.ts`](../apps/web/lib/appointment-client.ts). The
+shape stays additive — adding a duration to `hours_config` adds an
+option to the response; clinics with only two configured durations
+see only two cards.
 
 

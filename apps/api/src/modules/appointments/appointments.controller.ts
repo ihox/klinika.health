@@ -24,6 +24,8 @@ import { AuthGuard } from '../../common/guards/auth.guard';
 import { ClinicScopeGuard } from '../../common/guards/clinic-scope.guard';
 import type { RequestContext } from '../../common/request-context/request-context';
 import {
+  type AppointmentAvailabilityResponse,
+  AppointmentAvailabilityQuerySchema,
   type AppointmentDto,
   type AppointmentListResponse,
   type AppointmentStatsResponse,
@@ -82,6 +84,31 @@ export class AppointmentsController {
       });
     }
     return this.appointments.statsForDay(ctx.clinicId!, parsed.data.date);
+  }
+
+  // -------------------------------------------------------------------------
+  // Availability — per-duration verdict for a given (date, time) anchor
+  // -------------------------------------------------------------------------
+
+  @Get('availability')
+  async availability(
+    @Query() query: Record<string, string>,
+    @Ctx() ctx: RequestContext,
+  ): Promise<AppointmentAvailabilityResponse> {
+    this.assertCalendarRole(ctx);
+    const parsed = AppointmentAvailabilityQuerySchema.safeParse(query);
+    if (!parsed.success) {
+      throw new BadRequestException({
+        message: 'Parametra të pavlefshëm.',
+        issues: parsed.error.flatten(),
+      });
+    }
+    return this.appointments.availability(
+      ctx.clinicId!,
+      parsed.data.date,
+      parsed.data.time,
+      parsed.data.excludeAppointmentId ?? null,
+    );
   }
 
   // -------------------------------------------------------------------------

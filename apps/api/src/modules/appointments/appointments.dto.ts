@@ -138,6 +138,51 @@ export interface SoftDeleteResponse {
 }
 
 // ---------------------------------------------------------------------------
+// Availability (slice-09 booking dialog)
+// ---------------------------------------------------------------------------
+//
+// Given a (date, time) anchor — either tapped on the calendar (Path 1) or
+// chosen via the time picker (Path 2) — the dialog asks the server which
+// of the clinic's configured durations actually fit. The response drives
+// the three states from the design prototype:
+//   - `fits`     → clean fit, no warnings
+//   - `extends`  → fits but the booking would run past the natural slot
+//                  unit (the smallest configured duration) — UI shows the
+//                  end time as a calm "Të vazhdojmë?" notice
+//   - `blocked`  → conflict or after-hours; option is visually disabled
+//
+// `excludeAppointmentId` lets the edit flow check against everything
+// *except* the appointment being moved, so re-saving an unchanged
+// appointment doesn't report itself as a conflict.
+
+export const AppointmentAvailabilityQuerySchema = z
+  .object({
+    date: IsoDateSchema,
+    time: z.string().regex(/^([01]\d|2[0-3]):([0-5]\d)$/, 'Ora duhet të jetë HH:MM'),
+    excludeAppointmentId: z.string().uuid().optional(),
+  })
+  .strict();
+export type AppointmentAvailabilityQuery = z.infer<typeof AppointmentAvailabilityQuerySchema>;
+
+export type AvailabilityStatus = 'fits' | 'extends' | 'blocked';
+export type AvailabilityReason = 'closed_day' | 'before_open' | 'after_close' | 'conflict';
+
+export interface AvailabilityOption {
+  durationMinutes: number;
+  status: AvailabilityStatus;
+  endsAt: string | null;
+  reason: AvailabilityReason | null;
+}
+
+export interface AppointmentAvailabilityResponse {
+  date: string;
+  time: string;
+  /** Smallest configured duration; the UI treats it as the natural slot unit. */
+  slotUnitMinutes: number;
+  options: AvailabilityOption[];
+}
+
+// ---------------------------------------------------------------------------
 // Color indicator (CLAUDE.md slice-08 §2)
 // ---------------------------------------------------------------------------
 

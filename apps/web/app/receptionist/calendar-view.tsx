@@ -9,8 +9,8 @@ import { cn } from '@/lib/utils';
 import { ApiError } from '@/lib/api';
 import {
   addLocalDays,
-  appointmentClient,
   type AppointmentDto,
+  appointmentClient,
   type AppointmentStatsResponse,
   dayLabelLong,
   formatLongAlbanianDate,
@@ -23,17 +23,53 @@ import { clinicClient, type ClinicSettings, type HoursConfig } from '@/lib/clini
 import type { PatientPublicDto } from '@/lib/patient-client';
 
 import { AppointmentActions } from './appointment-actions';
-import { BookingDialog } from './booking-dialog';
+import { BookingDialog, type BookingDialogResult } from './booking-dialog';
 import { CalendarGrid, type DayColumn } from './calendar-grid';
+import { GlobalPatientSearch } from './global-patient-search';
+import { QuickAddPatientModal } from './pacientet/quick-add-patient-modal';
 import { PatientPicker } from './patient-picker';
 
 const DAYS_TO_SHOW = 6;
 const STATS_POLL_MS = 30_000;
 
 interface UndoState {
+  /** ID of the appointment that was just affected (for restore + delete-undo). */
   id: string;
   patientName: string;
+  /** Server-stamped expiry. */
   restorableUntil: string;
+  /** What the toast says before the "Anulo" affordance. */
+  message: string;
+  /**
+   * What "Anulo" should do:
+   *   `restore-deleted` — call POST /restore (post-delete undo)
+   *   `soft-delete`     — call DELETE /:id (post-booking undo)
+   */
+  intent: 'restore-deleted' | 'soft-delete';
+}
+
+interface BookingState {
+  mode: 'create' | 'edit';
+  appointmentId?: string;
+  patient: PatientPublicDto;
+  initialDate: string;
+  initialTime: string;
+  initialDurationMinutes?: number;
+  prefilledFromSlot: boolean;
+}
+
+interface PickerState {
+  /** Context that opened the picker. */
+  source: 'slot' | 'global';
+  date: string;
+  time: string;
+  anchor: { x: number; y: number };
+}
+
+interface QuickAddState {
+  seed: string;
+  /** Where to route the new patient on success. */
+  returnTo: { date: string; time: string; prefilledFromSlot: boolean };
 }
 
 export function CalendarView(): ReactElement {
@@ -46,16 +82,9 @@ export function CalendarView(): ReactElement {
   const [toast, setToast] = useState<string | null>(null);
   const [undo, setUndo] = useState<UndoState | null>(null);
 
-  const [picker, setPicker] = useState<{
-    date: string;
-    time: string;
-    anchor: { x: number; y: number };
-  } | null>(null);
-  const [booking, setBooking] = useState<{
-    patient: PatientPublicDto;
-    date: string;
-    time: string;
-  } | null>(null);
+  const [picker, setPicker] = useState<PickerState | null>(null);
+  const [booking, setBooking] = useState<BookingState | null>(null);
+  const [quickAdd, setQuickAdd] = useState<QuickAddState | null>(null);
   const [actionsFor, setActionsFor] = useState<{
     appointment: AppointmentDto;
     anchor: { x: number; y: number };
@@ -81,9 +110,6 @@ export function CalendarView(): ReactElement {
           endTime: day.end,
         });
       } else if (cursor === todayIso) {
-        // If today is closed, still surface it as the leftmost column so
-        // the receptionist sees today's state (matches the prototype's
-        // "today + N open" rule).
         out.push({
           date: cursor,
           weekday: dow,
@@ -93,8 +119,6 @@ export function CalendarView(): ReactElement {
         });
       }
       cursor = addLocalDays(cursor, 1);
-      // Bail-out: defensive cap so a misconfigured "all-closed" clinic
-      // doesn't lock the loop.
       if (out.length === 0 && cursor > addLocalDays(todayIso, 14)) break;
       if (cursor > addLocalDays(todayIso, 60)) break;
     }
@@ -109,7 +133,6 @@ export function CalendarView(): ReactElement {
     [columns.length, rangeFrom, rangeTo],
   );
 
-  // ----- Initial load: clinic settings + appointments + stats + unmarked
   const refreshAppointments = useCallback(async () => {
     if (columns.length === 0) return;
     try {
@@ -191,7 +214,7 @@ export function CalendarView(): ReactElement {
     source.addEventListener('appointment.updated', onAny);
     source.addEventListener('appointment.deleted', onAny);
     source.onerror = () => {
-      // The browser auto-reconnects. Fall back to polling-only.
+      // Browser auto-reconnects; fall back to polling-only.
     };
     return () => source.close();
   }, [refreshAppointments, refreshStats]);
@@ -209,18 +232,9 @@ export function CalendarView(): ReactElement {
     return () => document.removeEventListener('visibilitychange', onVis);
   }, [refreshAppointments, refreshStats, refreshUnmarked]);
 
-  // ----- Slot click → patient picker
-  const onSlotClick = useCallback(
-    (params: { date: string; time: string }) => {
-      setActionsFor(null);
-      // Anchor under the clicked column header. We use the last
-      // mousedown coords stashed via the document handler below.
-      const anchor = lastMouseRef.current ?? { x: window.innerWidth / 2, y: 120 };
-      setPicker({ ...params, anchor });
-    },
-    [],
-  );
-
+  // Last mousedown coords — used to anchor the slot-first popover next
+  // to wherever the receptionist tapped. Refs avoid a re-render per
+  // mouse-move.
   const lastMouseRef = useRef<{ x: number; y: number } | null>(null);
   useEffect(() => {
     function onMove(e: MouseEvent): void {
@@ -229,6 +243,16 @@ export function CalendarView(): ReactElement {
     window.addEventListener('mousedown', onMove);
     return () => window.removeEventListener('mousedown', onMove);
   }, []);
+
+  // ----- Slot click → patient picker (Path 1)
+  const onSlotClick = useCallback(
+    (params: { date: string; time: string }) => {
+      setActionsFor(null);
+      const anchor = lastMouseRef.current ?? { x: window.innerWidth / 2, y: 120 };
+      setPicker({ source: 'slot', ...params, anchor });
+    },
+    [],
+  );
 
   // ----- Appointment click → action menu
   const onAppointmentClick = useCallback(
@@ -273,6 +297,8 @@ export function CalendarView(): ReactElement {
           id: appointment.id,
           patientName: `${appointment.patient.firstName} ${appointment.patient.lastName}`,
           restorableUntil: res.restorableUntil,
+          message: `Termini i ${appointment.patient.firstName} ${appointment.patient.lastName} u fshi.`,
+          intent: 'restore-deleted',
         });
       } catch {
         setToast('Fshirja dështoi.');
@@ -281,21 +307,46 @@ export function CalendarView(): ReactElement {
     [refreshAppointments, refreshStats],
   );
 
-  const undoDelete = useCallback(async () => {
+  // ----- Edit existing appointment (open booking dialog in edit mode)
+  const onReschedule = useCallback((appointment: AppointmentDto) => {
+    const local = toLocalParts(new Date(appointment.scheduledFor));
+    setBooking({
+      mode: 'edit',
+      appointmentId: appointment.id,
+      patient: {
+        id: appointment.patientId,
+        firstName: appointment.patient.firstName,
+        lastName: appointment.patient.lastName,
+        dateOfBirth: appointment.patient.dateOfBirth,
+      },
+      initialDate: local.date,
+      initialTime: local.time,
+      initialDurationMinutes: appointment.durationMinutes,
+      prefilledFromSlot: false,
+    });
+  }, []);
+
+  // ----- Undo handling for both flows (delete-undo + post-booking undo)
+  const runUndo = useCallback(async () => {
     if (!undo) return;
     try {
-      await appointmentClient.restore(undo.id);
+      if (undo.intent === 'restore-deleted') {
+        await appointmentClient.restore(undo.id);
+        setToast(`Termini i ${undo.patientName} u rikthye.`);
+      } else {
+        await appointmentClient.softDelete(undo.id);
+        setToast('Termini u anulua.');
+      }
       await refreshAppointments();
       await refreshStats();
-      setToast(`Termini i ${undo.patientName} u rikthye.`);
     } catch {
-      setToast('Rikthimi dështoi.');
+      setToast('Anulimi dështoi.');
     } finally {
       setUndo(null);
     }
   }, [refreshAppointments, refreshStats, undo]);
 
-  // Auto-dismiss the undo toast after 30s (matches the server's restorableUntil).
+  // Auto-dismiss the undo toast after 30s.
   useEffect(() => {
     if (!undo) return undefined;
     const handle = window.setTimeout(() => setUndo(null), 30_000);
@@ -309,7 +360,108 @@ export function CalendarView(): ReactElement {
     return () => window.clearTimeout(handle);
   }, [toast]);
 
-  // ----- End-of-day prompt (yesterday's unmarked)
+  // ----- Patient picker → booking flow
+  const onPatientPicked = useCallback(
+    (p: PatientPublicDto) => {
+      if (!picker) return;
+      setBooking({
+        mode: 'create',
+        patient: p,
+        initialDate: picker.date,
+        initialTime: picker.time,
+        // Slot-first carries time + date from the tap. Patient-first
+        // carries today's date but leaves time blank.
+        prefilledFromSlot: picker.source === 'slot',
+      });
+      setPicker(null);
+    },
+    [picker],
+  );
+
+  const onAddNewFromPicker = useCallback(
+    (query: string) => {
+      if (!picker) return;
+      setQuickAdd({
+        seed: query,
+        returnTo: {
+          date: picker.date,
+          time: picker.time,
+          prefilledFromSlot: picker.source === 'slot',
+        },
+      });
+      setPicker(null);
+    },
+    [picker],
+  );
+
+  const onQuickAdded = useCallback(
+    (p: PatientPublicDto) => {
+      if (!quickAdd) {
+        setQuickAdd(null);
+        return;
+      }
+      setBooking({
+        mode: 'create',
+        patient: p,
+        initialDate: quickAdd.returnTo.date,
+        initialTime: quickAdd.returnTo.time,
+        prefilledFromSlot: quickAdd.returnTo.prefilledFromSlot,
+      });
+      setQuickAdd(null);
+    },
+    [quickAdd],
+  );
+
+  // ----- Path 2: global search opens a picker without a slot anchor.
+  const openGlobalPickerForPatient = useCallback(
+    (p: PatientPublicDto) => {
+      setBooking({
+        mode: 'create',
+        patient: p,
+        initialDate: todayIso,
+        initialTime: '',
+        prefilledFromSlot: false,
+      });
+    },
+    [todayIso],
+  );
+
+  const openGlobalQuickAdd = useCallback(
+    (seed: string) => {
+      setQuickAdd({
+        seed,
+        returnTo: { date: todayIso, time: '', prefilledFromSlot: false },
+      });
+    },
+    [todayIso],
+  );
+
+  // ----- Booking submitted (success path for both paths and edit mode)
+  const onBooked = useCallback(
+    (result: BookingDialogResult) => {
+      const apt = result.appointment;
+      const isEdit = booking?.mode === 'edit';
+      setBooking(null);
+      void refreshAppointments();
+      void refreshStats();
+      void refreshUnmarked();
+      // Post-booking undo (only on create). Edit reschedules don't get
+      // a 30s undo — the receptionist can just reschedule again.
+      if (!isEdit) {
+        setUndo({
+          id: apt.id,
+          patientName: `${apt.patient.firstName} ${apt.patient.lastName}`,
+          restorableUntil: new Date(Date.now() + 30_000).toISOString(),
+          message: result.toast,
+          intent: 'soft-delete',
+        });
+      } else {
+        setToast(result.toast);
+      }
+    },
+    [booking?.mode, refreshAppointments, refreshStats, refreshUnmarked],
+  );
+
   const promptCount = unmarked.length;
 
   if (error && !settings) {
@@ -343,9 +495,15 @@ export function CalendarView(): ReactElement {
               </Link>
             </nav>
           </div>
-          <Link href="/profili-im" className="text-[13px] text-ink-muted hover:text-ink">
-            Profili im →
-          </Link>
+          <div className="flex items-center gap-4">
+            <GlobalPatientSearch
+              onPick={openGlobalPickerForPatient}
+              onAddNew={openGlobalQuickAdd}
+            />
+            <Link href="/profili-im" className="text-[13px] text-ink-muted hover:text-ink">
+              Profili im →
+            </Link>
+          </div>
         </div>
       </header>
 
@@ -428,39 +586,39 @@ export function CalendarView(): ReactElement {
         </section>
       </div>
 
-      {/* Picker popover */}
+      {/* Picker popover (Path 1) */}
       {picker ? (
         <PatientPicker
           anchor={picker.anchor}
           contextLabel={`${dayLabelLong(weekdayOf(picker.date))}, ${picker.date.split('-').reverse().join('.').slice(0, 5)} · ${picker.time}`}
           onClose={() => setPicker(null)}
-          onPick={(p) => {
-            setBooking({ patient: p, date: picker.date, time: picker.time });
-            setPicker(null);
-          }}
-          onAddNew={() => {
-            setPicker(null);
-            setToast(
-              'Shtimi i pacientit të ri vjen me slice-09. Përdorni faqen Pacientët për ndërkohë.',
-            );
-          }}
+          onPick={onPatientPicked}
+          onAddNew={onAddNewFromPicker}
         />
       ) : null}
+
+      {/* Quick-add modal (chained from picker or global search) */}
+      <QuickAddPatientModal
+        open={quickAdd !== null}
+        seed={quickAdd?.seed}
+        onClose={() => setQuickAdd(null)}
+        onCreated={onQuickAdded}
+        onError={(m) => setToast(m)}
+      />
 
       {/* Booking dialog */}
       {booking && settings ? (
         <BookingDialog
+          mode={booking.mode}
+          appointmentId={booking.appointmentId}
           patient={booking.patient}
-          date={booking.date}
-          time={booking.time}
+          initialDate={booking.initialDate}
+          initialTime={booking.initialTime}
+          initialDurationMinutes={booking.initialDurationMinutes}
           hours={settings.hours as HoursConfig}
+          prefilledFromSlot={booking.prefilledFromSlot}
           onClose={() => setBooking(null)}
-          onBooked={() => {
-            setBooking(null);
-            setToast('Termini u caktua.');
-            void refreshAppointments();
-            void refreshStats();
-          }}
+          onBooked={onBooked}
           onError={(msg) => setToast(msg)}
         />
       ) : null}
@@ -478,9 +636,7 @@ export function CalendarView(): ReactElement {
             if (action === 'no_show') return applyStatus(a, 'no_show');
             if (action === 'cancelled') return applyStatus(a, 'cancelled');
             if (action === 'delete') return onDelete(a);
-            if (action === 'reschedule') {
-              setToast('Riprogramimi vjen me slice-09. Përdor zvarritjen e termineve.');
-            }
+            if (action === 'reschedule') return onReschedule(a);
             return undefined;
           }}
         />
@@ -497,19 +653,17 @@ export function CalendarView(): ReactElement {
         </div>
       ) : null}
 
-      {/* Undo toast */}
+      {/* Undo toast (post-booking + post-delete) */}
       {undo ? (
         <div
           role="status"
           aria-live="polite"
           className="fixed bottom-6 right-6 z-[120] flex items-center gap-3 rounded-md border border-line bg-surface-elevated px-4 py-2.5 text-[13px] text-ink shadow-modal"
         >
-          <span>
-            Termini i {undo.patientName} u fshi.
-          </span>
+          <span>{undo.message}</span>
           <button
             type="button"
-            onClick={undoDelete}
+            onClick={runUndo}
             className="font-medium text-primary-dark hover:underline"
           >
             Anulo

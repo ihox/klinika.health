@@ -11,6 +11,7 @@ import type { RequestContext } from '../../common/request-context/request-contex
 import { PrismaService } from '../../prisma/prisma.service';
 import { parseHoursOrDefault } from '../clinic-settings/clinic-settings.service';
 import {
+  type AppointmentAvailabilityResponse,
   type AppointmentDto,
   type AppointmentListResponse,
   type AppointmentStatsResponse,
@@ -19,6 +20,7 @@ import {
   type SoftDeleteResponse,
   type UpdateAppointmentInput,
 } from './appointments.dto';
+import { computeAvailability, type OccupiedInterval } from './appointments.availability';
 import { AppointmentsEventsService } from './appointments.events';
 import { fitsInsideHours, toMinutes } from './appointments.hours';
 import { localClockToUtc, utcToLocalParts } from './appointments.tz';
@@ -411,6 +413,64 @@ export class AppointmentsService {
     });
     const lastVisitMap = await this.fetchLastVisitMap(clinicId, [restored.patientId]);
     return this.toDto(restored, lastVisitMap);
+  }
+
+  // -------------------------------------------------------------------------
+  // Availability — slice-09 booking dialog
+  // -------------------------------------------------------------------------
+  //
+  // Returns the per-duration verdict for the chosen (date, time) anchor.
+  // The dialog calls this:
+  //   * on open (initial render with all options),
+  //   * when the receptionist changes date or time,
+  //   * when entering edit mode (with `excludeId` so the appointment
+  //     being moved doesn't self-conflict).
+  //
+  // We fetch the day's appointments once and intersect each candidate
+  // duration in memory. Three states drive the UI per AvailabilityOption:
+  //   - `fits`     when hours OK + no overlap and duration ≤ slot unit
+  //                (or duration > unit but no overlap with later appts)
+  //   - `extends`  when hours OK + no overlap AND the booking spills past
+  //                the natural slot unit (smallest configured duration)
+  //   - `blocked`  when out-of-hours or overlaps with an existing appt
+  //
+  // The split between `fits` and `extends` is purely a UI signal —
+  // both are bookable, but `extends` triggers the calm "Të vazhdojmë?"
+  // notice in the dialog.
+
+  async availability(
+    clinicId: string,
+    date: string,
+    time: string,
+    excludeId: string | null,
+  ): Promise<AppointmentAvailabilityResponse> {
+    const hours = await this.clinicHours(clinicId);
+
+    // One round-trip: pull every appointment on the day for conflict math.
+    const dayStartUtc = new Date(localClockToUtc(date, '00:00').getTime() - 86_400_000);
+    const dayEndUtc = new Date(localClockToUtc(date, '23:59').getTime() + 86_400_000);
+    const dayRows = await this.prisma.appointment.findMany({
+      where: {
+        clinicId,
+        deletedAt: null,
+        status: { in: ['scheduled', 'completed'] },
+        scheduledFor: { gte: dayStartUtc, lte: dayEndUtc },
+        ...(excludeId ? { NOT: { id: excludeId } } : {}),
+      },
+      select: { id: true, scheduledFor: true, durationMinutes: true },
+    });
+
+    // Convert each row to a local-minute interval so the pure helper
+    // can do the overlap math without re-binding to TIMESTAMPTZ.
+    const occupied: OccupiedInterval[] = dayRows.flatMap((r) => {
+      const local = utcToLocalParts(r.scheduledFor);
+      if (local.date !== date) return [];
+      const startMin = toMinutes(local.time);
+      return [{ startMin, endMin: startMin + r.durationMinutes }];
+    });
+
+    const { slotUnitMinutes, options } = computeAvailability(hours, date, time, occupied);
+    return { date, time, slotUnitMinutes, options };
   }
 
   // -------------------------------------------------------------------------
