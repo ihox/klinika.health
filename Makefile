@@ -14,7 +14,7 @@ DATABASE_URL ?= postgresql://klinika:klinika@localhost:5432/klinika?schema=publi
 
 COMPOSE := docker compose -f infra/compose/docker-compose.dev.yml --project-directory .
 
-.PHONY: dev stop logs ps db-migrate db-reset db-studio db-seed lint typecheck test test-e2e build clean
+.PHONY: dev stop logs ps db-migrate db-reset db-studio db-seed refresh-api lint typecheck test test-e2e build clean
 
 dev:
 	$(COMPOSE) up -d --build
@@ -51,6 +51,14 @@ db-studio:
 
 db-seed:
 	pnpm --filter @klinika/api seed
+
+# Rebuild the api container's node_modules symlinks and regenerate the
+# Prisma client. Run after `docker compose up --build`, after editing
+# api package.json, or whenever you see "Cannot find module 'puppeteer'"
+# or "Property 'Decimal' does not exist on type 'typeof Prisma'" in the
+# nest --watch output. Idempotent — safe to run any time.
+refresh-api:
+	$(COMPOSE) exec api sh -lc 'cd /workspace && pnpm install --filter @klinika/api && cd apps/api && pnpm exec prisma generate'
 
 lint:
 	pnpm -r lint
