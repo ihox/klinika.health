@@ -116,7 +116,10 @@ test.describe('Login + MFA', () => {
     await page.getByLabel('Email').fill('taulant.shala@klinika.health');
     await page.getByLabel('Fjalëkalimi').fill('wrong');
     await page.getByRole('button', { name: 'Hyr' }).click();
-    await expect(page.getByRole('alert')).toContainText('Email-i ose fjalëkalimi është i pasaktë');
+    // Filter by text so the matcher skips Next.js's
+    // `__next-route-announcer__`, which also carries role="alert".
+    const banner = page.locator('[role="alert"]').filter({ hasText: 'Email-i ose fjalëkalimi' });
+    await expect(banner).toContainText('Email-i ose fjalëkalimi është i pasaktë');
   });
 
   test('wrong MFA code shows error and remains on /verify', async ({ page }) => {
@@ -239,7 +242,10 @@ test.describe('Password reset', () => {
     await page.getByLabel('Konfirmo').fill('Abc123def!XY');
     await page.getByRole('button', { name: /Vendos fjalëkalimin/ }).click();
     await expect(page).toHaveURL(/\/login\?reason=password-changed/);
-    await expect(page.getByRole('alert')).toContainText('Fjalëkalimi u rivendos');
+    // Filter by text so the matcher skips Next.js's
+    // `__next-route-announcer__`, which also carries role="alert".
+    const banner = page.locator('[role="alert"]').filter({ hasText: 'Fjalëkalimi u rivendos' });
+    await expect(banner).toContainText('Fjalëkalimi u rivendos');
   });
 
   test('confirm: pwned password renders dedicated warning block', async ({ page }) => {
