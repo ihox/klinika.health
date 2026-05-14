@@ -2,9 +2,9 @@
 
 import type { ReactElement } from 'react';
 
+import { WalkInBand, groupWalkInsByDay } from '@/components/walk-in-band';
 import { cn } from '@/lib/utils';
 import {
-  type AppointmentDto,
   colorIndicatorForLastVisit,
   dayLabelShort,
   formatDob,
@@ -14,6 +14,7 @@ import {
   toLocalParts,
 } from '@/lib/appointment-client';
 import type { HoursConfig } from '@/lib/clinic-client';
+import { type CalendarEntry, type VisitStatus } from '@/lib/visits-calendar-client';
 
 // Layout constants. 120px per hour = 2px per minute. The grid keeps a
 // continuous open band per day (no in-day "Mbyllur" splits in v1) so a
@@ -33,16 +34,23 @@ export interface CalendarGridProps {
   now: Date;
   hours: HoursConfig;
   columns: DayColumn[];
-  appointments: AppointmentDto[];
+  /** Every entry the receptionist can see — scheduled AND walk-ins. */
+  entries: CalendarEntry[];
   onSlotClick: (params: { date: string; time: string }) => void;
-  onAppointmentClick: (
-    appointment: AppointmentDto,
+  onEntryClick: (
+    entry: CalendarEntry,
+    anchor: { x: number; y: number },
+  ) => void;
+  onEntryContextMenu?: (
+    entry: CalendarEntry,
     anchor: { x: number; y: number },
   ) => void;
 }
 
-const STATUS_LABEL: Record<AppointmentDto['status'], string> = {
+const STATUS_LABEL: Record<VisitStatus, string> = {
   scheduled: 'Planifikuar',
+  arrived: 'Paraqitur',
+  in_progress: 'Në vizitë',
   completed: 'Kryer',
   no_show: 'Mungesë',
   cancelled: 'Anuluar',
@@ -53,10 +61,16 @@ export function CalendarGrid({
   now,
   hours,
   columns,
-  appointments,
+  entries,
   onSlotClick,
-  onAppointmentClick,
+  onEntryClick,
+  onEntryContextMenu,
 }: CalendarGridProps): ReactElement {
+  // Walk-ins ride the band; only scheduled rows hit the time grid.
+  const scheduledEntries = entries.filter((e) => !e.isWalkIn);
+  const walkInEntries = entries.filter((e) => e.isWalkIn);
+  const walkInsByDay = groupWalkInsByDay(walkInEntries);
+
   // The widest open band determines the grid height so columns line up
   // even when one day closes earlier than another. We always anchor at
   // the earliest `start` across columns and extend to the latest `end`.
@@ -80,9 +94,10 @@ export function CalendarGrid({
     hourLabels.push(m);
   }
 
-  // Group appointments by their local day for fast per-column rendering.
-  const byDay = new Map<string, AppointmentDto[]>();
-  for (const a of appointments) {
+  // Group scheduled entries by their local day for fast per-column rendering.
+  const byDay = new Map<string, CalendarEntry[]>();
+  for (const a of scheduledEntries) {
+    if (a.scheduledFor == null) continue;
     const day = toLocalParts(new Date(a.scheduledFor)).date;
     if (!byDay.has(day)) byDay.set(day, []);
     byDay.get(day)!.push(a);
@@ -129,7 +144,16 @@ export function CalendarGrid({
         );
       })}
 
-      {/* Body row */}
+      {/* Walk-in band row */}
+      <WalkInBand
+        columns={columns}
+        todayIso={todayIso}
+        walkInsByDay={walkInsByDay}
+        onEntryClick={onEntryClick}
+        onEntryContextMenu={onEntryContextMenu}
+      />
+
+      {/* Body row — time axis + per-day columns */}
       <div className="relative border-r border-line" style={{ height: gridHeightPx }}>
         {hourLabels.map((m, idx) => (
           <div
@@ -150,7 +174,7 @@ export function CalendarGrid({
       </div>
 
       {columns.map((col) => {
-        const dayAppts = byDay.get(col.date) ?? [];
+        const dayEntries = byDay.get(col.date) ?? [];
         const isToday = col.date === todayIso;
         const colStartMin = col.open ? timeToMinutes(col.startTime) : gridStartMin;
         const colEndMin = col.open ? timeToMinutes(col.endTime) : gridStartMin;
@@ -167,9 +191,10 @@ export function CalendarGrid({
             gridHeightPx={gridHeightPx}
             colStartOffsetPx={closedTopOffset}
             colEndOffsetPx={closedBandTop * PX_PER_MIN}
-            appointments={dayAppts}
+            entries={dayEntries}
             onSlotClick={onSlotClick}
-            onAppointmentClick={onAppointmentClick}
+            onEntryClick={onEntryClick}
+            onEntryContextMenu={onEntryContextMenu}
           />
         );
       })}
@@ -186,9 +211,10 @@ interface DayColumnBodyProps {
   gridHeightPx: number;
   colStartOffsetPx: number;
   colEndOffsetPx: number;
-  appointments: AppointmentDto[];
+  entries: CalendarEntry[];
   onSlotClick: CalendarGridProps['onSlotClick'];
-  onAppointmentClick: CalendarGridProps['onAppointmentClick'];
+  onEntryClick: CalendarGridProps['onEntryClick'];
+  onEntryContextMenu: CalendarGridProps['onEntryContextMenu'];
 }
 
 function DayColumnBody({
@@ -199,9 +225,10 @@ function DayColumnBody({
   gridHeightPx,
   colStartOffsetPx,
   colEndOffsetPx,
-  appointments,
+  entries,
   onSlotClick,
-  onAppointmentClick,
+  onEntryClick,
+  onEntryContextMenu,
 }: DayColumnBodyProps): ReactElement {
   const handleClick = (event: React.MouseEvent<HTMLDivElement>): void => {
     if (!col.open) return;
@@ -267,13 +294,18 @@ function DayColumnBody({
         </div>
       ) : null}
 
-      {appointments.map((a) => (
-        <AppointmentCard
+      {entries.map((a) => (
+        <ScheduledCard
           key={a.id}
-          appointment={a}
+          entry={a}
           gridStartMin={gridStartMin}
           onClick={(ev) =>
-            onAppointmentClick(a, { x: ev.clientX, y: ev.clientY })
+            onEntryClick(a, { x: ev.clientX, y: ev.clientY })
+          }
+          onContextMenu={
+            onEntryContextMenu
+              ? (ev) => onEntryContextMenu(a, { x: ev.clientX, y: ev.clientY })
+              : undefined
           }
         />
       ))}
@@ -294,39 +326,55 @@ function DayColumnBody({
   );
 }
 
-interface AppointmentCardProps {
-  appointment: AppointmentDto;
+interface ScheduledCardProps {
+  entry: CalendarEntry;
   gridStartMin: number;
   onClick: (event: React.MouseEvent) => void;
+  onContextMenu?: (event: React.MouseEvent) => void;
 }
 
-function AppointmentCard({
-  appointment,
+function ScheduledCard({
+  entry,
   gridStartMin,
   onClick,
-}: AppointmentCardProps): ReactElement {
-  const start = new Date(appointment.scheduledFor);
+  onContextMenu,
+}: ScheduledCardProps): ReactElement | null {
+  if (entry.scheduledFor == null || entry.durationMinutes == null) return null;
+  const start = new Date(entry.scheduledFor);
   const localParts = toLocalParts(start);
   const startMin = timeToMinutes(localParts.time);
   const top = (startMin - gridStartMin) * PX_PER_MIN;
-  const height = appointment.durationMinutes * PX_PER_MIN;
-  const color = colorIndicatorForLastVisit(appointment.lastVisitAt);
+  const height = entry.durationMinutes * PX_PER_MIN;
+  const color = colorIndicatorForLastVisit(entry.lastVisitAt);
 
-  const isCompleted = appointment.status === 'completed';
-  const isNoShow = appointment.status === 'no_show';
-  const isCancelled = appointment.status === 'cancelled';
-  const isNew = appointment.isNewPatient;
+  // Step 4 (later in Phase 2a) will modulate the visual treatment for
+  // the new arrived/in_progress statuses. For now we keep the existing
+  // four-state styling — scheduled cards in arrived/in_progress render
+  // with the default teal treatment, which is acceptable.
+  const isCompleted = entry.status === 'completed';
+  const isNoShow = entry.status === 'no_show';
+  const isCancelled = entry.status === 'cancelled';
+  const isNew = entry.isNewPatient;
 
   return (
     <button
       type="button"
-      data-appt={appointment.id}
-      data-status={appointment.status}
+      data-appt={entry.id}
+      data-status={entry.status}
       onClick={(e) => {
         e.stopPropagation();
         onClick(e);
       }}
-      title={`${appointment.patient.firstName} ${appointment.patient.lastName} · ${formatDob(appointment.patient.dateOfBirth)} · ${STATUS_LABEL[appointment.status]}`}
+      onContextMenu={
+        onContextMenu
+          ? (e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onContextMenu(e);
+            }
+          : undefined
+      }
+      title={`${entry.patient.firstName} ${entry.patient.lastName} · ${formatDob(entry.patient.dateOfBirth)} · ${STATUS_LABEL[entry.status]}`}
       className={cn(
         'absolute left-1.5 right-1.5 px-2 py-0.5 rounded text-left border bg-surface-elevated border-teal-200 border-l-[3px] border-l-primary shadow-xs transition hover:-translate-y-px hover:shadow-sm z-[3] flex items-center gap-1.5 overflow-hidden',
         isCompleted &&
@@ -336,7 +384,7 @@ function AppointmentCard({
         isNew && !isCompleted && !isNoShow && 'border-l-accent-500 border-warning-soft',
       )}
       style={{ top, height: Math.max(20, height) }}
-      aria-label={`${appointment.patient.firstName} ${appointment.patient.lastName}, ${localParts.time}, ${STATUS_LABEL[appointment.status]}`}
+      aria-label={`${entry.patient.firstName} ${entry.patient.lastName}, ${localParts.time}, ${STATUS_LABEL[entry.status]}`}
     >
       <span className="flex-1 min-w-0 text-[11.5px] font-semibold text-ink-strong truncate leading-[1.15]">
         <span
@@ -346,7 +394,7 @@ function AppointmentCard({
             isCancelled && 'line-through text-ink-faint',
           )}
         >
-          {appointment.patient.firstName} {appointment.patient.lastName}
+          {entry.patient.firstName} {entry.patient.lastName}
         </span>
       </span>
       <span className="flex-none flex items-center gap-1 text-[10.5px] text-ink-muted tabular-nums">

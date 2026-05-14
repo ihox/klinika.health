@@ -12,9 +12,6 @@ import { ApiError } from '@/lib/api';
 import { useMe } from '@/lib/use-me';
 import {
   addLocalDays,
-  type AppointmentDto,
-  appointmentClient,
-  type AppointmentStatsResponse,
   dayLabelLong,
   formatLongAlbanianDate,
   formatRangeAlbanian,
@@ -24,6 +21,12 @@ import {
 } from '@/lib/appointment-client';
 import { clinicClient, type ClinicSettings, type HoursConfig } from '@/lib/clinic-client';
 import type { PatientPublicDto } from '@/lib/patient-client';
+import {
+  type CalendarEntry,
+  type CalendarStatsResponse,
+  type VisitStatus,
+  calendarClient,
+} from '@/lib/visits-calendar-client';
 
 import { AppointmentActions } from './appointment-actions';
 import { BookingDialog, type BookingDialogResult } from './booking-dialog';
@@ -79,9 +82,9 @@ interface QuickAddState {
 
 export function CalendarView(): ReactElement {
   const [settings, setSettings] = useState<ClinicSettings | null>(null);
-  const [appointments, setAppointments] = useState<AppointmentDto[]>([]);
-  const [stats, setStats] = useState<AppointmentStatsResponse | null>(null);
-  const [unmarked, setUnmarked] = useState<AppointmentDto[]>([]);
+  const [entries, setEntries] = useState<CalendarEntry[]>([]);
+  const [stats, setStats] = useState<CalendarStatsResponse | null>(null);
+  const [unmarked, setUnmarked] = useState<CalendarEntry[]>([]);
   const [now, setNow] = useState(() => new Date());
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
@@ -91,7 +94,7 @@ export function CalendarView(): ReactElement {
   const [booking, setBooking] = useState<BookingState | null>(null);
   const [quickAdd, setQuickAdd] = useState<QuickAddState | null>(null);
   const [actionsFor, setActionsFor] = useState<{
-    appointment: AppointmentDto;
+    entry: CalendarEntry;
     anchor: { x: number; y: number };
   } | null>(null);
 
@@ -138,11 +141,11 @@ export function CalendarView(): ReactElement {
     [columns.length, rangeFrom, rangeTo],
   );
 
-  const refreshAppointments = useCallback(async () => {
+  const refreshEntries = useCallback(async () => {
     if (columns.length === 0) return;
     try {
-      const res = await appointmentClient.list(rangeFrom, rangeTo);
-      setAppointments(res.appointments);
+      const res = await calendarClient.list(rangeFrom, rangeTo);
+      setEntries(res.entries);
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
         window.location.href = '/login?reason=session-expired';
@@ -154,7 +157,7 @@ export function CalendarView(): ReactElement {
 
   const refreshStats = useCallback(async () => {
     try {
-      const res = await appointmentClient.stats(todayIso);
+      const res = await calendarClient.stats(todayIso);
       setStats(res);
     } catch {
       // Stats are non-fatal — keep the previous snapshot.
@@ -163,8 +166,8 @@ export function CalendarView(): ReactElement {
 
   const refreshUnmarked = useCallback(async () => {
     try {
-      const res = await appointmentClient.unmarkedPast();
-      setUnmarked(res.appointments);
+      const res = await calendarClient.unmarkedPast();
+      setUnmarked(res.entries);
     } catch {
       setUnmarked([]);
     }
@@ -190,10 +193,10 @@ export function CalendarView(): ReactElement {
   }, []);
 
   useEffect(() => {
-    void refreshAppointments();
+    void refreshEntries();
     void refreshStats();
     void refreshUnmarked();
-  }, [refreshAppointments, refreshStats, refreshUnmarked]);
+  }, [refreshEntries, refreshStats, refreshUnmarked]);
 
   // ----- Now line: tick every minute, refresh stats every 30s
   useEffect(() => {
@@ -207,35 +210,40 @@ export function CalendarView(): ReactElement {
     return () => window.clearInterval(id);
   }, [refreshStats]);
 
-  // ----- SSE: real-time updates from the doctor (visit save → completed)
+  // ----- SSE: real-time updates from the calendar event bus. The server
+  // emits `visit.*` events (created / updated / status_changed / deleted
+  // / restored) — we don't filter by type since every event invalidates
+  // the calendar feed.
   useEffect(() => {
-    const url = appointmentClient.streamUrl();
+    const url = calendarClient.streamUrl();
     const source = new EventSource(url, { withCredentials: true });
     const onAny = (): void => {
-      void refreshAppointments();
+      void refreshEntries();
       void refreshStats();
     };
-    source.addEventListener('appointment.created', onAny);
-    source.addEventListener('appointment.updated', onAny);
-    source.addEventListener('appointment.deleted', onAny);
+    source.addEventListener('visit.created', onAny);
+    source.addEventListener('visit.updated', onAny);
+    source.addEventListener('visit.status_changed', onAny);
+    source.addEventListener('visit.deleted', onAny);
+    source.addEventListener('visit.restored', onAny);
     source.onerror = () => {
       // Browser auto-reconnects; fall back to polling-only.
     };
     return () => source.close();
-  }, [refreshAppointments, refreshStats]);
+  }, [refreshEntries, refreshStats]);
 
   // ----- Tab/window focus: invalidate caches.
   useEffect(() => {
     function onVis(): void {
       if (document.visibilityState === 'visible') {
-        void refreshAppointments();
+        void refreshEntries();
         void refreshStats();
         void refreshUnmarked();
       }
     }
     document.addEventListener('visibilitychange', onVis);
     return () => document.removeEventListener('visibilitychange', onVis);
-  }, [refreshAppointments, refreshStats, refreshUnmarked]);
+  }, [refreshEntries, refreshStats, refreshUnmarked]);
 
   // Last mousedown coords — used to anchor the slot-first popover next
   // to wherever the receptionist tapped. Refs avoid a re-render per
@@ -259,75 +267,82 @@ export function CalendarView(): ReactElement {
     [],
   );
 
-  // ----- Appointment click → action menu
-  const onAppointmentClick = useCallback(
-    (appointment: AppointmentDto, anchor: { x: number; y: number }) => {
+  // ----- Card / chip click → action menu
+  const onEntryClick = useCallback(
+    (entry: CalendarEntry, anchor: { x: number; y: number }) => {
       setPicker(null);
-      setActionsFor({ appointment, anchor });
+      setActionsFor({ entry, anchor });
     },
     [],
   );
 
   // ----- Status / delete actions
   const applyStatus = useCallback(
-    async (
-      appointment: AppointmentDto,
-      next: 'completed' | 'no_show' | 'cancelled',
-    ) => {
+    async (entry: CalendarEntry, next: VisitStatus) => {
       try {
-        await appointmentClient.update(appointment.id, { status: next });
-        await refreshAppointments();
+        await calendarClient.changeStatus(entry.id, next);
+        await refreshEntries();
         await refreshStats();
         await refreshUnmarked();
-        const labels = {
+        const labels: Partial<Record<VisitStatus, string>> = {
+          arrived: 'i shënuar si paraqitur',
+          in_progress: 'i shënuar si në vizitë',
           completed: 'i shënuar si kryer',
           no_show: 'i shënuar si mungesë',
           cancelled: 'i anuluar',
-        } as const;
-        setToast(`Termini ${labels[next]}.`);
+        };
+        setToast(`Termini ${labels[next] ?? 'u përditësua'}.`);
       } catch {
         setToast('Veprimi dështoi.');
       }
     },
-    [refreshAppointments, refreshStats, refreshUnmarked],
+    [refreshEntries, refreshStats, refreshUnmarked],
   );
 
   const onDelete = useCallback(
-    async (appointment: AppointmentDto) => {
+    async (entry: CalendarEntry) => {
       try {
-        const res = await appointmentClient.softDelete(appointment.id);
-        await refreshAppointments();
+        const res = await calendarClient.softDelete(entry.id);
+        await refreshEntries();
         await refreshStats();
+        const timeLabel = entry.scheduledFor
+          ? toLocalParts(new Date(entry.scheduledFor)).time
+          : entry.arrivedAt
+            ? `↻ ${toLocalParts(new Date(entry.arrivedAt)).time}`
+            : '';
         setUndo({
-          id: appointment.id,
-          patientName: `${appointment.patient.firstName} ${appointment.patient.lastName}`,
+          id: entry.id,
+          patientName: `${entry.patient.firstName} ${entry.patient.lastName}`,
           restorableUntil: res.restorableUntil,
-          message: 'Termini u fshi.',
-          secondary: `${appointment.patient.firstName} ${appointment.patient.lastName} · ${toLocalParts(new Date(appointment.scheduledFor)).time}`,
+          message: entry.isWalkIn ? 'Walk-in u fshi.' : 'Termini u fshi.',
+          secondary: `${entry.patient.firstName} ${entry.patient.lastName}${timeLabel ? ` · ${timeLabel}` : ''}`,
           intent: 'restore-deleted',
         });
       } catch {
         setToast('Fshirja dështoi.');
       }
     },
-    [refreshAppointments, refreshStats],
+    [refreshEntries, refreshStats],
   );
 
   // ----- Edit existing appointment (open booking dialog in edit mode)
-  const onReschedule = useCallback((appointment: AppointmentDto) => {
-    const local = toLocalParts(new Date(appointment.scheduledFor));
+  // Walk-ins can't be rescheduled — they have no slot. The action menu
+  // hides the option, so this only fires on scheduled entries.
+  const onReschedule = useCallback((entry: CalendarEntry) => {
+    if (entry.scheduledFor == null) return;
+    const local = toLocalParts(new Date(entry.scheduledFor));
     setBooking({
       mode: 'edit',
-      appointmentId: appointment.id,
+      appointmentId: entry.id,
       patient: {
-        id: appointment.patientId,
-        firstName: appointment.patient.firstName,
-        lastName: appointment.patient.lastName,
-        dateOfBirth: appointment.patient.dateOfBirth,
+        id: entry.patientId,
+        firstName: entry.patient.firstName,
+        lastName: entry.patient.lastName,
+        dateOfBirth: entry.patient.dateOfBirth,
       },
       initialDate: local.date,
       initialTime: local.time,
-      initialDurationMinutes: appointment.durationMinutes,
+      initialDurationMinutes: entry.durationMinutes ?? undefined,
       prefilledFromSlot: false,
     });
   }, []);
@@ -337,20 +352,20 @@ export function CalendarView(): ReactElement {
     if (!undo) return;
     try {
       if (undo.intent === 'restore-deleted') {
-        await appointmentClient.restore(undo.id);
+        await calendarClient.restore(undo.id);
         setToast(`Termini i ${undo.patientName} u rikthye.`);
       } else {
-        await appointmentClient.softDelete(undo.id);
+        await calendarClient.softDelete(undo.id);
         setToast('Termini u anulua.');
       }
-      await refreshAppointments();
+      await refreshEntries();
       await refreshStats();
     } catch {
       setToast('Anulimi dështoi.');
     } finally {
       setUndo(null);
     }
-  }, [refreshAppointments, refreshStats, undo]);
+  }, [refreshEntries, refreshStats, undo]);
 
   // Auto-dismiss the undo toast after 30s.
   useEffect(() => {
@@ -448,7 +463,7 @@ export function CalendarView(): ReactElement {
       const apt = result.appointment;
       const isEdit = booking?.mode === 'edit';
       setBooking(null);
-      void refreshAppointments();
+      void refreshEntries();
       void refreshStats();
       void refreshUnmarked();
       // Post-booking undo (only on create). Edit reschedules don't get
@@ -465,7 +480,7 @@ export function CalendarView(): ReactElement {
         setToast(result.toast);
       }
     },
-    [booking?.mode, refreshAppointments, refreshStats, refreshUnmarked],
+    [booking?.mode, refreshEntries, refreshStats, refreshUnmarked],
   );
 
   const promptCount = unmarked.length;
@@ -560,9 +575,9 @@ export function CalendarView(): ReactElement {
               now={now}
               hours={settings.hours}
               columns={columns}
-              appointments={appointments}
+              entries={entries}
               onSlotClick={onSlotClick}
-              onAppointmentClick={onAppointmentClick}
+              onEntryClick={onEntryClick}
             />
           ) : (
             <CalendarSkeleton />
@@ -607,14 +622,14 @@ export function CalendarView(): ReactElement {
         />
       ) : null}
 
-      {/* Appointment action menu */}
+      {/* Appointment / walk-in action menu */}
       {actionsFor ? (
         <AppointmentActions
-          appointment={actionsFor.appointment}
+          entry={actionsFor.entry}
           anchor={actionsFor.anchor}
           onClose={() => setActionsFor(null)}
           onAction={async (action) => {
-            const a = actionsFor.appointment;
+            const a = actionsFor.entry;
             setActionsFor(null);
             if (action === 'complete') return applyStatus(a, 'completed');
             if (action === 'no_show') return applyStatus(a, 'no_show');
@@ -665,7 +680,7 @@ function CalendarTopNav({ searchSlot }: { searchSlot: ReactElement }): ReactElem
 // =========================================================================
 
 interface StatsRowProps {
-  stats: AppointmentStatsResponse | null;
+  stats: CalendarStatsResponse | null;
   now: Date;
 }
 
@@ -831,8 +846,8 @@ function CalendarSkeleton(): ReactElement {
 // =========================================================================
 
 interface UnmarkedDropdownProps {
-  items: AppointmentDto[];
-  onMark: (a: AppointmentDto, status: 'completed' | 'no_show' | 'cancelled') => void;
+  items: CalendarEntry[];
+  onMark: (a: CalendarEntry, status: 'completed' | 'no_show' | 'cancelled') => void;
 }
 
 function UnmarkedDropdown({ items, onMark }: UnmarkedDropdownProps): ReactElement {
@@ -861,8 +876,9 @@ function UnmarkedDropdown({ items, onMark }: UnmarkedDropdownProps): ReactElemen
                 {a.patient.firstName} {a.patient.lastName}
               </div>
               <div className="text-[11.5px] text-ink-muted tabular-nums">
-                {formatLongAlbanianDate(toLocalParts(new Date(a.scheduledFor)).date)} ·{' '}
-                {toLocalParts(new Date(a.scheduledFor)).time}
+                {a.scheduledFor
+                  ? `${formatLongAlbanianDate(toLocalParts(new Date(a.scheduledFor)).date)} · ${toLocalParts(new Date(a.scheduledFor)).time}`
+                  : ''}
               </div>
               <div className="mt-1.5 flex flex-wrap gap-1.5">
                 <button

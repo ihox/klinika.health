@@ -5,16 +5,16 @@ import type { ReactElement } from 'react';
 
 import { cn } from '@/lib/utils';
 import {
-  type AppointmentDto,
   formatDob,
   formatLongAlbanianDate,
   toLocalParts,
 } from '@/lib/appointment-client';
+import type { CalendarEntry, VisitStatus } from '@/lib/visits-calendar-client';
 
 type ActionId = 'complete' | 'no_show' | 'cancelled' | 'reschedule' | 'delete';
 
 export interface AppointmentActionsProps {
-  appointment: AppointmentDto;
+  entry: CalendarEntry;
   anchor: { x: number; y: number };
   onClose: () => void;
   onAction: (action: ActionId) => void;
@@ -24,18 +24,20 @@ const ACTIONS: Array<{
   id: ActionId;
   label: string;
   destructive?: boolean;
-  showWhen: (status: AppointmentDto['status']) => boolean;
+  showWhen: (status: VisitStatus) => boolean;
 }> = [
   {
     id: 'complete',
     label: 'Shëno si kryer',
-    showWhen: (s) => s === 'scheduled',
+    // Step 5 introduces the full status menu; for now this stays the
+    // legacy single-shot "scheduled → completed" shortcut.
+    showWhen: (s) => s === 'scheduled' || s === 'arrived' || s === 'in_progress',
   },
   {
     id: 'no_show',
     label: 'Shëno si mungesë',
     destructive: true,
-    showWhen: (s) => s === 'scheduled',
+    showWhen: (s) => s === 'scheduled' || s === 'arrived',
   },
   {
     id: 'cancelled',
@@ -45,7 +47,8 @@ const ACTIONS: Array<{
   {
     id: 'reschedule',
     label: 'Riprogramo terminin',
-    showWhen: (s) => s !== 'cancelled',
+    // Walk-ins have no slot to move — hide reschedule on them.
+    showWhen: () => true,
   },
   {
     id: 'delete',
@@ -55,21 +58,29 @@ const ACTIONS: Array<{
   },
 ];
 
-const STATUS_LABEL: Record<AppointmentDto['status'], string> = {
+const STATUS_LABEL: Record<VisitStatus, string> = {
   scheduled: 'Planifikuar',
+  arrived: 'Paraqitur',
+  in_progress: 'Në vizitë',
   completed: 'Kryer',
   no_show: 'Mungesë',
   cancelled: 'Anuluar',
 };
 
 export function AppointmentActions({
-  appointment,
+  entry,
   anchor,
   onClose,
   onAction,
 }: AppointmentActionsProps): ReactElement {
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const localParts = toLocalParts(new Date(appointment.scheduledFor));
+  const isWalkIn = entry.isWalkIn;
+  const anchorInstant = entry.scheduledFor
+    ? new Date(entry.scheduledFor)
+    : entry.arrivedAt
+      ? new Date(entry.arrivedAt)
+      : new Date(entry.createdAt);
+  const localParts = toLocalParts(anchorInstant);
 
   const style = useMemo(() => {
     const width = 260;
@@ -110,18 +121,23 @@ export function AppointmentActions({
     >
       <div className="border-b border-line-soft bg-surface-subtle px-3.5 py-2.5">
         <div className="font-mono text-[10.5px] uppercase tracking-[0.06em] text-ink-muted">
-          {formatLongAlbanianDate(localParts.date)} · {localParts.time} ·{' '}
-          {STATUS_LABEL[appointment.status]}
+          {isWalkIn
+            ? `↻ Pa termin · erdhi ${localParts.time}`
+            : `${formatLongAlbanianDate(localParts.date)} · ${localParts.time} · ${STATUS_LABEL[entry.status]}`}
         </div>
         <div className="mt-0.5 font-display text-[14px] font-semibold text-ink-strong">
-          {appointment.patient.firstName} {appointment.patient.lastName}
+          {entry.patient.firstName} {entry.patient.lastName}
         </div>
         <div className="text-[11.5px] text-ink-muted tabular-nums">
-          DL {formatDob(appointment.patient.dateOfBirth)} ·{' '}
-          {appointment.durationMinutes} min
+          DL {formatDob(entry.patient.dateOfBirth)}
+          {entry.durationMinutes != null ? ` · ${entry.durationMinutes} min` : ''}
         </div>
       </div>
-      {ACTIONS.filter((a) => a.showWhen(appointment.status)).map((a) => (
+      {ACTIONS.filter((a) => {
+        // Walk-ins can never be rescheduled (no slot to move).
+        if (a.id === 'reschedule' && isWalkIn) return false;
+        return a.showWhen(entry.status);
+      }).map((a) => (
         <button
           key={a.id}
           type="button"
