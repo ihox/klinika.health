@@ -398,6 +398,95 @@ async function seedSampleClinical(clinicId: string): Promise<void> {
       updatedBy: receptionist.id,
     },
   });
+
+  // ---------------------------------------------------------------------------
+  // Walk-ins — Phase 2a fixtures (ADR-011, status lifecycle).
+  //
+  // The walk-in band on the receptionist's calendar needs data to render
+  // for today; add three patients across the three "active" lifecycle
+  // states so each visual treatment (default arrived, in_progress pulse,
+  // completed muted-green) shows up at first paint.
+  //
+  // We use real wall-clock offsets from `Date.now()` so the arrival
+  // chips read like a realistic morning: "10:12", "11:47", "13:55"-ish
+  // (give or take whenever the seed runs).
+  // ---------------------------------------------------------------------------
+
+  const liam = await prisma.patient.create({
+    data: {
+      clinicId,
+      firstName: 'Liam',
+      lastName: 'Berisha',
+      dateOfBirth: new Date('2024-11-01'),
+      sex: 'm',
+    },
+  });
+  const nita = await prisma.patient.create({
+    data: {
+      clinicId,
+      firstName: 'Nita',
+      lastName: 'Gashi',
+      dateOfBirth: new Date('2024-05-14'),
+      sex: 'f',
+    },
+  });
+
+  const wallNow = Date.now();
+  const minutesAgo = (m: number): Date => new Date(wallNow - m * 60_000);
+
+  // 1. Just-arrived walk-in — chip renders in the default teal "arrived"
+  //    state with the "✓ Arriti" badge equivalent.
+  await prisma.visit.create({
+    data: {
+      clinicId,
+      patientId: era.id,
+      visitDate: todayMidnightUtc,
+      scheduledFor: null,
+      durationMinutes: null,
+      isWalkIn: true,
+      arrivedAt: minutesAgo(8),
+      status: 'arrived',
+      createdBy: receptionist.id,
+      updatedBy: receptionist.id,
+    },
+  });
+
+  // 2. In-progress walk-in — the doctor pulled them in already; the
+  //    chip should show the pulsing teal indicator.
+  await prisma.visit.create({
+    data: {
+      clinicId,
+      patientId: liam.id,
+      visitDate: todayMidnightUtc,
+      scheduledFor: null,
+      durationMinutes: null,
+      isWalkIn: true,
+      arrivedAt: minutesAgo(35),
+      status: 'in_progress',
+      createdBy: receptionist.id,
+      updatedBy: receptionist.id,
+    },
+  });
+
+  // 3. Completed walk-in earlier today — minimal clinical content so
+  //    the day's payment total has a contribution; chip renders in the
+  //    muted-green "completed" state.
+  await prisma.visit.create({
+    data: {
+      clinicId,
+      patientId: nita.id,
+      visitDate: todayMidnightUtc,
+      scheduledFor: null,
+      durationMinutes: null,
+      isWalkIn: true,
+      arrivedAt: minutesAgo(150),
+      status: 'completed',
+      complaint: 'Vaksinim i rregullt.',
+      paymentCode: 'C',
+      createdBy: receptionist.id,
+      updatedBy: doctor.id,
+    },
+  });
 }
 
 async function main(): Promise<void> {
