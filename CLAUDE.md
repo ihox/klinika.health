@@ -384,6 +384,20 @@ If the prototype is ambiguous on a specific behavior (animation timing, hover st
 
 The Albanian strings in the prototype are the canonical source. Do not invent new strings; if a string is missing, add it to `docs/strings.md` and use that.
 
+### components/ subfolder
+The prototype now has two layers:
+- Top-level files (chart.html, doctor.html, etc.) — full screens in context
+- components/ subfolder — isolated component references for modals, toasts,
+  dialogs, and states
+
+Files in components/: clinic-login, password-reset, mfa-verify,
+edit-history-modal, dicom-lightbox, dicom-picker, vertetim-dialog,
+growth-chart-modal, toast-undo, save-failure-dialog, empty-states,
+loading-skeletons, connection-status.
+
+When building a UI piece that has a components/ reference, use it as the
+primary source of truth for that specific piece.
+
 ---
 
 ## 11. Documentation maintenance
