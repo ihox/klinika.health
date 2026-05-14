@@ -1,12 +1,14 @@
 import { emailFrame, escape } from './shared';
 
+export type ClinicRole = 'doctor' | 'receptionist' | 'clinic_admin';
+
 export interface UserInviteEmailVars {
   firstName: string;
   clinicName: string;
   inviterName: string;
   loginUrl: string;
   temporaryPassword: string;
-  role: 'doctor' | 'receptionist' | 'clinic_admin';
+  roles: ClinicRole[];
 }
 
 /**
@@ -22,7 +24,7 @@ export function userInviteEmail(vars: UserInviteEmailVars): {
   html: string;
 } {
   const subject = `${vars.clinicName} ju ftoi në Klinika`;
-  const roleLabel = roleLabelAl(vars.role);
+  const roleLabel = rolesLabelAl(vars.roles);
 
   const text = [
     `Përshëndetje ${vars.firstName},`,
@@ -67,13 +69,30 @@ export function userInviteEmail(vars: UserInviteEmailVars): {
   return { subject, text, html };
 }
 
-function roleLabelAl(role: UserInviteEmailVars['role']): string {
+function singleRoleLabelAl(role: ClinicRole): string {
   switch (role) {
     case 'doctor':
       return 'mjek';
     case 'receptionist':
-      return 'infermier/e';
+      return 'recepsioniste';
     case 'clinic_admin':
       return 'administrator i klinikës';
   }
+}
+
+/**
+ * Join the user's roles into a natural-language Albanian phrase that
+ * slots into "ju ka shtuar si …": "mjek", "mjek dhe administrator i
+ * klinikës", "mjek, recepsioniste dhe administrator i klinikës".
+ * The display order is doctor → receptionist → clinic_admin so the
+ * most clinically-meaningful role comes first.
+ */
+function rolesLabelAl(roles: ClinicRole[]): string {
+  const order: ClinicRole[] = ['doctor', 'receptionist', 'clinic_admin'];
+  const labels = order.filter((r) => roles.includes(r)).map(singleRoleLabelAl);
+  if (labels.length === 0) return 'përdorues';
+  if (labels.length === 1) return labels[0]!;
+  const head = labels.slice(0, -1).join(', ');
+  const tail = labels[labels.length - 1]!;
+  return `${head} dhe ${tail}`;
 }

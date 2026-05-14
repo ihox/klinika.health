@@ -256,7 +256,11 @@ export class AppointmentsController {
    * scheduling state).
    */
   private assertCalendarRole(ctx: RequestContext): void {
-    if (ctx.role === 'platform_admin' || ctx.role == null) {
+    // Defense in depth on top of @Roles: any active clinic role works
+    // (the @Roles decorator already excludes platform admins); reject
+    // anonymous / admin sessions explicitly so a future caller bypass
+    // is loud rather than silent.
+    if (!ctx.roles || ctx.roles.length === 0 || ctx.roles.includes('platform_admin')) {
       throw new ForbiddenException('Roli nuk ka qasje në kalendarin.');
     }
   }

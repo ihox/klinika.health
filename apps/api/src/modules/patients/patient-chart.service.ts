@@ -2,6 +2,7 @@ import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/commo
 
 import { AuditLogService } from '../../common/audit/audit-log.service';
 import type { RequestContext } from '../../common/request-context/request-context';
+import { hasClinicalAccess } from '../../common/request-context/role-helpers';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
   type ChartGrowthPointDto,
@@ -37,7 +38,7 @@ export class PatientChartService {
     patientId: string,
     ctx: RequestContext,
   ): Promise<PatientChartDto> {
-    if (ctx.role !== 'doctor' && ctx.role !== 'clinic_admin') {
+    if (!hasClinicalAccess(ctx.roles)) {
       throw new ForbiddenException('Vetëm mjeku ka qasje në këtë veprim.');
     }
     const patient = await this.prisma.patient.findFirst({

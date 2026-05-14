@@ -393,9 +393,12 @@ export class ClinicSettingsController {
     @Body() body: unknown,
     @Ctx() ctx: RequestContext,
   ): Promise<{ status: 'ok' }> {
-    // A doctor can upload their own signature; clinic admins can
-    // upload any doctor's signature.
-    if (ctx.role === 'doctor' && ctx.userId !== id) {
+    // A clinic admin can upload any doctor's signature. A user
+    // without the clinic_admin role can only upload their own — this
+    // is how the @Roles('clinic_admin', 'doctor') gate becomes "admins
+    // OR doctors-for-themselves" without a second decorator.
+    const isClinicAdmin = ctx.roles?.includes('clinic_admin') ?? false;
+    if (!isClinicAdmin && ctx.userId !== id) {
       throw new BadRequestException('Mund të ngarkoni vetëm nënshkrimin tuaj.');
     }
     const parsed = SignatureUploadSchema.safeParse(body);

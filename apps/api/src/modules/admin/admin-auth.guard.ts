@@ -18,7 +18,7 @@ export type RequestWithAdminContext = RequestWithContext & {
  *
  *   - reads a different cookie name (so tenant + admin sessions cannot
  *     be confused on the API),
- *   - sets `ctx.role = 'platform_admin'` and `ctx.userId =
+ *   - sets `ctx.roles = ['platform_admin']` and `ctx.userId =
  *     platformAdminId` so downstream `@Roles('platform_admin')` checks
  *     work uniformly,
  *   - does NOT populate `clinicId` (platform admins are cross-tenant),
@@ -74,7 +74,7 @@ export class AdminAuthGuard implements CanActivate {
     }
 
     ctx.userId = session.platformAdminId;
-    ctx.role = 'platform_admin';
+    ctx.roles = ['platform_admin'];
     ctx.sessionId = session.sessionId;
     req.userId = session.platformAdminId;
     req.platformAdminId = session.platformAdminId;

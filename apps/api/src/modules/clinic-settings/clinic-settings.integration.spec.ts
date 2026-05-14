@@ -131,12 +131,12 @@ describe.skipIf(!ENABLED)('Clinic settings integration', () => {
         );
     await prisma.user.upsert({
       where: { email: ADMIN_USER_EMAIL },
-      update: { passwordHash, role: 'clinic_admin', isActive: true, deletedAt: null },
+      update: { passwordHash, roles: ['clinic_admin'], isActive: true, deletedAt: null },
       create: {
         clinicId,
         email: ADMIN_USER_EMAIL,
         passwordHash,
-        role: 'clinic_admin',
+        roles: ['clinic_admin'],
         firstName: 'Admin',
         lastName: 'Cilësimet',
         isActive: true,

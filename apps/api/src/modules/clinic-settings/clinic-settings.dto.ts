@@ -200,11 +200,26 @@ const emailField = z
 
 export const ClinicRoleSchema = z.enum(['doctor', 'receptionist', 'clinic_admin']);
 
+/**
+ * Multi-role array (ADR-004). At least one role is required; the DB
+ * CHECK constraints reject empty arrays and >3-element arrays
+ * defensively, and the schema rejects duplicates here so the frontend
+ * gets a clean error rather than a constraint violation. Order is not
+ * load-bearing — the UI displays roles in a canonical chip order.
+ */
+export const ClinicRolesSchema = z
+  .array(ClinicRoleSchema)
+  .min(1, 'Të paktën një rol')
+  .max(3, 'Tepër role')
+  .refine((roles) => new Set(roles).size === roles.length, {
+    message: 'Rolet duhet të jenë unike',
+  });
+
 export const CreateUserRequestSchema = z.object({
   email: emailField,
   firstName: z.string().trim().min(1, 'Emri mungon').max(80),
   lastName: z.string().trim().min(1, 'Mbiemri mungon').max(80),
-  role: ClinicRoleSchema,
+  roles: ClinicRolesSchema,
   title: z.string().trim().max(60).optional(),
   credential: z.string().trim().max(120).optional(),
 });
@@ -214,7 +229,7 @@ export const UpdateUserRequestSchema = z.object({
   email: emailField,
   firstName: z.string().trim().min(1).max(80),
   lastName: z.string().trim().min(1).max(80),
-  role: ClinicRoleSchema,
+  roles: ClinicRolesSchema,
   title: z.string().trim().max(60).optional(),
   credential: z.string().trim().max(120).optional(),
 });
@@ -283,7 +298,7 @@ export interface ClinicUserRow {
   email: string;
   firstName: string;
   lastName: string;
-  role: 'doctor' | 'receptionist' | 'clinic_admin';
+  roles: Array<'doctor' | 'receptionist' | 'clinic_admin'>;
   title: string | null;
   credential: string | null;
   hasSignature: boolean;

@@ -83,10 +83,15 @@ export function ProfilePage() {
                 {me.firstName} {me.lastName}
               </div>
               <div className="text-[13px] text-stone-500 mt-0.5">{me.email}</div>
-              <div className="mt-2 flex items-center gap-2 text-[12.5px]">
-                <span className="rounded-full bg-teal-50 text-teal-800 px-2 py-0.5 font-medium">
-                  {roleLabel(me.role)}
-                </span>
+              <div className="mt-2 flex flex-wrap items-center gap-2 text-[12.5px]">
+                {me.roles.map((r) => (
+                  <span
+                    key={r}
+                    className="rounded-full bg-teal-50 text-teal-800 px-2 py-0.5 font-medium"
+                  >
+                    {roleLabel(r)}
+                  </span>
+                ))}
                 <span className="text-stone-400">·</span>
                 <span className="text-stone-600">{me.clinicShortName}</span>
               </div>
@@ -153,15 +158,15 @@ export function ProfilePage() {
   );
 }
 
-function roleLabel(role: MeResponse['user']['role']): string {
+function roleLabel(role: MeResponse['user']['roles'][number]): string {
   switch (role) {
     case 'doctor':
-      return 'Mjek';
+      return 'Mjeku';
     case 'receptionist':
-      return 'Recepsionist';
+      return 'Recepsioniste';
     case 'clinic_admin':
-      return 'Admin i klinikës';
+      return 'Administrator i klinikës';
     case 'platform_admin':
-      return 'Admin platforme';
+      return 'Administrator i platformës';
   }
 }

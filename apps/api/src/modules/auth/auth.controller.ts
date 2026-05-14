@@ -94,7 +94,7 @@ export class AuthController {
     status: 'mfa_required' | 'authenticated';
     pendingSessionId?: string;
     maskedEmail?: string;
-    role?: string;
+    roles?: string[];
   }> {
     const parsed = LoginRequestSchema.safeParse(body);
     if (!parsed.success) {
@@ -112,7 +112,7 @@ export class AuthController {
 
     if (result.status === 'authenticated') {
       this.setSessionCookie(res, result.sessionToken, result.sessionExpiresAt);
-      return { status: 'authenticated', role: result.role };
+      return { status: 'authenticated', roles: result.roles };
     }
     return {
       status: 'mfa_required',
@@ -129,7 +129,7 @@ export class AuthController {
     @Body() body: unknown,
     @Res({ passthrough: true }) res: Response,
     @Ctx() ctx: RequestContext,
-  ): Promise<{ role: string }> {
+  ): Promise<{ roles: string[] }> {
     const parsed = MfaVerifyRequestSchema.safeParse(body);
     if (!parsed.success) {
       throw new BadRequestException({
@@ -150,7 +150,7 @@ export class AuthController {
     if (out.trustedDeviceToken && out.trustedDeviceExpiresAt) {
       this.setTrustedDeviceCookie(res, out.trustedDeviceToken, out.trustedDeviceExpiresAt);
     }
-    return { role: out.role };
+    return { roles: out.roles };
   }
 
   /** POST /api/auth/mfa/resend — re-issue the code. */
@@ -231,7 +231,7 @@ export class AuthController {
       email: string;
       firstName: string;
       lastName: string;
-      role: string;
+      roles: string[];
       title: string | null;
       clinicName: string;
       clinicShortName: string;

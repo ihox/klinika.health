@@ -1,5 +1,7 @@
 import type { Request } from 'express';
 
+import type { AppRole } from '../decorators/roles.decorator';
+
 /**
  * Per-request context populated by the middleware/guard chain:
  *
@@ -10,7 +12,7 @@ import type { Request } from 'express';
  *      live). Reserved subdomains and unknown subdomains are rejected
  *      before any handler runs.
  *   2. `AuthGuard` / `AdminAuthGuard` validate the session cookie and
- *      set `userId`, `role`, `sessionId`.
+ *      set `userId`, `roles`, `sessionId`.
  *   3. Controllers receive the context via the `@Ctx()` decorator
  *      and pass it into services so query scoping is uniform.
  *
@@ -22,6 +24,14 @@ import type { Request } from 'express';
  *     Only clinic endpoints accept these requests.
  *   - These are mutually exclusive — never set both, never neither.
  *
+ * `roles` (ADR-004 Multi-role update): for an authenticated clinic
+ * session this is the user's `users.roles` array (subset of
+ * {doctor, receptionist, clinic_admin}); for an admin session it is
+ * `['platform_admin']` set by `AdminAuthGuard`; for anonymous
+ * traffic it is `null`. Authorization checks use array membership
+ * (`ctx.roles?.includes('doctor')` or the helpers in
+ * `role-helpers.ts`).
+ *
  * `ipAddress` and `userAgent` are filled by the middleware regardless
  * of auth state so the audit log and login-attempt tracking work for
  * anonymous traffic too.
@@ -31,7 +41,7 @@ export interface RequestContext {
   clinicSubdomain: string | null;
   clinicStatus: 'active' | 'suspended' | null;
   userId: string | null;
-  role: 'doctor' | 'receptionist' | 'clinic_admin' | 'platform_admin' | null;
+  roles: AppRole[] | null;
   sessionId: string | null;
   ipAddress: string;
   userAgent: string;
@@ -51,7 +61,7 @@ export function buildBaseContext(req: RequestWithContext): RequestContext {
     clinicSubdomain: null,
     clinicStatus: null,
     userId: null,
-    role: null,
+    roles: null,
     sessionId: null,
     ipAddress: extractIp(req),
     userAgent: (req.headers['user-agent'] ?? '').toString().slice(0, 512),

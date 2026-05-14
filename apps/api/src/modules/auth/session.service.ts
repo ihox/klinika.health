@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
-import type { UserRole } from '@prisma/client';
 import { InjectPinoLogger, type PinoLogger } from 'nestjs-pino';
 
+import type { AppRole } from '../../common/decorators/roles.decorator';
 import { PrismaService } from '../../prisma/prisma.service';
 import type { RequestContext } from '../../common/request-context/request-context';
 import { labelFromUserAgent } from './device';
@@ -18,7 +18,7 @@ export interface ValidatedSession {
   sessionId: string;
   userId: string;
   clinicId: string;
-  role: UserRole;
+  roles: AppRole[];
 }
 
 export interface SessionSummary {
@@ -83,7 +83,7 @@ export class SessionService {
     const tokenHash = hashToken(rawToken);
     const row = await this.prisma.authSession.findUnique({
       where: { tokenHash },
-      include: { user: { select: { id: true, role: true, clinicId: true, isActive: true } } },
+      include: { user: { select: { id: true, roles: true, clinicId: true, isActive: true } } },
     });
     if (!row) return null;
     if (row.revokedAt) return null;
@@ -106,11 +106,15 @@ export class SessionService {
         });
     }
 
+    // The DB CHECK constraint pins users.roles to a subset of
+    // {doctor, receptionist, clinic_admin}; cast through the AppRole
+    // union (which adds `platform_admin` for admin sessions
+    // elsewhere) so consumers don't need to re-narrow.
     return {
       sessionId: row.id,
       userId: row.userId,
       clinicId: row.clinicId,
-      role: row.user.role,
+      roles: row.user.roles as AppRole[],
     };
   }
 

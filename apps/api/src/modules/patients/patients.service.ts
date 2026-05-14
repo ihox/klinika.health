@@ -7,6 +7,7 @@ import { Prisma } from '@prisma/client';
 
 import { AuditLogService, type AuditFieldDiff } from '../../common/audit/audit-log.service';
 import type { RequestContext } from '../../common/request-context/request-context';
+import { hasClinicalAccess, isReceptionistOnly } from '../../common/request-context/role-helpers';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
   type DoctorCreatePatientInput,
@@ -74,13 +75,18 @@ export class PatientsService {
   async search(
     clinicId: string,
     query: PatientSearchQuery,
-    role: 'doctor' | 'receptionist' | 'clinic_admin' | 'platform_admin',
+    ctx: RequestContext,
   ): Promise<{ patients: Array<PatientPublicDto | PatientFullDto> }> {
     const rawTerm = query.q?.trim() ?? '';
     const limit = Math.min(query.limit ?? SEARCH_LIMIT_DEFAULT, SEARCH_LIMIT_MAX);
+    // Receptionist privacy boundary: anyone with doctor OR
+    // clinic_admin sees full records, even if they also hold the
+    // receptionist role. Only the "receptionist-only" caller gets
+    // PatientPublicDto.
+    const redact = isReceptionistOnly(ctx.roles);
 
-    const rows = await this.runSearch(clinicId, rawTerm, limit, role);
-    if (role === 'receptionist') {
+    const rows = await this.runSearch(clinicId, rawTerm, limit, redact);
+    if (redact) {
       return { patients: rows.map(rowToPublicDto) };
     }
     return { patients: rows.map(rowToFullDto) };
@@ -90,7 +96,7 @@ export class PatientsService {
     clinicId: string,
     term: string,
     limit: number,
-    role: 'doctor' | 'receptionist' | 'clinic_admin' | 'platform_admin',
+    redact: boolean,
   ): Promise<Array<SearchRow & Record<string, unknown>>> {
     if (term.length === 0) {
       // Empty search: return most-recently-created patients so the
@@ -99,7 +105,7 @@ export class PatientsService {
         where: { clinicId, deletedAt: null },
         orderBy: { createdAt: 'desc' },
         take: limit,
-        select: this.selectForRole(role),
+        select: this.selectForRedaction(redact),
       });
       return rows.map((r) => normaliseRow(r));
     }
@@ -153,16 +159,16 @@ export class PatientsService {
     }
 
     // Re-hydrate full columns by id for the doctor path (the raw query
-    // only returned the lean SELECT). Receptionist path doesn't need
-    // anything more — toPublicDto only reads the four fields we
-    // already have.
-    if (role === 'receptionist') {
+    // only returned the lean SELECT). Redacted (receptionist-only)
+    // path doesn't need anything more — toPublicDto only reads the
+    // four fields we already have.
+    if (redact) {
       return result.map((r) => normaliseRow(r));
     }
     const ids = result.map((r) => r.id);
     const full = await this.prisma.patient.findMany({
       where: { clinicId, id: { in: ids }, deletedAt: null },
-      select: this.selectForRole(role),
+      select: this.selectForRedaction(redact),
     });
     const byId = new Map(full.map((r) => [r.id, r]));
     return result
@@ -467,18 +473,16 @@ export class PatientsService {
   // -------------------------------------------------------------------------
 
   private requireDoctorOrAdmin(ctx: RequestContext): void {
-    if (ctx.role === 'doctor' || ctx.role === 'clinic_admin') return;
+    if (hasClinicalAccess(ctx.roles)) return;
     throw new ForbiddenException('Vetëm mjeku ka qasje në këtë veprim.');
   }
 
-  private selectForRole(
-    role: 'doctor' | 'receptionist' | 'clinic_admin' | 'platform_admin',
-  ): Prisma.PatientSelect {
-    // The query never returns more than the role allows, even though
-    // the DTO chokepoint is the actual gate. Defense in depth: if a
-    // future maintainer skips `toPublicDto`, the underlying row still
-    // doesn't contain the forbidden columns.
-    if (role === 'receptionist') {
+  private selectForRedaction(redact: boolean): Prisma.PatientSelect {
+    // The query never returns more than the redaction allows, even
+    // though the DTO chokepoint is the actual gate. Defense in depth:
+    // if a future maintainer skips `toPublicDto`, the underlying row
+    // still doesn't contain the forbidden columns.
+    if (redact) {
       return {
         id: true,
         firstName: true,

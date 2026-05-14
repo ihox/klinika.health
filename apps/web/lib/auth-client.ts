@@ -10,7 +10,7 @@ export interface LoginInput {
 
 export interface LoginResponse {
   status: 'authenticated' | 'mfa_required';
-  role?: AuthRole;
+  roles?: AuthRole[];
   pendingSessionId?: string;
   maskedEmail?: string;
 }
@@ -21,7 +21,7 @@ export interface MeResponse {
     email: string;
     firstName: string;
     lastName: string;
-    role: AuthRole;
+    roles: AuthRole[];
     title: string | null;
     clinicName: string;
     clinicShortName: string;
@@ -67,7 +67,7 @@ export interface PasswordStrengthResponse {
 export const authClient = {
   login: (input: LoginInput) => apiFetch<LoginResponse>('/api/auth/login', { method: 'POST', json: input }),
   mfaVerify: (input: { pendingSessionId: string; code: string; trustDevice: boolean }) =>
-    apiFetch<{ role: AuthRole }>('/api/auth/mfa/verify', { method: 'POST', json: input }),
+    apiFetch<{ roles: AuthRole[] }>('/api/auth/mfa/verify', { method: 'POST', json: input }),
   mfaResend: (input: { pendingSessionId: string }) =>
     apiFetch<{ maskedEmail: string }>('/api/auth/mfa/resend', { method: 'POST', json: input }),
   passwordResetRequest: (input: { email: string }) =>
@@ -101,16 +101,17 @@ export const authClient = {
   logout: () => apiFetch<{ status: 'ok' }>('/api/auth/logout', { method: 'POST' }),
 };
 
-/** Map a role to its post-login landing route. */
-export function homePathForRole(role: AuthRole): string {
-  switch (role) {
-    case 'doctor':
-      return '/doctor';
-    case 'receptionist':
-      return '/receptionist';
-    case 'clinic_admin':
-      return '/cilesimet';
-    case 'platform_admin':
-      return '/admin';
-  }
+/**
+ * Pick the post-login landing route from a user's role array.
+ * Priority — doctor > clinic_admin > receptionist (CLAUDE.md §5.8,
+ * ADR-004 Multi-role update). Platform admins go to /admin; if the
+ * roles array is empty (degenerate, should not happen with the DB
+ * CHECK constraints) we fall back to the profile page.
+ */
+export function homePathForRoles(roles: AuthRole[]): string {
+  if (roles.includes('platform_admin')) return '/admin';
+  if (roles.includes('doctor')) return '/doctor';
+  if (roles.includes('clinic_admin')) return '/cilesimet';
+  if (roles.includes('receptionist')) return '/receptionist';
+  return '/profili-im';
 }

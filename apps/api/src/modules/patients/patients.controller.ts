@@ -19,6 +19,7 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import { AuthGuard } from '../../common/guards/auth.guard';
 import { ClinicScopeGuard } from '../../common/guards/clinic-scope.guard';
 import type { RequestContext } from '../../common/request-context/request-context';
+import { hasClinicalAccess, isReceptionistOnly } from '../../common/request-context/role-helpers';
 import type { PatientChartDto } from './patient-chart.dto';
 import { PatientChartService } from './patient-chart.service';
 import {
@@ -71,11 +72,13 @@ export class PatientsController {
         issues: parsed.error.flatten(),
       });
     }
-    const role = ctx.role;
-    if (role === 'platform_admin' || role == null) {
+    // Platform-admin (or no-role) callers can't search the clinic
+    // patient list. The receptionist-vs-clinical redaction happens
+    // inside the service via `isReceptionistOnly(ctx.roles)`.
+    if (!ctx.roles || ctx.roles.length === 0 || ctx.roles.includes('platform_admin')) {
       throw new BadRequestException('Roli nuk ka qasje në pacientët.');
     }
-    return this.patients.search(ctx.clinicId!, parsed.data, role);
+    return this.patients.search(ctx.clinicId!, parsed.data, ctx);
   }
 
   // -------------------------------------------------------------------------
@@ -117,7 +120,21 @@ export class PatientsController {
     @Body() body: unknown,
     @Ctx() ctx: RequestContext,
   ): Promise<{ patient: PatientPublicDto | PatientFullDto }> {
-    if (ctx.role === 'receptionist') {
+    // Anyone with clinical access (doctor or clinic_admin) posts the
+    // full master record; otherwise the receptionist-only quick-add
+    // path applies — the privacy boundary is the same as for search.
+    if (hasClinicalAccess(ctx.roles)) {
+      const parsed = DoctorCreatePatientSchema.safeParse(body);
+      if (!parsed.success) {
+        throw new BadRequestException({
+          message: 'Të dhëna të pavlefshme.',
+          issues: parsed.error.flatten(),
+        });
+      }
+      const patient = await this.patients.createFull(ctx.clinicId!, parsed.data, ctx);
+      return { patient };
+    }
+    if (isReceptionistOnly(ctx.roles)) {
       // Receptionist body MUST satisfy the minimal schema. Anything
       // else (address, phone, alergji…) is silently dropped by
       // `.strict()` — a tampered client posting a full body sees no
@@ -130,17 +147,6 @@ export class PatientsController {
         });
       }
       const patient = await this.patients.createMinimal(ctx.clinicId!, parsed.data, ctx);
-      return { patient };
-    }
-    if (ctx.role === 'doctor' || ctx.role === 'clinic_admin') {
-      const parsed = DoctorCreatePatientSchema.safeParse(body);
-      if (!parsed.success) {
-        throw new BadRequestException({
-          message: 'Të dhëna të pavlefshme.',
-          issues: parsed.error.flatten(),
-        });
-      }
-      const patient = await this.patients.createFull(ctx.clinicId!, parsed.data, ctx);
       return { patient };
     }
     throw new BadRequestException('Roli nuk lejohet të krijojë pacientë.');

@@ -10,6 +10,8 @@ import {
   type AuditFieldDiff,
 } from '../../common/audit/audit-log.service';
 import type { RequestContext } from '../../common/request-context/request-context';
+import { hasClinicalAccess, primaryRoleForDisplay } from '../../common/request-context/role-helpers';
+import type { AppRole } from '../../common/decorators/roles.decorator';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
   type CreateVisitInput,
@@ -415,7 +417,7 @@ export class VisitsService {
     const userIds = Array.from(new Set(rows.map((r) => r.userId)));
     const users = await this.prisma.user.findMany({
       where: { clinicId, id: { in: userIds } },
-      select: { id: true, firstName: true, lastName: true, role: true, title: true },
+      select: { id: true, firstName: true, lastName: true, roles: true, title: true },
     });
     const byId = new Map(users.map((u) => [u.id, u]));
 
@@ -429,8 +431,7 @@ export class VisitsService {
         userDisplayName: user
           ? formatUserDisplayName(user)
           : 'Përdorues i panjohur',
-        userRole:
-          (user?.role as VisitHistoryEntryDto['userRole'] | undefined) ?? 'doctor',
+        userRole: primaryRoleForDisplay(user?.roles as AppRole[] | undefined),
         ipAddress: r.ipAddress ?? null,
         changes: parseChanges(r.changes),
       };
@@ -454,7 +455,7 @@ export class VisitsService {
   // -------------------------------------------------------------------------
 
   private requireDoctorOrAdmin(ctx: RequestContext): void {
-    if (ctx.role === 'doctor' || ctx.role === 'clinic_admin') return;
+    if (hasClinicalAccess(ctx.roles)) return;
     throw new ForbiddenException('Vetëm mjeku ka qasje në këtë veprim.');
   }
 }
@@ -524,12 +525,14 @@ function todayBelgrade(): Date {
 function formatUserDisplayName(user: {
   firstName: string;
   lastName: string;
-  role: string;
+  roles: string[];
   title: string | null;
 }): string {
   // Doctors are addressed by title ("Dr. Taulant Shala") in the audit
-  // trail; receptionists and clinic admins are first + last.
-  if (user.role === 'doctor') {
+  // trail; receptionists and clinic admins are first + last. Anyone
+  // carrying the doctor role gets the doctor formatting — they wrote
+  // a prescription somewhere, that's the relevant identity.
+  if (user.roles.includes('doctor')) {
     const title = user.title?.trim() || 'Dr.';
     return `${title} ${user.firstName} ${user.lastName}`;
   }

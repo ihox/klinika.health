@@ -63,7 +63,7 @@ export interface ClinicUserRow {
   email: string;
   firstName: string;
   lastName: string;
-  role: ClinicRole;
+  roles: ClinicRole[];
   title: string | null;
   credential: string | null;
   hasSignature: boolean;
@@ -153,7 +153,7 @@ export const clinicClient = {
     email: string;
     firstName: string;
     lastName: string;
-    role: ClinicRole;
+    roles: ClinicRole[];
     title?: string;
     credential?: string;
   }) => apiFetch<{ user: ClinicUserRow }>('/api/clinic/users', { method: 'POST', json: input }),
@@ -163,7 +163,7 @@ export const clinicClient = {
       email: string;
       firstName: string;
       lastName: string;
-      role: ClinicRole;
+      roles: ClinicRole[];
       title?: string;
       credential?: string;
     },
@@ -222,16 +222,11 @@ export function formatEuro(amountCents: number): string {
   })}`;
 }
 
-export function roleLabel(role: ClinicRole): string {
-  switch (role) {
-    case 'doctor':
-      return 'Mjek';
-    case 'receptionist':
-      return 'Infermierja';
-    case 'clinic_admin':
-      return 'Admin';
-  }
-}
+// Canonical Albanian role labels now live in
+// `apps/web/lib/role-labels.ts`. Re-export so existing call-sites
+// keep compiling — new code should import from `./role-labels`
+// directly for clarity.
+export { roleLabel } from './role-labels';
 
 export const DAY_LABELS: Record<DayKey, string> = {
   mon: 'E hënë',

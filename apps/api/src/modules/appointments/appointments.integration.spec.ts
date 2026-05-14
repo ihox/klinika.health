@@ -345,7 +345,7 @@ describe.skipIf(!ENABLED)('Appointments integration', () => {
           clinicId: secondClinicId,
           email: 'second-rls@second-appts.health',
           passwordHash: 'x',
-          role: 'receptionist',
+          roles: ['receptionist'],
           firstName: 'X',
           lastName: 'Y',
         },

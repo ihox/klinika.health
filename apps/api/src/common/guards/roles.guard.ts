@@ -13,13 +13,18 @@ import {
 /**
  * Enforces `@Roles(...)` metadata on a handler.
  *
+ * `@Roles(a, b)` is OR semantics: the request passes when the caller
+ * holds AT LEAST ONE of the listed roles. Since users can carry
+ * multiple roles (`ctx.roles` is an array — see ADR-004 Multi-role
+ * update), the check is array intersection rather than equality.
+ *
  * RolesGuard is registered as a global APP_GUARD so any controller can
  * tag a handler with `@Roles('doctor')` and skip wiring boilerplate.
  * Nest runs global guards BEFORE controller-scoped ones, which means
  * by the time we get called the per-controller AuthGuard /
- * AdminAuthGuard has not yet hydrated `ctx.role`. To avoid spurious
+ * AdminAuthGuard has not yet hydrated `ctx.roles`. To avoid spurious
  * 403s ("Roli juaj nuk ka qasje në këtë veprim") we re-validate the
- * session here just enough to set `ctx.role`. AuthGuard / AdminAuthGuard
+ * session here just enough to set `ctx.roles`. AuthGuard / AdminAuthGuard
  * still run after us to do the rest of the work (touch `last_used_at`,
  * set userId / sessionId / clinicId on the request).
  *
@@ -49,17 +54,18 @@ export class RolesGuard implements CanActivate {
       throw new ForbiddenException('Roli juaj nuk ka qasje në këtë veprim.');
     }
 
-    if (!ctx.role) {
-      await this.hydrateRole(req);
+    if (!ctx.roles) {
+      await this.hydrateRoles(req);
     }
 
-    if (!ctx.role || !required.includes(ctx.role)) {
+    const granted = ctx.roles;
+    if (!granted || !required.some((r) => granted.includes(r))) {
       throw new ForbiddenException('Roli juaj nuk ka qasje në këtë veprim.');
     }
     return true;
   }
 
-  private async hydrateRole(req: RequestWithContext): Promise<void> {
+  private async hydrateRoles(req: RequestWithContext): Promise<void> {
     const ctx = req.ctx;
     if (!ctx) return;
     const cookieHeader = req.headers['cookie'];
@@ -69,7 +75,7 @@ export class RolesGuard implements CanActivate {
       if (!token) return;
       const session = await this.adminSessions.validate(token, ctx);
       if (!session) return;
-      ctx.role = 'platform_admin';
+      ctx.roles = ['platform_admin'];
       return;
     }
 
@@ -77,6 +83,6 @@ export class RolesGuard implements CanActivate {
     if (!token) return;
     const session = await this.sessions.validate(token, ctx);
     if (!session) return;
-    ctx.role = session.role;
+    ctx.roles = session.roles;
   }
 }

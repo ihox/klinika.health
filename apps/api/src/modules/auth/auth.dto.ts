@@ -28,6 +28,7 @@ export interface LoginResponse {
   status: 'mfa_required' | 'authenticated';
   pendingSessionId?: string;
   maskedEmail?: string;
+  roles?: string[];
   redirectTo?: string;
 }
 

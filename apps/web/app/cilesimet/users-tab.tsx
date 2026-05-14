@@ -30,7 +30,7 @@ export function UsersTab({ users, onChange, onToast }: Props) {
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return users.filter((u) => {
-      if (roleFilter !== 'all' && u.role !== roleFilter) return false;
+      if (roleFilter !== 'all' && u.roles[0] !== roleFilter) return false;
       if (!q) return true;
       return (
         u.email.toLowerCase().includes(q) ||
@@ -126,7 +126,7 @@ export function UsersTab({ users, onChange, onToast }: Props) {
                     <div className="flex items-center gap-2.5">
                       <div
                         className={`h-7 w-7 rounded-full grid place-items-center text-[11px] font-semibold text-white ${
-                          !u.isActive ? 'bg-stone-300' : u.role === 'doctor' ? 'bg-teal-700' : 'bg-stone-500'
+                          !u.isActive ? 'bg-stone-300' : u.roles[0] === 'doctor' ? 'bg-teal-700' : 'bg-stone-500'
                         }`}
                       >
                         {u.firstName.charAt(0)}
@@ -145,7 +145,9 @@ export function UsersTab({ users, onChange, onToast }: Props) {
                       </div>
                     </div>
                   </td>
-                  <td className="px-4 py-3.5 text-[13px]">{roleLabel(u.role)}</td>
+                  <td className="px-4 py-3.5 text-[13px]">
+                    {u.roles.map(roleLabel).join(', ')}
+                  </td>
                   <td className="px-4 py-3.5">
                     {u.isActive ? (
                       <span className="inline-flex items-center gap-1 text-[12px] text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-2 py-0.5">
@@ -219,7 +221,7 @@ function AddUserModal({
   async function submit(): Promise<void> {
     setSubmitting(true);
     try {
-      const out = await clinicClient.createUser({ firstName, lastName, email, role });
+      const out = await clinicClient.createUser({ firstName, lastName, email, roles: [role] });
       onCreated(out.user);
     } catch (err: unknown) {
       onToast(err instanceof ApiError ? err.message : 'Shtimi dështoi.', 'error');
@@ -314,7 +316,7 @@ function EditUserDrawer({
   const [firstName, setFirstName] = useState(user.firstName);
   const [lastName, setLastName] = useState(user.lastName);
   const [email, setEmail] = useState(user.email);
-  const [role, setRole] = useState<ClinicRole>(user.role);
+  const [role, setRole] = useState<ClinicRole>(user.roles[0] ?? 'receptionist');
   const [title, setTitle] = useState(user.title ?? '');
   const [credential, setCredential] = useState(user.credential ?? '');
   const [saving, setSaving] = useState(false);
@@ -328,7 +330,7 @@ function EditUserDrawer({
         email,
         firstName,
         lastName,
-        role,
+        roles: [role],
         title: title || undefined,
         credential: credential || undefined,
       });

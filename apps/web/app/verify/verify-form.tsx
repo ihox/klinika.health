@@ -6,7 +6,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { ApiError } from '@/lib/api';
-import { authClient, homePathForRole } from '@/lib/auth-client';
+import { authClient, homePathForRoles } from '@/lib/auth-client';
 import { cn } from '@/lib/utils';
 
 const RESEND_COOLDOWN_SECONDS = 30;
@@ -105,7 +105,7 @@ export function VerifyForm() {
       setState('success');
       // Brief success flash, then navigate to the role-appropriate home.
       window.setTimeout(() => {
-        router.replace(homePathForRole(out.role));
+        router.replace(homePathForRoles(out.roles));
       }, 500);
     } catch (err) {
       if (err instanceof ApiError) {

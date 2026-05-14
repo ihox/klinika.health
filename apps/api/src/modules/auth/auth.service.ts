@@ -6,6 +6,7 @@ import {
 import { InjectPinoLogger, type PinoLogger } from 'nestjs-pino';
 
 import { AuditLogService } from '../../common/audit/audit-log.service';
+import type { AppRole } from '../../common/decorators/roles.decorator';
 import { GENERIC_INVALID_CREDENTIALS_MESSAGE } from '../../common/guards/clinic-scope.guard';
 import type { RequestContext } from '../../common/request-context/request-context';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -26,7 +27,7 @@ export interface AuthenticatedLogin {
   status: 'authenticated';
   userId: string;
   clinicId: string;
-  role: string;
+  roles: AppRole[];
   sessionToken: string;
   sessionExpiresAt: Date;
 }
@@ -131,7 +132,7 @@ export class AuthService {
         status: 'authenticated',
         userId: user.id,
         clinicId: user.clinicId,
-        role: user.role,
+        roles: user.roles as AppRole[],
         sessionToken: session.rawToken,
         sessionExpiresAt: session.expiresAt,
       };
@@ -180,7 +181,7 @@ export class AuthService {
     sessionExpiresAt: Date;
     userId: string;
     clinicId: string;
-    role: string;
+    roles: AppRole[];
     trustedDeviceToken: string | null;
     trustedDeviceExpiresAt: Date | null;
   }> {
@@ -269,7 +270,7 @@ export class AuthService {
       sessionExpiresAt: session.expiresAt,
       userId: user.id,
       clinicId: user.clinicId,
-      role: user.role,
+      roles: user.roles as AppRole[],
       trustedDeviceToken,
       trustedDeviceExpiresAt,
     };
@@ -470,7 +471,7 @@ export class AuthService {
     email: string;
     firstName: string;
     lastName: string;
-    role: string;
+    roles: AppRole[];
     title: string | null;
     clinicName: string;
     clinicShortName: string;
@@ -486,7 +487,7 @@ export class AuthService {
       email: user.email,
       firstName: user.firstName,
       lastName: user.lastName,
-      role: user.role,
+      roles: user.roles as AppRole[],
       title: user.title,
       clinicName: user.clinic.name,
       clinicShortName: user.clinic.shortName,

@@ -193,7 +193,7 @@ export function TenantDetailView({ id }: TenantDetailViewProps) {
                     <Td bold>
                       {u.firstName} {u.lastName}
                     </Td>
-                    <Td muted>{roleLabel(u.role)}</Td>
+                    <Td muted>{u.roles.map(roleLabel).join(', ')}</Td>
                     <Td className="font-mono text-[12px] text-stone-500">{u.email}</Td>
                     <Td>
                       <StatusChip tone={u.isActive ? 'green' : 'stone'}>
@@ -445,11 +445,11 @@ function Td({
 function roleLabel(role: string): string {
   switch (role) {
     case 'doctor':
-      return 'Mjek';
+      return 'Mjeku';
     case 'receptionist':
-      return 'Recepsion';
+      return 'Recepsioniste';
     case 'clinic_admin':
-      return 'Admin klinike';
+      return 'Administrator i klinikës';
     default:
       return role;
   }

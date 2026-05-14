@@ -6,6 +6,7 @@ import {
 
 import { AuditLogService } from '../../common/audit/audit-log.service';
 import type { RequestContext } from '../../common/request-context/request-context';
+import { hasClinicalAccess } from '../../common/request-context/role-helpers';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
   type IssueVertetimInput,
@@ -100,7 +101,7 @@ export class VertetimService {
   }
 
   private requireDoctorOrAdmin(ctx: RequestContext): void {
-    if (ctx.role === 'doctor' || ctx.role === 'clinic_admin') return;
+    if (hasClinicalAccess(ctx.roles)) return;
     throw new ForbiddenException('Vetëm mjeku ka qasje në këtë veprim.');
   }
 }

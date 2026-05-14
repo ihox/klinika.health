@@ -1,6 +1,7 @@
 import { ForbiddenException, Injectable } from '@nestjs/common';
 
 import type { RequestContext } from '../../common/request-context/request-context';
+import { hasClinicalAccess } from '../../common/request-context/role-helpers';
 import { PrismaService } from '../../prisma/prisma.service';
 import type { Icd10ResultDto } from './icd10.dto';
 
@@ -41,7 +42,7 @@ export class Icd10Service {
     q: string,
     limit: number,
   ): Promise<{ results: Icd10ResultDto[] }> {
-    if (ctx.role !== 'doctor' && ctx.role !== 'clinic_admin') {
+    if (!hasClinicalAccess(ctx.roles)) {
       throw new ForbiddenException('Vetëm mjeku ka qasje në kërkimin ICD-10.');
     }
     if (!ctx.userId) {

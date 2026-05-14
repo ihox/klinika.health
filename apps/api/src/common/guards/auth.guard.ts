@@ -68,7 +68,7 @@ export class AuthGuard implements CanActivate {
     }
 
     ctx.userId = session.userId;
-    ctx.role = session.role;
+    ctx.roles = session.roles;
     ctx.sessionId = session.sessionId;
     if (!ctx.clinicId) {
       ctx.clinicId = session.clinicId;

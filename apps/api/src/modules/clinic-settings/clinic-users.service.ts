@@ -22,10 +22,12 @@ import {
 } from './clinic-settings.dto';
 import { ClinicStorageService } from './clinic-storage.service';
 
+type ClinicRole = 'doctor' | 'receptionist' | 'clinic_admin';
+
 const TEMP_PASSWORD_BYTES = 12;
-const ROLE_LABEL: Record<'doctor' | 'receptionist' | 'clinic_admin', string> = {
+const ROLE_LABEL: Record<ClinicRole, string> = {
   doctor: 'mjek',
-  receptionist: 'infermier/e',
+  receptionist: 'recepsioniste',
   clinic_admin: 'administrator',
 };
 
@@ -62,7 +64,7 @@ export class ClinicUsersService {
         email: true,
         firstName: true,
         lastName: true,
-        role: true,
+        roles: true,
         title: true,
         credential: true,
         isActive: true,
@@ -78,7 +80,7 @@ export class ClinicUsersService {
       email: u.email,
       firstName: u.firstName,
       lastName: u.lastName,
-      role: u.role,
+      roles: u.roles as ClinicRole[],
       title: u.title,
       credential: u.credential,
       hasSignature: signaturePresence[i] ?? false,
@@ -114,7 +116,7 @@ export class ClinicUsersService {
         clinicId,
         email: payload.email,
         passwordHash,
-        role: payload.role,
+        roles: payload.roles,
         firstName: payload.firstName,
         lastName: payload.lastName,
         title: payload.title ?? null,
@@ -130,7 +132,7 @@ export class ClinicUsersService {
         inviterName: inviter ? `${inviter.title ? `${inviter.title} ` : ''}${inviter.firstName} ${inviter.lastName}`.trim() : 'Administratori',
         loginUrl: `https://${clinic.subdomain}.klinika.health/login`,
         temporaryPassword,
-        role: payload.role,
+        roles: payload.roles,
       });
     } catch (err: unknown) {
       this.logger.error(
@@ -146,7 +148,7 @@ export class ClinicUsersService {
       resourceId: created.id,
       changes: [
         { field: 'email', old: null, new: created.email },
-        { field: 'role', old: null, new: created.role },
+        { field: 'roles', old: null, new: created.roles },
         { field: 'firstName', old: null, new: created.firstName },
         { field: 'lastName', old: null, new: created.lastName },
       ],
@@ -169,13 +171,17 @@ export class ClinicUsersService {
       const taken = await this.prisma.user.findUnique({ where: { email: payload.email } });
       if (taken) throw new ConflictException('Ky email është tashmë i regjistruar.');
     }
-    // Last-active-admin guard: if we're demoting the last clinic_admin,
-    // refuse — the clinic must always have an admin who can manage it.
-    if (before.role === 'clinic_admin' && payload.role !== 'clinic_admin') {
+    // Last-active-admin guard: if this update strips clinic_admin from
+    // the only remaining active admin, refuse — the clinic must
+    // always have an admin who can manage it. `roles: { has }`
+    // matches any user whose roles array contains 'clinic_admin'.
+    const wasAdmin = before.roles.includes('clinic_admin');
+    const willBeAdmin = payload.roles.includes('clinic_admin');
+    if (wasAdmin && !willBeAdmin) {
       const otherActiveAdmins = await this.prisma.user.count({
         where: {
           clinicId,
-          role: 'clinic_admin',
+          roles: { has: 'clinic_admin' },
           isActive: true,
           deletedAt: null,
           NOT: { id: userId },
@@ -194,17 +200,22 @@ export class ClinicUsersService {
         email: payload.email,
         firstName: payload.firstName,
         lastName: payload.lastName,
-        role: payload.role,
+        roles: payload.roles,
         title: payload.title ?? null,
         credential: payload.credential ?? null,
       },
     });
 
+    // The roles diff is an array comparison; everything else is a
+    // primitive scalar where `!==` is enough.
     const diffs: AuditFieldDiff[] = [];
-    for (const k of ['email', 'firstName', 'lastName', 'role', 'title', 'credential'] as const) {
+    for (const k of ['email', 'firstName', 'lastName', 'title', 'credential'] as const) {
       if (before[k] !== after[k]) {
         diffs.push({ field: k, old: before[k], new: after[k] });
       }
+    }
+    if (!rolesEqual(before.roles, after.roles)) {
+      diffs.push({ field: 'roles', old: before.roles, new: after.roles });
     }
     if (diffs.length > 0) {
       await this.audit.record({
@@ -235,11 +246,11 @@ export class ClinicUsersService {
     if (before.isActive === isActive) {
       return (await this.list(clinicId)).find((u) => u.id === userId)!;
     }
-    if (before.role === 'clinic_admin' && !isActive) {
+    if (before.roles.includes('clinic_admin') && !isActive) {
       const otherActiveAdmins = await this.prisma.user.count({
         where: {
           clinicId,
-          role: 'clinic_admin',
+          roles: { has: 'clinic_admin' },
           isActive: true,
           deletedAt: null,
           NOT: { id: userId },
@@ -295,6 +306,19 @@ export class ClinicUsersService {
 
 function generateTemporaryPassword(): string {
   return randomBytes(TEMP_PASSWORD_BYTES).toString('base64url');
+}
+
+/**
+ * Set-equality on role arrays. Used in the audit diff so a no-op
+ * reorder (`['doctor','clinic_admin']` ↔ `['clinic_admin','doctor']`)
+ * doesn't record a change — the canonical role chip order is a UI
+ * concern, not a domain one.
+ */
+function rolesEqual(a: string[], b: string[]): boolean {
+  if (a.length !== b.length) return false;
+  const sa = new Set(a);
+  for (const r of b) if (!sa.has(r)) return false;
+  return true;
 }
 
 // Exported for templates that compose UI labels.

@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { ApiError } from '@/lib/api';
-import { authClient, homePathForRole } from '@/lib/auth-client';
+import { authClient, homePathForRoles } from '@/lib/auth-client';
 
 const LoginSchema = z.object({
   email: z
@@ -53,8 +53,8 @@ export function LoginForm() {
         router.push(`/verify?${params.toString()}`);
         return;
       }
-      if (result.status === 'authenticated' && result.role) {
-        router.push(homePathForRole(result.role));
+      if (result.status === 'authenticated' && result.roles) {
+        router.push(homePathForRoles(result.roles));
         return;
       }
       setFormError('Hyrja dështoi. Provoni përsëri.');

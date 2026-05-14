@@ -92,7 +92,7 @@ export interface TenantDetail extends TenantSummary {
     email: string;
     firstName: string;
     lastName: string;
-    role: string;
+    roles: Array<'doctor' | 'receptionist' | 'clinic_admin'>;
     isActive: boolean;
     lastLoginAt: string | null;
   }>;
