@@ -7,8 +7,10 @@ import { EmptyState } from '@/components/empty-state';
 import { ChangeHistoryModal } from '@/components/patient/change-history-modal';
 import { GrowthPanel } from '@/components/patient/growth-panel';
 import { MasterDataStrip } from '@/components/patient/master-data-strip';
+import { PrintHistoryDialog } from '@/components/patient/print-history-dialog';
 import { SaveFailureDialog } from '@/components/patient/save-failure-dialog';
 import { SetSexDialog } from '@/components/patient/set-sex-dialog';
+import { VertetimDialog } from '@/components/patient/vertetim-dialog';
 import { VisitForm } from '@/components/patient/visit-form';
 import { Skeleton } from '@/components/skeleton';
 import { Button } from '@/components/ui/button';
@@ -25,7 +27,9 @@ import {
   type PatientChartDto,
   type PatientFullDto,
 } from '@/lib/patient-client';
+import { openPrintFrame } from '@/lib/print-frame';
 import { useAutoSaveStore } from '@/lib/use-visit-autosave';
+import { printUrls, type VertetimDto } from '@/lib/vertetim-client';
 import { type VisitDto, visitClient } from '@/lib/visit-client';
 import { cn } from '@/lib/utils';
 
@@ -66,6 +70,8 @@ export function ChartView({ patientId, initialVisitId }: Props): ReactElement {
   } | null>(null);
   const [showAllHistory, setShowAllHistory] = useState(false);
   const [setSexOpen, setSetSexOpen] = useState(false);
+  const [vertetimDialogOpen, setVertetimDialogOpen] = useState(false);
+  const [printHistoryOpen, setPrintHistoryOpen] = useState(false);
 
   const refresh = useCallback(async () => {
     try {
@@ -287,6 +293,11 @@ export function ChartView({ patientId, initialVisitId }: Props): ReactElement {
                     onNewVisitRequest={() =>
                       void createNewVisit(patientId, navigateVisit, refresh)
                     }
+                    onPrintVisitReport={() =>
+                      void printVisitReport(activeVisit)
+                    }
+                    onIssueVertetim={() => setVertetimDialogOpen(true)}
+                    onPrintHistory={() => setPrintHistoryOpen(true)}
                   />
                 ) : (
                   <VisitFormLoading />
@@ -302,6 +313,8 @@ export function ChartView({ patientId, initialVisitId }: Props): ReactElement {
                   onToggleHistory={() => setShowAllHistory((s) => !s)}
                   onSelectVisit={navigateVisit}
                   onRequestSetSex={() => setSetSexOpen(true)}
+                  onViewVertetim={(v) => viewVertetim(v.id)}
+                  onReprintVertetim={(v) => reprintVertetim(v.id)}
                 />
               </div>
             </>
@@ -315,6 +328,31 @@ export function ChartView({ patientId, initialVisitId }: Props): ReactElement {
                 setSetSexOpen(false);
                 setData((d) => (d ? { ...d, patient: updated } : d));
               }}
+            />
+          ) : null}
+          {data && activeVisit ? (
+            <VertetimDialog
+              open={vertetimDialogOpen}
+              patient={data.patient}
+              visit={activeVisit}
+              primaryDiagnosis={
+                activeVisit.diagnoses[0]
+                  ? {
+                      code: activeVisit.diagnoses[0].code,
+                      latinDescription: activeVisit.diagnoses[0].latinDescription,
+                    }
+                  : null
+              }
+              onClose={() => setVertetimDialogOpen(false)}
+              onIssued={(issued) => onVertetimIssued(issued, setData)}
+            />
+          ) : null}
+          {data ? (
+            <PrintHistoryDialog
+              open={printHistoryOpen}
+              patient={data.patient}
+              ultrasoundImageCount={0}
+              onClose={() => setPrintHistoryOpen(false)}
             />
           ) : null}
         </>
@@ -488,6 +526,8 @@ interface RightColumnProps {
   onToggleHistory: () => void;
   onSelectVisit: (id: string) => void;
   onRequestSetSex: () => void;
+  onViewVertetim: (v: ChartVertetimDto) => void;
+  onReprintVertetim: (v: ChartVertetimDto) => void;
 }
 
 function RightColumn({
@@ -500,6 +540,8 @@ function RightColumn({
   onToggleHistory,
   onSelectVisit,
   onRequestSetSex,
+  onViewVertetim,
+  onReprintVertetim,
 }: RightColumnProps): ReactElement {
   const ageMonths = ageInMonths(patient.dateOfBirth);
   return (
@@ -522,7 +564,11 @@ function RightColumn({
         onToggle={onToggleHistory}
         onSelectVisit={onSelectVisit}
       />
-      <VertetimePanel vertetime={vertetime} />
+      <VertetimePanel
+        vertetime={vertetime}
+        onView={onViewVertetim}
+        onReprint={onReprintVertetim}
+      />
     </aside>
   );
 }
@@ -639,9 +685,11 @@ function HistoryPanel({
 
 interface VertetimePanelProps {
   vertetime: ChartVertetimDto[];
+  onView: (v: ChartVertetimDto) => void;
+  onReprint: (v: ChartVertetimDto) => void;
 }
 
-function VertetimePanel({ vertetime }: VertetimePanelProps): ReactElement {
+function VertetimePanel({ vertetime, onView, onReprint }: VertetimePanelProps): ReactElement {
   return (
     <section
       aria-label="Vërtetime të lëshuara"
@@ -676,18 +724,20 @@ function VertetimePanel({ vertetime }: VertetimePanelProps): ReactElement {
                   {c.diagnosisSnapshot}
                 </div>
               </div>
-              <div className="flex items-center gap-1 opacity-60">
+              <div className="flex items-center gap-1">
                 <IconButton
                   label="Shiko"
-                  disabled
-                  title="Shiko vërtetimin (vjen më vonë)"
+                  title="Shiko vërtetimin"
+                  data-testid={`vertetim-view-${c.id}`}
+                  onClick={() => onView(c)}
                 >
                   <EyeIcon />
                 </IconButton>
                 <IconButton
                   label="Printo"
-                  disabled
-                  title="Printo vërtetimin (vjen më vonë)"
+                  title="Printo vërtetimin"
+                  data-testid={`vertetim-reprint-${c.id}`}
+                  onClick={() => onReprint(c)}
                 >
                   <PrinterIcon />
                 </IconButton>
@@ -1070,6 +1120,54 @@ async function undoDelete(
       window.alert('Rikthimi i vizitës dështoi.');
     }
   }
+}
+
+// =========================================================================
+// Print + vërtetim helpers
+// =========================================================================
+
+async function printVisitReport(visit: VisitDto): Promise<void> {
+  // Flush in-flight auto-save edits before printing — the doctor
+  // expects the printed report to reflect what's on screen.
+  await useAutoSaveStore.getState().save();
+  openPrintFrame({ src: printUrls.visitReport(visit.id) });
+}
+
+function viewVertetim(vertetimId: string): void {
+  // "Shiko vërtetimin" — open the PDF in a new tab so the doctor
+  // can scroll the document before deciding whether to print. The
+  // iframe path is reserved for the direct-print "Reprint" action.
+  if (typeof window !== 'undefined') {
+    window.open(printUrls.vertetim(vertetimId), '_blank', 'noopener');
+  }
+}
+
+function reprintVertetim(vertetimId: string): void {
+  // Direct print — re-fetch + open dialog. Reuses the same iframe.
+  openPrintFrame({ src: printUrls.vertetim(vertetimId) });
+}
+
+function onVertetimIssued(
+  issued: VertetimDto,
+  setData: (
+    updater:
+      | PatientChartDto
+      | ((d: PatientChartDto | null) => PatientChartDto | null),
+  ) => void,
+): void {
+  setData((d) => {
+    if (!d) return d;
+    const next: ChartVertetimDto = {
+      id: issued.id,
+      visitId: issued.visitId,
+      issuedAt: issued.issuedAt,
+      absenceFrom: issued.absenceFrom,
+      absenceTo: issued.absenceTo,
+      durationDays: issued.durationDays,
+      diagnosisSnapshot: issued.diagnosisSnapshot,
+    };
+    return { ...d, vertetime: [next, ...d.vertetime] };
+  });
 }
 
 function daysSincePreviousFor(visits: ChartVisitDto[], index: number): number | null {

@@ -21,9 +21,11 @@ import { HealthModule } from './modules/health/health.module';
 import { Icd10Module } from './modules/icd10/icd10.module';
 import { JobsModule } from './modules/jobs/jobs.module';
 import { PatientsModule } from './modules/patients/patients.module';
+import { PrintModule } from './modules/print/print.module';
 import { RateLimitModule } from './modules/rate-limit/rate-limit.module';
 import { ErrorRateMiddleware } from './modules/telemetry/error-counter';
 import { TelemetryModule } from './modules/telemetry/telemetry.module';
+import { VertetimModule } from './modules/vertetim/vertetim.module';
 import { VisitsModule } from './modules/visits/visits.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { LoggingModule } from './common/logging/logger.module';
@@ -42,6 +44,8 @@ import { LoggingModule } from './common/logging/logger.module';
     ClinicSettingsModule,
     PatientsModule,
     VisitsModule,
+    VertetimModule,
+    PrintModule,
     Icd10Module,
     AppointmentsModule,
     DoctorDashboardModule,

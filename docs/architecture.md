@@ -35,6 +35,7 @@
 21. Slice 12 — visit form (auto-save + audit + change history)
 22. Slice 13 — diagnosis picker + Terapia plain text
 23. Slice 14 — WHO growth charts
+24. Slice 15 — print pipeline (visit / vërtetim / history)
 
 ## Slice 01 — skeleton
 
@@ -1538,3 +1539,235 @@ is the chokepoint and is unit-tested in
   `Asnjë e dhënë e regjistruar`; > 24mo with infancy data shows
   the historical link; unresolved-sex placeholder + inline
   PATCH-and-render flow.
+
+## Slice 15 — print pipeline (visit / vërtetim / history)
+
+Server-side Puppeteer renders every printable document — the visit
+report (A5, 1–2 pages), the school vërtetim (A5, single page), and
+the patient history (A5, multi-page). The frontend embeds the
+resulting `application/pdf` in a hidden iframe and triggers
+`iframe.contentWindow.print()` so the browser's native print dialog
+drives the actual paper output. PDFs are never archived — every
+print regenerates from current data (ADR-007), with snapshots
+protecting reprints from drift.
+
+### Pipeline diagram
+
+```
+   Doctor                     Web                            API                            Puppeteer
+   ──────                     ──────                          ──────                         ──────────
+   Click "Printo raportin" ─▶  openPrintFrame()
+                                  │
+                                  └─▶ iframe.src = /api/print/visit/:id ───────────────┐
+                                                                                       ▼
+                                                                          PrintController
+                                                                                │
+                                                                                ├─▶ PrintService.renderVisitReportPdf
+                                                                                │      │
+                                                                                │      ├─▶ Prisma: visit + patient + clinic + diagnoses
+                                                                                │      ├─▶ map → VisitReportTemplateData (omit PHI banned for visit)
+                                                                                │      ├─▶ renderVisitReport(data) → HTML
+                                                                                │      ├─▶ PrintRendererProxy.render(html, "visit:<id>") ─▶ Cluster ─▶ page.pdf({format:'A5'})
+                                                                                │      └─▶ AuditLog.record('print.visit_report.requested', null)
+                                                                                │
+                                                                                ▼
+                                              response: Content-Type: application/pdf
+                                                          Cache-Control: no-store
+                                                          Content-Disposition: inline; filename=…
+                                  ◀────────────────────────────────────────────┘
+                                  │
+                                  │ iframe load → iframe.contentWindow.print()
+   Native print dialog ◀──────────┘
+```
+
+The same iframe is recycled across prints — its `src` is replaced
+each time, with a `_t=Date.now()` cache-buster appended because some
+browsers ignore `Cache-Control: no-store` on embedded PDFs.
+
+### Modules
+
+```
+apps/api/src/modules/
+├── print/
+│   ├── print.module.ts
+│   ├── print.controller.ts       — GET /api/print/{visit,vertetim,history}/:id
+│   ├── print.service.ts          — loads data, maps to template DTOs, audits
+│   ├── print.dto.ts              — template payload shapes (HistoryPrintQuery)
+│   ├── print.format.ts           — pure formatters (dates, weights, age, ID labels)
+│   ├── print-renderer.service.ts — PuppeteerRenderer + PRINT_RENDERER token
+│   └── templates/
+│       ├── shared-styles.ts      — common CSS, signature column, stamp area, wrap shell
+│       ├── visit-report.template.ts
+│       ├── vertetim.template.ts
+│       └── history.template.ts
+└── vertetim/
+    ├── vertetim.module.ts
+    ├── vertetim.controller.ts    — POST /api/vertetim, GET /api/vertetim/:id
+    ├── vertetim.service.ts       — issue + fetch, freezes diagnosis snapshot
+    └── vertetim.dto.ts
+```
+
+### Puppeteer cluster
+
+`PuppeteerRenderer` owns a long-lived `puppeteer-cluster` pool
+(`Cluster.CONCURRENCY_CONTEXT`, `maxConcurrency: 4`). The cluster
+launches once on first use and reuses the Chromium binary across
+every render — startup cost is amortized. Shutdown drains via
+`onModuleDestroy`. Each `page.task`:
+
+1. `setRequestInterception(true)` — every outbound request is
+   aborted unless the URL is `data:` or `about:`. Templates embed
+   their fonts and SVG inline; nothing legitimate needs the network.
+   Docker egress firewall + this in-page interception are the two
+   layers of defense.
+2. `page.setContent(html, { waitUntil: 'load' })` — loads the
+   self-contained document.
+3. `page.pdf({ format: 'A5', preferCSSPageSize: true })` — outputs
+   the buffer.
+
+The renderer is injected via the `PRINT_RENDERER` token so
+integration tests can swap in a fake that returns a fixture byte
+sequence — Chromium isn't required to run the tests.
+
+### Templates
+
+Pure functions of typed payloads → HTML strings. They emit a single
+self-contained `<html>` document (shared shell from
+[`shared-styles.ts`](../apps/api/src/modules/print/templates/shared-styles.ts)).
+Field visibility is enforced at the type system: each template's
+DTO shape (in
+[`print.dto.ts`](../apps/api/src/modules/print/print.dto.ts)) only
+carries the fields it is allowed to render. The canonical visibility
+table:
+
+| Field             | Visit report | Vërtetim | History       |
+| ---               | :---:        | :---:    | :---:         |
+| Master data       | ✓            | ✓ subset | ✓             |
+| Alergji / Tjera   | ✗            | ✗        | ✗             |
+| Payment code      | ✓ (with ID)  | ✗        | ✗             |
+| Vitals            | ✓ box        | ✗        | ✓ Pesha col   |
+| Diagnoza          | ✓            | ✓        | ✓             |
+| Terapia           | ✓            | ✗        | ✓             |
+| Analizat          | ✓            | ✗        | ✓             |
+| Ankesa / Ushqimi  | ✗            | ✗        | ✗             |
+| Ekzaminime / Tjera| ✗            | ✗        | ✗             |
+| Ultrazëri         | ✓ page 2     | ✗        | optional appendix |
+| Kontrolla         | ✗            | ✗        | ✗             |
+
+Template-visibility tests in
+[`print.template.spec.ts`](../apps/api/src/modules/print/print.template.spec.ts)
+pin this table — sentinels prove that the omitted fields never
+appear even if a future refactor accidentally widens the payload.
+
+### Stamp area (non-negotiable)
+
+Every page reserves a blank ~50mm × 50mm rectangle in the
+bottom-right via `.stamp-area`. The faint dashed border + diagonal
+pattern + "Vendi i vulës" label are screen-only — the
+`@media print` block in
+[`shared-styles.ts`](../apps/api/src/modules/print/templates/shared-styles.ts)
+hides the border, background, and label so the actual paper
+output is a clean blank reserved area. **No digital stamp is ever
+rendered, stored, or generated.** This is CLAUDE.md §1.1 — Kosovo
+law requires a physical ink stamp.
+
+### Signature
+
+The doctor's scanned signature (`User.signatureUrl`) is rendered as
+an inline `<img>` (base64 data URI) at the signature line when
+present. Otherwise an SVG placeholder stroke is shown above the
+"Dr. X" footer — the doctor signs by hand. The signature column
+and the stamp area always sit side-by-side at the bottom of each
+printed page.
+
+### Vërtetim — issue + reprint with diagnosis snapshot
+
+`POST /api/vertetim` (doctor only) creates a row with
+`diagnosis_snapshot = "J03.9 — Tonsillitis acuta"` (or the legacy
+text if no structured diagnosis exists). The audit log captures
+`print.vertetim.issued` with the snapshot value.
+
+Reprints (`GET /api/print/vertetim/:id`) regenerate the PDF from
+the live row. The template prefers the structured `code +
+latinDescription` of the current visit's primary diagnosis for
+typographic display, **falling back to the frozen snapshot
+verbatim** when no structured diagnosis is available. The snapshot
+column is never overwritten — even if the doctor later changes the
+visit's diagnosis, the printed text on the reprint matches the
+original document.
+
+This is the heart of the integration spec in
+[`print.integration.spec.ts`](../apps/api/src/modules/print/print.integration.spec.ts):
+issue against `J03.9`, swap the visit to `R05`, reprint, assert the
+snapshot still surfaces `J03.9 — Tonsillitis acuta`.
+
+### Audit events
+
+| Endpoint                                         | Audit action                       |
+| ---                                              | ---                                |
+| `GET  /api/print/visit/:id`                      | `print.visit_report.requested`     |
+| `POST /api/vertetim`                             | `print.vertetim.issued` (+changes) |
+| `GET  /api/print/vertetim/:id`                   | `print.vertetim.requested`         |
+| `GET  /api/print/history/:patientId`             | `print.history.requested`          |
+
+Issue events carry the snapshot text in their `changes` array;
+print/reprint events carry `changes: null` per the sensitive-read
+convention.
+
+### Frontend
+
+Chart action bar (inside the visit form footer):
+
+- `[Printo raportin]` → flush auto-save, `openPrintFrame({ src: /api/print/visit/:id })`.
+- `[Vërtetim]` →
+  [`VertetimDialog`](../apps/web/components/patient/vertetim-dialog.tsx)
+  opens. Date pickers (`Nga` / `Deri`) + quick-day chips (1, 3, 5,
+  7, 10) drive a live preview of periudha + kohëzgjatja + diagnoza
+  snapshot. "Shiko" issues + opens the PDF in a new tab; "Printo"
+  issues + opens the iframe + triggers print.
+- `[Printo historinë]` →
+  [`PrintHistoryDialog`](../apps/web/components/patient/print-history-dialog.tsx)
+  confirms with an optional "Imazhet e ultrazerit" toggle, then
+  fires `GET /api/print/history/:patientId?include_ultrasound=…`.
+
+Vërtetime panel (right column of the chart): each issued row gets
+`👁 Shiko` (open the PDF in a new tab — read the document without
+printing) and `🖨 Printo` (re-fire the print pipeline).
+[`openPrintFrame`](../apps/web/lib/print-frame.ts) owns the iframe
+lifecycle: it lives at `#klinika-print-frame`, is recycled across
+prints, and falls back to `window.open(...)` if the embedded print
+call fails (cross-origin or PDF viewer quirk).
+
+### Tests
+
+- Unit ([`print.format.spec.ts`](../apps/api/src/modules/print/print.format.spec.ts))
+  — date formatting (dd.MM.yyyy + dd.MM.yy), weight + length +
+  temperature renderers, Albanian age labels (`ditë` / `muaj` /
+  `vit` / `vjeç`), `formatPatientIdLabel`, `formatCertificateNumber`,
+  `vertetimDaysInclusive` (same-day = 1, Mon-Fri = 5, range
+  validation throws on `to < from`), `escapeHtml`.
+- Unit ([`print.template.spec.ts`](../apps/api/src/modules/print/print.template.spec.ts))
+  — render-string assertions against the canonical visibility
+  table: visit-report renders Dg + Th + vitals + payment-code-with-ID;
+  vërtetim renders only the snapshot diagnosis + period; history
+  renders the table columns and paginates above 12 visits. Sentinel
+  strings prove banned fields never leak.
+- Unit ([`vertetim.service.spec.ts`](../apps/api/src/modules/vertetim/vertetim.service.spec.ts))
+  — `buildDiagnosisSnapshot` priority order (structured → legacy →
+  em-dash), `daysInclusive` math.
+- Unit ([`vertetim-dialog.spec.ts`](../apps/web/components/patient/vertetim-dialog.spec.ts))
+  — `addDaysIso` / `diffDaysInclusive` for the dialog's chip
+  buttons and live preview.
+- Integration ([`print.integration.spec.ts`](../apps/api/src/modules/print/print.integration.spec.ts))
+  — receptionist 403 on every print endpoint, doctor 200 with
+  `application/pdf` + `Cache-Control: no-store`, audit rows
+  written, and the snapshot-stability proof: issue → reprint →
+  change visit diagnosis → reprint, the second reprint still
+  carries the frozen text.
+- E2E ([`print.spec.ts`](../apps/web/tests/e2e/print.spec.ts))
+  — clicking the action-bar buttons fires the right network calls,
+  the vërtetim dialog opens with the patient + diagnosis preview,
+  invalid date ranges disable issue, the print frame triggers
+  `window.print()` on load, reprint of an existing vërtetim hits
+  `GET /api/print/vertetim/:id`, and `Printo historinë` confirms
+  before firing.

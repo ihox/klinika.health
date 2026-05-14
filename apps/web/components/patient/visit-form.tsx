@@ -43,6 +43,12 @@ interface Props {
   onOpenHistory: () => void;
   onDeleteRequest: () => void;
   onNewVisitRequest: () => void;
+  /** Open the print pipeline for the active visit (PDF iframe + browser print). */
+  onPrintVisitReport: () => void;
+  /** Open the "Lësho vërtetim absencë" modal anchored at this visit. */
+  onIssueVertetim: () => void;
+  /** Open the patient-history print dialog (toggles US appendix). */
+  onPrintHistory: () => void;
 }
 
 /**
@@ -66,6 +72,9 @@ export function VisitForm({
   onOpenHistory,
   onDeleteRequest,
   onNewVisitRequest,
+  onPrintVisitReport,
+  onIssueVertetim,
+  onPrintHistory,
 }: Props): ReactElement {
   const values = useAutoSaveStore((s) => s.values);
   const setValues = useAutoSaveStore((s) => s.setValues);
@@ -358,6 +367,9 @@ export function VisitForm({
         onSaveNow={() => void auto.flush()}
         onDelete={onDeleteRequest}
         onNewVisit={onNewVisitRequest}
+        onPrintVisitReport={onPrintVisitReport}
+        onIssueVertetim={onIssueVertetim}
+        onPrintHistory={onPrintHistory}
       />
     </section>
   );
@@ -453,6 +465,9 @@ interface VisitActionBarProps {
   onSaveNow: () => void;
   onDelete: () => void;
   onNewVisit: () => void;
+  onPrintVisitReport: () => void;
+  onIssueVertetim: () => void;
+  onPrintHistory: () => void;
 }
 
 function VisitActionBar({
@@ -461,10 +476,44 @@ function VisitActionBar({
   onSaveNow,
   onDelete,
   onNewVisit,
+  onPrintVisitReport,
+  onIssueVertetim,
+  onPrintHistory,
 }: VisitActionBarProps): ReactElement {
   return (
-    <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-line bg-surface-subtle px-4 py-3">
+    <footer className="flex flex-col gap-3 border-t border-line bg-surface-subtle px-4 py-3 lg:flex-row lg:flex-wrap lg:items-center lg:justify-between">
       <div className="flex flex-wrap items-center gap-2">
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={onPrintVisitReport}
+          data-testid="print-visit-report"
+        >
+          Printo raportin
+        </Button>
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={onIssueVertetim}
+          data-testid="open-vertetim-dialog"
+        >
+          Vërtetim
+        </Button>
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={onPrintHistory}
+          data-testid="print-history"
+        >
+          Printo historinë
+        </Button>
+        <span className="hidden h-5 w-px bg-line lg:inline-block" aria-hidden />
+        <Button variant="secondary" size="sm" onClick={onNewVisit}>
+          + Vizitë e re
+        </Button>
+        <Button variant="secondary" size="sm" onClick={onSaveNow}>
+          Ruaj tani
+        </Button>
         <Button
           variant="secondary"
           size="sm"
@@ -472,12 +521,6 @@ function VisitActionBar({
           className="text-danger hover:!bg-danger-bg"
         >
           Fshij vizitën
-        </Button>
-        <Button variant="secondary" size="sm" onClick={onNewVisit}>
-          + Vizitë e re
-        </Button>
-        <Button variant="secondary" size="sm" onClick={onSaveNow}>
-          Ruaj tani
         </Button>
       </div>
       <AutoSaveIndicator

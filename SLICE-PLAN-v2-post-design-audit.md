@@ -458,7 +458,7 @@ Build the complete print pipeline:
 2. Print templates (translate from design-reference/prototype/print-*.html):
    - visit-report.html — A5, header (clinic letterhead + patient block including payment code with ID like "A · 15626"), body (Dg + Th), footer (signature + blank stamp area + date/place)
    - visit-report-page2.html — only rendered if ultrasound studies linked; clinic header (compact), Ultrazeri notes, up to 4 images in 2×2 grid, signature + stamp area
-   - vertetim.html — A5, OSP DONETA-MED header, "VËRTETIM" title, body with name + DOB + place + diagnosis box + date range, signature + stamp area
+   - vertetim.html — A5, DONETA-MED header, "VËRTETIM" title, body with name + DOB + place + diagnosis box + date range, signature + stamp area
    - history.html — multi-page, columns: Data · Pesha · Diagnoza · Terapia, sorted newest first, optional ultrasound appendix
 
 3. API endpoints:

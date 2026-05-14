@@ -31,6 +31,8 @@
     "pino": "9.5.0",
     "pino-http": "10.3.0",
     "pino-pretty": "11.3.0",
+    "puppeteer": "23.7.1",
+    "puppeteer-cluster": "0.24.0",
     "reflect-metadata": "0.2.2",
     "resend": "4.0.1",
     "rxjs": "7.8.1",
