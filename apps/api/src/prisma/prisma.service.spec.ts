@@ -184,7 +184,7 @@ describe('PrismaService.softDeleteMiddleware', () => {
     const next = vi.fn().mockResolvedValue(null);
     const callerWhere = { id: 'abc', clinicId: 'xyz', deletedAt: { not: null } };
     const params = makeParams({
-      model: 'Appointment',
+      model: 'Visit',
       action: 'findFirst',
       args: { where: callerWhere },
     });
@@ -194,7 +194,7 @@ describe('PrismaService.softDeleteMiddleware', () => {
     const calledWith = next.mock.calls[0][0] as Prisma.MiddlewareParams;
     expect((calledWith.args as { where?: unknown }).where).toEqual(callerWhere);
     expect(logger.warn).toHaveBeenCalledWith(
-      { model: 'Appointment', action: 'findFirst' },
+      { model: 'Visit', action: 'findFirst' },
       'soft-delete filter bypassed via explicit deletedAt in where clause',
     );
   });
