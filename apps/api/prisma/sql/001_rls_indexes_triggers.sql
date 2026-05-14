@@ -127,6 +127,28 @@ CREATE POLICY tenant_isolation ON "prescription_lines"
   WITH CHECK ("clinic_id" = current_setting('app.clinic_id', true)::uuid);
 
 -- ---------------------------------------------------------------------------
+-- doctor_diagnosis_usage — RLS scoped to clinic_id; per-doctor rows
+-- are filtered application-side. The migration that created the table
+-- already set the policy, repeated here so a fresh psql -f apply is
+-- idempotent.
+-- ---------------------------------------------------------------------------
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables
+             WHERE table_schema = 'public' AND table_name = 'doctor_diagnosis_usage') THEN
+    EXECUTE 'ALTER TABLE "doctor_diagnosis_usage" ENABLE ROW LEVEL SECURITY';
+    EXECUTE 'ALTER TABLE "doctor_diagnosis_usage" FORCE ROW LEVEL SECURITY';
+    EXECUTE 'DROP POLICY IF EXISTS tenant_isolation ON "doctor_diagnosis_usage"';
+    EXECUTE $POL$
+      CREATE POLICY tenant_isolation ON "doctor_diagnosis_usage"
+        USING ("clinic_id" = current_setting('app.clinic_id', true)::uuid)
+        WITH CHECK ("clinic_id" = current_setting('app.clinic_id', true)::uuid)
+    $POL$;
+  END IF;
+END
+$$;
+
+-- ---------------------------------------------------------------------------
 -- appointments
 -- ---------------------------------------------------------------------------
 ALTER TABLE "appointments" ENABLE ROW LEVEL SECURITY;

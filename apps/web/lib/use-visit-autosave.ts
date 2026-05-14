@@ -261,7 +261,16 @@ function listDirtyFields(
   for (const k of keys) {
     if (before[k] !== after[k]) fields.push(k);
   }
+  // Diagnoses are an ordered array of objects — equality by reference
+  // would over-report. Compare the code sequence explicitly.
+  if (diagnosisCodes(before.diagnoses) !== diagnosisCodes(after.diagnoses)) {
+    fields.push('diagnoses');
+  }
   return fields;
+}
+
+function diagnosisCodes(list: VisitFormValues['diagnoses']): string {
+  return list.map((d) => d.code).join(',');
 }
 
 // ---------------------------------------------------------------------------

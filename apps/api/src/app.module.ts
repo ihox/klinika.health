@@ -18,6 +18,7 @@ import { ClinicSettingsModule } from './modules/clinic-settings/clinic-settings.
 import { DoctorDashboardModule } from './modules/doctor-dashboard/doctor-dashboard.module';
 import { EmailModule } from './modules/email/email.module';
 import { HealthModule } from './modules/health/health.module';
+import { Icd10Module } from './modules/icd10/icd10.module';
 import { JobsModule } from './modules/jobs/jobs.module';
 import { PatientsModule } from './modules/patients/patients.module';
 import { RateLimitModule } from './modules/rate-limit/rate-limit.module';
@@ -41,6 +42,7 @@ import { LoggingModule } from './common/logging/logger.module';
     ClinicSettingsModule,
     PatientsModule,
     VisitsModule,
+    Icd10Module,
     AppointmentsModule,
     DoctorDashboardModule,
     LoggingModule,

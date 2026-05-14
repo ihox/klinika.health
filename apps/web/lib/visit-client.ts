@@ -7,6 +7,12 @@ import { apiFetch } from './api';
 
 export type PaymentCode = 'A' | 'B' | 'C' | 'D' | 'E';
 
+export interface VisitDiagnosisDto {
+  code: string;
+  latinDescription: string;
+  orderIndex: number;
+}
+
 export interface VisitDto {
   id: string;
   clinicId: string;
@@ -29,6 +35,7 @@ export interface VisitDto {
   labResults: string | null;
   followupNotes: string | null;
   otherNotes: string | null;
+  diagnoses: VisitDiagnosisDto[];
   createdAt: string;
   updatedAt: string;
   createdBy: string;
@@ -56,6 +63,11 @@ export interface UpdateVisitInput {
   labResults?: string | null;
   followupNotes?: string | null;
   otherNotes?: string | null;
+  /**
+   * Ordered ICD-10 codes (primary first). Omit to leave the join
+   * table untouched; send an empty array to clear all diagnoses.
+   */
+  diagnoses?: string[];
 }
 
 export interface VisitHistoryFieldChange {
@@ -169,6 +181,12 @@ export interface VisitFormValues {
   labResults: string;
   followupNotes: string;
   otherNotes: string;
+  /**
+   * Ordered ICD-10 chips. Index 0 is the primary diagnosis. The list is
+   * the source of truth for the picker — re-ordering, adding, and
+   * removing a chip all mutate this array.
+   */
+  diagnoses: VisitDiagnosisDto[];
 }
 
 export function visitToFormValues(v: VisitDto): VisitFormValues {
@@ -192,6 +210,7 @@ export function visitToFormValues(v: VisitDto): VisitFormValues {
     labResults: v.labResults ?? '',
     followupNotes: v.followupNotes ?? '',
     otherNotes: v.otherNotes ?? '',
+    diagnoses: [...v.diagnoses].sort((a, b) => a.orderIndex - b.orderIndex),
   };
 }
 
@@ -265,7 +284,29 @@ export function diffFormValues(
     changed = true;
   }
 
+  if (diagnosesChanged(before.diagnoses, after.diagnoses)) {
+    patch.diagnoses = after.diagnoses.map((d) => d.code);
+    changed = true;
+  }
+
   return changed ? patch : null;
+}
+
+/**
+ * Order-sensitive comparison of two diagnosis chip lists. A reorder
+ * counts as a change — the primary diagnosis is defined by position.
+ *
+ * Exported for the unit tests that pin this rule.
+ */
+export function diagnosesChanged(
+  before: VisitDiagnosisDto[],
+  after: VisitDiagnosisDto[],
+): boolean {
+  if (before.length !== after.length) return true;
+  for (let i = 0; i < before.length; i++) {
+    if (before[i]!.code !== after[i]!.code) return true;
+  }
+  return false;
 }
 
 function diffWeight(beforeKg: string, afterKg: string): number | null | undefined {

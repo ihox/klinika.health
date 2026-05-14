@@ -280,7 +280,7 @@ Commit on branch `slice-12-visit-form`.
 ```
 Read CLAUDE.md and design-reference/prototype/chart.html (focus on Diagnoza and Terapia sections).
 
-Build the diagnosis picker and prescription autocomplete:
+Build the diagnosis picker and Terapia field:
 
 1. Diagnoza multi-select (ICD-10, Latin only):
    - Component: searchable multi-select combobox
@@ -295,60 +295,49 @@ Build the diagnosis picker and prescription autocomplete:
    - Each chip has × to remove
    - Order matters: first chip = primary diagnosis
    - Drag-to-reorder via dnd-kit
-   - Keyboard: arrows to navigate, Enter to add, Tab to commit, Backspace removes last chip
+   - Keyboard: arrows to navigate dropdown, Enter to add, Tab to commit, Backspace removes last chip
 
 2. Frequently-used tracking:
    - Each time a visit is saved with diagnoses, increment use counts in `doctor_diagnosis_usage` table (doctor_id, icd10_code, use_count, last_used_at)
-   - Per-doctor (not per-clinic)
+   - Per-doctor (not per-clinic) — different doctors see different frequent-used lists
+   - This table should exist from slice 2's schema; verify and add if missing
 
-3. Terapia autocomplete:
-   - Multi-line textarea, monospace-ish font for medical shorthand
-   - As doctor types each line (2+ chars), floating suggestions appear below cursor
-   - Backend: GET /api/prescriptions/suggest?q=<line>&doctorId=<id>
-   - Suggestions sourced from `prescription_lines` table (per-doctor index)
-   - Display: prescription text + use count chip ("12 uses")
-   - Keyboard: ↓ to navigate, Tab or Enter to accept, Esc dismisses
-   - Right-click suggestion → "Harro këtë sugjerim" (deletes the row)
-   - On visit save, parse Terapia line-by-line, upsert each line (increment use_count if exists, create if new)
-
-4. Snippet picker (⌘/Ctrl + ;):
-   - Opens modal with doctor's top 20 prescription patterns
-   - Tap to insert at cursor
-   - Each snippet: text + last used + use count
-
-5. Prescription seeding from migration:
-   - When Access migration runs (slice 17), pre-populate prescription_lines from historical Terapia values
-   - Each unique line becomes a row, use_count = historical occurrences
-   - Day-one of using Klinika, autocomplete already knows the doctor's patterns
+3. Terapia textarea:
+   - Multi-line textarea, plain text input
+   - No autocomplete, no suggestions, no snippet picker, no per-doctor indexing
+   - Standard textarea behavior: type, paste, edit freely
+   - Auto-resize vertically as content grows (min 4 rows, no max)
+   - Saved as plain text to visits.prescription column
+   - No backend endpoint for suggestions
 
 Constraints:
 - Diagnosis dropdown: max 20 results visible, virtualized if longer
-- Diagnosis search handles ICD-10 chapters (J = respiratory, etc.)
-- Prescription suggestions: max 6 visible, sorted by frequency-recency blend
-- "Forget suggestion" requires inline confirmation (not modal)
+- Diagnosis search handles ICD-10 chapters (J = respiratory, etc.) — typing "J" returns common J codes
 - All visible text in Albanian where applicable
+- Terapia is plain text only — do not add any autocomplete affordances
 
 Tests:
-- Unit: diagnosis search with frequently-used boost
-- Unit: prescription line parsing and indexing
-- Unit: snippet picker filtering
-- Integration: save visit → diagnoses indexed → next visit picker shows recently-used at top
-- Integration: prescription line auto-indexed on save
-- E2E: doctor types a diagnosis, picks from dropdown, reorders, saves
-- E2E: doctor types a prescription line, suggestion appears, accepts with Tab
-- E2E: snippet picker opens with shortcut
+- Unit: diagnosis search with frequently-used boost (verify doctor's recent codes appear first)
+- Unit: diagnosis chip ordering preserves primary-first semantics
+- Integration: save visit with diagnoses → doctor_diagnosis_usage table updated → next visit picker shows recently-used at top
+- Integration: GET /api/icd10/search returns expected ranking
+- E2E: doctor types a diagnosis code or partial Latin name, sees results, picks from dropdown, sees chip
+- E2E: doctor reorders diagnoses via drag, saves visit, reopens, order preserved
+- E2E: doctor removes a diagnosis chip via × button
+- E2E: doctor types in Terapia textarea, content saves on auto-save (from slice 12)
 
 Documentation:
-- Document the per-doctor diagnosis/prescription history in docs/architecture.md
+- Document the per-doctor diagnosis frequency tracking in docs/architecture.md
+- Note explicitly: Terapia is plain text in v1; autocomplete deferred to v2
 
-Commit on branch `slice-13-clinical-inputs`.
+Commit on branch `slice-13-diagnosis-and-terapia`.
 ```
 
 ---
 
 # SLICE 14 — WHO growth charts (0-24 months)
 
-**Goal:** Compact sparkline charts in right column + full-size modal with three tabs (weight/length/head circumference), WHO percentile bands, age cutoff at 24 months with historical view.
+**Goal:** Compact sparkline charts in right column + full-size modal with three tabs (weight/length/head circumference), WHO percentile bands, blue/pink coloring by sex, age cutoff at 24 months with historical view.
 
 ## Prompt
 
@@ -370,12 +359,21 @@ Build the WHO growth charts:
 
 2. Compact sparkline cards (in patient chart right column, per chart.html):
    - Three cards: "Pesha sipas moshës" / "Gjatësia sipas moshës" / "Perimetri i kokës"
-   - Each shows: WHO percentile bands as soft gradient zones, patient's data points as dots connected by line, X-axis (months 0-24), Y-axis (values with units), tabular numerals
+   - Each shows:
+     - WHO percentile bands as soft gradient zones (neutral grays)
+     - Patient's data points as dots connected by a line
+     - Color of patient's line and dots: BLUE for boys, PINK for girls
+     - X-axis: months (0-24)
+     - Y-axis: values with units
+     - Tabular numerals
    - Click any sparkline → opens full-size modal
 
 3. Full-size modal (from components/growth-chart-modal.html):
    - Three tabs: Pesha / Gjatësia / Perimetri kokës
    - Larger chart, more detail
+   - Modal header includes patient name followed by a small chip:
+     - "Djalë" with blue background for boys
+     - "Vajzë" with pink background for girls
    - Tooltip on hover: "Data: DD.MM.YYYY · Vlera: X · Mosha: N muaj"
    - Print this chart button (separate from main visit report)
    - Match visual treatment of components reference exactly (percentile bands, dot colors, line styling, tooltip)
@@ -387,10 +385,11 @@ Build the WHO growth charts:
    - Click → same modal with "Historiku 0-24 muaj" title
 
 5. Sex requirement:
-   - Growth charts require knowing patient's sex (boys vs girls have different curves)
+   - Growth charts require knowing patient's sex (boys vs girls have different curves AND different chart colors)
    - For patients without explicit sex, infer from first name where possible (Albanian first names usually gendered)
    - For ambiguous/unknown, prompt doctor to set sex on patient record before showing charts
-   - Sex is part of patient master data (verify schema from slice 7 includes `sex` enum)
+   - Sex is part of patient master data (verify schema from slice 7 includes `sex` enum with values: 'M' for boy, 'F' for girl)
+   - If sex is unknown and cannot be inferred: show a friendly placeholder in the growth chart panel ("Përcaktoni gjininë e pacientit për të parë grafikët") with a button to set it inline
 
 6. Data point display:
    - Use only weight/height/head circumference data from saved visits (not pending edits)
@@ -404,21 +403,31 @@ Build the WHO growth charts:
 
 Constraints:
 - WHO data is publicly available — embed as static JSON
-- Charts use design tokens (teal for patient's line, neutral grays for percentile bands)
+- Charts use design tokens:
+  - Patient's line and dots: blue for boys, pink for girls (standard pediatric convention)
+  - Percentile bands: neutral grays from design tokens
+  - Use existing blue/pink tokens from design-reference/tokens/ if available
+  - If missing, add `--chart-male` and `--chart-female` to the tokens file with sensible defaults (e.g., #4A90D9 for boys, #E8728E for girls); same for the "Djalë" / "Vajzë" chip backgrounds (lighter tints of the same colors)
+- The "Djalë"/"Vajzë" text chip ALWAYS accompanies the colored chart in the modal header (color is the primary signal, text is the backup for accessibility — some doctors are color-blind)
 - All UI in Albanian
 - Receptionist never sees these (doctor-only)
 - Match the visual style of components/growth-chart-modal.html exactly
 
 Tests:
 - Unit: age-in-months calculation from DOB and visit_date
-- Unit: percentile band rendering
-- Unit: data point filtering by age range
+- Unit: percentile band rendering (correct order P3-P97)
+- Unit: data point filtering by age range (0-24mo only on main chart)
+- Unit: color selection based on patient.sex ('M' → blue, 'F' → pink, null → placeholder)
 - Integration: chart loads for patient with measurements at various ages
-- E2E: open chart, see growth chart cards, click to expand, see full-size modal with all three tabs
+- Integration: patient with sex='M' renders blue charts and "Djalë" chip
+- Integration: patient with sex='F' renders pink charts and "Vajzë" chip
+- Integration: patient with sex=null shows the "set sex inline" placeholder
+- E2E: open chart for a boy, see blue sparklines, click to expand, see "Djalë" chip in modal header, see all three tabs working
 
 Documentation:
 - Document the WHO data source in docs/architecture.md
-- Note WHO data is public domain
+- Note WHO data is public domain (no licensing concerns)
+- Document the chart color convention (blue/pink) in docs/architecture.md
 
 Commit on branch `slice-14-growth-charts`.
 ```

@@ -9,8 +9,10 @@
 //     visit in real time and most saves only touch a handful of fields.
 //   * Body validation is forgiving (no minimum complaint length etc.)
 //     but defensive on numerics: negative weight/height is rejected.
-//   * Diagnoses are NOT part of this slice's PATCH payload — the ICD-10
-//     multi-select arrives in slice 13 and uses the join table.
+//   * Diagnoses ride alongside the regular form fields as an ordered
+//     ICD-10 code array (slice 13). Order matters — index 0 is the
+//     primary diagnosis by convention. The server rewrites the join
+//     table (`visit_diagnoses`) on every PATCH that includes the key.
 //
 // The response uses `VisitDto` for everything (create, get, patch,
 // restore). Soft delete returns `restorableUntil` and `status: 'ok'` —
@@ -85,6 +87,27 @@ const paymentCode = z.enum(['A', 'B', 'C', 'D', 'E']).nullable().optional();
 const optionalBoolean = z.boolean().optional();
 const optionalClinical = (max?: number) => clinicalText(max).nullable().optional();
 
+/**
+ * Ordered ICD-10 codes. Each entry is a catalogue key (regex
+ * intentionally permissive — the foreign key validates membership).
+ * Empty array clears the visit's diagnoses; omitting the key leaves
+ * the join table untouched. Duplicates are rejected; the order the
+ * doctor chose is the canonical primary-first sequence.
+ */
+const icd10CodeString = z
+  .string()
+  .min(1, 'Kod ICD-10 i pavlefshëm')
+  .max(16, 'Kod ICD-10 i pavlefshëm')
+  .regex(/^[A-Z][0-9]{2}(\.[0-9A-Z]{1,3})?$/, 'Kod ICD-10 i pavlefshëm');
+
+const optionalDiagnoses = z
+  .array(icd10CodeString)
+  .max(20, 'Maksimumi 20 diagnoza për vizitë')
+  .refine((arr) => new Set(arr).size === arr.length, {
+    message: 'Diagnozat e dyfishuara nuk lejohen',
+  })
+  .optional();
+
 // ---------------------------------------------------------------------------
 // Create
 // ---------------------------------------------------------------------------
@@ -136,6 +159,7 @@ export const UpdateVisitSchema = z
     labResults: optionalClinical(10_000),
     followupNotes: optionalClinical(4_000),
     otherNotes: optionalClinical(4_000),
+    diagnoses: optionalDiagnoses,
   })
   .strict();
 
@@ -192,6 +216,13 @@ export interface VisitDto {
   labResults: string | null;
   followupNotes: string | null;
   otherNotes: string | null;
+  /**
+   * Ordered ICD-10 diagnoses on the visit (primary first). Latin
+   * descriptions are embedded so the chart can render chips without
+   * a second round-trip. Empty array when no structured diagnoses
+   * exist (the legacy free-text diagnosis lives on `legacyDiagnosis`).
+   */
+  diagnoses: VisitDiagnosisDto[];
   createdAt: string;
   updatedAt: string;
   createdBy: string;
@@ -204,6 +235,12 @@ export interface VisitDto {
    * the same insert transaction).
    */
   wasUpdated: boolean;
+}
+
+export interface VisitDiagnosisDto {
+  code: string;
+  latinDescription: string;
+  orderIndex: number;
 }
 
 export interface VisitHistoryEntryDto {
@@ -253,6 +290,16 @@ export interface VisitRowLike {
   updatedAt: Date | string;
   createdBy: string;
   updatedBy: string;
+  /**
+   * Optional embedded diagnoses (with their Icd10Code relation). When
+   * absent, the DTO falls back to an empty array — useful for older
+   * code paths that haven't been updated to include the join.
+   */
+  diagnoses?: Array<{
+    icd10Code: string;
+    orderIndex: number;
+    code?: { latinDescription: string } | null;
+  }>;
 }
 
 const UPDATE_DETECTION_SKEW_MS = 2_000;
@@ -282,6 +329,7 @@ export function toVisitDto(row: VisitRowLike): VisitDto {
     labResults: row.labResults ?? null,
     followupNotes: row.followupNotes ?? null,
     otherNotes: row.otherNotes ?? null,
+    diagnoses: toDiagnosisDtos(row.diagnoses),
     createdAt: createdAt.toISOString(),
     updatedAt: updatedAt.toISOString(),
     createdBy: row.createdBy,
@@ -324,4 +372,17 @@ function normalisePaymentCode(
     return value;
   }
   return null;
+}
+
+function toDiagnosisDtos(
+  rows: VisitRowLike['diagnoses'],
+): VisitDiagnosisDto[] {
+  if (!rows || rows.length === 0) return [];
+  return [...rows]
+    .sort((a, b) => a.orderIndex - b.orderIndex)
+    .map((d) => ({
+      code: d.icd10Code,
+      latinDescription: d.code?.latinDescription ?? '',
+      orderIndex: d.orderIndex,
+    }));
 }

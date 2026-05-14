@@ -86,6 +86,7 @@ export class VisitsService {
         createdBy: ctx.userId,
         updatedBy: ctx.userId,
       },
+      include: { diagnoses: { include: { code: true } } },
     });
 
     await this.audit.record({
@@ -118,6 +119,7 @@ export class VisitsService {
     this.requireDoctorOrAdmin(ctx);
     const row = await this.prisma.visit.findFirst({
       where: { id, clinicId, deletedAt: null },
+      include: { diagnoses: { include: { code: true } } },
     });
     if (!row) throw new NotFoundException('Vizita nuk u gjet.');
     return toVisitDto(row);
@@ -149,6 +151,7 @@ export class VisitsService {
     return this.prisma.$transaction(async (tx) => {
       const before = await tx.visit.findFirst({
         where: { id, clinicId, deletedAt: null },
+        include: { diagnoses: { include: { code: true } } },
       });
       if (!before) throw new NotFoundException('Vizita nuk u gjet.');
 
@@ -187,16 +190,112 @@ export class VisitsService {
       if (payload.followupNotes !== undefined) data.followupNotes = payload.followupNotes;
       if (payload.otherNotes !== undefined) data.otherNotes = payload.otherNotes;
 
+      const wroteScalarField = Object.keys(data).length > 1;
+      const wroteDiagnoses = payload.diagnoses !== undefined;
+
       // Nothing to change beyond updatedBy — drop out without touching
       // updated_at / firing a no-op audit row.
-      const wroteAnyField = Object.keys(data).length > 1;
-      if (!wroteAnyField) {
+      if (!wroteScalarField && !wroteDiagnoses) {
         return toVisitDto(before);
       }
 
-      const after = await tx.visit.update({ where: { id }, data });
+      // Always run the scalar update so updated_by/updated_at advance,
+      // even when only diagnoses changed.
+      const after = await tx.visit.update({
+        where: { id },
+        data,
+        include: { diagnoses: { include: { code: true } } },
+      });
+
+      // ---------------------------------------------------------------------
+      // Diagnoses sync — full rewrite of visit_diagnoses rows when the
+      // payload includes the key. The doctor sees the chip list as a
+      // single source of truth, so partial syncs would be surprising.
+      // ---------------------------------------------------------------------
+      let diagnosisDiff: { old: string | null; new: string | null } | null = null;
+      let afterWithDiagnoses = after;
+      if (wroteDiagnoses) {
+        const nextCodes = payload.diagnoses ?? [];
+        const beforeCodes = before.diagnoses
+          .slice()
+          .sort((a, b) => a.orderIndex - b.orderIndex)
+          .map((d) => d.icd10Code);
+
+        const beforeKey = serialiseDiagnoses(beforeCodes);
+        const nextKey = serialiseDiagnoses(nextCodes);
+
+        if (beforeKey !== nextKey) {
+          await tx.visitDiagnosis.deleteMany({ where: { visitId: id } });
+          if (nextCodes.length > 0) {
+            // Validate that every code exists. Bad codes hit the FK
+            // anyway, but a pre-check produces a kinder Albanian error
+            // message than a Prisma raw-error surface.
+            const existing = await tx.icd10Code.findMany({
+              where: { code: { in: nextCodes } },
+              select: { code: true },
+            });
+            const known = new Set(existing.map((r) => r.code));
+            for (const code of nextCodes) {
+              if (!known.has(code)) {
+                throw new NotFoundException(
+                  `Kodi ICD-10 "${code}" nuk u gjet.`,
+                );
+              }
+            }
+            await tx.visitDiagnosis.createMany({
+              data: nextCodes.map((code, idx) => ({
+                visitId: id,
+                icd10Code: code,
+                orderIndex: idx,
+              })),
+            });
+          }
+
+          // Bump per-doctor usage counts for every code in the new
+          // list — including codes that were already on the visit
+          // (re-saving the form is a fresh signal that the doctor still
+          // considers the code current).
+          for (const code of nextCodes) {
+            await tx.doctorDiagnosisUsage.upsert({
+              where: {
+                doctor_diagnosis_usage_doctor_code_unique: {
+                  doctorId: ctx.userId!,
+                  icd10Code: code,
+                },
+              },
+              update: {
+                useCount: { increment: 1 },
+                lastUsedAt: new Date(),
+              },
+              create: {
+                clinicId,
+                doctorId: ctx.userId!,
+                icd10Code: code,
+                useCount: 1,
+                lastUsedAt: new Date(),
+              },
+            });
+          }
+
+          diagnosisDiff = { old: beforeKey || null, new: nextKey || null };
+
+          // Re-fetch with the join included so the response DTO has the
+          // latest diagnoses (createMany doesn't return rows).
+          afterWithDiagnoses = await tx.visit.findUniqueOrThrow({
+            where: { id },
+            include: { diagnoses: { include: { code: true } } },
+          });
+        }
+      }
 
       const diffs = computeDiffs(before, after);
+      if (diagnosisDiff) {
+        diffs.push({
+          field: 'diagnoses',
+          old: diagnosisDiff.old,
+          new: diagnosisDiff.new,
+        });
+      }
       if (diffs.length > 0) {
         await this.audit.record({
           ctx,
@@ -207,7 +306,7 @@ export class VisitsService {
         });
       }
 
-      return toVisitDto(after);
+      return toVisitDto(afterWithDiagnoses);
     });
   }
 
@@ -260,6 +359,7 @@ export class VisitsService {
     const restored = await this.prisma.visit.update({
       where: { id },
       data: { deletedAt: null },
+      include: { diagnoses: { include: { code: true } } },
     });
 
     await this.audit.record({
@@ -386,6 +486,16 @@ export function computeDiffs(
     }
   }
   return diffs;
+}
+
+/**
+ * Stable string form of an ordered ICD-10 list, used as the audit-log
+ * "old"/"new" value and as the change-detection key. Comma-joined
+ * (the codes themselves never contain commas) so a single reorder
+ * registers as a diff without inventing a JSON encoding.
+ */
+export function serialiseDiagnoses(codes: string[]): string {
+  return codes.join(',');
 }
 
 function normaliseForDiff(value: unknown): string | number | boolean | null {

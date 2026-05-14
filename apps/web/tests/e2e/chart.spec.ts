@@ -127,6 +127,7 @@ function makeVisit(overrides: Partial<VisitFixture> = {}): VisitFixture {
     labResults: null,
     followupNotes: null,
     otherNotes: null,
+    diagnoses: [],
     createdAt: '2026-05-14T08:00:00.000Z',
     updatedAt: '2026-05-14T08:00:00.000Z',
     createdBy: 'u-taulant',
@@ -134,6 +135,12 @@ function makeVisit(overrides: Partial<VisitFixture> = {}): VisitFixture {
     wasUpdated: false,
     ...overrides,
   };
+}
+
+interface VisitDiagnosisFixture {
+  code: string;
+  latinDescription: string;
+  orderIndex: number;
 }
 
 interface VisitFixture {
@@ -158,11 +165,60 @@ interface VisitFixture {
   labResults: string | null;
   followupNotes: string | null;
   otherNotes: string | null;
+  diagnoses: VisitDiagnosisFixture[];
   createdAt: string;
   updatedAt: string;
   createdBy: string;
   updatedBy: string;
   wasUpdated: boolean;
+}
+
+const ICD10_RESULTS: Array<{
+  code: string;
+  latinDescription: string;
+  chapter: string;
+  useCount: number;
+  frequentlyUsed: boolean;
+}> = [
+  {
+    code: 'J20.9',
+    latinDescription: 'Bronchitis acuta',
+    chapter: 'Respiratory',
+    useCount: 0,
+    frequentlyUsed: false,
+  },
+  {
+    code: 'J21.0',
+    latinDescription: 'Bronchiolitis acuta',
+    chapter: 'Respiratory',
+    useCount: 0,
+    frequentlyUsed: false,
+  },
+  {
+    code: 'J45.9',
+    latinDescription: 'Asthma bronchiale',
+    chapter: 'Respiratory',
+    useCount: 0,
+    frequentlyUsed: false,
+  },
+];
+
+async function mockIcd10Search(page: Page): Promise<void> {
+  await page.route('**/api/icd10/search*', async (route: Route) => {
+    const url = new URL(route.request().url());
+    const q = (url.searchParams.get('q') ?? '').toLowerCase();
+    const filtered = ICD10_RESULTS.filter(
+      (r) =>
+        q.length === 0 ||
+        r.code.toLowerCase().startsWith(q) ||
+        r.latinDescription.toLowerCase().includes(q),
+    );
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ results: filtered }),
+    });
+  });
 }
 
 async function mockVisits(
@@ -525,6 +581,143 @@ test.describe('Patient chart shell', () => {
     await page.getByRole('button', { name: '+ Vizitë e re' }).first().click();
     const req = await createPromise;
     expect(req.postDataJSON()).toMatchObject({ patientId: PATIENT_ID });
+  });
+
+  // -------------------------------------------------------------------------
+  // Diagnoza + Terapia (slice 13)
+  // -------------------------------------------------------------------------
+
+  test('typing in the diagnosis search shows the dropdown and picking adds a chip', async ({
+    page,
+  }) => {
+    await mockChart(page);
+    await mockVisits(page);
+    await mockIcd10Search(page);
+
+    const patchPromise = page.waitForRequest(
+      (req) =>
+        req.url().includes(`/api/visits/${VISIT_NEW}`) &&
+        req.method() === 'PATCH',
+    );
+    await page.goto(`/pacient/${PATIENT_ID}`);
+
+    const picker = page.getByTestId('diagnosis-picker');
+    const input = picker.getByLabel('Kërko ICD-10');
+    await input.click();
+    await input.fill('bron');
+
+    const option = page.getByTestId('diagnosis-option-J20.9');
+    await expect(option).toBeVisible();
+    await option.click();
+
+    await expect(page.getByTestId('diagnosis-chip-J20.9')).toBeVisible();
+    // Trigger the form-wide blur flush.
+    await page.locator('#visit-prescription').click();
+    const req = await patchPromise;
+    expect(req.postDataJSON()).toMatchObject({ diagnoses: ['J20.9'] });
+  });
+
+  test('drag-to-reorder swaps the primary diagnosis', async ({ page }) => {
+    await mockChart(page);
+    await mockVisits(page, {
+      initial: makeVisit({
+        diagnoses: [
+          { code: 'J03.9', latinDescription: 'Tonsillitis acuta', orderIndex: 0 },
+          { code: 'R05', latinDescription: 'Tussis', orderIndex: 1 },
+        ],
+      }),
+    });
+    await mockIcd10Search(page);
+
+    await page.goto(`/pacient/${PATIENT_ID}`);
+
+    const first = page.getByTestId('diagnosis-chip-J03.9');
+    const second = page.getByTestId('diagnosis-chip-R05');
+    await expect(first).toHaveAttribute('data-primary', 'true');
+    await expect(second).toHaveAttribute('data-primary', 'false');
+
+    // Drag the second chip to the position of the first.
+    const patchPromise = page.waitForRequest(
+      (req) =>
+        req.url().includes(`/api/visits/${VISIT_NEW}`) &&
+        req.method() === 'PATCH',
+    );
+    const grab = second.locator('span[title*="renditjen"]');
+    const firstBox = await first.boundingBox();
+    const grabBox = await grab.boundingBox();
+    if (!firstBox || !grabBox) {
+      throw new Error('chip bounding boxes unavailable');
+    }
+    await page.mouse.move(grabBox.x + grabBox.width / 2, grabBox.y + grabBox.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(firstBox.x + 4, firstBox.y + firstBox.height / 2, {
+      steps: 12,
+    });
+    await page.mouse.up();
+
+    // Order has flipped — R05 should now be the primary.
+    await expect(page.getByTestId('diagnosis-chip-R05')).toHaveAttribute(
+      'data-primary',
+      'true',
+    );
+
+    // Blur the picker to flush the auto-save.
+    await page.locator('#visit-prescription').click();
+    const req = await patchPromise;
+    expect(req.postDataJSON()).toMatchObject({ diagnoses: ['R05', 'J03.9'] });
+  });
+
+  test('clicking × on a chip removes the diagnosis and saves the new list', async ({
+    page,
+  }) => {
+    await mockChart(page);
+    await mockVisits(page, {
+      initial: makeVisit({
+        diagnoses: [
+          { code: 'J03.9', latinDescription: 'Tonsillitis acuta', orderIndex: 0 },
+          { code: 'R05', latinDescription: 'Tussis', orderIndex: 1 },
+        ],
+      }),
+    });
+    await mockIcd10Search(page);
+
+    const patchPromise = page.waitForRequest(
+      (req) =>
+        req.url().includes(`/api/visits/${VISIT_NEW}`) &&
+        req.method() === 'PATCH',
+    );
+    await page.goto(`/pacient/${PATIENT_ID}`);
+    await page
+      .getByTestId('diagnosis-chip-R05')
+      .getByRole('button', { name: /Hiq diagnozën/ })
+      .click();
+
+    await expect(page.getByTestId('diagnosis-chip-R05')).not.toBeVisible();
+    await page.locator('#visit-prescription').click();
+    const req = await patchPromise;
+    expect(req.postDataJSON()).toMatchObject({ diagnoses: ['J03.9'] });
+  });
+
+  test('typing in Terapia saves the prescription text on auto-save', async ({
+    page,
+  }) => {
+    await mockChart(page);
+    await mockVisits(page);
+    await mockIcd10Search(page);
+
+    const patchPromise = page.waitForRequest(
+      (req) =>
+        req.url().includes(`/api/visits/${VISIT_NEW}`) &&
+        req.method() === 'PATCH',
+    );
+    await page.goto(`/pacient/${PATIENT_ID}`);
+    const terapia = page.locator('#visit-prescription');
+    await terapia.fill('Paracetamol susp. 250mg s.3x\nIbuprofen susp. 100mg/5ml s.n.');
+    await page.locator('#visit-examinations').click();
+    const req = await patchPromise;
+    expect(req.postDataJSON()).toMatchObject({
+      prescription: 'Paracetamol susp. 250mg s.3x\nIbuprofen susp. 100mg/5ml s.n.',
+    });
   });
 
   test('patient with no visits shows the empty-visits state', async ({ page }) => {

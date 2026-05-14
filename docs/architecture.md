@@ -69,7 +69,7 @@ schema-per-tenant. The 14 tables fall into five groups:
 | Group           | Tables                                                      | Notes                                                                                  |
 |-----------------|-------------------------------------------------------------|----------------------------------------------------------------------------------------|
 | Tenancy         | `clinics`, `users`, `platform_admins`                       | `clinics.subdomain` is the public identifier resolved at the edge.                     |
-| Clinical core   | `patients`, `visits`, `visit_diagnoses`, `icd10_codes`, `prescription_lines` | `visit_diagnoses` FK → `icd10_codes`; `icd10_codes` is reference data, no `clinic_id`. |
+| Clinical core   | `patients`, `visits`, `visit_diagnoses`, `icd10_codes`, `doctor_diagnosis_usage`, `prescription_lines` | `visit_diagnoses` FK → `icd10_codes`; `icd10_codes` is reference data (no `clinic_id`); `doctor_diagnosis_usage` is per-doctor per-code (RLS-scoped) for the diagnosis-picker boost. |
 | Scheduling      | `appointments`                                              | `scheduled_for TIMESTAMPTZ`; renders in Europe/Belgrade.                               |
 | Documents       | `vertetime`, `dicom_studies`, `visit_dicom_links`           | Vërtetime are immutable once issued (no `updated_at`, no soft delete).                 |
 | Audit           | `audit_log`                                                 | Append-mostly; coalesces consecutive same-user same-resource writes in service code.   |
@@ -1288,3 +1288,127 @@ Gmail pattern from [ADR-008](decisions/008-soft-delete-undo.md):
   shows the undo toast and Anulo restores the visit, "Vizitë e re"
   posts to /api/visits.
 
+
+## Slice 13 — diagnosis picker + Terapia plain text
+
+This slice adds structured ICD-10 diagnoses to the visit form and
+replaces the Terapia placeholder with a plain auto-growing textarea.
+Prescription autocomplete is deferred to v2 (see CLAUDE.md §12); the
+existing `prescription_lines` table stays in the schema but is unused
+by the v1 application code.
+
+### Diagnosis picker
+
+UI mirrors [`chart.html` §dxCurrent](../design-reference/prototype/chart.html):
+chips above the search field, dropdown below when the field has
+focus. Each chip carries the ICD-10 code (monospace) and the Latin
+description; the first chip is the primary diagnosis by convention.
+The primary chip is rendered in teal-on-white to distinguish it from
+secondary chips. Drag-to-reorder is wired via `dnd-kit`; the same
+ordering flips the primary diagnosis. No Albanian translations of
+clinical terms — Latin only (CLAUDE.md §1.5).
+
+Keyboard surface on the search input:
+- `↑` / `↓` — move highlight in the dropdown
+- `Enter` / `Tab` — commit the highlighted option as a chip
+- `Backspace` (when query is empty) — remove the last chip
+- `Escape` — close the dropdown
+
+### ICD-10 search endpoint
+
+```
+GET /api/icd10/search?q=<query>&limit=<n>
+```
+
+Doctor / clinic-admin only. `doctorId` is **derived from the
+authenticated session, never from the query** — a client cannot peek
+at another doctor's recently-used list. Response shape:
+
+```ts
+{ results: Array<{
+  code: string;
+  latinDescription: string;
+  chapter: string;
+  useCount: number;        // this doctor's count, 0 if never used
+  frequentlyUsed: boolean; // true for the top-N personal recents
+}> }
+```
+
+Server-side ranking, in order:
+1. The doctor's top 5 `doctor_diagnosis_usage` rows that match `q`
+   (ordered by `use_count DESC, last_used_at DESC`) — these get
+   `frequentlyUsed: true`.
+2. The catalogue (`icd10_codes`) matching `q` (alphabetical by code,
+   excluding codes already in tier 1). An empty `q` falls back to
+   the `common = true` subset — the dropdown shows the doctor's
+   recently-used codes before they type anything.
+
+Match logic on `q`:
+- code prefix (case-insensitive) — single-letter `q` like `J` returns
+  the J-chapter naturally because every ICD-10 code starts with the
+  chapter letter.
+- Latin description substring (case-insensitive).
+
+Catalogue cap: 50 server-side (`Icd10SearchQuerySchema.limit.max`),
+20 in the dropdown UI before virtualisation would kick in (not yet
+required at our catalogue size).
+
+### Per-doctor frequency tracking (`doctor_diagnosis_usage`)
+
+One row per `(doctor_id, icd10_code)` with `use_count` and
+`last_used_at`. The table is RLS-scoped by `clinic_id`, but the
+ranking is per-doctor: two doctors sharing one clinic see different
+"recent" lists because pediatric sub-specialties diverge. Writes
+happen inside the visit PATCH transaction:
+
+1. The doctor saves the visit (any auto-save trigger).
+2. If `body.diagnoses` is present **and** the ordered list differs
+   from the pre-save row (compared via `serialiseDiagnoses` — a
+   comma-joined string of codes), the service rewrites
+   `visit_diagnoses` (deleteMany + createMany) and `upsert`s one row
+   per code in the new list with `useCount: { increment: 1 }`.
+3. A diagnoses field-diff is appended to the same audit row as the
+   scalar fields, so the 60s audit coalescing window still applies.
+
+A no-op save (same diagnoses in the same order) skips the rewrite
+and the usage bump — re-saving a steady form does not inflate the
+counts. Re-ordering counts as a change (the primary diagnosis is
+defined by position, so the doctor expressed an intent).
+
+Validation: every code must exist in `icd10_codes` or the PATCH
+returns 404 with an Albanian message (`Kodi ICD-10 "…" nuk u gjet.`).
+Duplicates in the array are rejected by Zod with
+`Diagnozat e dyfishuara nuk lejohen`. Max 20 chips per visit.
+
+### Terapia textarea
+
+Plain-text multi-line input that grows vertically as the doctor
+types (`AutoGrowTextarea` in
+[visit-form.tsx](../apps/web/components/patient/visit-form.tsx)).
+Min 4 rows when empty, no max — the browser scrolls naturally if a
+single rare prescription overflows the viewport. Saved to
+`visits.prescription` as plain text via the same auto-save path as
+every other field.
+
+**v1 explicitly has no autocomplete, snippet picker, or per-doctor
+prescription indexing.** The legacy `prescription_lines` table is
+unused by application code and stays in the schema in case v2 wires
+the suggestion experience the original prototype sketched.
+
+### Tests
+
+- Unit ([`icd10.service.spec.ts`](../apps/api/src/modules/icd10/icd10.service.spec.ts))
+  — `rankSearchResults` covers empty-q common-codes fallback,
+  frequently-used boost ordering, top-N cap, code-prefix +
+  description-substring matching, limit handling, no duplication
+  across tiers.
+- Integration ([`visits.integration.spec.ts`](../apps/api/src/modules/visits/visits.integration.spec.ts))
+  — PATCH writes ordered diagnoses and bumps usage counts; same
+  payload twice does **not** double-bump; a reorder DOES bump; empty
+  array clears the join rows; unknown ICD-10 code returns 404 with
+  the Albanian message; `GET /api/icd10/search` ranks the doctor's
+  most-used code first then alphabetical; receptionist gets 403.
+- E2E ([`chart.spec.ts`](../apps/web/tests/e2e/chart.spec.ts))
+  — typing in the picker shows the dropdown and picking adds a chip;
+  drag-to-reorder swaps the primary; clicking × removes a chip;
+  typing in Terapia auto-saves the prescription text.

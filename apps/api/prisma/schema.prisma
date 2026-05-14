@@ -111,6 +111,7 @@ model Clinic {
   vertetime         Vertetim[]
   dicomStudies      DicomStudy[]
   prescriptionLines PrescriptionLine[]
+  diagnosisUsages   DoctorDiagnosisUsage[]
 
   @@map("clinics")
 }
@@ -146,6 +147,7 @@ model User {
   vertetimeIssued     Vertetim[]               @relation("VertetimIssuedBy")
   dicomLinksCreated   VisitDicomLink[]         @relation("DicomLinkLinkedBy")
   prescriptionLines   PrescriptionLine[]
+  diagnosisUsages     DoctorDiagnosisUsage[]
   authSessions        AuthSession[]
   trustedDevices      AuthTrustedDevice[]
   mfaCodes            AuthMfaCode[]
@@ -383,9 +385,35 @@ model Icd10Code {
   common           Boolean @default(false)
 
   diagnoses VisitDiagnosis[]
+  usages    DoctorDiagnosisUsage[]
 
   @@index([common])
   @@map("icd10_codes")
+}
+
+/// Per-doctor count of how often an ICD-10 code has been used. Drives
+/// the "frequently-used" boost in the diagnosis picker (slice 13).
+///
+/// Per-doctor (not per-clinic) by design: two doctors sharing one
+/// clinic see different recent-used lists because their pediatric
+/// sub-specialties diverge. Incremented at visit-save time inside the
+/// PATCH transaction. RLS-scoped by `clinic_id` for tenant isolation.
+model DoctorDiagnosisUsage {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  clinicId   String   @map("clinic_id") @db.Uuid
+  doctorId   String   @map("doctor_id") @db.Uuid
+  icd10Code  String   @map("icd10_code")
+  useCount   Int      @default(1) @map("use_count")
+  lastUsedAt DateTime @map("last_used_at") @db.Timestamptz(6)
+
+  clinic Clinic    @relation(fields: [clinicId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  doctor User      @relation(fields: [doctorId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  code   Icd10Code @relation(fields: [icd10Code], references: [code], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([doctorId, icd10Code], name: "doctor_diagnosis_usage_doctor_code_unique")
+  @@index([clinicId])
+  @@index([doctorId, useCount(sort: Desc), lastUsedAt(sort: Desc)])
+  @@map("doctor_diagnosis_usage")
 }
 
 /// Per-doctor index of prescription text snippets, used to power

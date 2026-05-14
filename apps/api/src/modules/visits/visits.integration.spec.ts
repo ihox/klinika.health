@@ -134,6 +134,7 @@ describe.skipIf(!ENABLED)('Visits integration', () => {
     await prisma.vertetim.deleteMany({ where: { clinicId } });
     await prisma.visitDicomLink.deleteMany({});
     await prisma.visitDiagnosis.deleteMany({});
+    await prisma.doctorDiagnosisUsage.deleteMany({ where: { clinicId } });
     await prisma.visit.deleteMany({ where: { clinicId } });
     await prisma.visit.deleteMany({ where: { clinicId: secondClinicId } });
     await prisma.patient.deleteMany({ where: { clinicId } });
@@ -386,6 +387,143 @@ describe.skipIf(!ENABLED)('Visits integration', () => {
       expect(entries.length).toBe(3);
       expect(entries[0]!.action).toBe('visit.updated');
       expect(entries.at(-1)!.action).toBe('visit.created');
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Diagnoses + ICD-10 picker (slice 13)
+  // -------------------------------------------------------------------------
+
+  describe('diagnoses', () => {
+    it('PATCH writes ordered diagnoses + bumps doctor usage counts', async () => {
+      const visit = await createVisit();
+      const cookie = await loginAs(DOCTOR_EMAIL, SEED_DOCTOR_PASSWORD!);
+
+      const res = await req()
+        .patch(`/api/visits/${visit.id}`)
+        .set('host', TENANT_HOST)
+        .set('Cookie', cookie)
+        .send({ diagnoses: ['J03.9', 'R05'] });
+      expect(res.status).toBe(200);
+      expect(res.body.visit.diagnoses.map((d: { code: string }) => d.code)).toEqual([
+        'J03.9',
+        'R05',
+      ]);
+      expect(res.body.visit.diagnoses[0].orderIndex).toBe(0);
+
+      const usage = await prisma.doctorDiagnosisUsage.findMany({
+        where: { doctorId, clinicId },
+        orderBy: { icd10Code: 'asc' },
+      });
+      expect(usage.length).toBe(2);
+      expect(usage.map((u) => u.icd10Code)).toEqual(['J03.9', 'R05']);
+      expect(usage.every((u) => u.useCount === 1)).toBe(true);
+
+      // Re-save with the same diagnoses — usage counts bump regardless.
+      const res2 = await req()
+        .patch(`/api/visits/${visit.id}`)
+        .set('host', TENANT_HOST)
+        .set('Cookie', cookie)
+        .send({ diagnoses: ['J03.9', 'R05'] });
+      expect(res2.status).toBe(200);
+
+      // No-op (same payload, same order) → no usage bump. The DB
+      // change-detection key matches, so the upsert path is skipped.
+      const usage2 = await prisma.doctorDiagnosisUsage.findMany({
+        where: { doctorId, clinicId },
+      });
+      expect(usage2.every((u) => u.useCount === 1)).toBe(true);
+
+      // Re-save with a reorder — counts bump because the list changed.
+      const res3 = await req()
+        .patch(`/api/visits/${visit.id}`)
+        .set('host', TENANT_HOST)
+        .set('Cookie', cookie)
+        .send({ diagnoses: ['R05', 'J03.9'] });
+      expect(res3.status).toBe(200);
+      const usage3 = await prisma.doctorDiagnosisUsage.findMany({
+        where: { doctorId, clinicId },
+        orderBy: { icd10Code: 'asc' },
+      });
+      expect(usage3.find((u) => u.icd10Code === 'J03.9')?.useCount).toBe(2);
+      expect(usage3.find((u) => u.icd10Code === 'R05')?.useCount).toBe(2);
+    });
+
+    it('PATCH with empty diagnoses[] clears the join rows', async () => {
+      const visit = await createVisit();
+      const cookie = await loginAs(DOCTOR_EMAIL, SEED_DOCTOR_PASSWORD!);
+      await req()
+        .patch(`/api/visits/${visit.id}`)
+        .set('host', TENANT_HOST)
+        .set('Cookie', cookie)
+        .send({ diagnoses: ['J03.9'] });
+      const res = await req()
+        .patch(`/api/visits/${visit.id}`)
+        .set('host', TENANT_HOST)
+        .set('Cookie', cookie)
+        .send({ diagnoses: [] });
+      expect(res.status).toBe(200);
+      expect(res.body.visit.diagnoses).toEqual([]);
+      const rows = await prisma.visitDiagnosis.findMany({
+        where: { visitId: visit.id },
+      });
+      expect(rows.length).toBe(0);
+    });
+
+    it('PATCH rejects an unknown ICD-10 code with a friendly Albanian error', async () => {
+      const visit = await createVisit();
+      const cookie = await loginAs(DOCTOR_EMAIL, SEED_DOCTOR_PASSWORD!);
+      const res = await req()
+        .patch(`/api/visits/${visit.id}`)
+        .set('host', TENANT_HOST)
+        .set('Cookie', cookie)
+        .send({ diagnoses: ['Z99.99'] });
+      expect(res.status).toBe(404);
+      expect(res.body.message).toContain('ICD-10');
+    });
+
+    it('GET /api/icd10/search ranks the doctor\'s frequently-used codes first', async () => {
+      const visit = await createVisit();
+      const cookie = await loginAs(DOCTOR_EMAIL, SEED_DOCTOR_PASSWORD!);
+
+      // Seed usage by saving a visit with two diagnoses three times.
+      for (let i = 0; i < 3; i++) {
+        await req()
+          .patch(`/api/visits/${visit.id}`)
+          .set('host', TENANT_HOST)
+          .set('Cookie', cookie)
+          .send({ diagnoses: i % 2 === 0 ? ['J45.9'] : [] });
+      }
+
+      const res = await req()
+        .get('/api/icd10/search?q=J&limit=10')
+        .set('host', TENANT_HOST)
+        .set('Cookie', cookie);
+      expect(res.status).toBe(200);
+      const results = res.body.results as Array<{
+        code: string;
+        frequentlyUsed: boolean;
+        useCount: number;
+      }>;
+      // J45.9 should appear first because it has usage; subsequent
+      // entries are alphabetical-by-code without the boost.
+      expect(results[0]!.code).toBe('J45.9');
+      expect(results[0]!.frequentlyUsed).toBe(true);
+      expect(results[0]!.useCount).toBeGreaterThan(0);
+
+      const rest = results.slice(1);
+      const codes = rest.map((r) => r.code);
+      const sorted = [...codes].sort();
+      expect(codes).toEqual(sorted);
+    });
+
+    it('receptionist gets 403 on GET /api/icd10/search', async () => {
+      const cookie = await loginAs(RECEPTIONIST_EMAIL, SEED_RECEPTIONIST_PASSWORD!);
+      const res = await req()
+        .get('/api/icd10/search?q=J')
+        .set('host', TENANT_HOST)
+        .set('Cookie', cookie);
+      expect(res.status).toBe(403);
     });
   });
 

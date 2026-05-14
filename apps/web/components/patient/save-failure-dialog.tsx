@@ -26,6 +26,7 @@ const FIELD_LABELS: Record<keyof VisitFormValues, string> = {
   labResults: 'Analizat',
   followupNotes: 'Kontrolla',
   otherNotes: 'Tjera',
+  diagnoses: 'Diagnoza · ICD-10',
 };
 
 /**
@@ -236,6 +237,10 @@ export function SaveFailureDialog(): ReactElement | null {
 function previewValue(values: VisitFormValues, key: keyof VisitFormValues): string {
   const raw = values[key];
   if (typeof raw === 'boolean') return raw ? 'Po' : 'Jo';
+  if (Array.isArray(raw)) {
+    if (raw.length === 0) return '— bosh —';
+    return raw.map((d) => `${d.code} ${d.latinDescription}`).join(' · ');
+  }
   if (raw == null || raw === '') return '— bosh —';
   return String(raw);
 }

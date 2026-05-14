@@ -7,12 +7,15 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react';
 
 import { Button } from '@/components/ui/button';
+import { DiagnosisPicker } from '@/components/patient/diagnosis-picker';
 import {
   type PaymentCode,
+  type VisitDiagnosisDto,
   type VisitDto,
   type VisitFormValues,
   validateFormValues,
@@ -76,13 +79,18 @@ export function VisitForm({
   const auto = useVisitAutoSave(visit.id);
 
   const update = useCallback(
-    (key: FieldKey, value: string | boolean) => {
+    (key: FieldKey, value: VisitFormValues[FieldKey]) => {
       const current = useAutoSaveStore.getState().values;
       if (!current) return;
       const next = { ...current, [key]: value } as VisitFormValues;
       setValues(next);
     },
     [setValues],
+  );
+
+  const onChangeDiagnoses = useCallback(
+    (next: VisitDiagnosisDto[]) => update('diagnoses', next),
+    [update],
   );
 
   const onChangeText = useCallback(
@@ -278,11 +286,13 @@ export function VisitForm({
         </FieldRow>
       </Section>
 
-      {/* 4. Diagnoza — placeholder for slice 13 */}
+      {/* 4. Diagnoza — ICD-10 multi-select */}
       <Section title="Diagnoza · ICD-10">
-        <div className="rounded-md border border-dashed border-line-strong bg-surface-subtle px-3 py-4 text-center text-[12px] text-ink-faint">
-          Përzgjedhja strukturuar ICD-10 vjen në fazën e ardhshme (slice 13).
-        </div>
+        <DiagnosisPicker
+          value={values.diagnoses}
+          onChange={onChangeDiagnoses}
+          onBlur={onBlur}
+        />
         {visit.legacyDiagnosis ? (
           <div className="mt-3 rounded-md border border-line bg-surface-subtle px-3 py-3 text-[13px] text-ink">
             <div className="mb-1 text-[10.5px] font-semibold uppercase tracking-[0.06em] text-ink-faint">
@@ -295,20 +305,17 @@ export function VisitForm({
         ) : null}
       </Section>
 
-      {/* 5. Terapia — placeholder for slice 13 autocomplete */}
+      {/* 5. Terapia — plain-text textarea, auto-grows vertically */}
       <Section title="Terapia">
-        <Textarea
+        <AutoGrowTextarea
           id="visit-prescription"
           value={values.prescription}
           onChange={onChangeText('prescription')}
           onBlur={onBlur}
-          rows={5}
+          minRows={4}
           mono
           placeholder={`Shembull:\nParacetamol 250mg s.3x\nIbuprofen susp. 100mg/5ml s.n.`}
         />
-        <p className="mt-1.5 text-[11px] text-ink-faint">
-          Plotësimi automatik me histori personale vjen në slice 13.
-        </p>
       </Section>
 
       {/* 6. Plani — Analizat, Kontrolla, Tjera */}
@@ -645,6 +652,48 @@ function Textarea({
       {...rest}
       className={cn(
         'w-full rounded-md border border-line-strong bg-surface-elevated px-3 py-2.5 text-[13px] leading-snug text-ink outline-none transition focus:border-primary focus:shadow-focus',
+        mono && 'font-mono text-[12.5px] leading-relaxed',
+        className,
+      )}
+    />
+  );
+}
+
+/**
+ * Textarea that grows with its content. Used by Terapia: no max,
+ * `minRows` rows tall when empty, expands as the doctor types. Manual
+ * resize is disabled — the auto-grow drives the height entirely.
+ */
+function AutoGrowTextarea({
+  value,
+  mono,
+  minRows = 4,
+  className,
+  ...rest
+}: Omit<React.TextareaHTMLAttributes<HTMLTextAreaElement>, 'rows'> & {
+  mono?: boolean;
+  minRows?: number;
+  value: string | number | readonly string[];
+}): ReactElement {
+  const ref = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    // Reset to auto so shrinking content collapses correctly, then snap
+    // back to the scrollHeight so the box always matches the text.
+    el.style.height = 'auto';
+    el.style.height = `${el.scrollHeight}px`;
+  }, [value]);
+
+  return (
+    <textarea
+      ref={ref}
+      {...rest}
+      value={value}
+      rows={minRows}
+      className={cn(
+        'w-full resize-none overflow-hidden rounded-md border border-line-strong bg-surface-elevated px-3 py-2.5 text-[13px] leading-snug text-ink outline-none transition focus:border-primary focus:shadow-focus',
         mono && 'font-mono text-[12.5px] leading-relaxed',
         className,
       )}
