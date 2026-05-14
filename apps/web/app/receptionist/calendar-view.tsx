@@ -28,7 +28,7 @@ import {
   calendarClient,
 } from '@/lib/visits-calendar-client';
 
-import { AppointmentActions } from './appointment-actions';
+import { AppointmentActions, type EntryAction } from './appointment-actions';
 import { BookingDialog, type BookingDialogResult } from './booking-dialog';
 import { CalendarGrid, type DayColumn } from './calendar-grid';
 import { GlobalPatientSearch } from './global-patient-search';
@@ -642,6 +642,10 @@ export function CalendarView(): ReactElement {
               entries={entries}
               onSlotClick={onSlotClick}
               onEntryClick={onEntryClick}
+              // Right-click / tap-and-hold opens the same status menu
+              // as a left-click; users on tablets get the same menu via
+              // the long-press gesture they expect.
+              onEntryContextMenu={onEntryClick}
             />
           ) : (
             <CalendarSkeleton />
@@ -691,20 +695,19 @@ export function CalendarView(): ReactElement {
         />
       ) : null}
 
-      {/* Appointment / walk-in action menu */}
+      {/* Status menu — opened on left-click OR right-click of any
+          scheduled card or walk-in chip. */}
       {actionsFor ? (
         <AppointmentActions
           entry={actionsFor.entry}
           anchor={actionsFor.anchor}
           onClose={() => setActionsFor(null)}
-          onAction={async (action) => {
+          onAction={async (action: EntryAction) => {
             const a = actionsFor.entry;
             setActionsFor(null);
-            if (action === 'complete') return applyStatus(a, 'completed');
-            if (action === 'no_show') return applyStatus(a, 'no_show');
-            if (action === 'cancelled') return applyStatus(a, 'cancelled');
-            if (action === 'delete') return onDelete(a);
-            if (action === 'reschedule') return onReschedule(a);
+            if (action.kind === 'transition') return applyStatus(a, action.to);
+            if (action.kind === 'delete') return onDelete(a);
+            if (action.kind === 'reschedule') return onReschedule(a);
             return undefined;
           }}
         />
