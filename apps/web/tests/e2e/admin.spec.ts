@@ -53,7 +53,7 @@ function tenantDetailPayload(id: string, status: 'active' | 'suspended'): unknow
       users: [
         {
           id: 'u-1',
-          email: 'taulant.shala@donetamed.health',
+          email: 'taulant.shala@klinika.health',
           firstName: 'Taulant',
           lastName: 'Shala',
           role: 'doctor',
@@ -79,7 +79,7 @@ function tenantDetailPayload(id: string, status: 'active' | 'suspended'): unknow
           action: 'auth.login.success',
           resourceType: 'session',
           timestamp: '2026-05-14T13:00:00.000Z',
-          actorEmail: 'taulant.shala@donetamed.health',
+          actorEmail: 'taulant.shala@klinika.health',
         },
       ],
     },

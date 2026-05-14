@@ -24,7 +24,7 @@ function mockLoginMfaRequired(page: Page) {
         body: JSON.stringify({
           status: 'mfa_required',
           pendingSessionId: 'pending-session-token-xyz',
-          maskedEmail: 't…a@donetamed.health',
+          maskedEmail: 't…a@klinika.health',
         }),
       });
     } else {
@@ -65,13 +65,13 @@ test.describe('Login + MFA', () => {
     await page.goto('/login');
     await expect(page.getByRole('heading', { name: 'Mirë se erdhët' })).toBeVisible();
 
-    await page.getByLabel('Email').fill('taulant.shala@donetamed.health');
+    await page.getByLabel('Email').fill('taulant.shala@klinika.health');
     await page.getByLabel('Fjalëkalimi').fill('valid-password-here');
     await page.getByRole('button', { name: 'Hyr' }).click();
 
     await expect(page).toHaveURL(/\/verify\?/);
     await expect(page.getByRole('heading', { name: 'Verifikoni se jeni ju' })).toBeVisible();
-    await expect(page.getByText('t…a@donetamed.health')).toBeVisible();
+    await expect(page.getByText('t…a@klinika.health')).toBeVisible();
 
     // Type the 6 digits — the form auto-submits on the 6th.
     for (const digit of '482613') {
@@ -91,7 +91,7 @@ test.describe('Login + MFA', () => {
       });
     });
     await page.goto('/login');
-    await page.getByLabel('Email').fill('taulant.shala@donetamed.health');
+    await page.getByLabel('Email').fill('taulant.shala@klinika.health');
     await page.getByLabel('Fjalëkalimi').fill('wrong');
     await page.getByRole('button', { name: 'Hyr' }).click();
     await expect(page.getByRole('alert')).toContainText('Email-i ose fjalëkalimi është i pasaktë');
@@ -102,7 +102,7 @@ test.describe('Login + MFA', () => {
     await mockMfaVerifySuccess(page, '482613');
 
     await page.goto('/login');
-    await page.getByLabel('Email').fill('taulant.shala@donetamed.health');
+    await page.getByLabel('Email').fill('taulant.shala@klinika.health');
     await page.getByLabel('Fjalëkalimi').fill('valid-password-here');
     await page.getByRole('button', { name: 'Hyr' }).click();
     await expect(page).toHaveURL(/\/verify\?/);
@@ -134,7 +134,7 @@ test.describe('Login + MFA', () => {
     });
 
     await page.goto('/login');
-    await page.getByLabel('Email').fill('taulant.shala@donetamed.health');
+    await page.getByLabel('Email').fill('taulant.shala@klinika.health');
     await page.getByLabel('Fjalëkalimi').fill('valid-password-here');
     await page.getByRole('button', { name: 'Hyr' }).click();
     await expect(page).toHaveURL(/\/verify\?/);
@@ -172,7 +172,7 @@ test.describe('Trusted device (second login)', () => {
       });
     });
     await page.goto('/login');
-    await page.getByLabel('Email').fill('taulant.shala@donetamed.health');
+    await page.getByLabel('Email').fill('taulant.shala@klinika.health');
     await page.getByLabel('Fjalëkalimi').fill('valid-password-here');
     await page.getByRole('button', { name: 'Hyr' }).click();
     await expect(page).toHaveURL(/\/doctor$/);
@@ -189,7 +189,7 @@ test.describe('Password reset', () => {
       });
     });
     await page.goto('/forgot-password');
-    await page.getByLabel('Email').fill('taulant.shala@donetamed.health');
+    await page.getByLabel('Email').fill('taulant.shala@klinika.health');
     await page.getByRole('button', { name: /Dërgo lidhjen/ }).click();
     await expect(page.getByText('Email-i u dërgua')).toBeVisible();
   });

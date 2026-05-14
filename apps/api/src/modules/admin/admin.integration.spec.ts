@@ -31,7 +31,7 @@ const ENABLED = Boolean(DATABASE_URL && SEED_PLATFORM_ADMIN_PASSWORD && SEED_DOC
 const ADMIN_HOST = 'admin.klinika.health';
 const TENANT_HOST = 'donetamed.klinika.health';
 const FOUNDER_EMAIL = 'founder@klinika.health';
-const DOCTOR_EMAIL = 'taulant.shala@donetamed.health';
+const DOCTOR_EMAIL = 'taulant.shala@klinika.health';
 
 describe.skipIf(!ENABLED)('Admin integration', () => {
   let app: NestExpressApplication;

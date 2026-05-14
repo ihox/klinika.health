@@ -37,8 +37,8 @@ const ENABLED = Boolean(
 );
 
 const TENANT_HOST = 'donetamed.klinika.health';
-const DOCTOR_EMAIL = 'taulant.shala@donetamed.health';
-const RECEPTIONIST_EMAIL = 'ereblire.krasniqi@donetamed.health';
+const DOCTOR_EMAIL = 'taulant.shala@klinika.health';
+const RECEPTIONIST_EMAIL = 'ereblire.krasniqi@klinika.health';
 
 describe.skipIf(!ENABLED)('Doctor dashboard integration', () => {
   let app: NestExpressApplication;

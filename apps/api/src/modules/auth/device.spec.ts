@@ -31,7 +31,7 @@ describe('maskEmail', () => {
     // First and last chars of the local part survive; everything in
     // between collapses to a Unicode horizontal ellipsis. Short
     // (≤ 2 char) locals expose only the first char.
-    ['taulant.shala@donetamed.health', 't…a@donetamed.health'],
+    ['taulant.shala@klinika.health', 't…a@klinika.health'],
     ['ab@x.com', 'a…@x.com'],
     ['a@x.com', 'a…@x.com'],
   ])('%s → %s', (input, expected) => {

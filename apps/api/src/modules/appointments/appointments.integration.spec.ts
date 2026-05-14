@@ -33,7 +33,7 @@ const SEED_RECEPTIONIST_PASSWORD = process.env['SEED_RECEPTIONIST_PASSWORD'];
 const ENABLED = Boolean(DATABASE_URL && SEED_DOCTOR_PASSWORD && SEED_RECEPTIONIST_PASSWORD);
 
 const TENANT_HOST = 'donetamed.klinika.health';
-const RECEPTIONIST_EMAIL = 'ereblire.krasniqi@donetamed.health';
+const RECEPTIONIST_EMAIL = 'ereblire.krasniqi@klinika.health';
 
 describe.skipIf(!ENABLED)('Appointments integration', () => {
   let app: NestExpressApplication;

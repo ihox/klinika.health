@@ -34,7 +34,7 @@ const SEED_DOCTOR_PASSWORD = process.env['SEED_DOCTOR_PASSWORD'];
 const ENABLED = Boolean(DATABASE_URL && SEED_DOCTOR_PASSWORD);
 
 const TENANT_HOST = 'donetamed.klinika.health';
-const ADMIN_USER_EMAIL = 'admin.cilesimet@donetamed.health';
+const ADMIN_USER_EMAIL = 'admin.cilesimet@klinika.health';
 const ADMIN_USER_PASSWORD = 'AdminSettings#2026!ZxQ';
 
 const VALID_SVG =
@@ -273,7 +273,7 @@ describe.skipIf(!ENABLED)('Clinic settings integration', () => {
         username: 'info@donetamed.health',
         fromName: 'DonetaMED',
         fromAddress: 'info@donetamed.health',
-        toEmail: 'taulant@donetamed.health',
+        toEmail: 'taulant@klinika.health',
       });
     expect(ok.status).toBe(200);
     expect(ok.body.ok).toBe(true);
@@ -290,7 +290,7 @@ describe.skipIf(!ENABLED)('Clinic settings integration', () => {
         password: 'app-password-xyz',
         fromName: 'DonetaMED',
         fromAddress: 'info@donetamed.health',
-        toEmail: 'taulant@donetamed.health',
+        toEmail: 'taulant@klinika.health',
       });
     expect(fail.status).toBe(200);
     expect(fail.body.ok).toBe(false);
@@ -361,7 +361,7 @@ async function loginAsReceptionist(
   app: NestExpressApplication,
   captured: CapturingEmailSender,
 ): Promise<string> {
-  const email = 'ereblire.krasniqi@donetamed.health';
+  const email = 'ereblire.krasniqi@klinika.health';
   const start = await request(app.getHttpServer())
     .post('/api/auth/login')
     .set('host', TENANT_HOST)

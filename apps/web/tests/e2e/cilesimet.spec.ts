@@ -55,7 +55,7 @@ const CLINIC_BASE = {
 const USERS_BASE = [
   {
     id: 'u-taulant',
-    email: 'taulant.shala@donetamed.health',
+    email: 'taulant.shala@klinika.health',
     firstName: 'Taulant',
     lastName: 'Shala',
     role: 'doctor',
@@ -68,7 +68,7 @@ const USERS_BASE = [
   },
   {
     id: 'u-erebli',
-    email: 'ereblire.krasniqi@donetamed.health',
+    email: 'ereblire.krasniqi@klinika.health',
     firstName: 'Erëblirë',
     lastName: 'Krasniqi',
     role: 'receptionist',
@@ -86,7 +86,7 @@ const AUDIT_ROWS = [
     id: 'audit-1',
     timestamp: '2026-05-14T13:00:00.000Z',
     userId: 'u-taulant',
-    userEmail: 'taulant.shala@donetamed.health',
+    userEmail: 'taulant.shala@klinika.health',
     userName: 'Dr. Taulant Shala',
     action: 'settings.general.updated',
     resourceType: 'clinic',
@@ -98,7 +98,7 @@ const AUDIT_ROWS = [
     id: 'audit-2',
     timestamp: '2026-05-14T12:30:00.000Z',
     userId: 'u-erebli',
-    userEmail: 'ereblire.krasniqi@donetamed.health',
+    userEmail: 'ereblire.krasniqi@klinika.health',
     userName: 'Erëblirë Krasniqi',
     action: 'auth.login.success',
     resourceType: 'session',
@@ -214,7 +214,7 @@ async function mockClinicApi(page: Page) {
       await route.fulfill({
         status: 200,
         contentType: 'text/csv; charset=utf-8',
-        body: 'timestamp,user_email\n2026-05-14T13:00:00.000Z,taulant.shala@donetamed.health\n',
+        body: 'timestamp,user_email\n2026-05-14T13:00:00.000Z,taulant.shala@klinika.health\n',
       });
       return;
     }
@@ -283,7 +283,7 @@ test.describe('Clinic settings', () => {
     await page.locator('[data-testid="add-user"]').click();
     await page.locator('[data-testid="new-user-first"]').fill('Adea');
     await page.locator('[data-testid="new-user-last"]').fill('Maloku');
-    await page.locator('[data-testid="new-user-email"]').fill('adea@donetamed.health');
+    await page.locator('[data-testid="new-user-email"]').fill('adea@klinika.health');
     await page.locator('[data-testid="new-user-role"]').selectOption('receptionist');
     await page.locator('[data-testid="new-user-submit"]').click();
 

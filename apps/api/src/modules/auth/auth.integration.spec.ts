@@ -32,7 +32,7 @@ const DATABASE_URL = process.env['DATABASE_URL'];
 const SEED_DOCTOR_PASSWORD = process.env['SEED_DOCTOR_PASSWORD'];
 const ENABLED = Boolean(DATABASE_URL && SEED_DOCTOR_PASSWORD);
 
-const DOCTOR_EMAIL = 'taulant.shala@donetamed.health';
+const DOCTOR_EMAIL = 'taulant.shala@klinika.health';
 const TENANT_HOST = 'donetamed.klinika.health';
 
 describe.skipIf(!ENABLED)('Auth integration', () => {

@@ -110,11 +110,11 @@ async function seedPlatformAdmin(): Promise<void> {
 async function seedDoctor(clinicId: string): Promise<void> {
   const password = readEnvOrThrow('SEED_DOCTOR_PASSWORD');
   await prisma.user.upsert({
-    where: { email: 'taulant.shala@donetamed.health' },
+    where: { email: 'taulant.shala@klinika.health' },
     update: {},
     create: {
       clinicId,
-      email: 'taulant.shala@donetamed.health',
+      email: 'taulant.shala@klinika.health',
       passwordHash: await hashPassword(password),
       role: 'doctor',
       firstName: 'Taulant',
@@ -130,11 +130,11 @@ async function seedDoctor(clinicId: string): Promise<void> {
 async function seedReceptionist(clinicId: string): Promise<void> {
   const password = readEnvOrThrow('SEED_RECEPTIONIST_PASSWORD');
   await prisma.user.upsert({
-    where: { email: 'ereblire.krasniqi@donetamed.health' },
+    where: { email: 'ereblire.krasniqi@klinika.health' },
     update: {},
     create: {
       clinicId,
-      email: 'ereblire.krasniqi@donetamed.health',
+      email: 'ereblire.krasniqi@klinika.health',
       passwordHash: await hashPassword(password),
       role: 'receptionist',
       firstName: 'Erëblirë',
@@ -249,11 +249,11 @@ async function main(): Promise<void> {
 
   await seedDoctor(clinicId);
   // eslint-disable-next-line no-console
-  console.log('  ✓ Doctor taulant.shala@donetamed.health');
+  console.log('  ✓ Doctor taulant.shala@klinika.health');
 
   await seedReceptionist(clinicId);
   // eslint-disable-next-line no-console
-  console.log('  ✓ Receptionist ereblire.krasniqi@donetamed.health');
+  console.log('  ✓ Receptionist ereblire.krasniqi@klinika.health');
 
   const icd10Count = await seedIcd10();
   // eslint-disable-next-line no-console
