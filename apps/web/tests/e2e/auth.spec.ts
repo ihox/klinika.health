@@ -53,7 +53,7 @@ function mockLoginMfaRequired(page: Page) {
   });
 }
 
-function mockMfaVerifySuccess(page: Page, code = '482613') {
+function mockMfaVerifySuccess(page: Page, code = '482613', roles: string[] = ['doctor']) {
   return page.route('**/api/auth/mfa/verify', async (route: Route) => {
     const body = JSON.parse(route.request().postData() ?? '{}');
     if (body.code === code && body.pendingSessionId) {
@@ -65,7 +65,7 @@ function mockMfaVerifySuccess(page: Page, code = '482613') {
           'set-cookie':
             'klinika_session=test-session; Path=/; HttpOnly, klinika_trust=trusted-token; Path=/; HttpOnly',
         },
-        body: JSON.stringify({ role: 'doctor' }),
+        body: JSON.stringify({ roles }),
       });
     } else {
       await route.fulfill({
