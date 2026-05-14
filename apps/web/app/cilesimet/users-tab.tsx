@@ -2,6 +2,7 @@
 
 import { useMemo, useRef, useState } from 'react';
 
+import { RoleChip } from '@/components/role-chip';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ApiError } from '@/lib/api';
@@ -10,9 +11,9 @@ import {
   type ClinicRole,
   type ClinicUserRow,
   fileToBase64,
-  roleLabel,
 } from '@/lib/clinic-client';
 import { formatRelativeAlbanian } from '@/lib/format-relative';
+import { ROLE_DISPLAY_ORDER, roleLabel } from '@/lib/role-labels';
 import { InfoTip, PaneHeader } from './section-card';
 
 interface Props {
@@ -20,6 +21,17 @@ interface Props {
   onChange: (users: ClinicUserRow[]) => void;
   onToast: (msg: string, tone?: 'success' | 'error') => void;
 }
+
+/**
+ * Short Albanian description for each role checkbox — pulled from the
+ * design reference (components/user-create-modal.html) so the
+ * descriptive copy matches what the prototype shows.
+ */
+const ROLE_DESCRIPTION: Record<ClinicRole, string> = {
+  doctor: 'Karta, vizita, recetë',
+  receptionist: 'Kalendari, terminet',
+  clinic_admin: 'Stafi, cilësimet, audit',
+};
 
 export function UsersTab({ users, onChange, onToast }: Props) {
   const [query, setQuery] = useState('');
@@ -30,7 +42,9 @@ export function UsersTab({ users, onChange, onToast }: Props) {
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return users.filter((u) => {
-      if (roleFilter !== 'all' && u.roles[0] !== roleFilter) return false;
+      // Multi-role filter: match if ANY of the user's roles equals
+      // the filter selection.
+      if (roleFilter !== 'all' && !u.roles.includes(roleFilter)) return false;
       if (!q) return true;
       return (
         u.email.toLowerCase().includes(q) ||
@@ -53,7 +67,7 @@ export function UsersTab({ users, onChange, onToast }: Props) {
     <>
       <PaneHeader
         title="Përdoruesit"
-        description="Stafi i klinikës që hyn në Klinika. Shtoni mjekë, infermiere ose admin shtesë."
+        description="Stafi i klinikës që hyn në Klinika. Shtoni mjekë, recepsioniste ose admin shtesë."
       />
 
       <div className="flex items-center gap-3 mb-3.5">
@@ -78,13 +92,15 @@ export function UsersTab({ users, onChange, onToast }: Props) {
           className="h-10 px-3 rounded-md bg-white border border-stone-300 text-[13px] text-stone-800"
         >
           <option value="all">Të gjithë rolet</option>
-          <option value="doctor">Mjek</option>
-          <option value="receptionist">Infermierja</option>
-          <option value="clinic_admin">Admin</option>
+          {ROLE_DISPLAY_ORDER.map((r) => (
+            <option key={r} value={r}>
+              {roleLabel(r)}
+            </option>
+          ))}
         </select>
         <div className="flex-1" />
         <Button onClick={() => setAddOpen(true)} data-testid="add-user">
-          + Shto staf
+          + Shto përdorues
         </Button>
       </div>
 
@@ -96,7 +112,7 @@ export function UsersTab({ users, onChange, onToast }: Props) {
                 Emri
               </th>
               <th className="text-left text-[11px] uppercase tracking-wider font-semibold text-stone-500 px-4 py-3">
-                Roli
+                Rolet
               </th>
               <th className="text-left text-[11px] uppercase tracking-wider font-semibold text-stone-500 px-4 py-3">
                 Statusi
@@ -124,14 +140,7 @@ export function UsersTab({ users, onChange, onToast }: Props) {
                 >
                   <td className="px-4 py-3.5">
                     <div className="flex items-center gap-2.5">
-                      <div
-                        className={`h-7 w-7 rounded-full grid place-items-center text-[11px] font-semibold text-white ${
-                          !u.isActive ? 'bg-stone-300' : u.roles[0] === 'doctor' ? 'bg-teal-700' : 'bg-stone-500'
-                        }`}
-                      >
-                        {u.firstName.charAt(0)}
-                        {u.lastName.charAt(0)}
-                      </div>
+                      <UserAvatar user={u} />
                       <div>
                         <div
                           className={`text-[13px] font-medium ${
@@ -145,8 +154,12 @@ export function UsersTab({ users, onChange, onToast }: Props) {
                       </div>
                     </div>
                   </td>
-                  <td className="px-4 py-3.5 text-[13px]">
-                    {u.roles.map(roleLabel).join(', ')}
+                  <td className="px-4 py-3.5">
+                    <div className="flex flex-wrap gap-1" data-testid={`user-roles-${u.email}`}>
+                      {orderedRoles(u.roles).map((r) => (
+                        <RoleChip key={r} role={r} size="sm" />
+                      ))}
+                    </div>
                   </td>
                   <td className="px-4 py-3.5">
                     {u.isActive ? (
@@ -203,6 +216,37 @@ export function UsersTab({ users, onChange, onToast }: Props) {
   );
 }
 
+function UserAvatar({ user }: { user: ClinicUserRow }): React.ReactElement {
+  // Avatar background mirrors the dominant role (matching the user
+  // menu's avatar). Inactive users always render in muted stone.
+  const bg = !user.isActive
+    ? 'bg-stone-300'
+    : user.roles.includes('doctor')
+      ? 'bg-indigo-700'
+      : user.roles.includes('clinic_admin')
+        ? 'bg-slate-700'
+        : user.roles.includes('receptionist')
+          ? 'bg-violet-700'
+          : 'bg-stone-500';
+  return (
+    <div
+      className={`h-7 w-7 rounded-full grid place-items-center text-[11px] font-semibold text-white ${bg}`}
+    >
+      {user.firstName.charAt(0)}
+      {user.lastName.charAt(0)}
+    </div>
+  );
+}
+
+function orderedRoles(roles: readonly ClinicRole[]): ClinicRole[] {
+  const set = new Set(roles);
+  return ROLE_DISPLAY_ORDER.filter((r) => set.has(r));
+}
+
+// ===========================================================================
+// Add modal
+// ===========================================================================
+
 function AddUserModal({
   onClose,
   onCreated,
@@ -215,13 +259,36 @@ function AddUserModal({
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
-  const [role, setRole] = useState<ClinicRole>('receptionist');
+  const [roles, setRoles] = useState<Set<ClinicRole>>(new Set());
   const [submitting, setSubmitting] = useState(false);
 
+  const rolesArray = useMemo(() => orderedRoles(Array.from(roles)), [roles]);
+  const canSubmit =
+    !submitting &&
+    firstName.trim().length > 0 &&
+    lastName.trim().length > 0 &&
+    email.trim().length > 0 &&
+    rolesArray.length > 0;
+
+  function toggleRole(role: ClinicRole): void {
+    setRoles((prev) => {
+      const next = new Set(prev);
+      if (next.has(role)) next.delete(role);
+      else next.add(role);
+      return next;
+    });
+  }
+
   async function submit(): Promise<void> {
+    if (!canSubmit) return;
     setSubmitting(true);
     try {
-      const out = await clinicClient.createUser({ firstName, lastName, email, roles: [role] });
+      const out = await clinicClient.createUser({
+        firstName,
+        lastName,
+        email,
+        roles: rolesArray,
+      });
       onCreated(out.user);
     } catch (err: unknown) {
       onToast(err instanceof ApiError ? err.message : 'Shtimi dështoi.', 'error');
@@ -234,6 +301,7 @@ function AddUserModal({
     <div
       role="dialog"
       aria-modal="true"
+      aria-labelledby="add-user-title"
       className="fixed inset-0 z-50 bg-stone-900/40 grid place-items-center px-4"
       onClick={onClose}
     >
@@ -242,10 +310,11 @@ function AddUserModal({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="px-6 py-5 border-b border-stone-200">
-          <h2 className="text-[18px] font-semibold text-stone-900">Shto staf</h2>
+          <h2 id="add-user-title" className="text-[17px] font-semibold text-stone-900">
+            Shto përdorues të ri
+          </h2>
           <p className="text-[12.5px] text-stone-500 mt-1">
-            Personi do të marrë një email me fjalëkalim të përkohshëm. Mund ta ndryshojë në
-            hyrjen e parë.
+            Përdoruesi do të marrë një email për të vendosur fjalëkalimin.
           </p>
         </div>
         <div className="px-6 py-5 flex flex-col gap-4">
@@ -270,37 +339,32 @@ function AddUserModal({
             onChange={(e) => setEmail(e.target.value)}
             data-testid="new-user-email"
           />
-          <select
-            value={role}
-            onChange={(e) => setRole(e.target.value as ClinicRole)}
-            className="h-10 px-3 rounded-md bg-white border border-stone-300 text-[13px]"
-            data-testid="new-user-role"
-          >
-            <option value="doctor">Mjek</option>
-            <option value="receptionist">Infermierja</option>
-            <option value="clinic_admin">Admin · administrator i klinikës</option>
-          </select>
+          <RolePicker
+            selected={roles}
+            onToggle={toggleRole}
+            requiredHint
+            testIdPrefix="new-user-role"
+          />
           <InfoTip>
-            Mjeku ka qasje në karta pacientësh dhe vizita. Infermierja menaxhon vetëm terminet.
-            Admini menaxhon stafin dhe cilësimet.
+            Përdoruesi do të marrë një email për të vendosur fjalëkalimin.
           </InfoTip>
         </div>
         <div className="px-6 py-3.5 border-t border-stone-200 bg-stone-50 flex justify-end gap-2">
           <Button variant="ghost" onClick={onClose}>
             Anulo
           </Button>
-          <Button
-            onClick={submit}
-            disabled={submitting || !email || !firstName || !lastName}
-            data-testid="new-user-submit"
-          >
-            {submitting ? 'Po dërgohet…' : 'Shto dhe dërgo email'}
+          <Button onClick={submit} disabled={!canSubmit} data-testid="new-user-submit">
+            {submitting ? 'Po dërgohet…' : 'Shto përdoruesin'}
           </Button>
         </div>
       </div>
     </div>
   );
 }
+
+// ===========================================================================
+// Edit drawer
+// ===========================================================================
 
 function EditUserDrawer({
   user,
@@ -316,21 +380,35 @@ function EditUserDrawer({
   const [firstName, setFirstName] = useState(user.firstName);
   const [lastName, setLastName] = useState(user.lastName);
   const [email, setEmail] = useState(user.email);
-  const [role, setRole] = useState<ClinicRole>(user.roles[0] ?? 'receptionist');
+  const [roles, setRoles] = useState<Set<ClinicRole>>(new Set(user.roles));
   const [title, setTitle] = useState(user.title ?? '');
   const [credential, setCredential] = useState(user.credential ?? '');
   const [saving, setSaving] = useState(false);
   const [busyAction, setBusyAction] = useState<'deactivate' | 'reset' | 'signature' | null>(null);
   const signatureInput = useRef<HTMLInputElement>(null);
 
+  const rolesArray = useMemo(() => orderedRoles(Array.from(roles)), [roles]);
+  const isDoctor = roles.has('doctor');
+  const canSave = !saving && rolesArray.length > 0;
+
+  function toggleRole(role: ClinicRole): void {
+    setRoles((prev) => {
+      const next = new Set(prev);
+      if (next.has(role)) next.delete(role);
+      else next.add(role);
+      return next;
+    });
+  }
+
   async function save(): Promise<void> {
+    if (!canSave) return;
     setSaving(true);
     try {
       const out = await clinicClient.updateUser(user.id, {
         email,
         firstName,
         lastName,
-        roles: [role],
+        roles: rolesArray,
         title: title || undefined,
         credential: credential || undefined,
       });
@@ -396,6 +474,8 @@ function EditUserDrawer({
       <div
         className="absolute right-0 top-0 bottom-0 w-[440px] max-w-[calc(100vw-60px)] bg-white shadow-modal flex flex-col"
         onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
       >
         <div className="px-6 py-4.5 border-b border-stone-200 flex items-start justify-between gap-3">
           <div>
@@ -437,22 +517,15 @@ function EditUserDrawer({
             </label>
             <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
           </div>
-          <div>
-            <label className="text-[12px] font-medium uppercase tracking-wide text-stone-500">
-              Roli
-            </label>
-            <select
-              value={role}
-              onChange={(e) => setRole(e.target.value as ClinicRole)}
-              className="block w-full h-10 px-3 rounded-md bg-white border border-stone-300 text-[13px]"
-            >
-              <option value="doctor">Mjek</option>
-              <option value="receptionist">Infermierja</option>
-              <option value="clinic_admin">Admin</option>
-            </select>
-          </div>
 
-          {role === 'doctor' ? (
+          <RolePicker
+            selected={roles}
+            onToggle={toggleRole}
+            requiredHint
+            testIdPrefix="edit-user-role"
+          />
+
+          {isDoctor ? (
             <>
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -546,11 +619,81 @@ function EditUserDrawer({
           <Button variant="ghost" onClick={onClose}>
             Anulo
           </Button>
-          <Button onClick={save} disabled={saving} data-testid="user-save">
-            {saving ? 'Po ruhet…' : 'Ruaj'}
+          <Button onClick={save} disabled={!canSave} data-testid="user-save">
+            {saving ? 'Po ruhet…' : 'Ruaj ndryshimet'}
           </Button>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ===========================================================================
+// Role picker (shared between add modal + edit drawer)
+// ===========================================================================
+
+interface RolePickerProps {
+  selected: Set<ClinicRole>;
+  onToggle: (role: ClinicRole) => void;
+  requiredHint?: boolean;
+  testIdPrefix: string;
+}
+
+function RolePicker({ selected, onToggle, requiredHint, testIdPrefix }: RolePickerProps) {
+  const noneSelected = selected.size === 0;
+  return (
+    <div>
+      <label className="text-[12px] font-medium uppercase tracking-wide text-stone-500 flex items-center gap-2">
+        Rolet
+        {requiredHint ? (
+          <span className="normal-case text-[11px] font-normal text-stone-400">
+            — së paku një
+          </span>
+        ) : null}
+      </label>
+      <div className="mt-1.5 flex flex-col gap-2">
+        {ROLE_DISPLAY_ORDER.map((role) => {
+          const checked = selected.has(role);
+          return (
+            <label
+              key={role}
+              className={[
+                'flex items-center gap-3 px-3 py-2.5 border rounded-md cursor-pointer transition-colors',
+                checked
+                  ? 'border-teal-500 bg-teal-50'
+                  : 'border-stone-300 bg-white hover:bg-stone-50',
+              ].join(' ')}
+            >
+              <input
+                type="checkbox"
+                className="h-4 w-4 accent-teal-600"
+                checked={checked}
+                onChange={() => onToggle(role)}
+                data-testid={`${testIdPrefix}-${role}`}
+              />
+              <span className="flex items-center gap-2.5 flex-1 min-w-0">
+                <RoleChip role={role} />
+                <span className="text-[12px] text-stone-500 truncate">
+                  {ROLE_DESCRIPTION[role]}
+                </span>
+              </span>
+            </label>
+          );
+        })}
+      </div>
+      {noneSelected ? (
+        <div
+          className="mt-2 flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-[12.5px] text-amber-900"
+          role="alert"
+          data-testid={`${testIdPrefix}-validation`}
+        >
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <circle cx="8" cy="8" r="6.5" />
+            <path d="M8 5v3.5M8 11v.01" />
+          </svg>
+          Përdoruesi duhet të ketë së paku një rol.
+        </div>
+      ) : null}
     </div>
   );
 }

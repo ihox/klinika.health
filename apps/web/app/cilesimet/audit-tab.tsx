@@ -2,14 +2,17 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
+import { RoleChip } from '@/components/role-chip';
 import { Button } from '@/components/ui/button';
 import { ApiError } from '@/lib/api';
 import {
   clinicClient,
   type AuditQuery,
   type AuditRow,
+  type ClinicRole,
   type ClinicUserRow,
 } from '@/lib/clinic-client';
+import { ROLE_DISPLAY_ORDER, roleLabel } from '@/lib/role-labels';
 import { PaneHeader } from './section-card';
 
 interface Props {
@@ -203,9 +206,18 @@ export function AuditTab({ users }: Props) {
                       key={i}
                       className="grid grid-cols-[140px_1fr_1fr] gap-3 text-[12.5px] py-2 border-t border-dashed border-stone-200 first:border-0"
                     >
-                      <div className="text-stone-500">{c.field}</div>
-                      <div className="text-stone-500 line-through">{formatValue(c.old)}</div>
-                      <div className="text-stone-900 font-medium">{formatValue(c.new)}</div>
+                      <div className="text-stone-500">{fieldLabel(c.field)}</div>
+                      {c.field === 'roles' ? (
+                        <>
+                          <RolesDiffCell value={c.old} faded />
+                          <RolesDiffCell value={c.new} />
+                        </>
+                      ) : (
+                        <>
+                          <div className="text-stone-500 line-through">{formatValue(c.old)}</div>
+                          <div className="text-stone-900 font-medium">{formatValue(c.new)}</div>
+                        </>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -292,4 +304,59 @@ function formatValue(v: unknown): string {
   if (Array.isArray(v)) return v.map(formatValue).join(', ');
   if (typeof v === 'object') return JSON.stringify(v);
   return String(v);
+}
+
+// Albanian field labels for the audit diff. Falls back to the raw
+// field name if no override is registered.
+function fieldLabel(field: string): string {
+  switch (field) {
+    case 'roles':
+      return 'rolet';
+    case 'email':
+      return 'email';
+    case 'firstName':
+      return 'emri';
+    case 'lastName':
+      return 'mbiemri';
+    case 'title':
+      return 'titulli';
+    case 'credential':
+      return 'profesioni';
+    case 'isActive':
+      return 'statusi';
+    default:
+      return field;
+  }
+}
+
+/**
+ * Render a role-array audit value as a chip list using the canonical
+ * Albanian labels (matching the user-menu / Përdoruesit chips). The
+ * `faded` variant is the pre-change side per role-chips.html (chips
+ * at opacity 0.55 with no strike-through, since chips already imply
+ * "before/after" via position).
+ */
+function RolesDiffCell({ value, faded = false }: { value: unknown; faded?: boolean }) {
+  const ordered = useMemo(() => normaliseRoles(value), [value]);
+  if (ordered.length === 0) {
+    return <div className={`text-stone-500 ${faded ? 'opacity-55' : ''}`}>—</div>;
+  }
+  return (
+    <div className={`flex flex-wrap gap-1 ${faded ? 'opacity-55' : ''}`}>
+      {ordered.map((r) => (
+        <RoleChip key={r} role={r} size="sm" label={roleLabel(r)} />
+      ))}
+    </div>
+  );
+}
+
+function normaliseRoles(value: unknown): ClinicRole[] {
+  if (!Array.isArray(value)) return [];
+  const known = new Set<ClinicRole>();
+  for (const item of value) {
+    if (item === 'doctor' || item === 'receptionist' || item === 'clinic_admin') {
+      known.add(item);
+    }
+  }
+  return ROLE_DISPLAY_ORDER.filter((r) => known.has(r));
 }
