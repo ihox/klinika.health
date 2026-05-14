@@ -46,7 +46,7 @@ describe.skipIf(!ENABLED)('Auth integration', () => {
     execSync('pnpm exec prisma migrate deploy', { cwd: apiDir, stdio: 'inherit' });
     for (const f of ['001_rls_indexes_triggers.sql', '002_auth_rls.sql']) {
       execSync(
-        `psql "${DATABASE_URL ?? ''}" -v ON_ERROR_STOP=1 -f prisma/migrations/manual/${f}`,
+        `psql "${DATABASE_URL ?? ''}" -v ON_ERROR_STOP=1 -f prisma/sql/${f}`,
         { cwd: apiDir, stdio: 'inherit' },
       );
     }

@@ -57,7 +57,7 @@ describe.skipIf(!ENABLED)('Patients integration', () => {
       '004_patients_search.sql',
     ]) {
       execSync(
-        `psql "${DATABASE_URL ?? ''}" -v ON_ERROR_STOP=1 -f prisma/migrations/manual/${f}`,
+        `psql "${DATABASE_URL ?? ''}" -v ON_ERROR_STOP=1 -f prisma/sql/${f}`,
         { cwd: apiDir, stdio: 'inherit' },
       );
     }

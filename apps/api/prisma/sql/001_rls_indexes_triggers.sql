@@ -16,7 +16,7 @@
 -- by `psql -f` on every file in this directory) or manually:
 --
 --   psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
---     -f apps/api/prisma/migrations/manual/001_rls_indexes_triggers.sql
+--     -f apps/api/prisma/sql/001_rls_indexes_triggers.sql
 
 BEGIN;
 
@@ -36,6 +36,28 @@ BEGIN
   END IF;
 END
 $$;
+
+-- klinika_app: the tenant-scoped application role. In production the
+-- API connects as this role directly. In dev the connection user is
+-- the database owner (superuser, BYPASSRLS) so tests demote into
+-- klinika_app via `SET LOCAL ROLE klinika_app` to actually exercise
+-- the RLS policies below.
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'klinika_app') THEN
+    CREATE ROLE klinika_app NOLOGIN;
+  END IF;
+END
+$$;
+
+GRANT klinika_app TO CURRENT_USER;
+GRANT USAGE ON SCHEMA public TO klinika_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO klinika_app;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO klinika_app;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public
+  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO klinika_app;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public
+  GRANT USAGE, SELECT ON SEQUENCES TO klinika_app;
 
 -- ===========================================================================
 -- 2. Row-Level Security

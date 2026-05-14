@@ -187,7 +187,7 @@ Two-step deploy:
 pnpm --filter @klinika/api exec prisma migrate deploy
 
 # Klinika-only extras: RLS, triggers, role grants
-for f in apps/api/prisma/migrations/manual/*.sql; do
+for f in apps/api/prisma/sql/*.sql; do
   psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f "$f"
 done
 ```

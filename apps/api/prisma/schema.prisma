@@ -1,15 +1,15 @@
 // Klinika — primary database schema.
 //
 // All clinical tables carry `clinic_id` and are protected by Postgres
-// Row-Level Security policies (see migrations/manual/001_rls.sql and
+// Row-Level Security policies (see sql/001_rls_indexes_triggers.sql and
 // docs/decisions/005-multi-tenancy.md). The Prisma client never queries
 // without `clinic_id` scoping; RLS is the second layer of defense.
 //
 // All `TIMESTAMPTZ` columns are stored in UTC and rendered in
 // `Europe/Belgrade` at the UI layer (ADR-006). `created_at` defaults to
 // `now()` at the database level. `updated_at` is maintained by both
-// Prisma (`@updatedAt`) and a Postgres trigger (migrations/manual/002_triggers.sql)
-// so raw-SQL updates also stay correct.
+// Prisma (`@updatedAt`) and a Postgres trigger (also in
+// sql/001_rls_indexes_triggers.sql) so raw-SQL updates also stay correct.
 //
 // Soft delete is the default (ADR-008): the Prisma middleware adds
 // `WHERE deleted_at IS NULL` to all reads. Records are never physically

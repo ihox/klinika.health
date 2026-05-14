@@ -4,16 +4,18 @@
 // started by `make dev`). Skips automatically when `DATABASE_URL` is
 // unset, so unit-test runs on a laptop without docker keep working.
 //
+// Pre-requisites (the test does NOT re-apply them, so a host without
+// `psql` on PATH still works):
+//   * `make db-migrate` — applies Prisma migrations + manual SQL
+//     (RLS, indexes, triggers).
+//   * `make db-seed` — populates DonetaMED clinic, users, ICD-10.
+//
 // Assertions:
-//   1. The seed script populates clinics, users, patients, ICD-10
-//      codes — the four tables the API depends on at boot.
+//   1. The seed populated the four bootstrap tables.
 //   2. RLS prevents cross-clinic reads: with `app.clinic_id` set to
 //      clinic A, a query for clinic B's patients returns zero rows.
 //   3. The soft-delete middleware filters `deleted_at IS NOT NULL` rows
 //      even when the caller didn't ask.
-
-import { execSync } from 'node:child_process';
-import { resolve } from 'node:path';
 
 import type { PinoLogger } from 'nestjs-pino';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -42,18 +44,6 @@ describe.skipIf(!ENABLED)('Prisma + RLS integration', () => {
   let otherClinicId: string;
 
   beforeAll(async () => {
-    // Apply migrations + run the seed. `prisma migrate deploy` is
-    // idempotent (only runs pending migrations); the seed is upsert-
-    // based and also idempotent. The manual SQL (RLS, indexes,
-    // triggers) is layered after Prisma's auto-generated migration.
-    const apiDir = resolve(__dirname, '..', '..');
-    execSync('pnpm exec prisma migrate deploy', { cwd: apiDir, stdio: 'inherit' });
-    execSync(
-      `psql "${DATABASE_URL ?? ''}" -v ON_ERROR_STOP=1 -f prisma/migrations/manual/001_rls_indexes_triggers.sql`,
-      { cwd: apiDir, stdio: 'inherit' },
-    );
-    execSync('pnpm seed', { cwd: apiDir, stdio: 'inherit' });
-
     service = new PrismaService(makeNoopLogger());
     await service.onModuleInit();
 
@@ -106,7 +96,8 @@ describe.skipIf(!ENABLED)('Prisma + RLS integration', () => {
   it('RLS: in clinic A context, queries against clinic B return zero rows', async () => {
     // Establish a known patient in clinic B (rlstest). Outside any
     // tenant context, the application code uses the bypass path
-    // (table owner). The actual RLS gate is in `runInTenantContext`.
+    // (table owner is the dev superuser). The actual RLS gate is
+    // demonstrated below via `SET LOCAL ROLE klinika_app`.
     await service.patient.create({
       data: {
         clinicId: otherClinicId,
@@ -116,10 +107,16 @@ describe.skipIf(!ENABLED)('Prisma + RLS integration', () => {
       },
     });
 
-    const visibleFromDonetamed = await service.runInTenantContext(
-      donetamedClinicId,
-      async (tx) => tx.patient.findMany(),
-    );
+    // Demote into the non-superuser application role so RLS actually
+    // fires. In production the connection IS klinika_app from the
+    // start; in dev the connection is a superuser that bypasses RLS,
+    // so we explicitly switch within the transaction. Both `SET LOCAL`
+    // calls revert at COMMIT/ROLLBACK.
+    const visibleFromDonetamed = await service.$transaction(async (tx) => {
+      await tx.$executeRawUnsafe('SET LOCAL ROLE klinika_app');
+      await tx.$executeRaw`SELECT set_config('app.clinic_id', ${donetamedClinicId}::text, true)`;
+      return tx.patient.findMany();
+    });
 
     // Inside the donetamed tenant context, the other clinic's patient
     // must be invisible. RLS is the enforcement layer; even a buggy

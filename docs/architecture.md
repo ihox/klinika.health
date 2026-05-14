@@ -348,7 +348,7 @@ adds six tables:
 | `rate_limits` | Sliding-window counters | up to 1 h |
 
 Manual migration
-[`002_auth_rls.sql`](../apps/api/prisma/migrations/manual/002_auth_rls.sql)
+[`002_auth_rls.sql`](../apps/api/prisma/sql/002_auth_rls.sql)
 adds Row-Level Security on the three tenant-scoped auth tables and the
 `purge_expired_auth()` cleanup function.
 
@@ -551,7 +551,7 @@ shortcuts — patient privacy is the rule that doesn't bend.
 
 Patient lookup uses Postgres `pg_trgm` for trigram similarity and
 `unaccent` for diacritic-insensitive matching. The
-[`klinika_unaccent_lower`](../apps/api/prisma/migrations/manual/004_patients_search.sql)
+[`klinika_unaccent_lower`](../apps/api/prisma/sql/004_patients_search.sql)
 IMMUTABLE wrapper composes the two and powers three GIN indexes:
 
 - `patients_first_name_trgm_idx`

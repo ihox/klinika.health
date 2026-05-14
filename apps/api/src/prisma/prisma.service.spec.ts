@@ -74,10 +74,8 @@ describe('PrismaService.softDeleteMiddleware', () => {
     });
   });
 
-  it('applies on findUnique, findFirst, count, aggregate, and groupBy', async () => {
+  it('applies on findFirst, count, aggregate, and groupBy via AND wrap', async () => {
     const actions: Prisma.PrismaAction[] = [
-      'findUnique',
-      'findUniqueOrThrow',
       'findFirst',
       'findFirstOrThrow',
       'count',
@@ -94,6 +92,24 @@ describe('PrismaService.softDeleteMiddleware', () => {
         (calledWith.args as { where?: unknown }).where,
         `${action} should be filtered`,
       ).toEqual({ AND: [{}, { deletedAt: null }] });
+    }
+  });
+
+  it('spreads deletedAt:null at top level for findUnique (preserves unique-key validation)', async () => {
+    for (const action of ['findUnique', 'findUniqueOrThrow'] as const) {
+      const next = vi.fn().mockResolvedValue(null);
+      const params = makeParams({
+        model: 'Clinic',
+        action,
+        args: { where: { subdomain: 'donetamed' } },
+      });
+      await service.softDeleteMiddleware(params, next);
+      const calledWith = next.mock.calls[0][0] as Prisma.MiddlewareParams;
+      // The unique key must remain at the top level; AND-wrapping would
+      // hide it from Prisma's WhereUniqueInput validation.
+      expect(calledWith.args).toEqual({
+        where: { subdomain: 'donetamed', deletedAt: null },
+      });
     }
   });
 

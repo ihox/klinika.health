@@ -123,7 +123,7 @@ Set up the Klinika database schema with Prisma:
 
 2. Generate the Prisma migration: `pnpm prisma migrate dev --name initial`
 
-3. Write a separate SQL migration file (in apps/api/prisma/migrations/manual/) that:
+3. Write a separate SQL migration file (in apps/api/prisma/sql/) that:
    - Enables Row-Level Security on every table with clinic_id
    - Creates RLS policies: `clinic_id = current_setting('app.clinic_id')::uuid` for SELECT/INSERT/UPDATE/DELETE
    - Creates the platform_admin_role Postgres role with BYPASSRLS

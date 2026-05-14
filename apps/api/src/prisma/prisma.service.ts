@@ -49,7 +49,7 @@ const PRISMA_LOG_CONFIG = [
  *      (ADR-008).
  *   2. RLS tenant context: {@link runInTenantContext} opens a transaction
  *      and `SET LOCAL`s `app.clinic_id`, so the Postgres RLS policies
- *      installed by `migrations/manual/001_rls_indexes_triggers.sql`
+ *      installed by `sql/001_rls_indexes_triggers.sql`
  *      scope every query to the caller's clinic (ADR-005).
  *   3. Slow-query logging: queries slower than `PRISMA_SLOW_QUERY_MS`
  *      (default 500ms) emit a Pino warn with the parameterised SQL
@@ -121,9 +121,22 @@ export class PrismaService
       SOFT_DELETE_MODELS.has(model) &&
       SOFT_DELETE_READ_ACTIONS.has(params.action)
     ) {
-      const args = (params.args ?? {}) as { where?: unknown };
+      const args = (params.args ?? {}) as { where?: Record<string, unknown> };
       const existing = args.where ?? {};
-      params.args = { ...args, where: { AND: [existing, { deletedAt: null }] } };
+      if (
+        params.action === 'findUnique' ||
+        params.action === 'findUniqueOrThrow'
+      ) {
+        // findUnique requires the unique key at the top level — wrapping
+        // in AND hides it from Prisma's WhereUniqueInput validation.
+        // Spread instead; Prisma 5 accepts non-unique filters mixed in.
+        params.args = { ...args, where: { ...existing, deletedAt: null } };
+      } else {
+        params.args = {
+          ...args,
+          where: { AND: [existing, { deletedAt: null }] },
+        };
+      }
     }
     return next(params);
   };
