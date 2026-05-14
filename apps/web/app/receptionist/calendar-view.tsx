@@ -67,8 +67,13 @@ interface BookingState {
 }
 
 interface PickerState {
-  /** Context that opened the picker. */
-  source: 'slot' | 'global';
+  /**
+   * Context that opened the picker.
+   *   - 'slot'   : tap on an empty time slot → opens booking dialog after pick
+   *   - 'global' : top-bar global search → opens booking dialog after pick (date=today, time=blank)
+   *   - 'walkin' : "+ Pacient pa termin" button → immediately POSTs a walk-in, no dialog
+   */
+  source: 'slot' | 'global' | 'walkin';
   date: string;
   time: string;
   anchor: { x: number; y: number };
@@ -76,8 +81,14 @@ interface PickerState {
 
 interface QuickAddState {
   seed: string;
-  /** Where to route the new patient on success. */
-  returnTo: { date: string; time: string; prefilledFromSlot: boolean };
+  /**
+   * Where to route the new patient on success.
+   *   - kind='booking' : open the booking dialog with the new patient pre-selected
+   *   - kind='walkin'  : immediately POST /api/visits/walkin with the new patient
+   */
+  returnTo:
+    | { kind: 'booking'; date: string; time: string; prefilledFromSlot: boolean }
+    | { kind: 'walkin' };
 }
 
 export function CalendarView(): ReactElement {
@@ -381,10 +392,33 @@ export function CalendarView(): ReactElement {
     return () => window.clearTimeout(handle);
   }, [toast]);
 
-  // ----- Patient picker → booking flow
+  // ----- Walk-in entry: POST /api/visits/walkin and refresh. No dialog,
+  // no follow-up question — the receptionist's intent is "this patient
+  // is here NOW, the doctor will pull them in." Toast confirms.
+  const addWalkin = useCallback(
+    async (p: PatientPublicDto) => {
+      try {
+        await calendarClient.createWalkin({ patientId: p.id });
+        await refreshEntries();
+        await refreshStats();
+        setToast('Pacienti u shtua. Shfaqet menjëherë në kalendar.');
+      } catch {
+        setToast('Walk-in dështoi.');
+      }
+    },
+    [refreshEntries, refreshStats],
+  );
+
+  // ----- Patient picker → booking flow OR walk-in flow
   const onPatientPicked = useCallback(
     (p: PatientPublicDto) => {
       if (!picker) return;
+      const source = picker.source;
+      setPicker(null);
+      if (source === 'walkin') {
+        void addWalkin(p);
+        return;
+      }
       setBooking({
         mode: 'create',
         patient: p,
@@ -392,25 +426,30 @@ export function CalendarView(): ReactElement {
         initialTime: picker.time,
         // Slot-first carries time + date from the tap. Patient-first
         // carries today's date but leaves time blank.
-        prefilledFromSlot: picker.source === 'slot',
+        prefilledFromSlot: source === 'slot',
       });
-      setPicker(null);
     },
-    [picker],
+    [addWalkin, picker],
   );
 
   const onAddNewFromPicker = useCallback(
     (query: string) => {
       if (!picker) return;
+      const source = picker.source;
+      setPicker(null);
+      if (source === 'walkin') {
+        setQuickAdd({ seed: query, returnTo: { kind: 'walkin' } });
+        return;
+      }
       setQuickAdd({
         seed: query,
         returnTo: {
+          kind: 'booking',
           date: picker.date,
           time: picker.time,
-          prefilledFromSlot: picker.source === 'slot',
+          prefilledFromSlot: source === 'slot',
         },
       });
-      setPicker(null);
     },
     [picker],
   );
@@ -421,17 +460,33 @@ export function CalendarView(): ReactElement {
         setQuickAdd(null);
         return;
       }
+      const returnTo = quickAdd.returnTo;
+      setQuickAdd(null);
+      if (returnTo.kind === 'walkin') {
+        void addWalkin(p);
+        return;
+      }
       setBooking({
         mode: 'create',
         patient: p,
-        initialDate: quickAdd.returnTo.date,
-        initialTime: quickAdd.returnTo.time,
-        prefilledFromSlot: quickAdd.returnTo.prefilledFromSlot,
+        initialDate: returnTo.date,
+        initialTime: returnTo.time,
+        prefilledFromSlot: returnTo.prefilledFromSlot,
       });
-      setQuickAdd(null);
     },
-    [quickAdd],
+    [addWalkin, quickAdd],
   );
+
+  // ----- Open the walk-in picker, anchored to the centre of the page.
+  const openWalkinPicker = useCallback(() => {
+    setActionsFor(null);
+    setPicker({
+      source: 'walkin',
+      date: todayIso,
+      time: '',
+      anchor: { x: window.innerWidth / 2, y: 180 },
+    });
+  }, [todayIso]);
 
   // ----- Path 2: global search opens a picker without a slot anchor.
   const openGlobalPickerForPatient = useCallback(
@@ -451,7 +506,12 @@ export function CalendarView(): ReactElement {
     (seed: string) => {
       setQuickAdd({
         seed,
-        returnTo: { date: todayIso, time: '', prefilledFromSlot: false },
+        returnTo: {
+          kind: 'booking',
+          date: todayIso,
+          time: '',
+          prefilledFromSlot: false,
+        },
       });
     },
     [todayIso],
@@ -509,7 +569,7 @@ export function CalendarView(): ReactElement {
       />
 
       <div className="mx-auto max-w-page px-page-x pt-6">
-        {/* Greeting */}
+        {/* Greeting + [+ Pacient pa termin] */}
         <div className="mb-5 flex items-end justify-between gap-4">
           <div>
             <h1 className="font-display text-[28px] font-semibold tracking-[-0.025em] text-ink-strong">
@@ -520,6 +580,10 @@ export function CalendarView(): ReactElement {
               {settings ? ` · ${settings.general.shortName}` : ''}
             </p>
           </div>
+          <Button variant="secondary" size="sm" onClick={openWalkinPicker}>
+            <span aria-hidden className="mr-1.5 text-[16px] leading-none">+</span>
+            Pacient pa termin
+          </Button>
         </div>
 
         {/* Stats */}
@@ -585,11 +649,16 @@ export function CalendarView(): ReactElement {
         </section>
       </div>
 
-      {/* Picker popover (Path 1) */}
+      {/* Picker popover — opens for slot-tap, walk-in button, or
+          global-search add-new. */}
       {picker ? (
         <PatientPicker
           anchor={picker.anchor}
-          contextLabel={`${dayLabelLong(weekdayOf(picker.date))}, ${picker.date.split('-').reverse().join('.').slice(0, 5)} · ${picker.time}`}
+          contextLabel={
+            picker.source === 'walkin'
+              ? '↻ Pa termin · sot'
+              : `${dayLabelLong(weekdayOf(picker.date))}, ${picker.date.split('-').reverse().join('.').slice(0, 5)} · ${picker.time}`
+          }
           onClose={() => setPicker(null)}
           onPick={onPatientPicked}
           onAddNew={onAddNewFromPicker}
