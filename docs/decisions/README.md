@@ -45,6 +45,7 @@ Triggers that would justify reopening this decision.
 | 008 | [Soft delete with undo](008-soft-delete-undo.md) | Accepted |
 | 009 | [DICOM storage](009-dicom-storage.md) | Accepted |
 | 010 | [Migration approach](010-migration-approach.md) | Accepted |
+| 011 | [Unified visit model](011-unified-visit-model.md) | Accepted |
 
 ## Adding a new ADR
 

@@ -220,6 +220,8 @@ await this.prisma.patient.findMany();
 
 RLS policies enforce this at the database layer. If you ever need to bypass scoping (platform admin queries across clinics), use an explicit `prisma.$queryRaw` with a comment explaining why.
 
+**Visits and appointments are one table.** As of 2026-05-14 the `appointments` table is gone — bookings and clinical visits both live in `visits`. An appointment-style row has `scheduled_for IS NOT NULL`; a clinical-only row (the doctor's "[Vizitë e re]") has `scheduled_for IS NULL`. `status` is a TEXT column with a CHECK constraint over `{scheduled, arrived, in_progress, completed, no_show, cancelled}`. The receptionist API at `/api/appointments/*` is preserved by a translation layer in `apps/api/src/modules/appointments/appointments.service.ts` (will be removed in Phase 2a). See ADR-011 for the rationale, the lifecycle, and the known deferred follow-ups.
+
 ### 5.3 Audit log
 
 Every mutation on clinical or sensitive data writes an audit row:
