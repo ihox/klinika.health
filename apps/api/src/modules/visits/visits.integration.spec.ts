@@ -353,6 +353,21 @@ describe.skipIf(!ENABLED)('Visits integration', () => {
       expect(after.deletedAt).toBeNull();
     });
 
+    it('restore on a visit that was never deleted returns 404', async () => {
+      // The 30-second undo window (ADR-008) is client-side only — the
+      // server has no time-window check, so the only failure mode for
+      // restore is "row not soft-deleted." If the row was never deleted,
+      // findFirst with deletedAt: { not: null } matches nothing → 404.
+      const visit = await createVisit();
+      const cookie = await loginAs(DOCTOR_EMAIL, SEED_DOCTOR_PASSWORD!);
+
+      const restore = await req()
+        .post(`/api/visits/${visit.id}/restore`)
+        .set('host', TENANT_HOST)
+        .set('Cookie', cookie);
+      expect(restore.status).toBe(404);
+    });
+
     it('GET /:id/history returns events newest first', async () => {
       const visit = await createVisit();
       const cookie = await loginAs(DOCTOR_EMAIL, SEED_DOCTOR_PASSWORD!);
