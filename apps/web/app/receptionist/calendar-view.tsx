@@ -756,6 +756,13 @@ interface StatsRowProps {
   now: Date;
 }
 
+function formatEur(cents: number): string {
+  // Per the design prototype: "€ N.NN", tabular nums. Kosovo runs on
+  // the Euro since 2002; clinic payment codes are configured in cents.
+  const euros = (cents / 100).toFixed(2);
+  return `€ ${euros}`;
+}
+
 function StatsRow({ stats, now }: StatsRowProps): ReactElement {
   if (!stats) {
     return (
@@ -770,6 +777,9 @@ function StatsRow({ stats, now }: StatsRowProps): ReactElement {
       ? `${toLocalParts(new Date(stats.firstStart)).time} → ${toLocalParts(new Date(stats.lastEnd)).time}`
       : null;
   const next = stats.nextAppointment;
+  // "Me termin" = scheduled bookings (`scheduledFor` set). The server
+  // tells us walk-in count directly; everything else with a slot.
+  const withAppointmentCount = Math.max(0, stats.total - stats.walkIn);
   return (
     <section className="grid grid-cols-1 gap-4 md:grid-cols-2">
       <div className="rounded-lg border border-line bg-surface-elevated px-5 py-4 shadow-xs">
@@ -780,7 +790,14 @@ function StatsRow({ stats, now }: StatsRowProps): ReactElement {
           <div className="font-display text-[36px] font-semibold leading-none tracking-tight tabular-nums">
             {stats.total}
           </div>
-          <div className="text-[13px] text-ink-muted">termine të planifikuara</div>
+          <div className="text-[13px] text-ink-muted">
+            {stats.total === 1 ? 'vizitë' : 'vizita'}
+          </div>
+          {stats.walkIn > 0 ? (
+            <div className="ml-auto text-[12px] text-ink-faint tabular-nums">
+              {withAppointmentCount} me termin · {stats.walkIn} pa termin
+            </div>
+          ) : null}
         </div>
         <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-line pt-3 text-[12px] text-ink-muted">
           <span>
@@ -791,6 +808,10 @@ function StatsRow({ stats, now }: StatsRowProps): ReactElement {
           </span>
           <span>
             <strong className="text-ink font-semibold">{stats.scheduled}</strong> në pritje
+          </span>
+          <span>
+            <strong className="text-ink font-semibold">{formatEur(stats.paymentTotalCents)}</strong>{' '}
+            pagesa
           </span>
           {firstLast ? (
             <span className="text-ink-faint tabular-nums">{firstLast}</span>
