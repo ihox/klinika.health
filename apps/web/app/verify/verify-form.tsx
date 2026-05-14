@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
@@ -10,7 +11,13 @@ import { cn } from '@/lib/utils';
 
 const RESEND_COOLDOWN_SECONDS = 30;
 
-type VerifyState = 'idle' | 'verifying' | 'success' | 'error_invalid' | 'error_expired';
+type VerifyState =
+  | 'idle'
+  | 'verifying'
+  | 'success'
+  | 'error_invalid'
+  | 'error_expired'
+  | 'locked';
 
 export function VerifyForm() {
   const router = useRouter();
@@ -105,7 +112,11 @@ export function VerifyForm() {
         if (err.status === 401) {
           const reason = err.body.reason;
           if (reason === 'too_many_attempts') {
-            router.replace('/login?reason=mfa-attempts');
+            // Per components/mfa-verify.html the lockout state stays on
+            // the verify page and shows an inline banner — the user
+            // chooses when to navigate back to login.
+            setState('locked');
+            setErrorMessage(null);
             return;
           }
           if (reason === 'expired') {
@@ -179,11 +190,52 @@ export function VerifyForm() {
     );
   }
 
+  if (state === 'locked') {
+    return (
+      <div className="flex flex-col gap-4">
+        <div className="text-stone-500 text-[14px] leading-relaxed">
+          Ne dërguam një kod 6-shifror në <EmailPill value={maskedEmail} />
+        </div>
+        <div
+          role="alert"
+          className="flex items-start gap-2.5 rounded-md border border-amber-200 bg-amber-50 px-3.5 py-3 text-[12.5px] leading-relaxed text-amber-900"
+        >
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 16 16"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.6"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="mt-px shrink-0 text-amber-700"
+            aria-hidden="true"
+          >
+            <path d="M8 2.5l6 10.5H2z" />
+            <path d="M8 6.5v3M8 11.5v.01" />
+          </svg>
+          <div>
+            <strong className="font-semibold text-amber-700">Tepër përpjekje.</strong>{' '}
+            Filloni prej fillimit — hyni përsëri me email + fjalëkalim.
+            <div className="mt-2">
+              <Link
+                href="/login"
+                className="font-semibold text-amber-700 hover:underline"
+              >
+                ← Kthehu te hyrja
+              </Link>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <form onSubmit={onSubmit} className="flex flex-col gap-4">
       <div className="text-stone-500 text-[14px] leading-relaxed">
-        Ne dërguam një kod 6-shifror në{' '}
-        <span className="font-mono text-stone-700">{maskedEmail ?? '—'}</span>
+        Ne dërguam një kod 6-shifror në <EmailPill value={maskedEmail} />
       </div>
 
       <div>
@@ -265,5 +317,17 @@ export function VerifyForm() {
         </button>
       </div>
     </form>
+  );
+}
+
+/**
+ * Subtle pill around the masked email, matching the
+ * .email-mask token in components/mfa-verify.html.
+ */
+function EmailPill({ value }: { value: string | null }) {
+  return (
+    <span className="inline-block rounded border border-stone-200 bg-stone-100 px-1.5 py-px font-mono text-[12.5px] font-medium text-stone-700">
+      {value ?? '—'}
+    </span>
   );
 }

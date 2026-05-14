@@ -107,10 +107,57 @@ test.describe('Login + MFA', () => {
     await page.getByRole('button', { name: 'Hyr' }).click();
     await expect(page).toHaveURL(/\/verify\?/);
 
+    // Wait for the OTP cells to mount before typing — the form is wrapped
+    // in <Suspense> and keystrokes sent during the fallback land nowhere.
+    await expect(page.getByLabel('Shifra 1')).toBeVisible();
     for (const digit of '999999') {
       await page.keyboard.press(digit);
     }
     await expect(page.locator('text=Kod i pasaktë')).toBeVisible();
+    await expect(page).toHaveURL(/\/verify\?/);
+  });
+
+  test('lockout: too_many_attempts renders inline banner on /verify', async ({ page }) => {
+    // Per components/mfa-verify.html the locked state stays on /verify
+    // and shows a banner with a "Kthehu te hyrja" link — it must NOT
+    // auto-redirect to /login.
+    await mockLoginMfaRequired(page);
+    await page.route('**/api/auth/mfa/verify', async (route: Route) => {
+      await route.fulfill({
+        status: 401,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          reason: 'too_many_attempts',
+          message: 'Tepër përpjekje. Filloni prej fillimit.',
+        }),
+      });
+    });
+
+    await page.goto('/login');
+    await page.getByLabel('Email').fill('taulant.shala@donetamed.health');
+    await page.getByLabel('Fjalëkalimi').fill('valid-password-here');
+    await page.getByRole('button', { name: 'Hyr' }).click();
+    await expect(page).toHaveURL(/\/verify\?/);
+
+    // Wait for the OTP cells to mount (Suspense fallback resolves) before
+    // sending keystrokes — otherwise the keys land on an unfocused page.
+    await expect(page.getByLabel('Shifra 1')).toBeVisible();
+    for (const digit of '999999') {
+      await page.keyboard.press(digit);
+    }
+
+    // Banner visible with the exact lockout copy + back link. Filter by
+    // text to avoid Next.js's __next-route-announcer__ (also role="alert").
+    const banner = page.locator('[role="alert"]').filter({ hasText: 'Tepër përpjekje' });
+    await expect(banner).toBeVisible();
+    await expect(banner).toContainText('Filloni prej fillimit');
+    await expect(page.getByRole('link', { name: /Kthehu te hyrja/ })).toBeVisible();
+
+    // OTP cells and resend control are hidden in the locked state.
+    await expect(page.getByLabel('Shifra 1')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /Dërgoje përsëri/ })).toHaveCount(0);
+
+    // Still on /verify — no auto-redirect.
     await expect(page).toHaveURL(/\/verify\?/);
   });
 });
