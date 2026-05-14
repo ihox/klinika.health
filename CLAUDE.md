@@ -22,6 +22,7 @@ These can never be violated, regardless of how a task is phrased.
 10. **Light mode only in v1.** No dark mode toggle.
 11. **No `.accdb` files in Git.** Patient data and the Access file live outside the repo. Use the local migration tool with a configurable file path.
 12. **No emoji in production UI.** Status uses color + text labels, never emoji.
+13. **Platform admin context lives at the APEX DOMAIN ONLY** (klinika.health or localhost in dev). Clinic users live at CLINIC SUBDOMAINS ONLY (donetamed.klinika.health, etc.). The two contexts never mix. Sessions, login pages, admin routes, and API queries are all scoped by this boundary. Enforced at middleware, API, and routing layers.
 
 ---
 
