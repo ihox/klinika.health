@@ -11,6 +11,7 @@ import {
   type ReactElement,
 } from 'react';
 
+import { Skeleton } from '@/components/skeleton';
 import { Button } from '@/components/ui/button';
 import { ApiError } from '@/lib/api';
 import {
@@ -357,9 +358,7 @@ function AppointmentsPanel({
 
       <div className="flex flex-col">
         {snapshot == null ? (
-          <div className="px-4 py-8 text-center text-[12.5px] text-ink-muted">
-            Po ngarkohet…
-          </div>
+          <AppointmentListSkeleton />
         ) : filtered.length === 0 ? (
           <div className="px-4 py-8 text-center text-[12.5px] text-ink-muted">
             {filter.trim()
@@ -380,6 +379,27 @@ function AppointmentsPanel({
 
       <DayStats snapshot={snapshot} />
     </section>
+  );
+}
+
+function AppointmentListSkeleton(): ReactElement {
+  // Mirrors AppointmentRow's grid (time / spacer / name / badge) so the
+  // swap-in is jump-free per the loading-skeletons reference.
+  const nameWidths = ['72%', '58%', '80%', '64%', '70%'];
+  return (
+    <div className="flex flex-col" aria-label="Po ngarkohet…" role="status">
+      {nameWidths.map((w, i) => (
+        <div
+          key={i}
+          className="grid w-full grid-cols-[58px_12px_1fr_auto] items-center gap-2.5 border-b border-line-soft px-4 py-3 last:border-b-0"
+        >
+          <Skeleton className="h-3 w-10" />
+          <Skeleton className="h-3 w-3" />
+          <Skeleton className="h-3" style={{ width: w }} />
+          <Skeleton className="h-[18px] w-12 rounded-pill" />
+        </div>
+      ))}
+    </div>
   );
 }
 

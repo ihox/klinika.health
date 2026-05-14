@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
 
+import { Skeleton } from '@/components/skeleton';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { ApiError } from '@/lib/api';
@@ -579,9 +580,7 @@ export function CalendarView(): ReactElement {
               onAppointmentClick={onAppointmentClick}
             />
           ) : (
-            <div className="grid place-items-center px-6 py-12 text-[13px] text-ink-muted">
-              Po ngarkohet…
-            </div>
+            <CalendarSkeleton />
           )}
         </section>
       </div>
@@ -793,6 +792,50 @@ function NextCountdown({
 function SkeletonCard(): ReactElement {
   return (
     <div className="h-[112px] rounded-lg border border-line bg-surface-elevated shadow-xs" />
+  );
+}
+
+/**
+ * Calendar grid skeleton — 5 day-columns with a head + body of pulsing
+ * slots of varying heights, matching design-reference/prototype/
+ * components/loading-skeletons.html §8.3.
+ */
+function CalendarSkeleton(): ReactElement {
+  const columns = [
+    ['md', 'tall', 'short', 'md', 'md', 'tall'],
+    ['tall', 'md', 'short', 'md', 'tall', 'short'],
+    ['md', 'md', 'tall', 'short', 'md'],
+    ['short', 'tall', 'md', 'md', 'tall'],
+    ['md', 'short', 'tall', 'md'],
+  ] as const;
+  const slotHeight: Record<'md' | 'tall' | 'short', string> = {
+    md: 'h-8',
+    tall: 'h-14',
+    short: 'h-[22px]',
+  };
+  return (
+    <div
+      role="status"
+      aria-label="Po ngarkohet kalendari"
+      className="flex gap-4 overflow-x-auto px-2 py-3"
+    >
+      {columns.map((slots, ci) => (
+        <div
+          key={ci}
+          className="flex-none w-[200px] overflow-hidden rounded-lg border border-line bg-surface-elevated shadow-xs"
+        >
+          <div className="flex flex-col gap-1.5 border-b border-line px-3.5 py-2.5">
+            <Skeleton className="h-3 w-14" />
+            <Skeleton className="h-[18px] w-8" />
+          </div>
+          <div className="flex flex-col gap-2 p-3">
+            {slots.map((s, i) => (
+              <Skeleton key={i} className={slotHeight[s]} />
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
   );
 }
 

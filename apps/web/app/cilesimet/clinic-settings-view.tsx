@@ -3,6 +3,7 @@
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
+import { Skeleton } from '@/components/skeleton';
 import { ApiError } from '@/lib/api';
 import {
   clinicClient,
@@ -79,11 +80,7 @@ export function ClinicSettingsView() {
   const usersCount = useMemo(() => users?.filter((u) => u.isActive).length ?? 0, [users]);
 
   if (loading) {
-    return (
-      <main className="min-h-screen bg-stone-50 grid place-items-center text-stone-500">
-        Po ngarkohet…
-      </main>
-    );
+    return <ClinicSettingsSkeleton />;
   }
   if (error || !settings || !users) {
     return (
@@ -209,5 +206,46 @@ function SidebarItem({
         </span>
       ) : null}
     </button>
+  );
+}
+
+/**
+ * Page-level skeleton — header strip + tab sidebar + content card.
+ * Mirrors the rendered layout within ±2px per the loading-skeletons
+ * reference so the swap is jump-free.
+ */
+function ClinicSettingsSkeleton() {
+  return (
+    <main className="min-h-screen bg-stone-50 pb-16" role="status" aria-label="Po ngarkohet…">
+      <div className="max-w-[1280px] mx-auto px-8 pt-6">
+        <header className="mb-4 flex flex-col gap-2.5">
+          <Skeleton className="h-7 w-56" />
+          <div className="flex items-center gap-2.5">
+            <Skeleton className="h-3 w-20" />
+            <Skeleton className="h-3 w-44" />
+            <Skeleton className="h-3 w-16" />
+          </div>
+        </header>
+        <div className="grid grid-cols-[200px_1fr] gap-8 mt-6">
+          <div className="flex flex-col gap-1.5">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <Skeleton key={i} className="h-9 w-full" />
+            ))}
+          </div>
+          <div className="rounded-lg border border-stone-200 bg-white p-6 shadow-xs">
+            <div className="flex flex-col gap-4">
+              <Skeleton className="h-5 w-40" />
+              <Skeleton className="h-3 w-72" />
+              <div className="mt-2 grid grid-cols-2 gap-4">
+                <Skeleton className="h-10 w-full" />
+                <Skeleton className="h-10 w-full" />
+                <Skeleton className="h-10 w-full" />
+                <Skeleton className="h-10 w-full" />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
   );
 }

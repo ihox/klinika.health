@@ -8,6 +8,7 @@ import {
   clinicStatusTone,
   StatusChip,
 } from '@/components/admin/status-chip';
+import { Skeleton } from '@/components/skeleton';
 import { Button } from '@/components/ui/button';
 import { adminClient, type TenantSummary } from '@/lib/admin-client';
 import { formatDateAlbanian, formatRelativeAlbanian } from '@/lib/format-relative';
@@ -137,11 +138,32 @@ export function TenantsListView() {
           </thead>
           <tbody>
             {filtered === null ? (
-              <tr>
-                <td colSpan={8} className="text-center text-stone-500 text-[13px] py-10">
-                  Po ngarkohet…
-                </td>
-              </tr>
+              Array.from({ length: 5 }).map((_, i) => (
+                <tr key={i} className="border-b border-stone-100 last:border-b-0">
+                  <td className="px-4 py-3.5">
+                    <Skeleton className="h-3.5 w-[70%]" />
+                  </td>
+                  <td className="px-4 py-3.5">
+                    <Skeleton className="h-3 w-24" />
+                  </td>
+                  <td className="px-4 py-3.5">
+                    <Skeleton className="h-[18px] w-14 rounded-pill" />
+                  </td>
+                  <td className="px-4 py-3.5 text-right">
+                    <Skeleton className="ml-auto h-3 w-8" />
+                  </td>
+                  <td className="px-4 py-3.5 text-right">
+                    <Skeleton className="ml-auto h-3 w-6" />
+                  </td>
+                  <td className="px-4 py-3.5">
+                    <Skeleton className="h-3 w-16" />
+                  </td>
+                  <td className="px-4 py-3.5">
+                    <Skeleton className="h-3 w-20" />
+                  </td>
+                  <td />
+                </tr>
+              ))
             ) : filtered.length === 0 ? (
               <tr>
                 <td colSpan={8} className="text-center text-stone-500 text-[13px] py-10">

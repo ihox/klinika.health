@@ -8,3 +8,21 @@
     @apply bg-surface text-ink antialiased;
   }
 }
+
+/* Loading-skeleton pulse — mirrors design-reference/prototype/components/
+   loading-skeletons.html. Same 1.4s ease-in-out timing between two
+   warm stone tones; intentionally distinct from Tailwind's opacity-only
+   animate-pulse. */
+@keyframes sk-pulse {
+  0%,
+  100% {
+    background-color: #efeeec;
+  }
+  50% {
+    background-color: #f5f5f4;
+  }
+}
+.sk-pulse {
+  background-color: #efeeec;
+  animation: sk-pulse 1.4s ease-in-out infinite;
+}
