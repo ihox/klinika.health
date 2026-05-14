@@ -22,7 +22,10 @@ test.describe('Connection status indicator', () => {
       'data-state',
       'online',
     );
-    await expect(page.getByRole('status')).toContainText('I lidhur');
+    // Per components/connection-status.html the online pill is
+    // intentionally label-less — just the green dot. We assert that no
+    // status copy is shown rather than searching for a missing string.
+    await expect(page.getByRole('status')).toHaveText('');
   });
 
   test('shows degraded when /health/ready returns 503', async ({ page }) => {
