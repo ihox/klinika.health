@@ -42,13 +42,14 @@ async function bootstrap(): Promise<void> {
         callback(null, true);
         return;
       }
-      // Exact match against the configured list, OR a *.klinika.health subdomain.
+      // Exact match against the configured list, OR a *.klinika.health
+      // subdomain (tenants), OR the apex / app host (platform). The
+      // admin context now lives on apex — no admin.klinika.health.
       const ok =
         corsOrigin.includes(origin) ||
         /^https:\/\/[a-z0-9][a-z0-9-]{0,40}\.klinika\.health$/.test(origin) ||
         origin === 'https://klinika.health' ||
-        origin === 'https://app.klinika.health' ||
-        origin === 'https://admin.klinika.health';
+        origin === 'https://app.klinika.health';
       callback(null, ok);
     },
     credentials: true,

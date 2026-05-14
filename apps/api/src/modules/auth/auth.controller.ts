@@ -60,6 +60,27 @@ export class AuthController {
     private readonly audit: AuditLogService,
   ) {}
 
+  /**
+   * GET /api/auth/clinic-identity — public, returns the resolved
+   * clinic's display name + short name for the current host. The
+   * host-aware login page calls this to render "Klinika · {Clinic
+   * Name}" without hardcoding any tenant identifier in the frontend
+   * bundle. Returns 404 on apex / platform scope (ClinicScopeGuard
+   * surfaces this as the generic 401).
+   */
+  @Get('clinic-identity')
+  @AllowAnonymous()
+  async clinicIdentity(@Ctx() ctx: RequestContext): Promise<{
+    subdomain: string;
+    name: string;
+    shortName: string;
+  }> {
+    if (!ctx.clinicId || !ctx.clinicSubdomain) {
+      throw new BadRequestException('Klinika nuk u gjet.');
+    }
+    return this.auth.getClinicIdentity(ctx.clinicId);
+  }
+
   /** POST /api/auth/login — email + password. May return mfa_required. */
   @Post('login')
   @AllowAnonymous()

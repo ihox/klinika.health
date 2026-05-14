@@ -14,9 +14,8 @@ import {
 import { serialize } from 'cookie';
 import type { Response } from 'express';
 
-import { AllowAnonymous } from '../../common/decorators/allow-anonymous.decorator';
+import { AllowAnonymous, PlatformScope } from '../../common/decorators/allow-anonymous.decorator';
 import { Ctx } from '../../common/decorators/ctx.decorator';
-import { AdminScope } from '../../common/decorators/allow-anonymous.decorator';
 import { extractCookie } from '../../common/guards/auth.guard';
 import type { RequestContext, RequestWithContext } from '../../common/request-context/request-context';
 import { RATE_LIMITS, RateLimitService } from '../rate-limit/rate-limit.service';
@@ -41,7 +40,7 @@ function cookieIsSecure(): boolean {
 }
 
 @Controller('api/admin/auth')
-@AdminScope()
+@PlatformScope()
 @UseGuards(AdminAuthGuard)
 export class AdminAuthController {
   constructor(

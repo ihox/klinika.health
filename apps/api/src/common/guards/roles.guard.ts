@@ -64,7 +64,7 @@ export class RolesGuard implements CanActivate {
     if (!ctx) return;
     const cookieHeader = req.headers['cookie'];
 
-    if (ctx.isAdminScope) {
+    if (ctx.isPlatform) {
       const token = extractCookie(cookieHeader, ADMIN_SESSION_COOKIE_NAME);
       if (!token) return;
       const session = await this.adminSessions.validate(token, ctx);

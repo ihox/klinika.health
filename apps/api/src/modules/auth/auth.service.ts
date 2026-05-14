@@ -1,12 +1,12 @@
 import {
   BadRequestException,
-  ForbiddenException,
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
 import { InjectPinoLogger, type PinoLogger } from 'nestjs-pino';
 
 import { AuditLogService } from '../../common/audit/audit-log.service';
+import { GENERIC_INVALID_CREDENTIALS_MESSAGE } from '../../common/guards/clinic-scope.guard';
 import type { RequestContext } from '../../common/request-context/request-context';
 import { PrismaService } from '../../prisma/prisma.service';
 import { EmailService } from '../email/email.service';
@@ -67,8 +67,13 @@ export class AuthService {
     trustedDeviceCookie: string | null,
     ctx: RequestContext,
   ): Promise<AuthenticatedLogin | MfaPendingLogin> {
-    if (!ctx.clinicId) {
-      throw new ForbiddenException('Hyrja kërkon nëndomenin e klinikës.');
+    if (ctx.isPlatform || !ctx.clinicId) {
+      // Platform-scope (apex) request hitting the clinic login.
+      // Belt-and-braces — ClinicScopeGuard already returns the
+      // generic 401 for this case. Verify against the sentinel so
+      // timing doesn't reveal scope.
+      await this.passwords.verify(SENTINEL_ARGON_HASH, payload.password);
+      throw new UnauthorizedException(GENERIC_INVALID_CREDENTIALS_MESSAGE);
     }
 
     const emailLower = payload.email.toLowerCase();
@@ -90,8 +95,10 @@ export class AuthService {
         resourceId: user?.id ?? emailLower,
         changes: null,
       });
-      // Generic message — never reveal account existence per OWASP.
-      throw new UnauthorizedException('Email-i ose fjalëkalimi është i pasaktë.');
+      // Character-identical for wrong email, wrong password, wrong
+      // clinic (account in a different tenant), inactive user — no
+      // information leak about whether an email exists somewhere.
+      throw new UnauthorizedException(GENERIC_INVALID_CREDENTIALS_MESSAGE);
     }
 
     // Trusted-device check: skip MFA if the cookie matches a live row
@@ -177,8 +184,8 @@ export class AuthService {
     trustedDeviceToken: string | null;
     trustedDeviceExpiresAt: Date | null;
   }> {
-    if (!ctx.clinicId) {
-      throw new ForbiddenException('Hyrja kërkon nëndomenin e klinikës.');
+    if (ctx.isPlatform || !ctx.clinicId) {
+      throw new UnauthorizedException(GENERIC_INVALID_CREDENTIALS_MESSAGE);
     }
     const outcome = await this.mfa.verify(pendingSessionId, code);
     if (!outcome.ok) {
@@ -191,12 +198,15 @@ export class AuthService {
       throw new UnauthorizedException({ reason: outcome.reason, message: msg });
     }
     if (outcome.clinicId !== ctx.clinicId) {
-      throw new ForbiddenException('Sesioni i pavlefshëm për këtë klinikë.');
+      // MFA session was issued for a different clinic than the
+      // current host. Generic 401 so the response is indistinguishable
+      // from a wrong-code attempt.
+      throw new UnauthorizedException(GENERIC_INVALID_CREDENTIALS_MESSAGE);
     }
 
     const user = await this.prisma.user.findUnique({ where: { id: outcome.userId } });
     if (!user || !user.isActive || user.deletedAt) {
-      throw new UnauthorizedException('Përdoruesi nuk është aktiv.');
+      throw new UnauthorizedException(GENERIC_INVALID_CREDENTIALS_MESSAGE);
     }
 
     const session = await this.sessions.issue(user.id, user.clinicId, outcome.extendedTtl, ctx);
@@ -267,6 +277,9 @@ export class AuthService {
 
   /** Re-issue a fresh code, marking the previous one expired. */
   async resendMfa(pendingSessionId: string, ctx: RequestContext): Promise<{ maskedEmail: string }> {
+    if (ctx.isPlatform || !ctx.clinicId) {
+      throw new UnauthorizedException(GENERIC_INVALID_CREDENTIALS_MESSAGE);
+    }
     const pending = await this.mfa.findPending(pendingSessionId);
     if (!pending) {
       throw new BadRequestException('Sesioni i verifikimit nuk u gjet.');
@@ -275,7 +288,8 @@ export class AuthService {
       throw new BadRequestException('Kodi është verifikuar tashmë.');
     }
     if (pending.clinicId !== ctx.clinicId) {
-      throw new ForbiddenException('Sesioni i pavlefshëm për këtë klinikë.');
+      // Cross-tenant MFA reuse — generic 401.
+      throw new UnauthorizedException(GENERIC_INVALID_CREDENTIALS_MESSAGE);
     }
     const user = await this.prisma.user.findUnique({ where: { id: pending.userId } });
     if (!user || !user.isActive) {
@@ -433,6 +447,22 @@ export class AuthService {
       resourceId: user.id,
       changes: null,
     });
+  }
+
+  async getClinicIdentity(clinicId: string): Promise<{
+    subdomain: string;
+    name: string;
+    shortName: string;
+  }> {
+    const clinic = await this.prisma.clinic.findUniqueOrThrow({
+      where: { id: clinicId },
+      select: { subdomain: true, name: true, shortName: true },
+    });
+    return {
+      subdomain: clinic.subdomain,
+      name: clinic.name,
+      shortName: clinic.shortName,
+    };
   }
 
   async getUserProfile(userId: string): Promise<{

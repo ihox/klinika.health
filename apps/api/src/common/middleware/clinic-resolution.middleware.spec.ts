@@ -1,35 +1,47 @@
 import { describe, expect, it } from 'vitest';
 
-import { resolveSubdomain } from './clinic-resolution.middleware';
+import { resolveScope } from './clinic-resolution.middleware';
 
-describe('resolveSubdomain', () => {
+describe('resolveScope', () => {
   it.each([
+    // Tenant subdomains — production + dev.
     ['donetamed.klinika.health', { kind: 'tenant', subdomain: 'donetamed' }],
     ['demo.klinika.health:3000', { kind: 'tenant', subdomain: 'demo' }],
-    ['admin.klinika.health', { kind: 'admin', subdomain: null }],
-    ['klinika.health', { kind: 'apex', subdomain: null }],
-    ['app.klinika.health', { kind: 'apex', subdomain: null }],
-    ['localhost', { kind: 'localhost', subdomain: null }],
-    ['localhost:3000', { kind: 'localhost', subdomain: null }],
-    // *.localhost is the dev-time mirror of *.klinika.health so the
-    // subdomain routing can be exercised without /etc/hosts gymnastics
-    // for every tenant.
-    ['admin.localhost', { kind: 'admin', subdomain: null }],
-    ['admin.localhost:3000', { kind: 'admin', subdomain: null }],
     ['donetamed.localhost', { kind: 'tenant', subdomain: 'donetamed' }],
     ['donetamed.localhost:3000', { kind: 'tenant', subdomain: 'donetamed' }],
-    ['other-domain.com', { kind: 'apex', subdomain: null }],
-    // Lowercase-only subdomain regex enforced by the middleware; the
-    // caller is expected to lowercase the host before passing it in
-    // (which the middleware does — this test simulates that).
+    // Apex — platform scope. Platform admins live here, never on a
+    // dedicated admin subdomain.
+    ['klinika.health', { kind: 'platform' }],
+    ['app.klinika.health', { kind: 'platform' }],
+    ['localhost', { kind: 'platform' }],
+    ['localhost:3000', { kind: 'platform' }],
+    // Reserved hosts get rejected at the edge — they never resolve to
+    // platform OR to a tenant. The boundary is apex-only for platform
+    // and explicit subdomains for tenants.
+    ['admin.klinika.health', { kind: 'reserved', subdomain: 'admin' }],
+    ['admin.localhost', { kind: 'reserved', subdomain: 'admin' }],
+    ['admin.localhost:3000', { kind: 'reserved', subdomain: 'admin' }],
+    ['www.klinika.health', { kind: 'reserved', subdomain: 'www' }],
+    ['api.klinika.health', { kind: 'reserved', subdomain: 'api' }],
+    ['mail.klinika.health', { kind: 'reserved', subdomain: 'mail' }],
+    ['support.klinika.health', { kind: 'reserved', subdomain: 'support' }],
+    // Unrelated hosts — rejected, never silently treated as platform.
+    ['other-domain.com', { kind: 'reserved', subdomain: 'other-domain.com' }],
   ])('host=%s → %j', (host, expected) => {
-    expect(resolveSubdomain(host.toLowerCase(), null)).toEqual(expected);
+    expect(resolveScope(host.toLowerCase(), null)).toEqual(expected);
   });
 
   it('honours the X-Clinic-Subdomain override on localhost', () => {
-    expect(resolveSubdomain('localhost:3000', 'donetamed')).toEqual({
+    expect(resolveScope('localhost:3000', 'donetamed')).toEqual({
       kind: 'tenant',
       subdomain: 'donetamed',
+    });
+  });
+
+  it('rejects a reserved subdomain even when passed via override', () => {
+    expect(resolveScope('localhost:3000', 'admin')).toEqual({
+      kind: 'reserved',
+      subdomain: 'admin',
     });
   });
 });

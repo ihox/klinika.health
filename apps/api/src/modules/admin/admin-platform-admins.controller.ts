@@ -9,7 +9,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 
-import { AdminScope } from '../../common/decorators/allow-anonymous.decorator';
+import { PlatformScope } from '../../common/decorators/allow-anonymous.decorator';
 import { Ctx } from '../../common/decorators/ctx.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import type { RequestContext } from '../../common/request-context/request-context';
@@ -21,7 +21,7 @@ import {
 } from './admin.dto';
 
 @Controller('api/admin/platform-admins')
-@AdminScope()
+@PlatformScope()
 @UseGuards(AdminAuthGuard)
 @Roles('platform_admin')
 export class AdminPlatformAdminsController {

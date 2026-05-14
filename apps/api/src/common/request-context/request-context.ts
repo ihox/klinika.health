@@ -3,13 +3,24 @@ import type { Request } from 'express';
 /**
  * Per-request context populated by the middleware/guard chain:
  *
- *   1. `ClinicResolutionMiddleware` parses the Host header and sets
- *      `clinicId` (or marks the request as `/admin` scope, in which
- *      case `clinicId` is null and `platformAdmin` may be true).
- *   2. `AuthGuard` validates the session cookie and sets `userId`,
- *      `role`, `sessionId`.
+ *   1. `ClinicResolutionMiddleware` parses the Host header and decides
+ *      whether the request is in PLATFORM scope (apex domain — only
+ *      platform admins live here) or CLINIC scope (tenant subdomain —
+ *      where the clinic's doctors / receptionists / clinic admins
+ *      live). Reserved subdomains and unknown subdomains are rejected
+ *      before any handler runs.
+ *   2. `AuthGuard` / `AdminAuthGuard` validate the session cookie and
+ *      set `userId`, `role`, `sessionId`.
  *   3. Controllers receive the context via the `@Ctx()` decorator
  *      and pass it into services so query scoping is uniform.
+ *
+ * Platform vs clinic boundary (CLAUDE.md §1, ADR-005):
+ *   - `isPlatform = true` AND `clinicId = null` → apex domain
+ *     (klinika.health / localhost in dev). Only platform-admin
+ *     endpoints accept these requests.
+ *   - `isPlatform = false` AND `clinicId = <uuid>` → tenant subdomain.
+ *     Only clinic endpoints accept these requests.
+ *   - These are mutually exclusive — never set both, never neither.
  *
  * `ipAddress` and `userAgent` are filled by the middleware regardless
  * of auth state so the audit log and login-attempt tracking work for
@@ -25,7 +36,7 @@ export interface RequestContext {
   ipAddress: string;
   userAgent: string;
   requestId: string;
-  isAdminScope: boolean;
+  isPlatform: boolean;
 }
 
 export type RequestWithContext = Request & {
@@ -45,7 +56,7 @@ export function buildBaseContext(req: RequestWithContext): RequestContext {
     ipAddress: extractIp(req),
     userAgent: (req.headers['user-agent'] ?? '').toString().slice(0, 512),
     requestId: extractRequestId(req),
-    isAdminScope: false,
+    isPlatform: false,
   };
 }
 

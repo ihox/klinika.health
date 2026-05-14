@@ -1,11 +1,11 @@
 import {
   BadRequestException,
-  ForbiddenException,
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
 import { InjectPinoLogger, type PinoLogger } from 'nestjs-pino';
 
+import { GENERIC_INVALID_CREDENTIALS_MESSAGE } from '../../common/guards/clinic-scope.guard';
 import type { RequestContext } from '../../common/request-context/request-context';
 import { PrismaService } from '../../prisma/prisma.service';
 import { maskEmail } from '../auth/device';
@@ -51,8 +51,12 @@ export class AdminAuthService {
     password: string,
     ctx: RequestContext,
   ): Promise<BeginAdminLoginResult> {
-    if (!ctx.isAdminScope) {
-      throw new ForbiddenException('Vetëm për administratorin e platformës.');
+    if (!ctx.isPlatform) {
+      // Belt-and-braces — the controller's @PlatformScope() already
+      // surfaces this as a generic 401 via ClinicScopeGuard. We pay
+      // the Argon2 cost anyway so timing doesn't reveal scope.
+      await this.passwords.verify(SENTINEL_ARGON_HASH, password);
+      throw new UnauthorizedException(GENERIC_INVALID_CREDENTIALS_MESSAGE);
     }
     const emailLower = email.toLowerCase();
     const admin = await this.prisma.platformAdmin.findUnique({ where: { email: emailLower } });
@@ -66,7 +70,7 @@ export class AdminAuthService {
         { emailLower, ipAddress: ctx.ipAddress },
         'Admin login attempt failed',
       );
-      throw new UnauthorizedException('Email-i ose fjalëkalimi është i pasaktë.');
+      throw new UnauthorizedException(GENERIC_INVALID_CREDENTIALS_MESSAGE);
     }
 
     const mfa = await this.mfa.issue(admin.id, ctx);
@@ -102,8 +106,8 @@ export class AdminAuthService {
     sessionExpiresAt: Date;
     platformAdminId: string;
   }> {
-    if (!ctx.isAdminScope) {
-      throw new ForbiddenException('Vetëm për administratorin e platformës.');
+    if (!ctx.isPlatform) {
+      throw new UnauthorizedException(GENERIC_INVALID_CREDENTIALS_MESSAGE);
     }
     const outcome = await this.mfa.verify(pendingSessionId, code);
     if (!outcome.ok) {
@@ -118,7 +122,7 @@ export class AdminAuthService {
 
     const admin = await this.prisma.platformAdmin.findUnique({ where: { id: outcome.platformAdminId } });
     if (!admin || !admin.isActive) {
-      throw new UnauthorizedException('Llogaria nuk është aktive.');
+      throw new UnauthorizedException(GENERIC_INVALID_CREDENTIALS_MESSAGE);
     }
 
     const session = await this.sessions.issue(admin.id, ctx);

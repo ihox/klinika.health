@@ -11,7 +11,9 @@ import type { PlatformAuditContext } from './platform-audit.service';
 import { PlatformAuditService } from './platform-audit.service';
 
 const TEMP_PASSWORD_BYTES = 12;
-const ADMIN_LOGIN_URL = 'https://admin.klinika.health/login';
+// Platform admins log in on the apex domain — never on a dedicated
+// admin.* subdomain. See ADR-005 boundary enforcement update.
+const ADMIN_LOGIN_URL = 'https://klinika.health/login';
 
 /**
  * Platform-admin account management. Same shape as

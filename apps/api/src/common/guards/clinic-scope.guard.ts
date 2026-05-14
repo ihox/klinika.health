@@ -1,31 +1,53 @@
-import { CanActivate, ExecutionContext, ForbiddenException, Injectable } from '@nestjs/common';
+import {
+  CanActivate,
+  ExecutionContext,
+  ForbiddenException,
+  Injectable,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 
 import type { RequestWithContext } from '../request-context/request-context';
 import { ALLOW_ANONYMOUS_METADATA_KEY } from './auth.guard';
 
-export const ADMIN_SCOPE_METADATA_KEY = 'klinika:admin-scope';
+export const PLATFORM_SCOPE_METADATA_KEY = 'klinika:platform-scope';
 
 /**
- * Asserts that the request has a resolved clinic context. Bypassed
- * for handlers tagged `@AdminScope()` (platform admin routes which
- * legitimately span clinics).
+ * Generic "Email-i ose fjalëkalimi është i pasaktë" — the SAME string
+ * used for wrong password, wrong email, wrong scope (platform admin
+ * on subdomain or vice versa), and any other failure that would
+ * otherwise leak whether an account exists in a different context.
  *
- * Defense-in-depth check: the AuthGuard already requires a session
- * which carries a clinic_id, but for endpoints reachable
- * anonymously (login, password reset, MFA) we still need the
- * subdomain to be known so we can scope the database lookup. Running
- * this guard after AuthGuard catches the case where a session got
- * issued for a different clinic than the current host (token theft
- * across tenants).
+ * Keeping this constant in one place (and identical to the message
+ * thrown by AuthService / AdminAuthService) is part of the boundary's
+ * security guarantee: a response from the API gives an attacker no
+ * signal about whether they hit the right domain.
+ */
+export const GENERIC_INVALID_CREDENTIALS_MESSAGE = 'Email-i ose fjalëkalimi është i pasaktë.';
+
+/**
+ * Asserts that the request scope matches the handler's contract.
+ *
+ * - `@PlatformScope()` handlers require apex (`ctx.isPlatform === true`).
+ *   On a tenant subdomain they return the generic 401, so a clinic
+ *   user can't tell the route exists somewhere else.
+ * - Default (no decorator): the handler expects clinic scope. Tenant
+ *   subdomain only; platform requests get the generic 401 unless they
+ *   are `@AllowAnonymous()` (in which case scope just isn't enforced
+ *   here — login endpoints handle it themselves).
+ * - Suspended clinics get a dedicated 403 with `reason:
+ *   clinic_suspended` so the web layer can redirect to `/suspended`.
+ *   We surface this BEFORE the boundary check because a suspended
+ *   tenant still has a clinic record and we want the operator to know
+ *   they need to reactivate, not to think the URL is broken.
  */
 @Injectable()
 export class ClinicScopeGuard implements CanActivate {
   constructor(private readonly reflector: Reflector) {}
 
   canActivate(executionContext: ExecutionContext): boolean {
-    const adminScope = this.reflector.getAllAndOverride<boolean | undefined>(
-      ADMIN_SCOPE_METADATA_KEY,
+    const platformScope = this.reflector.getAllAndOverride<boolean | undefined>(
+      PLATFORM_SCOPE_METADATA_KEY,
       [executionContext.getHandler(), executionContext.getClass()],
     );
     const allowAnonymous = this.reflector.getAllAndOverride<boolean | undefined>(
@@ -35,35 +57,47 @@ export class ClinicScopeGuard implements CanActivate {
     const req = executionContext.switchToHttp().getRequest<RequestWithContext>();
     const ctx = req.ctx;
     if (!ctx) {
-      throw new ForbiddenException('Pa kontekst kërkese.');
+      throw new UnauthorizedException(GENERIC_INVALID_CREDENTIALS_MESSAGE);
     }
 
-    if (adminScope) {
-      if (!ctx.isAdminScope) {
-        throw new ForbiddenException('Vetëm për administratorin e platformës.');
+    if (platformScope) {
+      if (!ctx.isPlatform) {
+        // Tenant subdomain hitting a platform-only handler. Generic 401
+        // — never reveal that this route exists at apex.
+        throw new UnauthorizedException(GENERIC_INVALID_CREDENTIALS_MESSAGE);
       }
       return true;
     }
 
-    if (!ctx.clinicId) {
+    // Clinic-scope handler.
+    if (ctx.isPlatform) {
       if (allowAnonymous) {
-        // Login from apex (klinika.health/login) is rejected here —
-        // login must be performed on the clinic's own subdomain so
-        // we know which tenant the user belongs to. The error wording
-        // surfaces in the browser as a useful redirect target.
-        throw new ForbiddenException('Hyrja kërkon nëndomenin e klinikës.');
+        // Apex login / password-reset / health probe hitting the
+        // clinic auth controller. Generic 401 so the response is
+        // indistinguishable from a wrong-password attempt — no scope
+        // leak.
+        throw new UnauthorizedException(GENERIC_INVALID_CREDENTIALS_MESSAGE);
       }
-      throw new ForbiddenException('Klinika nuk u njoh.');
+      throw new UnauthorizedException(GENERIC_INVALID_CREDENTIALS_MESSAGE);
+    }
+
+    if (!ctx.clinicId) {
+      // Middleware should have either set this or rejected with 404 —
+      // belt-and-braces.
+      throw new UnauthorizedException(GENERIC_INVALID_CREDENTIALS_MESSAGE);
     }
 
     if (ctx.clinicStatus === 'suspended') {
       // Suspended clinics keep their data but reject every request —
       // login, authenticated traffic, password reset — until a
-      // platform admin reactivates. The error code lets the web
-      // layer redirect to `/suspended` instead of showing a generic
-      // 403. Active sessions are also revoked at suspension time
-      // (admin-tenants.service), so an in-flight session can't carry
-      // a user past this guard.
+      // platform admin reactivates. Active sessions are also revoked
+      // at suspension time (admin-tenants.service), so an in-flight
+      // session can't carry a user past this guard.
+      //
+      // 403 with a dedicated `reason` is intentional here — unlike the
+      // boundary-leak case, "your clinic is suspended" is a state the
+      // operator already knows about, and the web layer needs the
+      // signal to redirect to `/suspended` instead of /login.
       throw new ForbiddenException({
         reason: 'clinic_suspended',
         message: 'Klinika juaj është pezulluar. Kontaktoni adminin.',
@@ -71,7 +105,10 @@ export class ClinicScopeGuard implements CanActivate {
     }
 
     if (ctx.userId && req.userId && ctx.clinicId !== req.clinicId) {
-      throw new ForbiddenException('Përshtatja klinikë/sesion është e pavlefshme.');
+      // Session was issued for a different clinic than the current
+      // host. Same generic 401 — never reveal which clinic the
+      // session belongs to.
+      throw new UnauthorizedException(GENERIC_INVALID_CREDENTIALS_MESSAGE);
     }
 
     return true;

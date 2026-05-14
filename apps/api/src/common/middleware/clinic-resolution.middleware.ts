@@ -5,22 +5,59 @@ import { InjectPinoLogger, type PinoLogger } from 'nestjs-pino';
 import { PrismaService } from '../../prisma/prisma.service';
 import { buildBaseContext, type RequestWithContext } from '../request-context/request-context';
 
-const ADMIN_HOST_PREFIX = 'admin.';
 const SUBDOMAIN_HOST_SUFFIX = '.klinika.health';
 
-interface ResolvedSubdomain {
-  kind: 'tenant' | 'admin' | 'apex' | 'localhost';
-  subdomain: string | null;
-}
+/**
+ * Subdomains reserved for the platform's own infrastructure. Tenants
+ * are forbidden from claiming these (see `subdomain-validation.ts`),
+ * AND requests targeting them are rejected at the edge — they never
+ * resolve to a clinic, never resolve to platform scope, just 400.
+ *
+ * Notably `admin` is here: under the boundary model (ADR-005 fix,
+ * 2026-05-14), the platform-admin context lives at the apex domain
+ * only, not on a dedicated `admin.*` subdomain. Hitting
+ * `admin.klinika.health` is invalid the same way `mail.klinika.health`
+ * is invalid.
+ */
+const RESERVED_HOST_PREFIXES: ReadonlySet<string> = new Set([
+  'admin',
+  'www',
+  'api',
+  'mail',
+  'support',
+  'status',
+  'help',
+  'docs',
+  'static',
+  'cdn',
+  'auth',
+  'login',
+  'staging',
+  'test',
+  'dev',
+  'internal',
+]);
+
+export type ResolvedScope =
+  | { kind: 'platform' }
+  | { kind: 'tenant'; subdomain: string }
+  | { kind: 'reserved'; subdomain: string }
+  | { kind: 'unknown'; subdomain: string };
 
 /**
- * Resolve the tenant clinic from the Host header on every request,
+ * Resolve the request scope from the Host header on every request,
  * before any guards run.
  *
- *   - `donetamed.klinika.health` → clinic with subdomain `donetamed`
- *   - `admin.klinika.health` → platform-admin scope (no clinic)
- *   - `klinika.health` or `app.klinika.health` → apex marketing pages
- *     (read-only public endpoints only — most routes will reject)
+ *   - `klinika.health`, `app.klinika.health`, or bare `localhost`
+ *     → platform scope (apex). Only `/api/admin/*` routes accept these.
+ *   - `donetamed.klinika.health` / `donetamed.localhost` → tenant
+ *     scope, resolves to the matching clinic's id.
+ *   - `admin.klinika.health`, `www.*`, `api.*`, … → rejected with 400
+ *     (`reserved`). The platform never serves an app under these
+ *     hosts.
+ *   - `<sub>.klinika.health` where `<sub>` matches the subdomain
+ *     shape but no clinic exists → 404 (`unknown`). Returns
+ *     `{ reason: 'clinic_not_found', message: 'Klinika nuk u gjet.' }`.
  *
  * Sets `req.ctx` for downstream consumers and also `req.clinicId` /
  * `req.userId` (the latter cleared, filled by AuthGuard) so the Pino
@@ -38,7 +75,7 @@ export class ClinicResolutionMiddleware implements NestMiddleware {
     private readonly logger: PinoLogger,
   ) {}
 
-  async use(req: RequestWithContext, _res: Response, next: NextFunction): Promise<void> {
+  async use(req: RequestWithContext, res: Response, next: NextFunction): Promise<void> {
     const ctx = buildBaseContext(req);
     req.ctx = ctx;
 
@@ -55,45 +92,51 @@ export class ClinicResolutionMiddleware implements NestMiddleware {
     const overrideHeader = req.headers['x-clinic-subdomain'];
     const override = typeof overrideHeader === 'string' ? overrideHeader.toLowerCase() : null;
 
-    const resolved = resolveSubdomain(host, override);
+    const resolved = resolveScope(host, override);
 
-    if (resolved.kind === 'admin') {
-      ctx.isAdminScope = true;
+    if (resolved.kind === 'reserved') {
+      this.logger.warn(
+        { subdomain: resolved.subdomain, requestId: ctx.requestId },
+        'Rejected request targeting reserved subdomain',
+      );
+      res.status(400).json({
+        reason: 'reserved_subdomain',
+        message: 'Subdomain i rezervuar.',
+      });
+      return;
+    }
+
+    if (resolved.kind === 'platform') {
+      ctx.isPlatform = true;
       next();
       return;
     }
 
-    if (resolved.kind === 'apex' || resolved.kind === 'localhost') {
-      // No tenant context — apex or undecorated localhost. Many
-      // routes will reject (ClinicScopeGuard), but health/auth-reset
-      // can still respond.
-      next();
-      return;
-    }
-
-    if (!resolved.subdomain) {
-      next();
-      return;
-    }
-
+    // Tenant scope. Look up the clinic and either continue (active /
+    // suspended — let the guard decide) or 404 if it doesn't exist.
     const clinic = await this.lookupClinicBySubdomain(resolved.subdomain);
-    if (clinic) {
-      ctx.clinicId = clinic.id;
-      ctx.clinicSubdomain = resolved.subdomain;
-      ctx.clinicStatus = clinic.status;
-      req.clinicId = clinic.id;
-    } else {
+    if (!clinic) {
       this.logger.warn(
         { subdomain: resolved.subdomain, requestId: ctx.requestId },
         'Unknown clinic subdomain',
       );
+      res.status(404).json({
+        reason: 'clinic_not_found',
+        message: 'Klinika nuk u gjet.',
+      });
+      return;
     }
+    ctx.isPlatform = false;
+    ctx.clinicId = clinic.id;
+    ctx.clinicSubdomain = resolved.subdomain;
+    ctx.clinicStatus = clinic.status;
+    req.clinicId = clinic.id;
 
     next();
   }
 
   // Public so the AuthService can reuse it during admin login (where
-  // the host is admin.klinika.health and there's no clinic to resolve).
+  // there's no clinic to resolve from the host).
   async lookupClinicBySubdomain(
     subdomain: string,
   ): Promise<{ id: string; status: 'active' | 'suspended' } | null> {
@@ -114,39 +157,72 @@ export class ClinicResolutionMiddleware implements NestMiddleware {
   }
 }
 
-export function resolveSubdomain(host: string, override: string | null): ResolvedSubdomain {
-  if (override) {
-    return { kind: 'tenant', subdomain: override };
-  }
+/**
+ * Pure host → scope classifier. Exported for unit tests and for the
+ * frontend middleware which mirrors this logic.
+ */
+export function resolveScope(host: string, override: string | null): ResolvedScope {
   const hostWithoutPort = host.split(':')[0] ?? host;
-  // Admin host wins over the generic localhost fallback so
-  // `admin.localhost` works for dev the same way `admin.klinika.health`
-  // works in prod.
-  if (hostWithoutPort.startsWith(ADMIN_HOST_PREFIX)) {
-    return { kind: 'admin', subdomain: null };
+
+  // Localhost override (dev / E2E) — explicit, takes precedence over
+  // anything the Host header carries. Honoured as a tenant subdomain
+  // so tests can target a specific clinic without DNS gymnastics.
+  if (override) {
+    if (RESERVED_HOST_PREFIXES.has(override)) {
+      return { kind: 'reserved', subdomain: override };
+    }
+    if (/^[a-z0-9][a-z0-9-]{0,40}$/.test(override)) {
+      return { kind: 'tenant', subdomain: override };
+    }
+    return { kind: 'reserved', subdomain: override };
   }
-  // Tenant subdomains on .localhost (e.g. donetamed.localhost) — used
-  // in dev so the subdomain-driven clinic resolution can be exercised
-  // without DNS. Bare `localhost` falls through to the no-context
-  // branch below.
+
+  // Apex hosts — platform scope. `app.klinika.health` historically
+  // served the marketing page; treat it as platform too so the
+  // boundary stays apex-only.
+  if (
+    hostWithoutPort === 'localhost' ||
+    hostWithoutPort === 'klinika.health' ||
+    hostWithoutPort === 'app.klinika.health'
+  ) {
+    return { kind: 'platform' };
+  }
+
+  // `*.localhost` — dev-time mirror of `*.klinika.health` so
+  // subdomain-driven clinic routing works without `/etc/hosts` edits
+  // for every tenant.
   if (hostWithoutPort.endsWith('.localhost')) {
     const sub = hostWithoutPort.slice(0, -'.localhost'.length);
-    if (sub && /^[a-z0-9][a-z0-9-]{0,40}$/.test(sub)) {
+    if (!sub) return { kind: 'platform' };
+    if (RESERVED_HOST_PREFIXES.has(sub)) {
+      return { kind: 'reserved', subdomain: sub };
+    }
+    if (/^[a-z0-9][a-z0-9-]{0,40}$/.test(sub)) {
       return { kind: 'tenant', subdomain: sub };
     }
-    return { kind: 'localhost', subdomain: null };
+    // Malformed subdomain — treat as reserved (rejected at the edge)
+    // rather than silently falling through to platform.
+    return { kind: 'reserved', subdomain: sub };
   }
-  if (hostWithoutPort === 'localhost') {
-    return { kind: 'localhost', subdomain: null };
-  }
-  if (hostWithoutPort === 'klinika.health' || hostWithoutPort === 'app.klinika.health') {
-    return { kind: 'apex', subdomain: null };
-  }
+
+  // Production tenant subdomains.
   if (hostWithoutPort.endsWith(SUBDOMAIN_HOST_SUFFIX)) {
     const sub = hostWithoutPort.slice(0, -SUBDOMAIN_HOST_SUFFIX.length);
-    if (sub && /^[a-z0-9][a-z0-9-]{0,40}$/.test(sub)) {
+    if (!sub) return { kind: 'platform' };
+    if (RESERVED_HOST_PREFIXES.has(sub)) {
+      return { kind: 'reserved', subdomain: sub };
+    }
+    if (/^[a-z0-9][a-z0-9-]{0,40}$/.test(sub)) {
       return { kind: 'tenant', subdomain: sub };
     }
+    return { kind: 'reserved', subdomain: sub };
   }
-  return { kind: 'apex', subdomain: null };
+
+  // Unknown host (e.g. someone pointing their own domain at us). Don't
+  // give it platform scope — that would expose admin endpoints. 400
+  // makes it explicit at the edge.
+  return { kind: 'reserved', subdomain: hostWithoutPort };
 }
+
+/** Back-compat export so internal callers don't break before they migrate. */
+export const resolveSubdomain = resolveScope;
