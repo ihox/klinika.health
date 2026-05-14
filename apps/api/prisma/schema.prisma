@@ -39,18 +39,6 @@ enum ClinicStatus {
   @@map("clinic_status")
 }
 
-/// Application roles within a clinic. Platform admins live in a separate
-/// table and are not part of any clinic. Per CLAUDE.md §1.2, the
-/// `receptionist` role sees only patient name and date of birth — all
-/// other fields are hidden at UI, API, and RLS layers.
-enum UserRole {
-  doctor
-  receptionist
-  clinic_admin
-
-  @@map("user_role")
-}
-
 /// Lifecycle states of a scheduled appointment.
 enum AppointmentStatus {
   scheduled
@@ -120,6 +108,16 @@ model Clinic {
 /// single person cannot belong to two clinics — they would need separate
 /// emails (intentional, per ADR-004).
 ///
+/// `roles` is a TEXT[] of clinic-scope roles drawn from
+/// {`doctor`, `receptionist`, `clinic_admin`}. A user has at least one
+/// and at most three — Postgres CHECK constraints
+/// (`users_roles_size_check`, `users_roles_allowed_check`) enforce
+/// both invariants at the DB layer; the DTO layer rejects empty
+/// arrays before they reach here. The single-role enum that this
+/// replaced was too rigid for small clinics where one person wears
+/// multiple hats (e.g. Dr. Taulant is doctor + clinic_admin). See
+/// ADR-004 (Multi-role update).
+///
 /// Doctors carry `signature_url` for printed prescriptions and
 /// `vërtetime` documents. Receptionists and clinic admins typically do
 /// not, though the field is available for all roles.
@@ -128,7 +126,7 @@ model User {
   clinicId     String    @map("clinic_id") @db.Uuid
   email        String    @unique
   passwordHash String    @map("password_hash")
-  role         UserRole
+  roles        String[]
   firstName    String    @map("first_name")
   lastName     String    @map("last_name")
   title        String?

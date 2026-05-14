@@ -109,14 +109,18 @@ async function seedPlatformAdmin(): Promise<void> {
 
 async function seedDoctor(clinicId: string): Promise<void> {
   const password = readEnvOrThrow('SEED_DOCTOR_PASSWORD');
+  // Dr. Taulant wears two hats — doctor AND clinic_admin (no separate
+  // admin account at DonetaMED). `update` re-asserts roles so existing
+  // single-role rows from earlier seeds get the second role on
+  // re-seed.
   await prisma.user.upsert({
     where: { email: 'taulant.shala@klinika.health' },
-    update: {},
+    update: { roles: ['doctor', 'clinic_admin'] },
     create: {
       clinicId,
       email: 'taulant.shala@klinika.health',
       passwordHash: await hashPassword(password),
-      role: 'doctor',
+      roles: ['doctor', 'clinic_admin'],
       firstName: 'Taulant',
       lastName: 'Shala',
       title: 'Dr.',
@@ -131,12 +135,12 @@ async function seedReceptionist(clinicId: string): Promise<void> {
   const password = readEnvOrThrow('SEED_RECEPTIONIST_PASSWORD');
   await prisma.user.upsert({
     where: { email: 'ereblire.krasniqi@klinika.health' },
-    update: {},
+    update: { roles: ['receptionist'] },
     create: {
       clinicId,
       email: 'ereblire.krasniqi@klinika.health',
       passwordHash: await hashPassword(password),
-      role: 'receptionist',
+      roles: ['receptionist'],
       firstName: 'Erëblirë',
       lastName: 'Krasniqi',
       title: null,
