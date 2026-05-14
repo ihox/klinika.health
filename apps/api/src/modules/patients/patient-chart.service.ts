@@ -48,7 +48,19 @@ export class PatientChartService {
 
     const [visits, vertetime] = await Promise.all([
       this.prisma.visit.findMany({
-        where: { clinicId, patientId, deletedAt: null },
+        // Post-merge (ADR-011): the unified `visits` table holds both
+        // scheduled appointments and clinical visits. The chart's
+        // history list is "vizita të mëparshme" — rows the doctor has
+        // actually touched — so we narrow to `status IN ('completed',
+        // 'in_progress')`. Scheduled / arrived / no_show / cancelled
+        // rows are receptionist-controlled lifecycle states and must
+        // not leak into the clinical history.
+        where: {
+          clinicId,
+          patientId,
+          deletedAt: null,
+          status: { in: ['completed', 'in_progress'] },
+        },
         orderBy: [{ visitDate: 'desc' }, { createdAt: 'desc' }],
         include: {
           diagnoses: {

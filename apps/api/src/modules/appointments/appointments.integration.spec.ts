@@ -120,8 +120,11 @@ describe.skipIf(!ENABLED)('Appointments integration', () => {
     await prisma.authTrustedDevice.deleteMany({});
     await prisma.authSession.deleteMany({});
     await prisma.auditLog.deleteMany({ where: { clinicId } });
-    await prisma.appointment.deleteMany({ where: { clinicId } });
-    await prisma.appointment.deleteMany({ where: { clinicId: secondClinicId } });
+    // Post-merge (ADR-011): appointments now live as `visits` rows with
+    // `scheduled_for IS NOT NULL`. We wipe every visit row in each test
+    // clinic to keep the test isolated.
+    await prisma.visit.deleteMany({ where: { clinicId } });
+    await prisma.visit.deleteMany({ where: { clinicId: secondClinicId } });
     await prisma.patient.deleteMany({ where: { clinicId } });
     await prisma.patient.deleteMany({ where: { clinicId: secondClinicId } });
 
@@ -171,7 +174,11 @@ describe.skipIf(!ENABLED)('Appointments integration', () => {
     expect(listRes.body.appointments).toHaveLength(1);
 
     const audit = await prisma.auditLog.findMany({
-      where: { clinicId, resourceType: 'appointment', resourceId: created.id },
+      // Post-merge (ADR-011): the audit row points at the unified
+      // `visits` row via `resource_type='visit'`; the `action` prefix
+      // stays `appointment.*` so receptionist-scheduling intent is
+      // still legible.
+      where: { clinicId, resourceType: 'visit', resourceId: created.id },
     });
     expect(audit.length).toBeGreaterThanOrEqual(1);
     const create = audit.find((a) => a.action === 'appointment.created');
@@ -333,14 +340,17 @@ describe.skipIf(!ENABLED)('Appointments integration', () => {
     // it lands on the prior local day in Europe/Belgrade.
     const yesterday = new Date(Date.now() - 86_400_000);
     yesterday.setUTCHours(10, 0, 0, 0);
-    const stale = await prisma.appointment.create({
+    const creator = await prisma.user.findFirstOrThrow({ where: { clinicId } });
+    const stale = await prisma.visit.create({
       data: {
         clinicId,
         patientId,
+        visitDate: new Date(`${yesterday.toISOString().slice(0, 10)}T00:00:00Z`),
         scheduledFor: yesterday,
         durationMinutes: 15,
         status: 'scheduled',
-        createdBy: (await prisma.user.findFirstOrThrow({ where: { clinicId } })).id,
+        createdBy: creator.id,
+        updatedBy: creator.id,
       },
     });
 
@@ -351,6 +361,111 @@ describe.skipIf(!ENABLED)('Appointments integration', () => {
     expect(res.status).toBe(200);
     const ids = (res.body.appointments as Array<{ id: string }>).map((a) => a.id);
     expect(ids).toContain(stale.id);
+  });
+
+  // Audit-shape invariant (Phase 1 of the visits merge, ADR-011)
+  //
+  // The translation layer keeps the `action` prefix `appointment.*` so a
+  // receptionist-side scheduling change still reads as such in the
+  // history, but the row's `resource_type` is `'visit'` because the
+  // underlying record lives in the unified `visits` table — there is no
+  // longer an `appointments` table to point at. This test pins both
+  // halves of the contract across the create / update / soft-delete /
+  // restore cycle, and asserts no orphaned `resource_type='appointment'`
+  // rows are produced.
+  it('appointment mutations write audit rows with resource_type=visit + action=appointment.*', async () => {
+    const cookie = await loginAs(RECEPTIONIST_EMAIL, SEED_RECEPTIONIST_PASSWORD!);
+    const date = nextOpenDate();
+    const create = await req()
+      .post('/api/appointments')
+      .set('host', TENANT_HOST)
+      .set('Cookie', cookie)
+      .send({ patientId, date, time: '11:15', durationMinutes: 15 });
+    expect(create.status).toBe(201);
+    const id = create.body.appointment.id;
+
+    await req()
+      .patch(`/api/appointments/${id}`)
+      .set('host', TENANT_HOST)
+      .set('Cookie', cookie)
+      .send({ status: 'no_show' });
+
+    await req()
+      .delete(`/api/appointments/${id}`)
+      .set('host', TENANT_HOST)
+      .set('Cookie', cookie);
+
+    const rows = await prisma.auditLog.findMany({
+      where: { clinicId, resourceId: id },
+    });
+    expect(rows.length).toBeGreaterThanOrEqual(3);
+    for (const r of rows) {
+      expect(r.resourceType).toBe('visit');
+      expect(r.action).toMatch(/^appointment\./);
+    }
+    // No stray `resource_type='appointment'` rows anywhere in this
+    // clinic's log after the merge.
+    const legacy = await prisma.auditLog.count({
+      where: { clinicId, resourceType: 'appointment' },
+    });
+    expect(legacy).toBe(0);
+  });
+
+  // ----------------------------------------------------------------------
+  // Translation-layer invariant (Phase 1 of the visits merge, ADR-011)
+  //
+  // After the merge, appointments and visits share a single `visits` table.
+  // The appointments endpoints must therefore filter every read by
+  // `scheduled_for IS NOT NULL` (the APPT_BASE_WHERE predicate in
+  // AppointmentsService) so a doctor-only clinical visit — one created
+  // via "[Vizitë e re]" with no prior booking — never leaks into the
+  // receptionist's calendar feed.
+  //
+  // We seed a row that satisfies the doctor-side invariant (clinical
+  // content present, `scheduled_for=null`, status='completed') and assert
+  // it is invisible to `GET /api/appointments` even when the local day
+  // matches and the patient is in the same clinic.
+  // ----------------------------------------------------------------------
+
+  it('doctor-only visits (scheduled_for=null) are invisible to GET /api/appointments', async () => {
+    const cookie = await loginAs(RECEPTIONIST_EMAIL, SEED_RECEPTIONIST_PASSWORD!);
+    const date = nextOpenDate();
+    const creator = await prisma.user.findFirstOrThrow({ where: { clinicId } });
+
+    // Doctor-only visit — same clinic + patient + local day as the
+    // appointments query, but `scheduled_for` is null so it must stay
+    // off the receptionist's calendar.
+    const doctorOnly = await prisma.visit.create({
+      data: {
+        clinicId,
+        patientId,
+        visitDate: new Date(`${date}T00:00:00Z`),
+        // scheduledFor omitted — null
+        // durationMinutes omitted — null
+        status: 'completed',
+        complaint: 'Kontroll pa terminim — i regjistruar drejtpërdrejt nga mjeku.',
+        paymentCode: 'A',
+        createdBy: creator.id,
+        updatedBy: creator.id,
+      },
+    });
+
+    // And a normal appointment so the response isn't trivially empty.
+    const booking = await req()
+      .post('/api/appointments')
+      .set('host', TENANT_HOST)
+      .set('Cookie', cookie)
+      .send({ patientId, date, time: '13:00', durationMinutes: 15 });
+    expect(booking.status).toBe(201);
+
+    const list = await req()
+      .get(`/api/appointments?from=${date}&to=${date}`)
+      .set('host', TENANT_HOST)
+      .set('Cookie', cookie);
+    expect(list.status).toBe(200);
+    const ids = (list.body.appointments as Array<{ id: string }>).map((a) => a.id);
+    expect(ids).toContain(booking.body.appointment.id);
+    expect(ids).not.toContain(doctorOnly.id);
   });
 
   it('RLS isolation: clinic A cookie cannot reach clinic B data', async () => {
@@ -383,14 +498,16 @@ describe.skipIf(!ENABLED)('Appointments integration', () => {
     });
     const futureUtc = new Date(Date.now() + 7 * 86_400_000);
     futureUtc.setUTCHours(10, 0, 0, 0);
-    const apptB = await prisma.appointment.create({
+    const apptB = await prisma.visit.create({
       data: {
         clinicId: secondClinicId,
         patientId: patientB.id,
+        visitDate: new Date(`${futureUtc.toISOString().slice(0, 10)}T00:00:00Z`),
         scheduledFor: futureUtc,
         durationMinutes: 15,
         status: 'scheduled',
         createdBy: userB.id,
+        updatedBy: userB.id,
       },
     });
 

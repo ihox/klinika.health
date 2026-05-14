@@ -99,8 +99,9 @@ describe.skipIf(!ENABLED)('Doctor dashboard integration', () => {
     await prisma.authSession.deleteMany({});
     await prisma.auditLog.deleteMany({ where: { clinicId } });
     await prisma.visitDiagnosis.deleteMany({});
+    // Post-merge (ADR-011): appointments now live as `visits` rows.
+    // One delete clears both kinds.
     await prisma.visit.deleteMany({ where: { clinicId } });
-    await prisma.appointment.deleteMany({ where: { clinicId } });
     await prisma.patient.deleteMany({ where: { clinicId } });
   });
 
@@ -142,14 +143,16 @@ describe.skipIf(!ENABLED)('Doctor dashboard integration', () => {
     // A scheduled appointment in the future (still "next" for the
     // doctor) so the next-patient card has something to bind to.
     const futureStart = new Date(Date.now() + 60 * 60_000);
-    const appt = await prisma.appointment.create({
+    const appt = await prisma.visit.create({
       data: {
         clinicId,
         patientId: patient.id,
+        visitDate: new Date(`${today}T00:00:00Z`),
         scheduledFor: futureStart,
         durationMinutes: 15,
         status: 'scheduled',
         createdBy: doctorUserId,
+        updatedBy: doctorUserId,
       },
     });
     // A completed visit earlier today so todayVisits + stats are

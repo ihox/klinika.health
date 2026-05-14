@@ -39,16 +39,6 @@ enum ClinicStatus {
   @@map("clinic_status")
 }
 
-/// Lifecycle states of a scheduled appointment.
-enum AppointmentStatus {
-  scheduled
-  completed
-  no_show
-  cancelled
-
-  @@map("appointment_status")
-}
-
 /// Biological sex used for WHO growth charts and master-data display.
 /// Optional on the patient row — names alone are often enough to
 /// derive at display time, but the doctor may set it explicitly when
@@ -95,7 +85,6 @@ model Clinic {
   users             User[]
   patients          Patient[]
   visits            Visit[]
-  appointments      Appointment[]
   vertetime         Vertetim[]
   dicomStudies      DicomStudy[]
   prescriptionLines PrescriptionLine[]
@@ -141,7 +130,6 @@ model User {
   clinic              Clinic                   @relation(fields: [clinicId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   visitsCreated       Visit[]                  @relation("VisitCreatedBy")
   visitsUpdated       Visit[]                  @relation("VisitUpdatedBy")
-  appointmentsCreated Appointment[]            @relation("AppointmentCreatedBy")
   vertetimeIssued     Vertetim[]               @relation("VertetimIssuedBy")
   dicomLinksCreated   VisitDicomLink[]         @relation("DicomLinkLinkedBy")
   prescriptionLines   PrescriptionLine[]
@@ -290,20 +278,37 @@ model Patient {
   updatedAt                DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
   deletedAt                DateTime? @map("deleted_at") @db.Timestamptz(6)
 
-  clinic       Clinic        @relation(fields: [clinicId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  visits       Visit[]
-  appointments Appointment[]
-  vertetime    Vertetim[]
+  clinic    Clinic     @relation(fields: [clinicId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  visits    Visit[]
+  vertetime Vertetim[]
 
   @@unique([clinicId, legacyId], name: "patient_clinic_legacy_unique")
   @@index([clinicId])
   @@map("patients")
 }
 
-/// A clinical visit. The doctor's daily working surface. Most fields are
-/// optional because doctors fill in only what is relevant. `complaint`,
-/// `examinations`, `prescription`, `lab_results`, `followup_notes`, and
-/// `other_notes` are the main free-text fields and are redacted from all
+/// A clinical visit — the unified record for one patient session, from
+/// the receptionist's booking through the doctor's clinical write-up.
+/// Before the visits-merge (ADR-011) this was split across `visits` and
+/// `appointments`; small clinics like DonetaMED never had a meaningful
+/// distinction between the two, so they live in one table now.
+///
+/// Lifecycle is driven by `status`:
+///   scheduled    receptionist booked, no patient interaction yet
+///   arrived      patient checked in
+///   in_progress  doctor is filling clinical fields
+///   completed    visit done (the v0 default — every legacy visit row
+///                migrates to this)
+///   no_show      patient never arrived
+///   cancelled    booking cancelled before patient arrived
+///
+/// Scheduling fields (`scheduled_for`, `duration_minutes`) are populated
+/// when the receptionist books; they stay NULL for walk-ins (Phase 2
+/// will set `is_walk_in = true` for those). `arrived_at` is set the
+/// moment the patient checks in. Most fields are still optional because
+/// doctors fill in only what is relevant. `complaint`, `examinations`,
+/// `prescription`, `lab_results`, `followup_notes`, and `other_notes`
+/// are the main free-text clinical fields and are redacted from all
 /// logs per CLAUDE.md §1.3.
 ///
 /// `payment_code` is a single character (E/A/B/C/D) describing the
@@ -317,6 +322,11 @@ model Visit {
   patientId           String    @map("patient_id") @db.Uuid
   legacyId            Int?      @map("legacy_id")
   visitDate           DateTime  @map("visit_date") @db.Date
+  scheduledFor        DateTime? @map("scheduled_for") @db.Timestamptz(6)
+  durationMinutes     Int?      @map("duration_minutes")
+  isWalkIn            Boolean   @default(false) @map("is_walk_in")
+  arrivedAt           DateTime? @map("arrived_at") @db.Timestamptz(6)
+  status              String    @default("completed")
   complaint           String?   @db.Text
   feedingNotes        String?   @map("feeding_notes") @db.Text
   feedingBreast       Boolean   @default(false) @map("feeding_breast")
@@ -351,6 +361,7 @@ model Visit {
   @@unique([clinicId, legacyId], name: "visit_clinic_legacy_unique")
   @@index([clinicId])
   @@index([patientId])
+  @@index([clinicId, status])
   @@map("visits")
 }
 
@@ -434,34 +445,6 @@ model PrescriptionLine {
   @@index([userId])
   @@index([clinicId])
   @@map("prescription_lines")
-}
-
-// ---------------------------------------------------------------------------
-// Scheduling
-// ---------------------------------------------------------------------------
-
-/// A scheduled appointment. `scheduled_for` is `TIMESTAMPTZ` because the
-/// time matters; the UI renders in Europe/Belgrade.
-model Appointment {
-  id              String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  clinicId        String            @map("clinic_id") @db.Uuid
-  patientId       String            @map("patient_id") @db.Uuid
-  scheduledFor    DateTime          @map("scheduled_for") @db.Timestamptz(6)
-  durationMinutes Int               @map("duration_minutes")
-  status          AppointmentStatus @default(scheduled)
-  createdBy       String            @map("created_by") @db.Uuid
-  createdAt       DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt       DateTime          @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
-  deletedAt       DateTime?         @map("deleted_at") @db.Timestamptz(6)
-
-  clinic        Clinic  @relation(fields: [clinicId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  patient       Patient @relation(fields: [patientId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  createdByUser User    @relation("AppointmentCreatedBy", fields: [createdBy], references: [id], onDelete: NoAction, onUpdate: NoAction)
-
-  @@index([clinicId])
-  @@index([patientId])
-  @@index([scheduledFor])
-  @@map("appointments")
 }
 
 // ---------------------------------------------------------------------------
