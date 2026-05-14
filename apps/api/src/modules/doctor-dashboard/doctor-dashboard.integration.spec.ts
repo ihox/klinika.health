@@ -27,7 +27,7 @@ import {
   EMAIL_SENDER,
   EmailService,
 } from '../email/email.service';
-import { localClockToUtc, utcToLocalParts } from '../appointments/appointments.tz';
+import { localDateToday } from '../../common/datetime';
 
 const DATABASE_URL = process.env['DATABASE_URL'];
 const SEED_DOCTOR_PASSWORD = process.env['SEED_DOCTOR_PASSWORD'];
@@ -113,7 +113,14 @@ describe.skipIf(!ENABLED)('Doctor dashboard integration', () => {
   // any override. The override query parameter exists primarily for
   // debugging; tests prefer the natural code path.
   function todayBelgrade(): string {
-    return utcToLocalParts(new Date()).date;
+    return localDateToday();
+  }
+
+  // Seed visit_date the same way production code does (see
+  // visits.service.ts:79). UTC midnight on the local date round-trips
+  // through Prisma's `@db.Date` serialization without timezone drift.
+  function visitDateFor(localDate: string): Date {
+    return new Date(`${localDate}T00:00:00Z`);
   }
 
   // ------------------------------------------------------------------
@@ -151,7 +158,7 @@ describe.skipIf(!ENABLED)('Doctor dashboard integration', () => {
       data: {
         clinicId,
         patientId: patient.id,
-        visitDate: localClockToUtc(today, '00:00'),
+        visitDate: visitDateFor(today),
         paymentCode: 'A',
         createdBy: doctorUserId,
         updatedBy: doctorUserId,
@@ -207,7 +214,7 @@ describe.skipIf(!ENABLED)('Doctor dashboard integration', () => {
 
   it('aggregates payments across multiple visits using clinic payment codes', async () => {
     const today = todayBelgrade();
-    const visitDate = localClockToUtc(today, '00:00');
+    const visitDate = visitDateFor(today);
     const patient = await prisma.patient.create({
       data: {
         clinicId,
@@ -244,6 +251,46 @@ describe.skipIf(!ENABLED)('Doctor dashboard integration', () => {
     expect(res.body.stats.visitsCompleted).toBe(3);
     expect(res.body.stats.paymentsCents).toBe(2500);
     expect(typeof res.body.stats.averageVisitMinutes).toBe('number');
+  });
+
+  // ------------------------------------------------------------------
+  // 4. Regression — visits.visit_date is @db.Date, query must use a
+  //    DATE-typed operand. Pre-fix, the dashboard sent a Timestamptz
+  //    derived from `localClockToUtc(today, '00:00')`, which serialized
+  //    as *yesterday* in summer and silently excluded today's visits.
+  //    See ADR-006 § "DATE vs Timestamptz operand fix".
+  // ------------------------------------------------------------------
+
+  it("today's visit appears in todayVisits regardless of UTC offset", async () => {
+    const today = todayBelgrade();
+    const patient = await prisma.patient.create({
+      data: {
+        clinicId,
+        firstName: 'Liridon',
+        lastName: 'Berisha',
+        dateOfBirth: new Date('2022-11-09'),
+      },
+    });
+    const visit = await prisma.visit.create({
+      data: {
+        clinicId,
+        patientId: patient.id,
+        visitDate: visitDateFor(today),
+        createdBy: doctorUserId,
+        updatedBy: doctorUserId,
+      },
+    });
+
+    const cookie = await loginAs(DOCTOR_EMAIL, SEED_DOCTOR_PASSWORD!);
+    const res = await req()
+      .get('/api/doctor/dashboard')
+      .set('host', TENANT_HOST)
+      .set('Cookie', cookie);
+    expect(res.status).toBe(200);
+    expect(res.body.date).toBe(today);
+    const ids = (res.body.todayVisits as Array<{ id: string }>).map((v) => v.id);
+    expect(ids).toContain(visit.id);
+    expect(res.body.stats.visitsCompleted).toBe(1);
   });
 
   // ------------------------------------------------------------------

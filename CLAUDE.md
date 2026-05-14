@@ -270,6 +270,8 @@ Soft-deleted rows are hidden from normal queries by default. Restore endpoints a
 
 All timestamps stored as `TIMESTAMPTZ` in UTC. All UI display in `Europe/Belgrade`. All containers and OS run on `Europe/Belgrade` system time. Use `date-fns-tz` for any conversion. Never use the host's default time zone.
 
+**DATE column handling.** `visits.visit_date` and other `@db.Date` columns are date-only — they carry no time component. When querying these, use DATE-typed operands (`YYYY-MM-DD`) computed for the local timezone, not Timestamptz values. Comparing a Timestamptz derived from `localClockToUtc(today, '00:00')` against a DATE column causes off-by-one errors at the timezone offset (yesterday's UTC date in summer) and at DST boundaries. Use `localDateToday()`, `localDateRange()`, and `localMonthStart()` from `apps/api/src/common/datetime.ts` to compute the date string, and wrap with `utcMidnight(iso)` to produce the Date operand Prisma expects (its runtime parser rejects bare date strings). See ADR-006 § "DATE vs Timestamptz operand fix".
+
 ### 5.7 OS-aware keyboard shortcuts
 
 Centralize OS detection in one utility:
