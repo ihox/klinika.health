@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="sq">
+<head>
+<meta charset="UTF-8">
+<title>Klinika — Profili im</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="styles.css">
+<style>
+  .profile-page {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 32px;
+  }
+  .profile-page h1 {
+    font-size: 24px;
+    letter-spacing: -0.02em;
+    margin-bottom: 4px;
+  }
+  .profile-page .lede {
+    font-size: 13px;
+    color: var(--text-muted);
+    margin-bottom: 28px;
+  }
+
+  .profile-card {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: var(--r-lg);
+    box-shadow: var(--shadow-xs);
+    margin-bottom: 16px;
+  }
+  .profile-card .card-h {
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .profile-card .card-h h2 { font-size: 14px; font-weight: 600; }
+  .profile-card .card-b { padding: 20px; }
+
+  .identity-row {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+  .identity-row .avatar-lg {
+    width: 64px; height: 64px;
+    background: var(--teal-700);
+    color: white;
+    border-radius: 999px;
+    display: grid; place-items: center;
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 22px;
+    letter-spacing: -0.01em;
+    flex-shrink: 0;
+  }
+  .identity-row .id-info .name {
+    font-family: var(--font-display);
+    font-size: 20px;
+    font-weight: 600;
+    letter-spacing: -0.015em;
+    color: var(--text-strong);
+  }
+  .identity-row .id-info .email {
+    font-size: 12.5px;
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    margin-top: 2px;
+  }
+
+  .field-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .field-grid { display: flex; flex-direction: column; gap: 14px; }
+
+  .lock-hint {
+    font-size: 11px;
+    color: var(--text-faint);
+    margin-top: 6px;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .lock-hint svg { color: var(--text-faint); }
+
+  .roles-card .roles-display {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 10px;
+  }
+  .roles-card .roles-display .chip-role {
+    font-size: 12px;
+    padding: 4px 10px;
+  }
+  .roles-card .help {
+    font-size: 12.5px;
+    color: var(--text-muted);
+    line-height: 1.5;
+    padding: 10px 12px;
+    background: var(--bg-subtle);
+    border-radius: var(--r-md);
+    border: 1px solid var(--border);
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+  }
+  .roles-card .help .i {
+    width: 18px; height: 18px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-strong);
+    border-radius: 999px;
+    color: var(--text-muted);
+    flex-shrink: 0;
+    display: grid;
+    place-items: center;
+    font-size: 11px;
+    font-weight: 600;
+    font-style: italic;
+    font-family: var(--font-display);
+  }
+
+  .row-actions-foot {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 14px 20px;
+    background: var(--bg-subtle);
+    border-top: 1px solid var(--border);
+  }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <a href="index.html" class="topbar-brand">
+    <svg width="22" height="22" viewBox="0 0 64 64" fill="none" style="color: var(--primary);">
+      <path d="M32 54 C 12 40, 8 26, 18 18 C 24 14, 30 16, 32 22 C 34 16, 40 14, 46 18 C 56 26, 52 40, 32 54 Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M14 34 L 22 34 L 26 26 L 30 42 L 34 28 L 38 36 L 50 36" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+    </svg>
+    klinika<span class="dot-app">.</span>
+  </a>
+
+  <nav class="topbar-nav">
+    <a href="doctor.html" class="nav-link">Pamja e ditës</a>
+    <a href="chart.html" class="nav-link">Pacientët</a>
+    <a href="clinic-settings.html" class="nav-link">Cilësimet</a>
+  </nav>
+
+  <div class="topbar-spacer"></div>
+
+  <div class="user-wrap">
+    <button class="topbar-user">
+      <div class="avatar">TS</div>
+      <span class="name">Dr. Taulant Shala</span>
+      <span class="chev">▾</span>
+    </button>
+  </div>
+</header>
+
+<main class="profile-page">
+
+  <h1>Profili im</h1>
+  <div class="lede">Të dhënat tuaja personale. Të menaxhuara nga administratori i klinikës.</div>
+
+  <!-- Identity -->
+  <div class="profile-card">
+    <div class="card-h">
+      <h2>Identiteti</h2>
+    </div>
+    <div class="card-b">
+      <div class="identity-row">
+        <div class="avatar-lg">TS</div>
+        <div class="id-info">
+          <div class="name">Dr. Taulant Shala</div>
+          <div class="email">taulant@donetamed.com</div>
+        </div>
+      </div>
+
+      <div class="field-grid">
+        <div class="field-pair">
+          <div class="field">
+            <label class="field-label">Emri</label>
+            <input class="input" value="Taulant" disabled style="background: var(--bg-subtle); cursor: not-allowed;">
+          </div>
+          <div class="field">
+            <label class="field-label">Mbiemri</label>
+            <input class="input" value="Shala" disabled style="background: var(--bg-subtle); cursor: not-allowed;">
+          </div>
+        </div>
+
+        <div class="field">
+          <label class="field-label">Email</label>
+          <input class="input" value="taulant@donetamed.com" disabled style="background: var(--bg-subtle); cursor: not-allowed; font-family: var(--font-mono);">
+          <span class="lock-hint">
+            <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="8" height="6" rx="1"/><path d="M4 5V3.5a2 2 0 0 1 4 0V5"/></svg>
+            Për të ndryshuar emrin ose email-in, kontaktoni administratorin e klinikës.
+          </span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Roles -->
+  <div class="profile-card roles-card">
+    <div class="card-h">
+      <h2>Rolet e mia</h2>
+      <span class="muted" style="font-size: 12px;">Vetëm-lexim</span>
+    </div>
+    <div class="card-b">
+      <div class="roles-display">
+        <span class="chip-role doctor">Mjeku</span>
+        <span class="chip-role admin">Administrator i klinikës</span>
+      </div>
+      <div class="help">
+        <span class="i">i</span>
+        <div>Për të ndryshuar rolet tuaja, kontaktoni administratorin e klinikës.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Password & security -->
+  <div class="profile-card">
+    <div class="card-h">
+      <h2>Siguria</h2>
+    </div>
+    <div class="card-b">
+      <div class="field-grid">
+        <div class="field">
+          <label class="field-label">Fjalëkalimi</label>
+          <div style="display: flex; align-items: center; gap: 12px;">
+            <input class="input" type="password" value="••••••••••••" disabled style="background: var(--bg-subtle); cursor: not-allowed; max-width: 240px;">
+            <button class="btn btn-secondary btn-sm">Ndrysho fjalëkalimin</button>
+          </div>
+        </div>
+        <div class="field">
+          <label class="field-label">Verifikimi me dy faktorë (2FA)</label>
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <span class="chip chip-green"><span class="dot"></span>Aktiv</span>
+            <span style="font-size: 12px; color: var(--text-muted);">Aplikacioni Authenticator · konfiguruar 14.02.2024</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Clinic context (read-only) -->
+  <div class="profile-card">
+    <div class="card-h">
+      <h2>Klinika</h2>
+    </div>
+    <div class="card-b">
+      <div class="field-grid">
+        <div class="field-pair">
+          <div class="field">
+            <label class="field-label">Klinika</label>
+            <div style="font-size: 13.5px; font-weight: 500; color: var(--text-strong);">DonetaMED</div>
+            <span style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">Prizren · Ambulanca Specialistike Pediatrike</span>
+          </div>
+          <div class="field">
+            <label class="field-label">Hyrja e fundit</label>
+            <div style="font-size: 13.5px; font-weight: 500; color: var(--text-strong); font-variant-numeric: tabular-nums;">Tani · 14.05.2026</div>
+            <span style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">Chrome 134 · macOS · 85.94.116.42</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+</body>
+</html>

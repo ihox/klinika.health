@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="sq">
+<head>
+<meta charset="UTF-8">
+<title>Klinika · Edit user modal</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="../styles.css">
+<style>
+  body {
+    min-height: 100vh;
+    background: rgba(28,25,23,0.38);
+    backdrop-filter: blur(2px);
+    display: grid;
+    place-items: start center;
+    padding: 40px 24px 80px;
+  }
+  .modal-card {
+    background: var(--bg-elevated);
+    border-radius: var(--r-xl);
+    box-shadow: var(--shadow-modal);
+    width: 100%;
+    max-width: 520px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+  }
+  .modal-head {
+    padding: 18px 24px 14px;
+    border-bottom: 1px solid var(--border-soft);
+  }
+  .modal-head h2 {
+    font-size: 17px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+  .modal-head .sub {
+    font-size: 12.5px;
+    color: var(--text-muted);
+    margin-top: 4px;
+  }
+  .modal-body {
+    padding: 18px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .modal-foot {
+    padding: 14px 24px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    background: var(--bg-subtle);
+  }
+
+  .field-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+  .role-picker { display: flex; flex-direction: column; gap: 8px; }
+  .role-picker .role-opt {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--r-md);
+    cursor: pointer;
+    background: var(--bg-elevated);
+    transition: all 120ms ease;
+  }
+  .role-picker .role-opt:hover { background: var(--bg-subtle); }
+  .role-picker .role-opt input { accent-color: var(--primary); width: 16px; height: 16px; }
+  .role-picker .role-opt:has(input:checked),
+  .role-picker .role-opt.is-checked {
+    border-color: var(--primary);
+    background: var(--primary-tint);
+  }
+  .role-picker .role-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 1;
+  }
+  .role-picker .role-desc {
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+
+  .sig-upload {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    border: 1px dashed var(--border-strong);
+    border-radius: var(--r-md);
+    background: var(--bg-subtle);
+  }
+  .sig-preview {
+    width: 160px; height: 48px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: var(--r-sm);
+    display: grid; place-items: center;
+  }
+  .sig-meta { flex: 1; }
+  .sig-name { font-size: 12.5px; font-family: var(--font-mono); }
+  .sig-sub { font-size: 11px; color: var(--text-faint); margin-top: 2px; }
+
+  .status-toggle {
+    display: flex;
+    gap: 8px;
+    background: var(--bg-subtle);
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    padding: 4px;
+  }
+  .status-toggle .opt {
+    flex: 1;
+    text-align: center;
+    padding: 7px 12px;
+    font-size: 12.5px;
+    font-weight: 500;
+    color: var(--text-muted);
+    border-radius: var(--r-sm);
+    cursor: pointer;
+  }
+  .status-toggle .opt.active {
+    background: var(--bg-elevated);
+    color: var(--text-strong);
+    box-shadow: var(--shadow-xs);
+  }
+
+  /* Validation banner */
+  .validation-banner {
+    display: none;
+    background: var(--red-bg);
+    color: var(--red);
+    border: 1px solid var(--red-soft);
+    border-radius: var(--r-md);
+    padding: 8px 12px;
+    font-size: 12.5px;
+    align-items: center;
+    gap: 8px;
+  }
+  .validation-banner.show { display: flex; }
+</style>
+</head>
+<body>
+
+<div class="modal-card">
+  <div class="modal-head">
+    <h2>Përdorues: Dr. Taulant Shala</h2>
+    <div class="sub">Krijuar 14.02.2024 · Hyrja e fundit: tani</div>
+  </div>
+  <div class="modal-body">
+
+    <div class="field-pair">
+      <div class="field">
+        <label class="field-label">Emri</label>
+        <input class="input" value="Taulant">
+      </div>
+      <div class="field">
+        <label class="field-label">Mbiemri</label>
+        <input class="input" value="Shala">
+      </div>
+    </div>
+
+    <div class="field">
+      <label class="field-label">Email</label>
+      <input class="input" type="email" value="taulant@donetamed.com">
+    </div>
+
+    <div class="field">
+      <label class="field-label">Rolet <span style="color: var(--text-faint); font-weight: 400;">— së paku një</span></label>
+      <div class="role-picker">
+        <label class="role-opt is-checked">
+          <input type="checkbox" checked onchange="onRoleChange()">
+          <span class="role-row">
+            <span class="chip-role doctor">Mjeku</span>
+            <span class="role-desc">Karta, vizita, recetë</span>
+          </span>
+        </label>
+        <label class="role-opt">
+          <input type="checkbox" onchange="onRoleChange()">
+          <span class="role-row">
+            <span class="chip-role reception">Recepsioniste</span>
+            <span class="role-desc">Kalendari, terminet</span>
+          </span>
+        </label>
+        <label class="role-opt is-checked">
+          <input type="checkbox" checked onchange="onRoleChange()">
+          <span class="role-row">
+            <span class="chip-role admin">Administrator i klinikës</span>
+            <span class="role-desc">Stafi, cilësimet, audit</span>
+          </span>
+        </label>
+      </div>
+      <div class="validation-banner" id="validation">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="6.5"/><path d="M8 5v3.5M8 11v.01"/></svg>
+        Përdoruesi duhet të ketë së paku një rol.
+      </div>
+    </div>
+
+    <div class="field" id="signature-field">
+      <label class="field-label">Nënshkrimi <span style="color: var(--text-faint); font-weight: 400;">— për receta dhe vërtetime</span></label>
+      <div class="sig-upload">
+        <div class="sig-preview">
+          <svg width="160" height="48" viewBox="0 0 160 48" fill="none">
+            <path d="M6 32 Q 18 8, 30 28 T 58 30 Q 70 14, 84 30 T 112 32 Q 124 22, 138 32 L 154 28"
+                  stroke="var(--text-strong)" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round" opacity="0.65"/>
+          </svg>
+        </div>
+        <div class="sig-meta">
+          <div class="sig-name">nenshkrim-shala.png</div>
+          <div class="sig-sub">Ngarkuar 14.02.2024 · 320 × 96</div>
+        </div>
+        <button class="btn btn-secondary btn-sm">Zëvendëso</button>
+      </div>
+    </div>
+
+    <div class="field">
+      <label class="field-label">Statusi</label>
+      <div class="status-toggle">
+        <div class="opt active">Aktiv</div>
+        <div class="opt">Çaktivizuar</div>
+      </div>
+    </div>
+
+  </div>
+  <div class="modal-foot">
+    <button class="btn btn-ghost">Anulo</button>
+    <button class="btn btn-primary">Ruaj ndryshimet</button>
+  </div>
+</div>
+
+<script>
+  function onRoleChange() {
+    const opts = document.querySelectorAll('.role-opt');
+    let any = false, mjeku = false;
+    opts.forEach(o => {
+      const cb = o.querySelector('input');
+      o.classList.toggle('is-checked', cb.checked);
+      if (cb.checked) any = true;
+      if (cb.checked && o.querySelector('.chip-role.doctor')) mjeku = true;
+    });
+    document.getElementById('validation').classList.toggle('show', !any);
+    document.getElementById('signature-field').style.display = mjeku ? '' : 'none';
+  }
+</script>
+
+</body>
+</html>

@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="sq">
+<head>
+<meta charset="UTF-8">
+<title>Klinika · Doctor home — walk-in row</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="../styles.css">
+<style>
+  body { padding: 40px 32px 80px; }
+  .page-head { max-width: 1100px; margin: 0 auto 28px; }
+  .crumb { font-size: 11px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--text-faint); font-weight: 600; margin-bottom: 10px; }
+  .page-head h1 { font-size: 28px; letter-spacing: -0.025em; margin-bottom: 6px; }
+  .page-head .lede { color: var(--text-muted); font-size: 14px; max-width: 720px; line-height: 1.55; }
+  .wrap { max-width: 1100px; margin: 0 auto; }
+
+  .stage {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: var(--r-lg);
+    box-shadow: var(--shadow-xs);
+    overflow: hidden;
+    margin-bottom: 26px;
+  }
+  .stage-head {
+    padding: 12px 18px;
+    border-bottom: 1px solid var(--border-soft);
+    background: var(--bg-subtle);
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .stage-head h3 { font-family: var(--font-display); font-size: 14px; font-weight: 600; }
+  .stage-head .meta { font-size: 12px; color: var(--text-muted); }
+
+  /* Reuse appt-row styles from doctor.html */
+  .appt-list { display: flex; flex-direction: column; }
+  .appt-row {
+    display: grid;
+    grid-template-columns: 58px 12px 1fr auto;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 18px;
+    border-bottom: 1px solid var(--border-soft);
+  }
+  .appt-row:last-child { border-bottom: none; }
+  .appt-row .time { font-variant-numeric: tabular-nums; font-size: 13px; font-weight: 500; color: var(--text); }
+  .appt-row.done .time { color: var(--text-faint); text-decoration: line-through; text-decoration-thickness: 1px; }
+  .appt-row .status-dot { width: 8px; height: 8px; border-radius: 999px; background: var(--border-strong); }
+  .appt-row.done .status-dot { background: var(--green); }
+  .appt-row.next .status-dot { background: var(--primary); box-shadow: 0 0 0 3px var(--primary-soft); }
+  .appt-row .name { font-size: 13px; font-weight: 500; color: var(--text); }
+  .appt-row.done .name { color: var(--text-muted); }
+  .appt-row .name .age { color: var(--text-faint); font-weight: 400; margin-left: 6px; font-size: 12px; }
+  .appt-row .name .wn-mark {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px; height: 16px;
+    color: var(--primary-dark);
+    background: var(--primary-soft);
+    border: 1px solid var(--teal-200);
+    border-radius: 4px;
+    margin-right: 6px;
+    vertical-align: -3px;
+  }
+  .appt-row.done .name .wn-mark { background: var(--bg-subtle); color: var(--text-faint); border-color: var(--border); }
+  .appt-row .reason { font-size: 11px; color: var(--text-muted); }
+  .appt-row .reason .wn-tag { color: var(--primary-dark); font-weight: 500; }
+  .appt-row.next {
+    background: linear-gradient(90deg, var(--primary-soft) 0%, transparent 100%);
+    border-left: 2px solid var(--primary);
+    padding-left: 16px;
+  }
+  .appt-row.next .name { color: var(--text-strong); font-weight: 600; }
+
+  .stats-sub {
+    padding: 11px 18px;
+    border-top: 1px solid var(--border);
+    background: var(--bg-subtle);
+    font-size: 12.5px;
+    color: var(--text-muted);
+    display: flex; gap: 12px; align-items: center;
+  }
+  .stats-sub strong { color: var(--text); font-weight: 600; }
+  .stats-sub .wn-pill {
+    display: inline-flex; align-items: center; gap: 5px;
+    color: var(--primary-dark);
+  }
+
+  .specs {
+    display: grid;
+    grid-template-columns: 240px 1fr;
+    gap: 28px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-soft);
+    border-radius: var(--r-lg);
+    padding: 22px 26px;
+  }
+  .specs .l { font-family: var(--font-mono); font-size: 10.5px; color: var(--text-faint); letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 6px; }
+  .specs h2 { font-family: var(--font-display); font-size: 16px; font-weight: 600; margin-bottom: 6px; }
+  .specs ul { margin: 0; padding-left: 16px; font-size: 12.5px; color: var(--text-muted); line-height: 1.75; }
+  .specs li strong { color: var(--text); font-weight: 600; }
+  .specs code { font-family: var(--font-mono); font-size: 11px; background: var(--bg-subtle); padding: 1px 6px; border-radius: 3px; color: var(--text); }
+</style>
+</head>
+<body>
+
+<div class="page-head">
+  <div class="crumb">Klinika · Components · Doctor home</div>
+  <h1>Walk-in row · në listën e pacientëve të sotit</h1>
+  <div class="lede">
+    Walk-in-ët shfaqen në të njëjtën listë me terminet, të renditur kronologjikisht
+    sipas kohës së mbërritjes. Ikona <code style="font-family: var(--font-mono); background: var(--bg-subtle); padding: 1px 5px; border-radius: 3px;">↻</code>
+    para emrit i identifikon menjëherë. Pa rresht të veçantë, pa seksion të ndarë.
+  </div>
+</div>
+
+<div class="wrap">
+
+  <div class="stage">
+    <div class="stage-head">
+      <h3>Terminet e sotit</h3>
+      <span class="meta">17 vizita · 5 të kryera · 3 pa termin</span>
+    </div>
+    <div class="appt-list">
+      <div class="appt-row done">
+        <div class="time">10:00</div><div class="status-dot"></div>
+        <div><div class="name">Era Berisha <span class="age">4v 2m</span></div><div class="reason">Tonsillopharyngitis acuta</div></div>
+        <span class="chip">A · 15€</span>
+      </div>
+      <div class="appt-row done">
+        <div class="time">10:12</div><div class="status-dot"></div>
+        <div>
+          <div class="name"><span class="wn-mark"><svg width="9" height="9" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8a5 5 0 0 1 8.5-3.5L13 6"/><path d="M13 2.5V6h-3.5"/></svg></span>Liam Berisha <span class="age">6m</span></div>
+          <div class="reason"><span class="wn-tag">Pa termin</span> · ethe, përgjumje</div>
+        </div>
+        <span class="chip">A · 15€</span>
+      </div>
+      <div class="appt-row done">
+        <div class="time">10:30</div><div class="status-dot"></div>
+        <div><div class="name">Dion Hoxha <span class="age">7m</span></div><div class="reason">Kontroll i rregullt</div></div>
+        <span class="chip">B · 10€</span>
+      </div>
+      <div class="appt-row done">
+        <div class="time">11:47</div><div class="status-dot"></div>
+        <div>
+          <div class="name"><span class="wn-mark"><svg width="9" height="9" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8a5 5 0 0 1 8.5-3.5L13 6"/><path d="M13 2.5V6h-3.5"/></svg></span>Ema Krasniqi <span class="age">2v 10m</span></div>
+          <div class="reason"><span class="wn-tag">Pa termin</span> · plagë e vogël në gju</div>
+        </div>
+        <span class="chip">A · 15€</span>
+      </div>
+      <div class="appt-row">
+        <div class="time">13:55</div><div class="status-dot" style="background: var(--primary); box-shadow: 0 0 0 3px var(--primary-soft);"></div>
+        <div>
+          <div class="name"><span class="wn-mark"><svg width="9" height="9" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8a5 5 0 0 1 8.5-3.5L13 6"/><path d="M13 2.5V6h-3.5"/></svg></span>Dorian Hoxha <span class="age">4v 2m</span></div>
+          <div class="reason"><span class="wn-tag">Pa termin</span> · kollitje, temperaturë 38.2</div>
+        </div>
+        <span class="chip chip-teal"><span class="dot"></span>Arriti</span>
+      </div>
+      <div class="appt-row next">
+        <div class="time">14:20</div><div class="status-dot"></div>
+        <div><div class="name">Era Krasniqi <span class="age">2v 9m</span></div><div class="reason">Kontroll i rregullt</div></div>
+        <span class="chip chip-teal"><span class="dot"></span>Tani</span>
+      </div>
+      <div class="appt-row">
+        <div class="time">14:50</div><div class="status-dot"></div>
+        <div><div class="name">Mira Hoxhaj <span class="age">11m</span></div><div class="reason">Otitis media · pasvizitë</div></div>
+        <span class="chip">15 min</span>
+      </div>
+    </div>
+    <div class="stats-sub">
+      <span><strong>9</strong> me termin</span>
+      <span style="opacity: 0.5;">·</span>
+      <span class="wn-pill">
+        <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8a5 5 0 0 1 8.5-3.5L13 6"/><path d="M13 2.5V6h-3.5"/></svg>
+        <strong>3</strong> pa termin
+      </span>
+    </div>
+  </div>
+
+  <div class="specs">
+    <div>
+      <div class="l">Specifikim</div>
+      <h2>Walk-in row</h2>
+      <p style="font-size: 12.5px; color: var(--text-muted); margin-top: 4px;">Rendi kronologjik sipas <em>arrived_at</em>.</p>
+    </div>
+    <ul>
+      <li><strong>Ikona ↻.</strong> 16px në një katror të vogël me sfond <code>--primary-soft</code>. Vendoset para emrit; nuk zëvendëson asnjë informacion tjetër.</li>
+      <li><strong>Renditja.</strong> Walk-in-ët mbahen në të njëjtën listë me terminet, të renditur sipas kohës — <em>arrived_at</em> për walk-in, <em>scheduled_at</em> për termin. Mjeku sheh fluksin real të ditës, jo dy lista paralele.</li>
+      <li><strong>Ngjyra.</strong> Nuk dallohet me ngjyrë rrethore — vetëm me ikonën dhe me <em>"Pa termin"</em> në rreshtin e arsyes. Pa "ngjyrë alarme", pa qfarëdo zona të veçanta.</li>
+      <li><strong>Status chip.</strong> Walk-in i ardhshëm shfaq <em>"Arriti"</em>, jo kohë; pas zgjedhjes së vizitës nga mjeku, kalon në <em>"Tani"</em> dhe pastaj në çmim.</li>
+      <li><strong>Sub-line e statistikave.</strong> Poshtë listës (ose nën titullin e greeting-it): <em>"X me termin · Y pa termin"</em>. Tregon menjëherë cikli i ditës.</li>
+    </ul>
+  </div>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="sq">
+<head>
+<meta charset="UTF-8">
+<title>Klinika · Walk-in band</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="../styles.css">
+<style>
+  body { padding: 40px 32px 80px; }
+  .page-head { max-width: 1200px; margin: 0 auto 28px; }
+  .page-head .crumb { font-size: 11px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--text-faint); font-weight: 600; margin-bottom: 10px; }
+  .page-head h1 { font-size: 28px; letter-spacing: -0.025em; margin-bottom: 6px; }
+  .page-head .lede { color: var(--text-muted); font-size: 14px; max-width: 720px; line-height: 1.55; }
+  .wrap { max-width: 1200px; margin: 0 auto; }
+
+  /* Stage */
+  .stage {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: var(--r-lg);
+    overflow: hidden;
+    box-shadow: var(--shadow-xs);
+    margin-bottom: 22px;
+  }
+  .stage-head {
+    padding: 12px 18px;
+    border-bottom: 1px solid var(--border-soft);
+    display: flex; align-items: center; justify-content: space-between;
+    background: var(--bg-subtle);
+  }
+  .stage-head .num { font-family: var(--font-mono); font-size: 10px; color: var(--text-faint); letter-spacing: 0.08em; }
+  .stage-head h3 { font-family: var(--font-display); font-size: 14px; font-weight: 600; margin-top: 2px; }
+  .stage-head .right { font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); }
+
+  /* Band replica — mirrors the receptionist column layout */
+  .band-demo {
+    display: grid;
+    grid-template-columns: 56px repeat(3, 1fr);
+    border-top: 1px solid var(--border);
+  }
+  .axis-cell, .band-cell {
+    background: var(--bg-subtle);
+    border-bottom: 1px solid var(--border);
+    border-right: 1px solid var(--border);
+  }
+  .axis-cell {
+    padding: 10px 8px;
+    min-height: 70px;
+    display: flex; flex-direction: column; gap: 4px;
+  }
+  .axis-cell .lab {
+    font-family: var(--font-mono); font-size: 9.5px; color: var(--text-muted);
+    letter-spacing: 0.08em; text-transform: uppercase; font-weight: 600;
+  }
+  .axis-cell .ic { color: var(--text-faint); margin-top: 4px; }
+
+  .band-cell {
+    padding: 8px;
+    min-height: 70px;
+    overflow-x: auto;
+  }
+  .band-cell:last-child { border-right: none; }
+  .band-cell.today { background: rgba(204,251,241,0.22); }
+  .band-cell.with-day-head { padding-top: 4px; }
+  .day-head {
+    padding: 8px 12px 6px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-subtle);
+    text-align: left;
+  }
+  .day-head .dow { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); font-weight: 500; }
+  .day-head .date { font-family: var(--font-display); font-size: 18px; font-weight: 600; }
+  .day-head.today .dow, .day-head.today .date { color: var(--primary-dark); }
+
+  .band-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 4px; padding: 0 2px;
+  }
+  .band-header .ttl { font-size: 10px; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600; }
+  .band-header .count { font-size: 10px; background: var(--bg-elevated); border: 1px solid var(--border); color: var(--text-muted); padding: 1px 6px; border-radius: 999px; font-weight: 600; }
+  .band-header .count.has { background: var(--primary-soft); color: var(--teal-800); border-color: var(--teal-200); }
+
+  .row { display: flex; gap: 6px; }
+
+  /* Walk-in chip */
+  .chip-w {
+    flex: 0 0 auto; min-width: 138px; max-width: 168px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--teal-200);
+    border-left: 3px dashed var(--primary);
+    border-radius: var(--r-sm);
+    padding: 5px 8px 5px 9px;
+    box-shadow: var(--shadow-xs);
+    display: flex; flex-direction: column; gap: 1px;
+    position: relative;
+  }
+  .chip-w .top { display: flex; align-items: center; gap: 5px; min-width: 0; }
+  .chip-w .ico { color: var(--primary); flex-shrink: 0; display: grid; place-items: center; }
+  .chip-w .name { flex: 1 1 auto; min-width: 0; font-size: 11.5px; font-weight: 600; color: var(--text-strong); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.2; }
+  .chip-w .meta { display: flex; align-items: center; gap: 6px; font-size: 10.5px; color: var(--text-muted); font-variant-numeric: tabular-nums; line-height: 1.2; }
+  .chip-w .meta .dob { color: var(--text-faint); }
+  .chip-w .meta .at { display: inline-flex; align-items: center; gap: 3px; color: var(--primary-dark); font-weight: 500; }
+  .chip-w .meta .at svg { color: var(--primary); }
+
+  .chip-w.in-progress { background: var(--teal-50); border-color: var(--teal-300); border-left-style: solid; }
+  .chip-w.in-progress::after {
+    content: ''; position: absolute; top: 7px; right: 7px;
+    width: 6px; height: 6px; border-radius: 999px; background: var(--primary);
+    animation: cw-pulse 1.6s ease-in-out infinite;
+  }
+  @keyframes cw-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(13,148,136,0.4); }
+    50%      { box-shadow: 0 0 0 5px rgba(13,148,136,0); }
+  }
+  .chip-w.completed { background: var(--green-bg); border-color: var(--green-soft); border-left-color: var(--green); border-left-style: solid; opacity: 0.9; }
+  .chip-w.completed .name, .chip-w.completed .ico, .chip-w.completed .meta .at, .chip-w.completed .meta .at svg { color: var(--green); }
+
+  .empty-msg {
+    display: flex; align-items: center; height: 100%;
+    min-height: 50px; font-size: 11px; color: var(--text-faint);
+    font-style: italic; padding: 0 4px;
+  }
+
+  /* Specs panel */
+  .specs {
+    display: grid;
+    grid-template-columns: 240px 1fr;
+    gap: 28px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-soft);
+    border-radius: var(--r-lg);
+    padding: 22px 26px;
+    margin-top: 32px;
+  }
+  .specs .l { font-family: var(--font-mono); font-size: 10.5px; color: var(--text-faint); letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 6px; }
+  .specs h2 { font-family: var(--font-display); font-size: 16px; font-weight: 600; margin-bottom: 6px; }
+  .specs ul { margin: 0; padding-left: 16px; font-size: 12.5px; color: var(--text-muted); line-height: 1.7; }
+  .specs ul li strong { color: var(--text); font-weight: 600; }
+  .specs code { font-family: var(--font-mono); font-size: 11px; background: var(--bg-subtle); padding: 1px 6px; border-radius: 3px; color: var(--text); }
+</style>
+</head>
+<body>
+
+<div class="page-head">
+  <div class="crumb">Klinika · Components · Calendar</div>
+  <h1>Walk-in band</h1>
+  <div class="lede">
+    Një zonë horizontale mbi rrjetin e orarit ku qëndrojnë vizitat <em>pa termin</em>.
+    Nuk konkurron për slot kohe; çdo vizitë <em>walk-in</em> tregohet si chip me
+    statusin e saj. Recepsionisti i shton në kohë reale me butonin <strong>+ Pacient pa termin</strong>.
+  </div>
+</div>
+
+<div class="wrap">
+
+  <!-- DEMO 1: with walk-ins -->
+  <div class="stage">
+    <div class="stage-head">
+      <div>
+        <div class="num">01</div>
+        <h3>Me vizita pa termin · ditë me ngarkesë</h3>
+      </div>
+      <div class="right">grid · 56px + n×1fr</div>
+    </div>
+    <div class="band-demo">
+      <div class="axis-cell">
+        <span class="lab">Pa termin</span>
+        <span class="ic">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 8a5 5 0 0 1 8.5-3.5L13 6"/><path d="M13 2.5V6h-3.5"/>
+            <circle cx="8" cy="11" r="0.7" fill="currentColor"/>
+          </svg>
+        </span>
+      </div>
+      <div class="band-cell today">
+        <div class="band-header"><span class="ttl">Pa termin</span><span class="count has">3</span></div>
+        <div class="row">
+          <div class="chip-w completed">
+            <div class="top"><span class="ico"><svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8a5 5 0 0 1 8.5-3.5L13 6"/><path d="M13 2.5V6h-3.5"/></svg></span><span class="name">Liam Berisha</span></div>
+            <div class="meta"><span class="dob">01.11.24</span><span class="at"><svg width="9" height="9" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8a5 5 0 0 1 8.5-3.5L13 6"/><path d="M13 2.5V6h-3.5"/></svg>10:12</span></div>
+          </div>
+          <div class="chip-w in-progress">
+            <div class="top"><span class="ico"><svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8a5 5 0 0 1 8.5-3.5L13 6"/><path d="M13 2.5V6h-3.5"/></svg></span><span class="name">Ema Krasniqi</span></div>
+            <div class="meta"><span class="dob">22.07.23</span><span class="at"><svg width="9" height="9" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8a5 5 0 0 1 8.5-3.5L13 6"/><path d="M13 2.5V6h-3.5"/></svg>11:47</span></div>
+          </div>
+          <div class="chip-w">
+            <div class="top"><span class="ico"><svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8a5 5 0 0 1 8.5-3.5L13 6"/><path d="M13 2.5V6h-3.5"/></svg></span><span class="name">Dorian Hoxha</span></div>
+            <div class="meta"><span class="dob">03.03.22</span><span class="at"><svg width="9" height="9" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8a5 5 0 0 1 8.5-3.5L13 6"/><path d="M13 2.5V6h-3.5"/></svg>13:55</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="band-cell">
+        <div class="band-header"><span class="ttl">Pa termin</span><span class="count has">1</span></div>
+        <div class="row">
+          <div class="chip-w completed">
+            <div class="top"><span class="ico"><svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8a5 5 0 0 1 8.5-3.5L13 6"/><path d="M13 2.5V6h-3.5"/></svg></span><span class="name">Nita Gashi</span></div>
+            <div class="meta"><span class="dob">14.05.24</span><span class="at"><svg width="9" height="9" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8a5 5 0 0 1 8.5-3.5L13 6"/><path d="M13 2.5V6h-3.5"/></svg>09:48</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="band-cell">
+        <div class="empty-msg">Asnjë pacient pa termin</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- DEMO 2: scroll overflow -->
+  <div class="stage">
+    <div class="stage-head">
+      <div>
+        <div class="num">02</div>
+        <h3>Mbushje e plotë · band-i bën scroll horizontalisht</h3>
+      </div>
+      <div class="right">overflow-x: auto</div>
+    </div>
+    <div class="band-demo" style="grid-template-columns: 56px 1fr;">
+      <div class="axis-cell">
+        <span class="lab">Pa termin</span>
+      </div>
+      <div class="band-cell today">
+        <div class="band-header"><span class="ttl">Pa termin</span><span class="count has">7</span></div>
+        <div class="row">
+          <div class="chip-w completed"><div class="top"><span class="ico"><svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8a5 5 0 0 1 8.5-3.5L13 6"/><path d="M13 2.5V6h-3.5"/></svg></span><span class="name">Liam Berisha</span></div><div class="meta"><span class="dob">01.11.24</span><span class="at">10:12</span></div></div>
+          <div class="chip-w completed"><div class="top"><span class="ico"><svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8a5 5 0 0 1 8.5-3.5L13 6"/><path d="M13 2.5V6h-3.5"/></svg></span><span class="name">Ardit Krasniqi</span></div><div class="meta"><span class="dob">12.06.23</span><span class="at">10:30</span></div></div>
+          <div class="chip-w completed"><div class="top"><span class="ico"><svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8a5 5 0 0 1 8.5-3.5L13 6"/><path d="M13 2.5V6h-3.5"/></svg></span><span class="name">Ema Krasniqi</span></div><div class="meta"><span class="dob">22.07.23</span><span class="at">11:47</span></div></div>
+          <div class="chip-w in-progress"><div class="top"><span class="ico"><svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8a5 5 0 0 1 8.5-3.5L13 6"/><path d="M13 2.5V6h-3.5"/></svg></span><span class="name">Dorian Hoxha</span></div><div class="meta"><span class="dob">03.03.22</span><span class="at">13:55</span></div></div>
+          <div class="chip-w"><div class="top"><span class="ico"><svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8a5 5 0 0 1 8.5-3.5L13 6"/><path d="M13 2.5V6h-3.5"/></svg></span><span class="name">Vesa Berisha</span></div><div class="meta"><span class="dob">17.02.25</span><span class="at">14:02</span></div></div>
+          <div class="chip-w"><div class="top"><span class="ico"><svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8a5 5 0 0 1 8.5-3.5L13 6"/><path d="M13 2.5V6h-3.5"/></svg></span><span class="name">Lir Kelmendi</span></div><div class="meta"><span class="dob">29.09.22</span><span class="at">14:11</span></div></div>
+          <div class="chip-w"><div class="top"><span class="ico"><svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8a5 5 0 0 1 8.5-3.5L13 6"/><path d="M13 2.5V6h-3.5"/></svg></span><span class="name">Bora Hoti</span></div><div class="meta"><span class="dob">08.04.24</span><span class="at">14:18</span></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- DEMO 3: empty state -->
+  <div class="stage">
+    <div class="stage-head">
+      <div>
+        <div class="num">03</div>
+        <h3>Gjendja e zbrazët · pa pacientë pa termin</h3>
+      </div>
+      <div class="right">italic faint helper</div>
+    </div>
+    <div class="band-demo" style="grid-template-columns: 56px 1fr;">
+      <div class="axis-cell">
+        <span class="lab">Pa termin</span>
+      </div>
+      <div class="band-cell">
+        <div class="empty-msg">Asnjë pacient pa termin</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="specs">
+    <div>
+      <div class="l">Specifikim</div>
+      <h2>Walk-in band</h2>
+      <p style="font-size: 12.5px; color: var(--text-muted); margin-top: 4px;">Mbi rrjetin e orarit. ~64–80px lartësi.</p>
+    </div>
+    <ul>
+      <li><strong>Pozicionim.</strong> Një rresht i ri grid mes <code>cal-head</code> dhe <code>time-axis</code>. Boshti i majtë mban etiketën <code>Pa termin</code>; çdo ditë ka qelinë e vet me chip-et.</li>
+      <li><strong>Dallimi vizual.</strong> Chip-i ka <code>border-left: 3px dashed var(--primary)</code> në gjendje normale dhe një ikonë rrethore me shigjetë (↻) për të treguar "pa termin". Statusi <em>in_progress</em> bën pulsim teal; <em>completed</em> kalon në jeshil të butë.</li>
+      <li><strong>Lëndësi e nivelit.</strong> Header inline ka etiketën dhe count-chip ngjyrë teal kur ka të paktën një vizitë; ngjyra neutrale kur është zbrazët.</li>
+      <li><strong>Sjellja e mbushjes.</strong> Kur ka shumë walk-in, qelina bën <code>overflow-x: auto</code> me scrollbar të hollë — më e mirë se rrjedhja vertikale që do të zhvendoste rrjetin e orarit poshtë.</li>
+      <li><strong>Gjendja e zbrazët.</strong> Tekst i hollë <em>"Asnjë pacient pa termin"</em>; pa ikonë, pa veprim — band-i nuk është një CTA, është një vend ku shfaqen vizitat.</li>
+      <li><strong>Akses.</strong> Klikimi mbi chip hap menynë e statusit (e njëjta si për terminet); klikimi mbi <strong>+ Pacient pa termin</strong> në krye të faqes hap zgjedhësin e pacientit pa zgjedhje kohe.</li>
+    </ul>
+  </div>
+
+  <p style="margin-top: 28px; font-size: 12.5px; color: var(--text-muted); line-height: 1.6;">
+    Versioni i integruar në kalendar: <a href="../receptionist.html" style="color: var(--primary); font-weight: 500;">receptionist.html</a>.
+  </p>
+</div>
+
+</body>
+</html>

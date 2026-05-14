@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="sq">
+<head>
+<meta charset="UTF-8">
+<title>Klinika · Role chips</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="../styles.css">
+<style>
+  body {
+    min-height: 100vh;
+    background: var(--bg);
+    padding: 40px 32px;
+  }
+  .wrap { max-width: 880px; margin: 0 auto; }
+
+  .crumb {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--text-faint);
+    font-weight: 600;
+    margin-bottom: 10px;
+  }
+  h1 {
+    font-size: 28px;
+    letter-spacing: -0.025em;
+    margin-bottom: 6px;
+  }
+  .lede {
+    color: var(--text-muted);
+    font-size: 14px;
+    max-width: 680px;
+    line-height: 1.55;
+    margin-bottom: 36px;
+  }
+
+  .panel {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: var(--r-lg);
+    padding: 24px;
+    margin-bottom: 18px;
+    box-shadow: var(--shadow-xs);
+  }
+  .panel h2 {
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 4px;
+  }
+  .panel .desc {
+    font-size: 12.5px;
+    color: var(--text-muted);
+    margin-bottom: 16px;
+  }
+
+  .swatches {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px;
+  }
+  .swatch {
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    padding: 16px;
+    background: var(--bg);
+  }
+  .swatch .chip-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+  .swatch .swatch-label {
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    color: var(--text-faint);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  .swatch .swatch-key {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 2px;
+  }
+  .swatch .swatch-grants {
+    font-size: 12px;
+    color: var(--text-muted);
+    line-height: 1.5;
+    margin-top: 8px;
+  }
+
+  .row-demo {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .row-demo .row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+  }
+  .row-demo .row .user {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .row-demo .row .av {
+    width: 28px; height: 28px;
+    border-radius: 999px;
+    background: var(--teal-700);
+    color: white;
+    display: grid;
+    place-items: center;
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .row-demo .row .user-name { font-size: 13px; font-weight: 500; }
+  .row-demo .row .user-email { font-size: 12px; color: var(--text-muted); font-family: var(--font-mono); }
+
+  .compare-row {
+    display: flex;
+    gap: 14px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .compare-cell {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 12px 14px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    min-width: 160px;
+  }
+  .compare-cell .compare-label {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text-faint);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  /* Audit diff demo */
+  .diff-demo {
+    display: grid;
+    grid-template-columns: 70px 1fr;
+    gap: 10px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    overflow: hidden;
+  }
+  .diff-demo > div {
+    padding: 10px 12px;
+    font-size: 13px;
+  }
+  .diff-demo .key {
+    background: var(--bg-subtle);
+    font-size: 11px;
+    color: var(--text-muted);
+    letter-spacing: 0.02em;
+    border-right: 1px solid var(--border);
+  }
+  .diff-demo .key.then { opacity: 0.8; }
+  .diff-demo .then-val .chip-role { opacity: 0.55; }
+  .diff-demo .now-val { font-weight: 500; }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <div class="crumb">Components</div>
+  <h1>Role chips</h1>
+  <div class="lede">
+    Kanonike — të njëjtat tre chips përdoren në menynë e përdoruesit, tabelën e
+    Përdoruesit, ekranin <em>Profili im</em>, dhe audit log. Familje e veçantë
+    ngjyrash (indigo / violet / slate) që dallon nga chip-at e statusit
+    (jeshil/portokalli/kuq) dhe diagnozave (teal).
+  </div>
+
+  <!-- Three canonical chips -->
+  <section class="panel">
+    <h2>Tre rolet</h2>
+    <div class="desc">Përdorimi i parë: secili rol ka një chip të vetëm. Etiketat janë kanonike — mos i ndryshoni.</div>
+    <div class="swatches">
+      <div class="swatch">
+        <div class="chip-row"><span class="chip-role doctor">Mjeku</span></div>
+        <div class="swatch-label">Roli: doctor</div>
+        <div class="swatch-key">.chip-role.doctor · indigo</div>
+        <div class="swatch-grants">Jep qasje në: Pamja e ditës, Pacientët.</div>
+      </div>
+      <div class="swatch">
+        <div class="chip-row"><span class="chip-role reception">Recepsioniste</span></div>
+        <div class="swatch-label">Roli: reception</div>
+        <div class="swatch-key">.chip-role.reception · violet</div>
+        <div class="swatch-grants">Jep qasje në: Kalendari.</div>
+      </div>
+      <div class="swatch">
+        <div class="chip-row"><span class="chip-role admin">Administrator i klinikës</span></div>
+        <div class="swatch-label">Roli: clinic_admin</div>
+        <div class="swatch-key">.chip-role.admin · slate</div>
+        <div class="swatch-grants">Jep qasje në: Cilësimet.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Size variants -->
+  <section class="panel">
+    <h2>Madhësitë</h2>
+    <div class="desc">Default për menynë e përdoruesit dhe profilin · varianti <code style="background: var(--bg-subtle); padding: 1px 5px; border-radius: 3px; font-family: var(--font-mono); font-size: 11px;">.sm</code> për qeliza tabele dhe audit log.</div>
+    <div class="compare-row">
+      <div class="compare-cell">
+        <span class="compare-label">Default (12px)</span>
+        <span class="chip-row" style="display: flex; gap: 6px; flex-wrap: wrap;">
+          <span class="chip-role doctor">Mjeku</span>
+          <span class="chip-role admin">Administrator i klinikës</span>
+        </span>
+      </div>
+      <div class="compare-cell">
+        <span class="compare-label">Small (10.5px) · .sm</span>
+        <span class="chip-row" style="display: flex; gap: 4px; flex-wrap: wrap;">
+          <span class="chip-role doctor sm">Mjeku</span>
+          <span class="chip-role admin sm">Administrator</span>
+        </span>
+      </div>
+    </div>
+  </section>
+
+  <!-- In rows -->
+  <section class="panel">
+    <h2>Në tabelën e përdoruesve</h2>
+    <div class="desc">Disa role në një qelizë — chip-list me gap 4px.</div>
+    <div class="row-demo">
+      <div class="row">
+        <div class="user">
+          <div class="av">TS</div>
+          <div>
+            <div class="user-name">Dr. Taulant Shala</div>
+            <div class="user-email">taulant@donetamed.com</div>
+          </div>
+        </div>
+        <span class="role-chip-list">
+          <span class="chip-role doctor sm">Mjeku</span>
+          <span class="chip-role admin sm">Administrator</span>
+        </span>
+      </div>
+      <div class="row">
+        <div class="user">
+          <div class="av" style="background: #5B21B6;">EK</div>
+          <div>
+            <div class="user-name">Erëblirë Krasniqi</div>
+            <div class="user-email">ereblire@donetamed.com</div>
+          </div>
+        </div>
+        <span class="role-chip-list">
+          <span class="chip-role reception sm">Recepsioniste</span>
+        </span>
+      </div>
+      <div class="row">
+        <div class="user">
+          <div class="av" style="background: #334155;">BG</div>
+          <div>
+            <div class="user-name">Blerta Gashi</div>
+            <div class="user-email">blerta@donetamed.com</div>
+          </div>
+        </div>
+        <span class="role-chip-list">
+          <span class="chip-role reception sm">Recepsioniste</span>
+          <span class="chip-role admin sm">Administrator</span>
+        </span>
+      </div>
+    </div>
+  </section>
+
+  <!-- Audit diff -->
+  <section class="panel">
+    <h2>Në audit log · diff</h2>
+    <div class="desc">Rolet e ndryshuar shfaqen si chip-array para/pas. Chip-at e mëparshëm transparentë (opacity 0.55), pa vijë në mes.</div>
+    <div class="diff-demo">
+      <div class="key then">më parë</div>
+      <div class="then-val">
+        <span class="chip-role reception sm">Recepsioniste</span>
+      </div>
+      <div class="key">tani</div>
+      <div class="now-val">
+        <span class="role-chip-list">
+          <span class="chip-role reception sm">Recepsioniste</span>
+          <span class="chip-role admin sm">Administrator</span>
+        </span>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+</body>
+</html>

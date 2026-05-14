@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="sq">
+<head>
+<meta charset="UTF-8">
+<title>Klinika · User menu</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="../styles.css">
+<style>
+  body {
+    min-height: 100vh;
+    background: var(--bg);
+    padding: 40px 32px;
+  }
+  .wrap { max-width: 980px; margin: 0 auto; }
+  .crumb {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--text-faint);
+    font-weight: 600;
+    margin-bottom: 10px;
+  }
+  h1 { font-size: 28px; letter-spacing: -0.025em; margin-bottom: 6px; }
+  .lede {
+    color: var(--text-muted);
+    font-size: 14px;
+    max-width: 720px;
+    line-height: 1.55;
+    margin-bottom: 36px;
+  }
+
+  .menu-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 24px;
+  }
+  .menu-cell {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .menu-cell .cell-label {
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    color: var(--text-faint);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    font-weight: 600;
+  }
+
+  /* Static, always-open user-menu — same DOM as the live component but with .open-static */
+  .menu-mount {
+    position: relative;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    padding: 12px;
+  }
+  .menu-mount .topbar-mock {
+    background: var(--bg-subtle);
+    border-radius: var(--r-sm);
+    height: 36px;
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    padding: 0 8px;
+    margin-bottom: 6px;
+  }
+  .menu-mount .avatar-mock {
+    width: 24px; height: 24px;
+    border-radius: 999px;
+    background: var(--teal-700);
+    color: white;
+    font-size: 10px;
+    font-weight: 600;
+    display: grid;
+    place-items: center;
+  }
+  .menu-static {
+    width: 232px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    box-shadow: 0 16px 40px rgba(28,25,23,0.16), 0 2px 6px rgba(28,25,23,0.08);
+    margin-left: auto;
+    overflow: hidden;
+  }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <div class="crumb">Components</div>
+  <h1>User menu</h1>
+  <div class="lede">
+    Menyja e avatarit lart-djathtas. Tregon emrin, email-in dhe role chips —
+    pastaj <em>Profili im</em> dhe <em>Dilni</em>. Disa role janë të dukshme në
+    mënyrë të paqartë.
+  </div>
+
+  <div class="menu-grid">
+
+    <!-- Receptionist only -->
+    <div class="menu-cell">
+      <div class="cell-label">Recepsioniste</div>
+      <div class="menu-mount">
+        <div class="topbar-mock"><div class="avatar-mock" style="background: #5B21B6;">EK</div></div>
+        <div class="menu-static">
+          <div class="um-head" style="padding: 12px 14px; border-bottom: 1px solid var(--border-soft); background: var(--bg-subtle);">
+            <div style="font-family: var(--font-display); font-size: 13.5px; font-weight: 600; color: var(--text-strong); line-height: 1.2;">Erëblirë Krasniqi</div>
+            <div style="font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); margin-top: 3px;">ereblire@donetamed.com</div>
+            <div style="display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px;">
+              <span class="chip-role reception">Recepsioniste</span>
+            </div>
+          </div>
+          <a href="#" class="um-item" style="padding: 9px 14px; font-size: 13px; display: flex; align-items: center; gap: 10px; color: var(--text); text-decoration: none;">
+            <svg style="width: 16px; height: 16px; color: var(--text-muted);" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="5.5" r="2.8"/><path d="M2.5 14c0-3 2.5-4.5 5.5-4.5s5.5 1.5 5.5 4.5"/></svg>
+            Profili im
+          </a>
+          <div style="height: 1px; background: var(--border-soft);"></div>
+          <a href="#" style="padding: 9px 14px; font-size: 13px; display: flex; align-items: center; gap: 10px; color: var(--red); text-decoration: none;">
+            <svg style="width: 16px; height: 16px;" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10 4V2.5a1 1 0 0 0-1-1H3a1 1 0 0 0-1 1v11a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V12"/><path d="M6.5 8h8M11.5 5l3 3-3 3"/></svg>
+            Dilni
+          </a>
+        </div>
+      </div>
+    </div>
+
+    <!-- Doctor + admin (Dr. Taulant) -->
+    <div class="menu-cell">
+      <div class="cell-label">Mjeku + Administrator i klinikës</div>
+      <div class="menu-mount">
+        <div class="topbar-mock"><div class="avatar-mock">TS</div></div>
+        <div class="menu-static">
+          <div class="um-head" style="padding: 12px 14px; border-bottom: 1px solid var(--border-soft); background: var(--bg-subtle);">
+            <div style="font-family: var(--font-display); font-size: 13.5px; font-weight: 600; color: var(--text-strong); line-height: 1.2;">Dr. Taulant Shala</div>
+            <div style="font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); margin-top: 3px;">taulant@donetamed.com</div>
+            <div style="display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px;">
+              <span class="chip-role doctor">Mjeku</span>
+              <span class="chip-role admin">Administrator i klinikës</span>
+            </div>
+          </div>
+          <a href="#" style="padding: 9px 14px; font-size: 13px; display: flex; align-items: center; gap: 10px; color: var(--text); text-decoration: none;">
+            <svg style="width: 16px; height: 16px; color: var(--text-muted);" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="5.5" r="2.8"/><path d="M2.5 14c0-3 2.5-4.5 5.5-4.5s5.5 1.5 5.5 4.5"/></svg>
+            Profili im
+          </a>
+          <div style="height: 1px; background: var(--border-soft);"></div>
+          <a href="#" style="padding: 9px 14px; font-size: 13px; display: flex; align-items: center; gap: 10px; color: var(--red); text-decoration: none;">
+            <svg style="width: 16px; height: 16px;" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10 4V2.5a1 1 0 0 0-1-1H3a1 1 0 0 0-1 1v11a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V12"/><path d="M6.5 8h8M11.5 5l3 3-3 3"/></svg>
+            Dilni
+          </a>
+        </div>
+      </div>
+    </div>
+
+    <!-- Receptionist + admin -->
+    <div class="menu-cell">
+      <div class="cell-label">Recepsioniste + Administrator</div>
+      <div class="menu-mount">
+        <div class="topbar-mock"><div class="avatar-mock" style="background: #334155;">BG</div></div>
+        <div class="menu-static">
+          <div class="um-head" style="padding: 12px 14px; border-bottom: 1px solid var(--border-soft); background: var(--bg-subtle);">
+            <div style="font-family: var(--font-display); font-size: 13.5px; font-weight: 600; color: var(--text-strong); line-height: 1.2;">Blerta Gashi</div>
+            <div style="font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); margin-top: 3px;">blerta@donetamed.com</div>
+            <div style="display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px;">
+              <span class="chip-role reception">Recepsioniste</span>
+              <span class="chip-role admin">Administrator i klinikës</span>
+            </div>
+          </div>
+          <a href="#" style="padding: 9px 14px; font-size: 13px; display: flex; align-items: center; gap: 10px; color: var(--text); text-decoration: none;">
+            <svg style="width: 16px; height: 16px; color: var(--text-muted);" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="5.5" r="2.8"/><path d="M2.5 14c0-3 2.5-4.5 5.5-4.5s5.5 1.5 5.5 4.5"/></svg>
+            Profili im
+          </a>
+          <div style="height: 1px; background: var(--border-soft);"></div>
+          <a href="#" style="padding: 9px 14px; font-size: 13px; display: flex; align-items: center; gap: 10px; color: var(--red); text-decoration: none;">
+            <svg style="width: 16px; height: 16px;" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10 4V2.5a1 1 0 0 0-1-1H3a1 1 0 0 0-1 1v11a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V12"/><path d="M6.5 8h8M11.5 5l3 3-3 3"/></svg>
+            Dilni
+          </a>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+</body>
+</html>

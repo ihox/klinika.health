@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="sq">
+<head>
+<meta charset="UTF-8">
+<title>Klinika · Pastro vizitën toast</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="../styles.css">
+<style>
+  body {
+    min-height: 100vh;
+    background: var(--bg);
+    background-image:
+      linear-gradient(rgba(28,25,23,0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(28,25,23,0.04) 1px, transparent 1px);
+    background-size: 24px 24px;
+    padding: 40px 32px 120px;
+  }
+  .wrap { max-width: 1100px; margin: 0 auto; }
+  .page-head { margin-bottom: 28px; }
+  .crumb { font-size: 11px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--text-faint); font-weight: 600; margin-bottom: 10px; }
+  .page-head h1 { font-size: 28px; letter-spacing: -0.025em; margin-bottom: 6px; }
+  .page-head .lede { color: var(--text-muted); font-size: 14px; max-width: 720px; line-height: 1.55; }
+
+  .demo {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: var(--r-lg);
+    padding: 24px;
+    box-shadow: var(--shadow-xs);
+    margin-bottom: 26px;
+  }
+  .demo h3 { font-size: 14px; margin-bottom: 6px; }
+  .demo .desc { font-size: 13px; color: var(--text-muted); line-height: 1.55; margin-bottom: 16px; }
+
+  .btn-warning {
+    background: var(--bg-elevated);
+    color: var(--amber);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--r-md);
+    padding: 7px 14px;
+    font-size: 13px;
+    font-weight: 500;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .btn-warning:hover { background: var(--amber-bg); border-color: var(--amber-soft); }
+
+  /* Toast */
+  .ct {
+    position: fixed;
+    left: 50%;
+    bottom: 32px;
+    transform: translate(-50%, 140px);
+    z-index: 100;
+    background: rgba(12,10,9,0.94);
+    color: white;
+    padding: 13px 16px 0;
+    border-radius: var(--r-lg);
+    box-shadow: 0 14px 36px rgba(0,0,0,0.28);
+    font-size: 13px;
+    min-width: 420px;
+    max-width: 520px;
+    overflow: hidden;
+    opacity: 0;
+    transition: transform 280ms cubic-bezier(.2,.7,.3,1), opacity 200ms ease;
+    pointer-events: none;
+  }
+  .ct.show { transform: translate(-50%, 0); opacity: 1; pointer-events: auto; }
+  .ct-row { display: flex; align-items: center; gap: 14px; padding-bottom: 12px; }
+  .ct .ic {
+    width: 30px; height: 30px;
+    border-radius: 999px;
+    background: rgba(251,191,36,0.16);
+    color: #FCD34D;
+    display: grid; place-items: center;
+    flex-shrink: 0;
+  }
+  .ct .msg { flex: 1; line-height: 1.4; }
+  .ct .msg .strong { font-weight: 600; }
+  .ct .msg .dim { color: rgba(255,255,255,0.6); font-size: 11.5px; display: block; margin-top: 2px; }
+  .ct .undo {
+    color: white;
+    font-weight: 600;
+    font-size: 13px;
+    padding: 5px 12px;
+    border: 1px solid rgba(255,255,255,0.22);
+    border-radius: var(--r-sm);
+    background: transparent;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-variant-numeric: tabular-nums;
+    cursor: pointer;
+  }
+  .ct .undo:hover { background: rgba(255,255,255,0.1); }
+  .ct .undo .countdown { color: rgba(255,255,255,0.55); font-size: 11px; font-weight: 500; }
+  .ct-bar { height: 2px; background: #FCD34D; transform-origin: left center; transform: scaleX(1); }
+  .ct.show .ct-bar { animation: drain 30s linear forwards; }
+  @keyframes drain { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+
+  .restored {
+    margin-top: 16px;
+    padding: 11px 14px;
+    background: var(--primary-tint);
+    border: 1px solid var(--teal-200);
+    color: var(--teal-800);
+    border-radius: var(--r-md);
+    font-size: 12.5px;
+    display: none;
+    align-items: center;
+    gap: 8px;
+  }
+  .restored.show { display: flex; }
+
+  .specs {
+    display: grid;
+    grid-template-columns: 240px 1fr;
+    gap: 28px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-soft);
+    border-radius: var(--r-lg);
+    padding: 22px 26px;
+  }
+  .specs .l { font-family: var(--font-mono); font-size: 10.5px; color: var(--text-faint); letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 6px; }
+  .specs h2 { font-family: var(--font-display); font-size: 16px; font-weight: 600; margin-bottom: 6px; }
+  .specs ul { margin: 0; padding-left: 16px; font-size: 12.5px; color: var(--text-muted); line-height: 1.75; }
+  .specs li strong { color: var(--text); font-weight: 600; }
+  .specs code { font-family: var(--font-mono); font-size: 11px; background: var(--bg-subtle); padding: 1px 6px; border-radius: 3px; color: var(--text); }
+
+  .compare {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 22px;
+    margin-bottom: 26px;
+  }
+  .compare .col {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-soft);
+    border-radius: var(--r-lg);
+    padding: 18px 20px;
+  }
+  .compare h4 { font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+  .compare .sub { font-size: 11.5px; color: var(--text-faint); margin-bottom: 10px; font-family: var(--font-mono); letter-spacing: 0.04em; text-transform: uppercase; }
+  .compare .row { display: flex; align-items: center; gap: 10px; }
+  .btn-row-delete {
+    background: var(--bg-elevated);
+    color: var(--red);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--r-md);
+    padding: 7px 14px;
+    font-size: 13px;
+    font-weight: 500;
+  }
+  .compare .note { font-size: 12px; color: var(--text-muted); margin-top: 10px; line-height: 1.55; }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <div class="page-head">
+    <div class="crumb">Klinika · Components · Feedback</div>
+    <h1>"Pastro vizitën" · toast me numërues 30s</h1>
+    <div class="lede">
+      Veprim më pak agresiv se fshirja e rrjeshtit. Pastron të dhënat klinike por
+      <strong>ruan terminin</strong> — pacienti është ende në kalendar, ora dhe slot-i
+      mbeten. Përdor metaforën <em>"gomë / fshij"</em>, jo trash-can.
+    </div>
+  </div>
+
+  <!-- Compare with row-delete -->
+  <div class="compare">
+    <div class="col">
+      <h4>Pastro vizitën</h4>
+      <div class="sub">Soft · clinical data only</div>
+      <div class="row">
+        <button class="btn-warning">
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M9.5 2.5L13.5 6.5l-6.5 6.5H3.5l-1.5-1.5L9.5 2.5z"/>
+            <path d="M6 6.5l3.5 3.5"/>
+            <path d="M1.5 14h11"/>
+          </svg>
+          Pastro vizitën
+        </button>
+      </div>
+      <div class="note">Amber, ikonë <em>gomë</em>. Pastrohet vetëm përmbajtja klinike — termini, ora, dhe pacienti mbeten. Përdoret kur vizita është hapur gabimisht ose kur recepsionisti ka nevojë t'ia kalojë mjekut tjetër pa fshirë slot-in.</div>
+    </div>
+
+    <div class="col">
+      <h4>Fshij terminin</h4>
+      <div class="sub">Hard · row delete</div>
+      <div class="row">
+        <button class="btn-row-delete">
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="display: inline; vertical-align: -2px; margin-right: 4px;">
+            <path d="M3 4h10M6 4V2.5a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1V4M4.5 4l.5 9a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1l.5-9"/>
+          </svg>
+          Fshij terminin
+        </button>
+      </div>
+      <div class="note">E kuqe, ikona <em>kazan plehrash</em>. Fshin gjithë vizitën — slot-in, të dhënat klinike, çdo gjë. Veprim destruktiv i nivelit më të lartë (te menyja e statusit, jo te kartela).</div>
+    </div>
+  </div>
+
+  <!-- Live demo -->
+  <div class="demo">
+    <h3>Demo</h3>
+    <p class="desc">Klikoni butonin për të parë toast-in me numërues 30 sekondësh.</p>
+    <button class="btn-warning" onclick="fireToast()">
+      <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M9.5 2.5L13.5 6.5l-6.5 6.5H3.5l-1.5-1.5L9.5 2.5z"/>
+        <path d="M6 6.5l3.5 3.5"/>
+        <path d="M1.5 14h11"/>
+      </svg>
+      Pastro vizitën
+    </button>
+    <div class="restored" id="restored">
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="color: var(--primary);">
+        <path d="M2 7a5 5 0 0 1 8.5-3.5L12 5"/><path d="M12 2v3h-3"/>
+      </svg>
+      <span><strong>Të dhënat u rikthyen.</strong> <span style="color: var(--text-muted);">Asgjë nuk u pastrua.</span></span>
+    </div>
+  </div>
+
+  <!-- Specs -->
+  <div class="specs">
+    <div>
+      <div class="l">Specifikim</div>
+      <h2>Pastro vizitën</h2>
+      <p style="font-size: 12.5px; color: var(--text-muted); margin-top: 4px;">Amber soft-action · 30s undo · auto-save flow.</p>
+    </div>
+    <ul>
+      <li><strong>Ngjyra.</strong> Amber (jo e kuqe). Sinjalizon kujdes, jo destrukim. Tooltip në hover: <em>"Pastron të dhënat klinike, por ruan terminin"</em>.</li>
+      <li><strong>Ikona.</strong> Gomë në një bazë horizontale — <em>"fshij"</em>, jo <em>"hidh"</em>. Pa kazan plehrash, pa X.</li>
+      <li><strong>Toast.</strong> Sfond i errët si <a href="toast-undo.html" style="color: var(--primary);">toast-undo</a>; ikona në rreth me sfond amber-të zbehtë; bar 2px lart amber që zbrazet në 30s.</li>
+      <li><strong>Mesazhi.</strong> Strong: <em>"Të dhënat klinike u pastruan."</em> Dim: <em>"Termini ruhet · DATA · PACIENTI · ORA"</em>. Pa formulim teknik, pa "soft-delete".</li>
+      <li><strong>Anulo me numërues.</strong> Butoni shfaq "Anulo 30s" — numëruesi zvogëlohet çdo sekondë. Klikimi rikthen të dhënat dhe shfaq një konfirmim teal të vogël.</li>
+      <li><strong>Auto-save flow.</strong> Kur përdoruesi klikon "Anulo", restorimi shkon nëpërmjet të njëjtit auto-save flow si edhe ruajtja normale. Nëse server-i nuk është i lidhur, hapet <a href="save-failure-dialog.html" style="color: var(--primary);">save-failure dialog</a>.</li>
+    </ul>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="ct" id="toast" role="status">
+  <div class="ct-row">
+    <div class="ic">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M9.5 2.5L13.5 6.5l-6.5 6.5H3.5l-1.5-1.5L9.5 2.5z"/>
+        <path d="M6 6.5l3.5 3.5"/>
+        <path d="M1.5 14h11"/>
+      </svg>
+    </div>
+    <div class="msg">
+      <span class="strong">Të dhënat klinike u pastruan.</span>
+      <span class="dim">Termini ruhet · 14.05.2026 · Era Krasniqi · 14:20</span>
+    </div>
+    <button class="undo" onclick="undoIt()">
+      Anulo
+      <span class="countdown" id="cd">30s</span>
+    </button>
+  </div>
+  <div class="ct-bar"></div>
+</div>
+
+<script>
+  const toast = document.getElementById('toast');
+  const restored = document.getElementById('restored');
+  const cd = document.getElementById('cd');
+  let timer = null, tick = null, remaining = 30;
+
+  function fireToast() {
+    remaining = 30; cd.textContent = '30s';
+    restored.classList.remove('show');
+    toast.classList.remove('show');
+    void toast.offsetWidth;
+    toast.classList.add('show');
+    clearInterval(tick); clearTimeout(timer);
+    tick = setInterval(() => {
+      remaining--;
+      if (remaining <= 0) { cd.textContent = ''; clearInterval(tick); }
+      else cd.textContent = remaining + 's';
+    }, 1000);
+    timer = setTimeout(() => { toast.classList.remove('show'); }, 30000);
+  }
+
+  function undoIt() {
+    toast.classList.remove('show');
+    clearInterval(tick); clearTimeout(timer);
+    restored.classList.add('show');
+    setTimeout(() => restored.classList.remove('show'), 2800);
+  }
+</script>
+
+</body>
+</html>

@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="sq">
+<head>
+<meta charset="UTF-8">
+<title>Klinika · Walk-in chip</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="../styles.css">
+<style>
+  body { padding: 40px 32px 80px; }
+  .page-head { max-width: 1100px; margin: 0 auto 28px; }
+  .crumb { font-size: 11px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--text-faint); font-weight: 600; margin-bottom: 10px; }
+  .page-head h1 { font-size: 28px; letter-spacing: -0.025em; margin-bottom: 6px; }
+  .page-head .lede { color: var(--text-muted); font-size: 14px; max-width: 720px; line-height: 1.55; }
+  .wrap { max-width: 1100px; margin: 0 auto; }
+
+  .states {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 18px;
+    margin-bottom: 32px;
+  }
+  .card {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-soft);
+    border-radius: var(--r-lg);
+    overflow: hidden;
+  }
+  .card-head {
+    padding: 12px 16px 10px;
+    border-bottom: 1px solid var(--border-soft);
+    background: var(--bg-subtle);
+    display: flex; align-items: flex-start; justify-content: space-between; gap: 10px;
+  }
+  .num { font-family: var(--font-mono); font-size: 10px; color: var(--text-faint); letter-spacing: 0.08em; }
+  .card-head h3 { font-family: var(--font-display); font-size: 14px; font-weight: 600; margin-top: 2px; }
+  .tag {
+    font-family: var(--font-mono); font-size: 9.5px;
+    padding: 3px 7px; border-radius: 999px;
+    letter-spacing: 0.06em; font-weight: 600;
+  }
+  .tag.teal { color: var(--teal-800); background: var(--teal-50); border: 1px solid var(--teal-200); }
+  .tag.green { color: var(--green); background: var(--green-bg); border: 1px solid var(--green-soft); }
+  .tag.muted { color: var(--text-muted); background: var(--bg-subtle); border: 1px solid var(--border); }
+
+  .stage {
+    padding: 36px 24px;
+    background: linear-gradient(180deg, #fafaf7 0%, #f4f3ed 100%);
+    display: grid; place-items: center;
+    min-height: 130px;
+  }
+  .foot {
+    padding: 11px 16px 13px;
+    border-top: 1px solid var(--border-soft);
+    font-size: 11.5px; color: var(--text-muted); line-height: 1.55;
+  }
+  .foot code { font-family: var(--font-mono); font-size: 10.5px; background: var(--bg-subtle); padding: 1px 6px; border-radius: 4px; border: 1px solid var(--border-soft); color: var(--text); }
+
+  /* Chip */
+  .wc {
+    width: 168px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--teal-200);
+    border-left: 3px dashed var(--primary);
+    border-radius: var(--r-sm);
+    padding: 6px 9px 6px 11px;
+    box-shadow: var(--shadow-xs);
+    position: relative;
+  }
+  .wc .top { display: flex; align-items: center; gap: 5px; }
+  .wc .ico { color: var(--primary); display: grid; place-items: center; }
+  .wc .name { flex: 1; font-size: 12px; font-weight: 600; color: var(--text-strong); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.2; }
+  .wc .meta { display: flex; align-items: center; gap: 8px; font-size: 10.5px; color: var(--text-muted); font-variant-numeric: tabular-nums; line-height: 1.2; margin-top: 1px; }
+  .wc .meta .dob { color: var(--text-faint); }
+  .wc .meta .at { display: inline-flex; align-items: center; gap: 3px; color: var(--primary-dark); font-weight: 500; }
+  .wc .meta .at svg { color: var(--primary); }
+
+  .wc.in-progress {
+    background: var(--teal-50);
+    border-color: var(--teal-300);
+    border-left-style: solid;
+  }
+  .wc.in-progress::after {
+    content: ''; position: absolute; top: 8px; right: 8px;
+    width: 7px; height: 7px; border-radius: 999px; background: var(--primary);
+    animation: wp 1.6s ease-in-out infinite;
+  }
+  @keyframes wp {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(13,148,136,0.4); }
+    50%      { box-shadow: 0 0 0 6px rgba(13,148,136,0); }
+  }
+
+  .wc.completed {
+    background: var(--green-bg);
+    border-color: var(--green-soft);
+    border-left: 3px solid var(--green);
+    opacity: 0.9;
+  }
+  .wc.completed .name, .wc.completed .ico, .wc.completed .meta .at, .wc.completed .meta .at svg { color: var(--green); }
+
+  /* Anatomy diagram */
+  .anatomy {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-soft);
+    border-radius: var(--r-lg);
+    padding: 32px 24px;
+    margin-bottom: 28px;
+    position: relative;
+  }
+  .anatomy-stage {
+    display: flex; align-items: center; justify-content: center;
+    padding: 40px 12px;
+  }
+  .ann {
+    position: absolute;
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    color: var(--text-muted);
+    letter-spacing: 0.04em;
+    background: var(--bg-elevated);
+    padding: 2px 8px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    white-space: nowrap;
+  }
+
+  .specs {
+    display: grid;
+    grid-template-columns: 240px 1fr;
+    gap: 28px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-soft);
+    border-radius: var(--r-lg);
+    padding: 22px 26px;
+  }
+  .specs .l { font-family: var(--font-mono); font-size: 10.5px; color: var(--text-faint); letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 6px; }
+  .specs h2 { font-family: var(--font-display); font-size: 16px; font-weight: 600; margin-bottom: 6px; }
+  .specs ul { margin: 0; padding-left: 16px; font-size: 12.5px; color: var(--text-muted); line-height: 1.75; }
+  .specs li strong { color: var(--text); font-weight: 600; }
+  .specs code { font-family: var(--font-mono); font-size: 11px; background: var(--bg-subtle); padding: 1px 6px; border-radius: 3px; color: var(--text); }
+</style>
+</head>
+<body>
+
+<div class="page-head">
+  <div class="crumb">Klinika · Components · Calendar</div>
+  <h1>Walk-in chip · 3 gjendje statusi</h1>
+  <div class="lede">
+    Përfaqësimi vizual i një vizite <em>pa termin</em> brenda walk-in band-it.
+    Tre gjendje: <strong>arrived</strong> (sapo arriti), <strong>in_progress</strong>
+    (në vizitë me mjekun), <strong>completed</strong> (mbaroi). Ndryshe nga
+    kartela e terminit në rrjetin e orarit, walk-in chip nuk ka kohë fillimi/zgjatje —
+    vetëm kohën e mbërritjes.
+  </div>
+</div>
+
+<div class="wrap">
+
+  <div class="states">
+    <!-- Arrived -->
+    <div class="card">
+      <div class="card-head">
+        <div><div class="num">01</div><h3>Arrived · sapo arriti</h3></div>
+        <span class="tag teal">DEFAULT</span>
+      </div>
+      <div class="stage">
+        <div class="wc">
+          <div class="top">
+            <span class="ico"><svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8a5 5 0 0 1 8.5-3.5L13 6"/><path d="M13 2.5V6h-3.5"/></svg></span>
+            <span class="name">Dorian Hoxha</span>
+          </div>
+          <div class="meta">
+            <span class="dob">03.03.22</span>
+            <span class="at"><svg width="9" height="9" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8a5 5 0 0 1 8.5-3.5L13 6"/><path d="M13 2.5V6h-3.5"/></svg>13:55</span>
+          </div>
+        </div>
+      </div>
+      <div class="foot">
+        Gjendja fillestare pas regjistrimit. Sfond i bardhë, kornizë teal me <code>border-left dashed</code>. Recepsionisti e shenjon kur njofton pacientin.
+      </div>
+    </div>
+
+    <!-- In progress -->
+    <div class="card">
+      <div class="card-head">
+        <div><div class="num">02</div><h3>In progress · në vizitë</h3></div>
+        <span class="tag teal">LIVE</span>
+      </div>
+      <div class="stage">
+        <div class="wc in-progress">
+          <div class="top">
+            <span class="ico"><svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8a5 5 0 0 1 8.5-3.5L13 6"/><path d="M13 2.5V6h-3.5"/></svg></span>
+            <span class="name">Ema Krasniqi</span>
+          </div>
+          <div class="meta">
+            <span class="dob">22.07.23</span>
+            <span class="at"><svg width="9" height="9" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8a5 5 0 0 1 8.5-3.5L13 6"/><path d="M13 2.5V6h-3.5"/></svg>11:47</span>
+          </div>
+        </div>
+      </div>
+      <div class="foot">
+        Mjeku po e sheh pacientin. Border kalon në vijë të vazhduar, sfond pak teal, dhe një pulsim i butë teal lart-djathtas.
+      </div>
+    </div>
+
+    <!-- Completed -->
+    <div class="card">
+      <div class="card-head">
+        <div><div class="num">03</div><h3>Completed · kryer</h3></div>
+        <span class="tag green">DONE</span>
+      </div>
+      <div class="stage">
+        <div class="wc completed">
+          <div class="top">
+            <span class="ico"><svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8a5 5 0 0 1 8.5-3.5L13 6"/><path d="M13 2.5V6h-3.5"/></svg></span>
+            <span class="name">Liam Berisha</span>
+          </div>
+          <div class="meta">
+            <span class="dob">01.11.24</span>
+            <span class="at"><svg width="9" height="9" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8a5 5 0 0 1 8.5-3.5L13 6"/><path d="M13 2.5V6h-3.5"/></svg>10:12</span>
+          </div>
+        </div>
+      </div>
+      <div class="foot">
+        Vizita ka të dhëna të ruajtura. Jeshil i butë, opacity 0.9 — qartë "kryer", por akoma e dukshme në band për kontekst.
+      </div>
+    </div>
+  </div>
+
+  <!-- Anatomy -->
+  <div class="anatomy">
+    <div style="font-family: var(--font-mono); font-size: 10.5px; color: var(--text-faint); letter-spacing: 0.08em; text-transform: uppercase; font-weight: 600;">Anatomia</div>
+    <div class="anatomy-stage">
+      <div class="wc" style="transform: scale(1.8); transform-origin: center; margin: 60px 220px;">
+        <div class="top">
+          <span class="ico"><svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8a5 5 0 0 1 8.5-3.5L13 6"/><path d="M13 2.5V6h-3.5"/></svg></span>
+          <span class="name">Dorian Hoxha</span>
+        </div>
+        <div class="meta">
+          <span class="dob">03.03.22</span>
+          <span class="at"><svg width="9" height="9" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8a5 5 0 0 1 8.5-3.5L13 6"/><path d="M13 2.5V6h-3.5"/></svg>13:55</span>
+        </div>
+      </div>
+    </div>
+    <div class="ann" style="top: 90px; left: 80px;">↘ border-left: 3px dashed</div>
+    <div class="ann" style="top: 50%; right: 80px;">↖ ikona ↻ (pa termin)</div>
+    <div class="ann" style="bottom: 110px; left: 50%; transform: translateX(-50%);">↑ koha e mbërritjes — pa kohëzgjatje</div>
+  </div>
+
+  <div class="specs">
+    <div>
+      <div class="l">Specifikim</div>
+      <h2>Walk-in chip</h2>
+      <p style="font-size: 12.5px; color: var(--text-muted); margin-top: 4px;">Min 138px, max 168px. Lartësi auto.</p>
+    </div>
+    <ul>
+      <li><strong>Pa kohë fillimi.</strong> Chip-i nuk ka <code>top</code>/<code>height</code> si kartela e zakonshme — qëndron në band-in horizontal lart, jo në rrjetin e orarit.</li>
+      <li><strong>Border-left.</strong> Vija e majtë është <code>dashed</code> në gjendje <em>arrived</em> dhe <em>completed-completed nuk-tregohet-më</em> — kur kalon në <em>in_progress</em>, bëhet vijë e vazhduar për të treguar aktivitet të menjëhershëm.</li>
+      <li><strong>Ikona ↻.</strong> Shfaqet majtas emrit dhe — kur ka hapësirë — edhe pranë kohës së mbërritjes. Tregon menjëherë "pa termin" pa nevojë teksti shtesë.</li>
+      <li><strong>Statusi me ngjyra.</strong> Teal për gjendjet aktive, jeshil për <em>completed</em>. Asnjë statusi nuk i jepet ngjyrë e kuqe — pa concept <em>no_show</em> për walk-in (nuk ka termin për të humbur).</li>
+      <li><strong>Klikimi.</strong> Hap menynë e statusit (e njëjta si për terminet, por pa <em>Riprogramo</em>). Statuset <em>arrived → in_progress → completed</em> janë linearë.</li>
+    </ul>
+  </div>
+</div>
+
+</body>
+</html>

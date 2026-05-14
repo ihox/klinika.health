@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="sq">
+<head>
+<meta charset="UTF-8">
+<title>Klinika · Create user modal</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="../styles.css">
+<style>
+  body {
+    min-height: 100vh;
+    background: rgba(28,25,23,0.38);
+    backdrop-filter: blur(2px);
+    display: grid;
+    place-items: start center;
+    padding: 40px 24px 80px;
+  }
+  .modal-card {
+    background: var(--bg-elevated);
+    border-radius: var(--r-xl);
+    box-shadow: var(--shadow-modal);
+    width: 100%;
+    max-width: 480px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+  }
+  .modal-head {
+    padding: 18px 24px 14px;
+    border-bottom: 1px solid var(--border-soft);
+  }
+  .modal-head h2 {
+    font-size: 17px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+  .modal-head .sub {
+    font-size: 12.5px;
+    color: var(--text-muted);
+    margin-top: 4px;
+  }
+  .modal-body {
+    padding: 18px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .modal-foot {
+    padding: 14px 24px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    background: var(--bg-subtle);
+  }
+
+  .field-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+  .role-picker { display: flex; flex-direction: column; gap: 8px; }
+  .role-picker .role-opt {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--r-md);
+    cursor: pointer;
+    background: var(--bg-elevated);
+    transition: all 120ms ease;
+  }
+  .role-picker .role-opt:hover { background: var(--bg-subtle); }
+  .role-picker .role-opt input { accent-color: var(--primary); width: 16px; height: 16px; }
+  .role-picker .role-opt:has(input:checked) {
+    border-color: var(--primary);
+    background: var(--primary-tint);
+  }
+  .role-picker .role-row {
+    display: flex; align-items: center; gap: 10px; flex: 1;
+  }
+  .role-picker .role-desc { font-size: 12px; color: var(--text-muted); }
+
+  .helper {
+    font-size: 12.5px;
+    color: var(--text-muted);
+    line-height: 1.5;
+    padding: 10px 12px;
+    background: var(--bg-subtle);
+    border-radius: var(--r-md);
+    border: 1px solid var(--border);
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+  }
+  .helper .i {
+    width: 18px; height: 18px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-strong);
+    border-radius: 999px;
+    color: var(--text-muted);
+    flex-shrink: 0;
+    display: grid;
+    place-items: center;
+    font-size: 11px;
+    font-weight: 600;
+    font-style: italic;
+    font-family: var(--font-display);
+  }
+</style>
+</head>
+<body>
+
+<div class="modal-card">
+  <div class="modal-head">
+    <h2>Shto përdorues të ri</h2>
+    <div class="sub">Përdoruesi do të marrë një email për të vendosur fjalëkalimin.</div>
+  </div>
+  <div class="modal-body">
+
+    <div class="field-pair">
+      <div class="field">
+        <label class="field-label">Emri</label>
+        <input class="input" placeholder="p.sh. Adea">
+      </div>
+      <div class="field">
+        <label class="field-label">Mbiemri</label>
+        <input class="input" placeholder="p.sh. Maloku">
+      </div>
+    </div>
+
+    <div class="field">
+      <label class="field-label">Email</label>
+      <input class="input" type="email" placeholder="adea@donetamed.com">
+    </div>
+
+    <div class="field">
+      <label class="field-label">Rolet <span style="color: var(--text-faint); font-weight: 400;">— së paku një</span></label>
+      <div class="role-picker">
+        <label class="role-opt">
+          <input type="checkbox">
+          <span class="role-row">
+            <span class="chip-role doctor">Mjeku</span>
+            <span class="role-desc">Karta, vizita, recetë</span>
+          </span>
+        </label>
+        <label class="role-opt">
+          <input type="checkbox">
+          <span class="role-row">
+            <span class="chip-role reception">Recepsioniste</span>
+            <span class="role-desc">Kalendari, terminet</span>
+          </span>
+        </label>
+        <label class="role-opt">
+          <input type="checkbox">
+          <span class="role-row">
+            <span class="chip-role admin">Administrator i klinikës</span>
+            <span class="role-desc">Stafi, cilësimet, audit</span>
+          </span>
+        </label>
+      </div>
+    </div>
+
+    <div class="helper">
+      <span class="i">i</span>
+      <div>Përdoruesi do të marrë një email për të vendosur fjalëkalimin.</div>
+    </div>
+
+  </div>
+  <div class="modal-foot">
+    <button class="btn btn-ghost">Anulo</button>
+    <button class="btn btn-primary">Shto përdoruesin</button>
+  </div>
+</div>
+
+</body>
+</html>
