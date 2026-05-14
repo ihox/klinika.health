@@ -4,7 +4,8 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useMemo } from 'react';
 
-import type { AuthRole } from '@/lib/auth-client';
+import type { AuthRole, MeResponse } from '@/lib/auth-client';
+import { ClinicUserMenu } from './clinic-user-menu';
 
 /**
  * Canonical role-to-menu mapping (CLAUDE.md §5.8, ADR-004 Multi-role
@@ -70,19 +71,21 @@ const NAV_ITEMS: NavItem[] = [
 ];
 
 interface Props {
-  roles: AuthRole[];
   /**
-   * Right-aligned slot — used by the user menu in STEP 5 once the
-   * dropdown lands. Falls back to a simple `Profili im →` link so
-   * the nav still works without the menu.
+   * The current user, as returned by `/api/auth/me`. Pass `null`
+   * during the initial `useMe` fetch — the menu items collapse to
+   * nothing and the user-menu slot renders an inert placeholder, so
+   * the layout reserves the right amount of space and doesn't jump
+   * once the data lands.
    */
-  trailing?: React.ReactNode;
+  me: MeResponse['user'] | null;
   /** Optional sibling rendered to the right of the brand (e.g. global search). */
   brandAdjacent?: React.ReactNode;
 }
 
-export function ClinicTopNav({ roles, trailing, brandAdjacent }: Props) {
+export function ClinicTopNav({ me, brandAdjacent }: Props) {
   const pathname = usePathname() ?? '';
+  const roles: AuthRole[] = me?.roles ?? [];
 
   const items = useMemo(() => {
     return NAV_ITEMS.filter((item) => item.grantedBy.some((r) => roles.includes(r)));
@@ -123,10 +126,16 @@ export function ClinicTopNav({ roles, trailing, brandAdjacent }: Props) {
           {brandAdjacent ? <div className="flex items-center">{brandAdjacent}</div> : null}
         </div>
         <div className="flex items-center gap-4">
-          {trailing ?? (
-            <Link href="/profili-im" className="text-[13px] text-ink-muted hover:text-ink">
-              Profili im →
-            </Link>
+          {me ? (
+            <ClinicUserMenu user={me} />
+          ) : (
+            // Pre-load placeholder — same 32×32 footprint as the
+            // rendered avatar so the header doesn't jump when /me
+            // resolves.
+            <div
+              className="h-8 w-8 rounded-full bg-surface-subtle"
+              aria-hidden="true"
+            />
           )}
         </div>
       </div>

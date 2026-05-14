@@ -236,5 +236,5 @@ export function DoctorPatientsView() {
 
 function DoctorPatientsTopNav() {
   const { me } = useMe();
-  return <ClinicTopNav roles={me?.roles ?? []} />;
+  return <ClinicTopNav me={me} />;
 }

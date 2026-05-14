@@ -174,7 +174,7 @@ function CilesimetTopNav() {
   // existing left-sidebar sub-navigation; this top bar is the
   // role-filtered union nav across all clinic screens.
   const { me } = useMe();
-  return <ClinicTopNav roles={me?.roles ?? []} />;
+  return <ClinicTopNav me={me} />;
 }
 
 function SectionLabel({ children }: { children: React.ReactNode }) {

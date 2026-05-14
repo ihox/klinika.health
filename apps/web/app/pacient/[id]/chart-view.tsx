@@ -374,7 +374,7 @@ function ChartTopBar(): ReactElement {
   // /pacient/[id], which `ClinicTopNav` matches as part of the
   // "Pacientët" item via its `activePrefixes` list.
   const { me } = useMe();
-  return <ClinicTopNav roles={me?.roles ?? []} />;
+  return <ClinicTopNav me={me} />;
 }
 
 // =========================================================================

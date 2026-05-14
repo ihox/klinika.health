@@ -192,12 +192,12 @@ export function DashboardView(): ReactElement {
 // =========================================================================
 
 function DashboardTopBar(): ReactElement {
-  // Role-filtered top nav (ADR-004). A user who lands here while still
-  // loading `/me` sees the brand chrome but no menu items — the nav
-  // re-renders the moment roles arrive. Avoids the menu briefly
-  // showing the wrong items.
+  // Role-filtered top nav + user-menu dropdown (ADR-004). A user who
+  // lands here while still loading `/me` sees the brand chrome with
+  // empty menu items + avatar placeholder; everything re-renders
+  // once roles arrive.
   const { me } = useMe();
-  return <ClinicTopNav roles={me?.roles ?? []} />;
+  return <ClinicTopNav me={me} />;
 }
 
 // =========================================================================

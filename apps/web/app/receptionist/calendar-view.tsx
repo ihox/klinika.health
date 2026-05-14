@@ -657,7 +657,7 @@ export function CalendarView(): ReactElement {
 
 function CalendarTopNav({ searchSlot }: { searchSlot: ReactElement }): ReactElement {
   const { me } = useMe();
-  return <ClinicTopNav roles={me?.roles ?? []} brandAdjacent={searchSlot} />;
+  return <ClinicTopNav me={me} brandAdjacent={searchSlot} />;
 }
 
 // =========================================================================
