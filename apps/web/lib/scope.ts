@@ -90,6 +90,7 @@ export const CLINIC_PATH_PREFIXES = [
   '/receptionist',
   '/cilesimet',
   '/pacient',
+  '/pacientet',
   '/pamja-e-dites',
   '/profili-im',
   '/verify',

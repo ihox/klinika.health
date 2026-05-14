@@ -1,14 +1,15 @@
 'use client';
 
-import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
 
+import { ClinicTopNav } from '@/components/clinic-top-nav';
 import { Skeleton } from '@/components/skeleton';
 import { Button } from '@/components/ui/button';
 import { UndoToast } from '@/components/undo-toast';
 import { cn } from '@/lib/utils';
 import { ApiError } from '@/lib/api';
+import { useMe } from '@/lib/use-me';
 import {
   addLocalDays,
   type AppointmentDto,
@@ -481,36 +482,16 @@ export function CalendarView(): ReactElement {
 
   return (
     <main className="min-h-screen bg-stone-50 pb-16">
-      {/* Top bar */}
-      <header className="sticky top-0 z-30 border-b border-line bg-surface-elevated">
-        <div className="mx-auto flex max-w-page items-center justify-between px-page-x py-3">
-          <div className="flex items-center gap-8">
-            <Link href="/receptionist" className="font-display text-[17px] font-semibold tracking-[-0.015em] text-ink-strong">
-              klinika<span className="text-primary">.</span>
-            </Link>
-            <nav className="flex items-center gap-5 text-[14px]">
-              <Link href="/receptionist" className="font-medium text-ink-strong">
-                Kalendari
-              </Link>
-              <Link href="/receptionist/pacientet" className="text-ink-muted hover:text-ink">
-                Pacientët
-              </Link>
-              <Link href="/cilesimet" className="text-ink-muted hover:text-ink">
-                Cilësimet
-              </Link>
-            </nav>
-          </div>
-          <div className="flex items-center gap-4">
-            <GlobalPatientSearch
-              onPick={openGlobalPickerForPatient}
-              onAddNew={openGlobalQuickAdd}
-            />
-            <Link href="/profili-im" className="text-[13px] text-ink-muted hover:text-ink">
-              Profili im →
-            </Link>
-          </div>
-        </div>
-      </header>
+      {/* Top bar — role-filtered (ADR-004). The receptionist's global
+          patient search lives in the brand-adjacent slot. */}
+      <CalendarTopNav
+        searchSlot={
+          <GlobalPatientSearch
+            onPick={openGlobalPickerForPatient}
+            onAddNew={openGlobalQuickAdd}
+          />
+        }
+      />
 
       <div className="mx-auto max-w-page px-page-x pt-6">
         {/* Greeting */}
@@ -667,6 +648,16 @@ export function CalendarView(): ReactElement {
       ) : null}
     </main>
   );
+}
+
+// =========================================================================
+// Top nav wrapper — fetches `/me` and slots the receptionist's
+// global search next to the brand.
+// =========================================================================
+
+function CalendarTopNav({ searchSlot }: { searchSlot: ReactElement }): ReactElement {
+  const { me } = useMe();
+  return <ClinicTopNav roles={me?.roles ?? []} brandAdjacent={searchSlot} />;
 }
 
 // =========================================================================

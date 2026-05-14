@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState, type ReactElement } from 'react';
 
+import { ClinicTopNav } from '@/components/clinic-top-nav';
 import { EmptyState } from '@/components/empty-state';
 import { ChangeHistoryModal } from '@/components/patient/change-history-modal';
 import { GrowthPanel } from '@/components/patient/growth-panel';
@@ -17,6 +18,7 @@ import { Skeleton } from '@/components/skeleton';
 import { Button } from '@/components/ui/button';
 import { UndoToast } from '@/components/undo-toast';
 import { ApiError } from '@/lib/api';
+import { useMe } from '@/lib/use-me';
 import { ageInMonths } from '@/lib/growth-chart';
 import {
   ageLabelChart,
@@ -368,29 +370,11 @@ export function ChartView({ patientId, initialVisitId }: Props): ReactElement {
 // =========================================================================
 
 function ChartTopBar(): ReactElement {
-  return (
-    <header className="sticky top-0 z-30 border-b border-line bg-surface-elevated">
-      <div className="mx-auto flex max-w-page items-center justify-between px-page-x py-3">
-        <div className="flex items-center gap-8">
-          <Link
-            href="/doctor"
-            className="font-display text-[17px] font-semibold tracking-[-0.015em] text-ink-strong"
-          >
-            klinika<span className="text-primary">.</span>
-          </Link>
-          <nav className="flex items-center gap-5 text-[14px]">
-            <Link href="/doctor" className="text-ink-muted hover:text-ink">
-              Sot
-            </Link>
-            <span className="font-medium text-ink-strong">Pacientët</span>
-          </nav>
-        </div>
-        <Link href="/profili-im" className="text-[13px] text-ink-muted hover:text-ink">
-          Profili im →
-        </Link>
-      </div>
-    </header>
-  );
+  // Role-filtered nav (ADR-004). The chart view lives under
+  // /pacient/[id], which `ClinicTopNav` matches as part of the
+  // "Pacientët" item via its `activePrefixes` list.
+  const { me } = useMe();
+  return <ClinicTopNav roles={me?.roles ?? []} />;
 }
 
 // =========================================================================

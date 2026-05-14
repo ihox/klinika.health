@@ -1,6 +1,5 @@
 'use client';
 
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   useCallback,
@@ -11,9 +10,11 @@ import {
   type ReactElement,
 } from 'react';
 
+import { ClinicTopNav } from '@/components/clinic-top-nav';
 import { Skeleton } from '@/components/skeleton';
 import { Button } from '@/components/ui/button';
 import { ApiError } from '@/lib/api';
+import { useMe } from '@/lib/use-me';
 import {
   formatLongAlbanianDate,
   toLocalParts,
@@ -191,40 +192,12 @@ export function DashboardView(): ReactElement {
 // =========================================================================
 
 function DashboardTopBar(): ReactElement {
-  return (
-    <header className="sticky top-0 z-30 border-b border-line bg-surface-elevated">
-      <div className="mx-auto flex max-w-page items-center justify-between px-page-x py-3">
-        <div className="flex items-center gap-8">
-          <Link
-            href="/doctor"
-            className="font-display text-[17px] font-semibold tracking-[-0.015em] text-ink-strong"
-          >
-            klinika<span className="text-primary">.</span>
-          </Link>
-          <nav className="flex items-center gap-5 text-[14px]">
-            <Link href="/doctor" className="font-medium text-ink-strong">
-              Sot
-            </Link>
-            <Link
-              href="/doctor/pacientet"
-              className="text-ink-muted hover:text-ink"
-            >
-              Pacientët
-            </Link>
-            <Link href="/cilesimet" className="text-ink-muted hover:text-ink">
-              Cilësimet
-            </Link>
-          </nav>
-        </div>
-        <Link
-          href="/profili-im"
-          className="text-[13px] text-ink-muted hover:text-ink"
-        >
-          Profili im →
-        </Link>
-      </div>
-    </header>
-  );
+  // Role-filtered top nav (ADR-004). A user who lands here while still
+  // loading `/me` sees the brand chrome but no menu items — the nav
+  // re-renders the moment roles arrive. Avoids the menu briefly
+  // showing the wrong items.
+  const { me } = useMe();
+  return <ClinicTopNav roles={me?.roles ?? []} />;
 }
 
 // =========================================================================

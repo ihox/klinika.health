@@ -1,12 +1,13 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 
+import { ClinicTopNav } from '@/components/clinic-top-nav';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ApiError } from '@/lib/api';
+import { useMe } from '@/lib/use-me';
 import {
   ageLabel,
   formatDob,
@@ -115,24 +116,7 @@ export function DoctorPatientsView() {
 
   return (
     <main className="min-h-screen bg-stone-50">
-      <header className="border-b border-stone-200 bg-white">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-8 py-4">
-          <div className="flex items-center gap-6">
-            <Link href="/doctor" className="font-display text-[20px] font-semibold tracking-[-0.02em] text-stone-900">
-              klinika<span className="text-teal-700">.</span>
-            </Link>
-            <nav className="flex items-center gap-5 text-[14px]">
-              <Link href="/doctor" className="text-stone-600 hover:text-stone-900">
-                Sot
-              </Link>
-              <span className="font-medium text-stone-900">Pacientët</span>
-            </nav>
-          </div>
-          <Link href="/profili-im" className="text-[13px] text-stone-500 hover:text-stone-800">
-            Profili im →
-          </Link>
-        </div>
-      </header>
+      <DoctorPatientsTopNav />
 
       <section className="mx-auto grid max-w-6xl grid-cols-[340px_1fr] gap-6 px-8 py-8">
         <aside>
@@ -248,4 +232,9 @@ export function DoctorPatientsView() {
       ) : null}
     </main>
   );
+}
+
+function DoctorPatientsTopNav() {
+  const { me } = useMe();
+  return <ClinicTopNav roles={me?.roles ?? []} />;
 }

@@ -3,6 +3,7 @@
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
+import { ClinicTopNav } from '@/components/clinic-top-nav';
 import { Skeleton } from '@/components/skeleton';
 import { ApiError } from '@/lib/api';
 import {
@@ -10,6 +11,7 @@ import {
   type ClinicSettings,
   type ClinicUserRow,
 } from '@/lib/clinic-client';
+import { useMe } from '@/lib/use-me';
 import { AuditTab } from './audit-tab';
 import { EmailTab } from './email-tab';
 import { GeneralTab } from './general-tab';
@@ -94,6 +96,7 @@ export function ClinicSettingsView() {
 
   return (
     <main className="min-h-screen bg-stone-50 pb-16">
+      <CilesimetTopNav />
       <div className="max-w-[1280px] mx-auto px-8 pt-6">
         <header className="mb-4">
           <h1 className="font-display text-[26px] font-semibold tracking-[-0.02em] text-stone-900">
@@ -164,6 +167,14 @@ export function ClinicSettingsView() {
       <Toast toast={toast} />
     </main>
   );
+}
+
+function CilesimetTopNav() {
+  // Shared clinic chrome (ADR-004). The Cilësimet section keeps its
+  // existing left-sidebar sub-navigation; this top bar is the
+  // role-filtered union nav across all clinic screens.
+  const { me } = useMe();
+  return <ClinicTopNav roles={me?.roles ?? []} />;
 }
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
