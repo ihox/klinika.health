@@ -264,6 +264,8 @@ User clicks delete → record gets `deletedAt = now()` → 30-second toast appea
 
 After 30 seconds without undo, the toast dismisses. The record stays soft-deleted (never hard-deleted in v1). Platform admin has a CLI tool to purge soft-deleted records older than N days if needed.
 
+Soft-deleted rows are hidden from normal queries by default. Restore endpoints and platform-admin-only purge tools must pass `deletedAt` explicitly at the top level of the WHERE clause — the middleware detects this and skips its default deleted-row filter (and emits a Pino warning so accidental bypasses stay visible). Only top-level `deletedAt` is inspected; filters nested inside `AND`/`OR`/`NOT` are not auto-detected.
+
 ### 5.6 Time zones
 
 All timestamps stored as `TIMESTAMPTZ` in UTC. All UI display in `Europe/Belgrade`. All containers and OS run on `Europe/Belgrade` system time. Use `date-fns-tz` for any conversion. Never use the host's default time zone.

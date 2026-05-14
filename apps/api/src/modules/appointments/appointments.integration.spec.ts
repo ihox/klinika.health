@@ -280,6 +280,27 @@ describe.skipIf(!ENABLED)('Appointments integration', () => {
     expect(listAgain.body.appointments).toHaveLength(1);
   });
 
+  it('restore on an appointment that was never deleted returns 404', async () => {
+    // The 30-second undo window (ADR-008) is client-side only — the
+    // server has no time-window check, so the only failure mode for
+    // restore is "row not soft-deleted." If the row was never deleted,
+    // findFirst with deletedAt: { not: null } matches nothing → 404.
+    const cookie = await loginAs(RECEPTIONIST_EMAIL, SEED_RECEPTIONIST_PASSWORD!);
+    const date = nextOpenDate();
+    const create = await req()
+      .post('/api/appointments')
+      .set('host', TENANT_HOST)
+      .set('Cookie', cookie)
+      .send({ patientId, date, time: '12:30', durationMinutes: 15 });
+    const id = create.body.appointment.id;
+
+    const restore = await req()
+      .post(`/api/appointments/${id}/restore`)
+      .set('host', TENANT_HOST)
+      .set('Cookie', cookie);
+    expect(restore.status).toBe(404);
+  });
+
   it('stats endpoint reports counts and the next appointment', async () => {
     const cookie = await loginAs(RECEPTIONIST_EMAIL, SEED_RECEPTIONIST_PASSWORD!);
     const date = nextOpenDate();

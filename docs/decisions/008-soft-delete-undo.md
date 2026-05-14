@@ -82,3 +82,16 @@ Platform admin has a CLI tool (`pnpm cli purge:soft-deleted --older-than 5y`) to
     "metadata": { "snapshotAtDelete": { ... } }
   }
   ```
+
+## Middleware fix (2026-05-14)
+
+**Bug.** The soft-delete Prisma middleware in `apps/api/src/prisma/prisma.service.ts` AND-ed `deletedAt: null` into the WHERE clause of every read on a soft-delete-tracked model. The three restore code paths (`appointments.service.ts`, `visits.service.ts`, `patients.service.ts`) pass `deletedAt: { not: null }` in the WHERE to find the soft-deleted row before un-deleting it. The middleware's AND-wrap turned that into `AND [{ deletedAt: { not: null } }, { deletedAt: null }]` — an unsatisfiable conjunction — so every restore returned 404. The `findUnique` branch had the same latent bug via spread-overwrite, though no caller hit that path today. Bug latent since the middleware was added; integration tests don't run in CI, so it surfaced only during the Phase 1 visits-merge smoke test (Finding #3).
+
+**Fix.** The middleware now inspects the caller's WHERE for a top-level `deletedAt` key and, if present, skips its default injection entirely. The caller's intent wins. Same logic applies to both the `findFirst`/`findMany`/`count`/`aggregate`/`groupBy` AND-wrap path and the `findUnique`/`findUniqueOrThrow` spread path. On bypass, the middleware emits a Pino warning (`soft-delete filter bypassed via explicit deletedAt in where clause`) so accidental bypasses stay visible in operational logs.
+
+**Limitations.** Only top-level `deletedAt` is detected. Filters nested inside an explicit `AND`/`OR`/`NOT` are not auto-bypassed — callers needing such a shape must lift `deletedAt` to the top level. Documented inline in the middleware.
+
+**Tests added** to prevent regression:
+- `apps/api/src/prisma/prisma.service.spec.ts` — four new unit tests covering both bypass paths (`findFirst` + `findUnique`), the warning emission, and a sanity check that the default injection still happens when no `deletedAt` is in the caller's WHERE.
+- `apps/api/src/prisma/prisma.integration.spec.ts` — live-DB restore round-trip: soft-delete → explicit-`deletedAt` lookup finds the row → un-delete → default fetch reloads it.
+- `apps/api/src/modules/{appointments,visits,patients}/*.integration.spec.ts` — each gains a "restore on a never-deleted row returns 404" case so the only remaining failure mode is exercised end-to-end.

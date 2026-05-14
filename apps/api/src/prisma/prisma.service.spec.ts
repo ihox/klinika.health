@@ -39,9 +39,11 @@ function makeParams(
 
 describe('PrismaService.softDeleteMiddleware', () => {
   let service: PrismaService;
+  let logger: PinoLogger;
 
   beforeEach(() => {
-    service = new PrismaService(makeLogger());
+    logger = makeLogger();
+    service = new PrismaService(logger);
   });
 
   it('adds deletedAt:null to findMany on a soft-delete-tracked model', async () => {
@@ -172,6 +174,86 @@ describe('PrismaService.softDeleteMiddleware', () => {
       [],
     );
     expect(next).toHaveBeenCalledTimes(1);
+  });
+
+  // ---------------------------------------------------------------------------
+  // Bypass: caller passes deletedAt explicitly (restore path, ADR-008 fix)
+  // ---------------------------------------------------------------------------
+
+  it('does NOT inject when caller passes deletedAt: { not: null } on findFirst (restore path)', async () => {
+    const next = vi.fn().mockResolvedValue(null);
+    const callerWhere = { id: 'abc', clinicId: 'xyz', deletedAt: { not: null } };
+    const params = makeParams({
+      model: 'Appointment',
+      action: 'findFirst',
+      args: { where: callerWhere },
+    });
+
+    await service.softDeleteMiddleware(params, next);
+
+    const calledWith = next.mock.calls[0][0] as Prisma.MiddlewareParams;
+    expect((calledWith.args as { where?: unknown }).where).toEqual(callerWhere);
+    expect(logger.warn).toHaveBeenCalledWith(
+      { model: 'Appointment', action: 'findFirst' },
+      'soft-delete filter bypassed via explicit deletedAt in where clause',
+    );
+  });
+
+  it('does NOT inject when caller passes deletedAt: null on findFirst', async () => {
+    const next = vi.fn().mockResolvedValue(null);
+    const callerWhere = { clinicId: 'xyz', deletedAt: null };
+    const params = makeParams({
+      model: 'Patient',
+      action: 'findFirst',
+      args: { where: callerWhere },
+    });
+
+    await service.softDeleteMiddleware(params, next);
+
+    const calledWith = next.mock.calls[0][0] as Prisma.MiddlewareParams;
+    // Caller asked explicitly — middleware respects it, no AND-wrap.
+    expect((calledWith.args as { where?: unknown }).where).toEqual(callerWhere);
+    expect(logger.warn).toHaveBeenCalledTimes(1);
+  });
+
+  it('does NOT inject when caller passes deletedAt on findUnique', async () => {
+    // The pre-fix findUnique branch silently overwrote the caller's
+    // deletedAt via spread. Same bypass logic now applies here too.
+    const next = vi.fn().mockResolvedValue(null);
+    const callerWhere = { id: 'patient-uuid', deletedAt: { not: null } };
+    const params = makeParams({
+      model: 'Patient',
+      action: 'findUnique',
+      args: { where: callerWhere },
+    });
+
+    await service.softDeleteMiddleware(params, next);
+
+    const calledWith = next.mock.calls[0][0] as Prisma.MiddlewareParams;
+    expect((calledWith.args as { where?: unknown }).where).toEqual(callerWhere);
+    expect(logger.warn).toHaveBeenCalledWith(
+      { model: 'Patient', action: 'findUnique' },
+      'soft-delete filter bypassed via explicit deletedAt in where clause',
+    );
+  });
+
+  it('preserves default injection when caller has no deletedAt key', async () => {
+    // Sanity guard: the bypass is opt-in; queries without deletedAt
+    // continue to get the soft-delete filter as before.
+    const next = vi.fn().mockResolvedValue([]);
+    const params = makeParams({
+      model: 'Patient',
+      action: 'findFirst',
+      args: { where: { clinicId: 'xyz' } },
+    });
+
+    await service.softDeleteMiddleware(params, next);
+
+    const calledWith = next.mock.calls[0][0] as Prisma.MiddlewareParams;
+    expect(calledWith.args).toEqual({
+      where: { AND: [{ clinicId: 'xyz' }, { deletedAt: null }] },
+    });
+    expect(logger.warn).not.toHaveBeenCalled();
   });
 });
 

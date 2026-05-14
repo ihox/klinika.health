@@ -123,6 +123,25 @@ export class PrismaService
     ) {
       const args = (params.args ?? {}) as { where?: Record<string, unknown> };
       const existing = args.where ?? {};
+      // Bypass when the caller passes an explicit `deletedAt` at the top
+      // level of the WHERE — they're querying the soft-delete column on
+      // purpose (restore endpoints, future platform-admin purge tools).
+      // Without this, the AND-wrap below would conjoin `deletedAt: null`
+      // with the caller's `deletedAt: { not: null }`, making restore
+      // impossible (ADR-008 middleware fix, 2026-05-14).
+      //
+      // NOTE: only the top-level `deletedAt` key is inspected. Filters
+      // nested inside an explicit `AND`/`OR`/`NOT` are NOT detected — if
+      // a future caller needs to express such a query, lift `deletedAt`
+      // to the top level or refactor the middleware. The bypass logs a
+      // warning so accidental bypasses stay visible in operational logs.
+      if (Object.prototype.hasOwnProperty.call(existing, 'deletedAt')) {
+        this.logger.warn(
+          { model, action: params.action },
+          'soft-delete filter bypassed via explicit deletedAt in where clause',
+        );
+        return next(params);
+      }
       if (
         params.action === 'findUnique' ||
         params.action === 'findUniqueOrThrow'

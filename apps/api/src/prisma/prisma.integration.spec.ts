@@ -145,4 +145,39 @@ describe.skipIf(!ENABLED)('Prisma + RLS integration', () => {
     const found = await service.patient.findUnique({ where: { id: created.id } });
     expect(found).toBeNull();
   });
+
+  it('restore round-trip: explicit deletedAt: { not: null } reaches the soft-deleted row', async () => {
+    // Live-DB regression test for the ADR-008 middleware fix: an
+    // explicit `deletedAt: { not: null }` in the caller's WHERE must
+    // bypass the default injection so the restore code paths
+    // (appointments/visits/patients) can find the soft-deleted row.
+    const created = await service.patient.create({
+      data: {
+        clinicId: donetamedClinicId,
+        firstName: 'Restore',
+        lastName: 'Probe',
+        dateOfBirth: new Date('2022-01-01'),
+      },
+    });
+    await service.patient.update({
+      where: { id: created.id },
+      data: { deletedAt: new Date() },
+    });
+
+    const found = await service.patient.findFirst({
+      where: { id: created.id, clinicId: donetamedClinicId, deletedAt: { not: null } },
+    });
+    expect(found).not.toBeNull();
+    expect(found!.id).toBe(created.id);
+    expect(found!.deletedAt).not.toBeNull();
+
+    // And the un-delete + subsequent fetch under default rules works.
+    await service.patient.update({
+      where: { id: created.id },
+      data: { deletedAt: null },
+    });
+    const restored = await service.patient.findUnique({ where: { id: created.id } });
+    expect(restored).not.toBeNull();
+    expect(restored!.deletedAt).toBeNull();
+  });
 });
