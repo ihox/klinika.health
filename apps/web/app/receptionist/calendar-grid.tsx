@@ -347,10 +347,8 @@ function ScheduledCard({
   const height = entry.durationMinutes * PX_PER_MIN;
   const color = colorIndicatorForLastVisit(entry.lastVisitAt);
 
-  // Step 4 (later in Phase 2a) will modulate the visual treatment for
-  // the new arrived/in_progress statuses. For now we keep the existing
-  // four-state styling — scheduled cards in arrived/in_progress render
-  // with the default teal treatment, which is acceptable.
+  const isArrived = entry.status === 'arrived';
+  const isInProgress = entry.status === 'in_progress';
   const isCompleted = entry.status === 'completed';
   const isNoShow = entry.status === 'no_show';
   const isCancelled = entry.status === 'cancelled';
@@ -377,11 +375,14 @@ function ScheduledCard({
       title={`${entry.patient.firstName} ${entry.patient.lastName} · ${formatDob(entry.patient.dateOfBirth)} · ${STATUS_LABEL[entry.status]}`}
       className={cn(
         'absolute left-1.5 right-1.5 px-2 py-0.5 rounded text-left border bg-surface-elevated border-teal-200 border-l-[3px] border-l-primary shadow-xs transition hover:-translate-y-px hover:shadow-sm z-[3] flex items-center gap-1.5 overflow-hidden',
+        isArrived && 'bg-teal-50/60 border-teal-300',
+        isInProgress && 'relative bg-teal-50 border-teal-300',
         isCompleted &&
           'bg-success-bg/50 border-success-soft border-l-success opacity-90',
         isNoShow && 'border border-dashed border-danger-soft border-l-danger opacity-70',
         isCancelled && 'opacity-50',
-        isNew && !isCompleted && !isNoShow && 'border-l-accent-500 border-warning-soft',
+        isNew && !isCompleted && !isNoShow && !isArrived && !isInProgress &&
+          'border-l-accent-500 border-warning-soft',
       )}
       style={{ top, height: Math.max(20, height) }}
       aria-label={`${entry.patient.firstName} ${entry.patient.lastName}, ${localParts.time}, ${STATUS_LABEL[entry.status]}`}
@@ -392,12 +393,29 @@ function ScheduledCard({
             isCompleted && 'text-success',
             isNoShow && 'text-danger line-through decoration-1',
             isCancelled && 'line-through text-ink-faint',
+            isInProgress && 'text-primary-dark',
           )}
         >
           {entry.patient.firstName} {entry.patient.lastName}
         </span>
       </span>
       <span className="flex-none flex items-center gap-1 text-[10.5px] text-ink-muted tabular-nums">
+        {isArrived ? (
+          <span
+            className="rounded bg-primary-soft px-1 text-[9.5px] font-bold uppercase tracking-[0.04em] text-teal-800"
+            aria-hidden
+          >
+            ✓ Arriti
+          </span>
+        ) : null}
+        {isInProgress ? (
+          <span
+            className="rounded bg-primary-soft px-1 text-[9.5px] font-bold uppercase tracking-[0.04em] text-teal-800"
+            aria-hidden
+          >
+            Në vizitë
+          </span>
+        ) : null}
         {isCompleted ? (
           <span aria-hidden className="text-success font-bold">✓</span>
         ) : null}
@@ -412,6 +430,12 @@ function ScheduledCard({
         <ColorChip color={color} />
         <span className="hidden sm:inline">{localParts.time}</span>
       </span>
+      {isInProgress ? (
+        <span
+          aria-hidden
+          className="pointer-events-none absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-primary shadow-[0_0_0_3px_rgba(13,148,136,0.22)]"
+        />
+      ) : null}
     </button>
   );
 }
