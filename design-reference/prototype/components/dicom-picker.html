@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="sq">
+<head>
+<meta charset="UTF-8">
+<title>Klinika · Lidh studim ultrazeri</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="../styles.css">
+<style>
+  :root { --r-pill: 999px; }
+  body {
+    min-height: 100vh;
+    background: var(--bg);
+    display: grid;
+    place-items: center;
+    padding: 40px 24px;
+  }
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: rgba(28,25,23,0.38);
+    backdrop-filter: blur(3px);
+    z-index: 1;
+  }
+
+  .picker {
+    position: relative;
+    z-index: 2;
+    width: 100%;
+    max-width: 560px;
+    background: var(--bg-elevated);
+    border-radius: var(--r-xl);
+    box-shadow: var(--shadow-modal);
+    overflow: hidden;
+    border: 1px solid var(--border);
+    animation: modal-in 200ms cubic-bezier(.2,.7,.3,1);
+  }
+  @keyframes modal-in {
+    from { opacity: 0; transform: translateY(8px) scale(0.985); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+  }
+
+  .picker > header {
+    padding: 18px 24px 14px;
+    border-bottom: 1px solid var(--border);
+  }
+  .picker > header h3 { font-size: 16px; font-weight: 600; }
+  .picker > header .sub { font-size: 12.5px; color: var(--text-muted); margin-top: 3px; }
+
+  .picker-body {
+    padding: 12px 16px 16px;
+    max-height: 440px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .study-card {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 14px;
+    align-items: center;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    background: var(--bg-elevated);
+    cursor: pointer;
+    transition: all 120ms ease;
+  }
+  .study-card:hover { border-color: var(--border-strong); background: var(--bg-subtle); }
+  .study-card.selected {
+    border-color: var(--primary);
+    background: var(--primary-tint);
+    box-shadow: 0 0 0 1px var(--primary);
+  }
+  .study-card .thumbs { display: flex; gap: 4px; }
+  .study-card .thumbs .th {
+    width: 40px; height: 40px;
+    border-radius: 4px;
+    overflow: hidden;
+    background: #0c0a09;
+  }
+  .study-card .thumbs .th svg { width: 100%; height: 100%; display: block; }
+  .study-card .meta .when {
+    font-size: 12.5px;
+    font-weight: 500;
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+  }
+  .study-card .meta .when-rel {
+    color: var(--text-faint);
+    font-weight: 400;
+    margin-left: 6px;
+  }
+  .study-card .meta .count {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 3px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .study-card .meta .count .src {
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    color: var(--text-faint);
+    background: var(--bg-subtle);
+    border: 1px solid var(--border);
+    padding: 1px 5px;
+    border-radius: 3px;
+  }
+  .study-card .select-mark {
+    width: 20px; height: 20px;
+    border-radius: 999px;
+    border: 1.5px solid var(--border-strong);
+    display: grid; place-items: center;
+    color: white;
+    background: transparent;
+    transition: all 120ms ease;
+  }
+  .study-card.selected .select-mark {
+    background: var(--primary);
+    border-color: var(--primary);
+  }
+  .study-card .select-mark svg { opacity: 0; }
+  .study-card.selected .select-mark svg { opacity: 1; }
+
+  .picker > footer {
+    padding: 12px 20px;
+    border-top: 1px solid var(--border);
+    background: var(--bg-subtle);
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    align-items: center;
+  }
+  .picker > footer .lf {
+    margin-right: auto;
+    font-size: 11.5px;
+    color: var(--text-faint);
+  }
+  .more-hint {
+    text-align: center;
+    padding: 6px 0 2px;
+    font-size: 11.5px;
+    color: var(--text-faint);
+  }
+</style>
+</head>
+<body>
+
+<div class="picker" role="dialog" aria-labelledby="pickerTitle">
+  <header>
+    <h3 id="pickerTitle">Lidh studim ultrazeri</h3>
+    <div class="sub">Era Krasniqi · vizita e 14.05.2026 · zgjidh studimin që i përket kësaj vizite.</div>
+  </header>
+
+  <div class="picker-body" id="list">
+    <!-- studies injected below -->
+  </div>
+
+  <footer>
+    <span class="lf" id="lfStat">10 studime të fundit</span>
+    <button class="btn btn-ghost" onclick="window.close()">Anulo</button>
+    <button class="btn btn-primary" id="linkBtn" disabled>Lidh me këtë vizitë</button>
+  </footer>
+</div>
+
+<script>
+  // Demo dataset (10 most recent received from US machine)
+  const studies = [
+    { id: '1.2.840.113619.2.5.1234567890.20260514.1142.3457', when: '14.05.2026 · 11:42', rel: 'para 3 min', n: 8 },
+    { id: '1.2.840.113619.2.5.1234567890.20260514.1018.3447', when: '14.05.2026 · 10:18', rel: '',           n: 5 },
+    { id: '1.2.840.113619.2.5.1234567890.20260513.1655.3441', when: '13.05.2026 · 16:55', rel: '',           n: 12 },
+    { id: '1.2.840.113619.2.5.1234567890.20260513.1430.3439', when: '13.05.2026 · 14:30', rel: '',           n: 9 },
+    { id: '1.2.840.113619.2.5.1234567890.20260512.0902.3422', when: '12.05.2026 · 09:02', rel: '',           n: 6 },
+    { id: '1.2.840.113619.2.5.1234567890.20260511.1542.3418', when: '11.05.2026 · 15:42', rel: '',           n: 4 },
+    { id: '1.2.840.113619.2.5.1234567890.20260511.1132.3411', when: '11.05.2026 · 11:32', rel: '',           n: 8 },
+    { id: '1.2.840.113619.2.5.1234567890.20260510.1648.3402', when: '10.05.2026 · 16:48', rel: '',           n: 6 },
+    { id: '1.2.840.113619.2.5.1234567890.20260510.1010.3395', when: '10.05.2026 · 10:10', rel: '',           n: 7 },
+    { id: '1.2.840.113619.2.5.1234567890.20260509.1422.3388', when: '09.05.2026 · 14:22', rel: '',           n: 5 },
+  ];
+
+  // 4 thumb patterns to vary the strip
+  const thumbs = [
+    '<svg viewBox="0 0 40 40"><rect width="40" height="40" fill="#0c0a09"/><path d="M20 4 L36 36 L4 36 Z" fill="#1c1917"/><ellipse cx="20" cy="26" rx="6" ry="4" fill="#44403c"/></svg>',
+    '<svg viewBox="0 0 40 40"><rect width="40" height="40" fill="#0c0a09"/><ellipse cx="20" cy="22" rx="14" ry="10" fill="#1c1917"/><ellipse cx="16" cy="22" rx="5" ry="3.5" fill="#292524"/></svg>',
+    '<svg viewBox="0 0 40 40"><rect width="40" height="40" fill="#0c0a09"/><path d="M20 8 L34 32 L6 32 Z" fill="#1c1917"/><ellipse cx="20" cy="24" rx="5" ry="3" fill="#44403c"/></svg>',
+    '<svg viewBox="0 0 40 40"><rect width="40" height="40" fill="#0c0a09"/><ellipse cx="20" cy="22" rx="13" ry="9" fill="#1c1917"/><ellipse cx="20" cy="22" rx="3" ry="2" fill="#78716c"/></svg>',
+  ];
+
+  const list = document.getElementById('list');
+  const linkBtn = document.getElementById('linkBtn');
+  const lfStat = document.getElementById('lfStat');
+  let selected = null;
+
+  // Render
+  studies.forEach((s, i) => {
+    const card = document.createElement('div');
+    card.className = 'study-card';
+    card.dataset.idx = i;
+    const thumbCount = Math.min(4, s.n);
+    const thumbHtml = Array.from({ length: thumbCount }).map((_, j) => `<div class="th">${thumbs[(i + j) % thumbs.length]}</div>`).join('');
+    const shortId = '…' + s.id.slice(-7);
+    card.innerHTML = `
+      <div class="thumbs">${thumbHtml}</div>
+      <div class="meta">
+        <div class="when">${s.when}${s.rel ? `<span class="when-rel">(${s.rel})</span>` : ''}</div>
+        <div class="count">${s.n} imazhe <span class="src">DICOM ${shortId}</span></div>
+      </div>
+      <div class="select-mark">
+        <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 6.5l2.5 2.5 4.5-5"/></svg>
+      </div>
+    `;
+    card.addEventListener('click', () => selectCard(i));
+    list.appendChild(card);
+  });
+
+  function selectCard(i) {
+    selected = i;
+    document.querySelectorAll('.study-card').forEach(c => c.classList.toggle('selected', +c.dataset.idx === i));
+    linkBtn.disabled = false;
+    lfStat.textContent = '1 i zgjedhur';
+  }
+
+  linkBtn.addEventListener('click', () => {
+    if (selected == null) return;
+    // demo — in prod would link via API. Here we just close.
+    window.close();
+  });
+
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') window.close(); });
+</script>
+
+</body>
+</html>

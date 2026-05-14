@@ -93,6 +93,9 @@ export class PgBossService implements OnApplicationBootstrap, OnModuleDestroy {
     if (!this.boss) {
       return;
     }
+    // pg-boss v10 requires the queue to exist before scheduling.
+    // createQueue is idempotent (no-op if already created).
+    await this.boss.createQueue(name);
     await this.boss.schedule(name, cron, undefined, options);
   }
 

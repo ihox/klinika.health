@@ -7,6 +7,17 @@ import { buildLoggerConfig } from './logger.config';
 // used to call LoggerModule.forRoot() itself with defaults; that's now
 // removed in favor of this @Global module so PHI redaction and request-
 // ID propagation apply uniformly.
+//
+// **Load order matters.** nestjs-pino's @InjectPinoLogger(context) adds
+// `context` to a module-level Set at decorator-evaluation time. The
+// matching per-context providers are produced by forRoot() snapshotting
+// that Set _when forRoot runs_. So forRoot must run AFTER every service
+// file with @InjectPinoLogger has been loaded by Node — otherwise the
+// snapshot is empty and you get "Nest can't resolve PinoLogger:<X>".
+//
+// AppModule guarantees this by importing LoggingModule LAST in its
+// `imports` array (the import statement at the top of AppModule is
+// also placed last for the same reason).
 @Global()
 @Module({
   imports: [PinoLoggerModule.forRoot(buildLoggerConfig())],

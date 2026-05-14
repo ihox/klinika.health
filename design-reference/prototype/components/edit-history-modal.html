@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="sq">
+<head>
+<meta charset="UTF-8">
+<title>Klinika · Historia e ndryshimeve</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="../styles.css">
+<style>
+  :root { --r-pill: 999px; }
+  body {
+    min-height: 100vh;
+    background: var(--bg);
+    display: grid;
+    place-items: center;
+    padding: 40px 24px;
+  }
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: rgba(28,25,23,0.38);
+    backdrop-filter: blur(3px);
+    z-index: 1;
+  }
+
+  .hist-modal {
+    position: relative;
+    z-index: 2;
+    width: 100%;
+    max-width: 620px;
+    background: var(--bg-elevated);
+    border-radius: var(--r-xl);
+    box-shadow: var(--shadow-modal);
+    overflow: hidden;
+    border: 1px solid var(--border);
+    animation: modal-in 200ms cubic-bezier(.2,.7,.3,1);
+  }
+  @keyframes modal-in {
+    from { opacity: 0; transform: translateY(8px) scale(0.985); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+  }
+
+  .hist-modal > header {
+    padding: 18px 24px 14px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+  }
+  .hist-modal > header h3 { font-size: 16px; font-weight: 600; }
+  .hist-modal > header h3 .vt { color: var(--text-muted); font-weight: 500; }
+  .hist-modal > header .sub { font-size: 12.5px; color: var(--text-muted); margin-top: 3px; }
+  .hist-modal > header .x {
+    color: var(--text-faint);
+    font-size: 20px;
+    width: 28px; height: 28px;
+    display: grid; place-items: center;
+    border-radius: var(--r-sm);
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    line-height: 1;
+  }
+  .hist-modal > header .x:hover { background: var(--bg-subtle); color: var(--text); }
+
+  .hist-body {
+    padding: 14px 24px 22px;
+    max-height: 460px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 22px;
+  }
+  .hist-event {
+    display: grid;
+    grid-template-columns: 24px 1fr;
+    gap: 14px;
+  }
+  .hist-event .rail {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  .hist-event .rail .dot {
+    width: 9px; height: 9px;
+    background: var(--text-muted);
+    border-radius: 999px;
+    margin-top: 5px;
+    border: 2px solid var(--bg-elevated);
+    box-shadow: 0 0 0 1px var(--border-strong);
+  }
+  .hist-event:first-child .rail .dot { background: var(--primary); box-shadow: 0 0 0 1px var(--primary); }
+  .hist-event.creation .rail .dot { background: var(--bg-elevated); box-shadow: 0 0 0 1px var(--border-strong); }
+  .hist-event .rail .line {
+    flex: 1;
+    width: 1px;
+    background: var(--border);
+    margin-top: 4px;
+    min-height: 8px;
+  }
+  .hist-event:last-child .rail .line { background: transparent; }
+
+  .hist-event .body .who { font-size: 13px; font-weight: 600; color: var(--text); }
+  .hist-event .body .when {
+    font-size: 11.5px;
+    color: var(--text-faint);
+    font-variant-numeric: tabular-nums;
+    margin-left: 6px;
+    font-weight: 400;
+  }
+  .hist-event .body .ip {
+    font-size: 11px;
+    color: var(--text-faint);
+    font-family: var(--font-mono);
+    margin-left: 8px;
+  }
+  .hist-event .body .field-diff {
+    margin-top: 10px;
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    overflow: hidden;
+    background: var(--bg-elevated);
+  }
+  .hist-event .body .field-diff + .field-diff { margin-top: 10px; }
+  .hist-event .body .field-diff .fld-head {
+    background: var(--bg-subtle);
+    padding: 6px 12px;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+    font-weight: 600;
+    border-bottom: 1px solid var(--border);
+  }
+  .hist-event .body .field-diff .diff-row {
+    padding: 10px 12px;
+    font-size: 13px;
+    line-height: 1.5;
+    display: grid;
+    grid-template-columns: 70px 1fr;
+    gap: 10px;
+  }
+  .hist-event .body .field-diff .diff-row + .diff-row {
+    border-top: 1px solid var(--border-soft);
+  }
+  .hist-event .body .field-diff .diff-row .key {
+    font-size: 11px;
+    color: var(--text-faint);
+    letter-spacing: 0.02em;
+    padding-top: 1px;
+    font-weight: 500;
+  }
+  .hist-event .body .field-diff .diff-row.then .val {
+    color: var(--text-faint);
+    text-decoration: line-through;
+    text-decoration-color: var(--border-strong);
+    text-decoration-thickness: 1px;
+  }
+  .hist-event .body .field-diff .diff-row.now .val {
+    color: var(--text-strong);
+    font-weight: 500;
+  }
+  .val code {
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    background: var(--bg-subtle);
+    padding: 1px 5px;
+    border-radius: 3px;
+    color: var(--text);
+    margin-right: 6px;
+  }
+  .val.then code { color: var(--text-muted); }
+  .val.now-code code { background: var(--primary-soft); color: var(--teal-800); }
+
+  /* Truncate */
+  .val.truncate {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .val.truncate.expanded {
+    -webkit-line-clamp: unset;
+    display: block;
+  }
+  .show-more {
+    margin-top: 4px;
+    font-size: 11.5px;
+    color: var(--primary);
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    font-weight: 500;
+    font-family: var(--font-ui);
+  }
+  .show-more:hover { color: var(--primary-dark); text-decoration: underline; }
+
+  .creation-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 8px;
+    font-size: 12px;
+    color: var(--text-muted);
+    background: var(--bg-subtle);
+    padding: 4px 10px;
+    border-radius: var(--r-pill);
+    border: 1px solid var(--border);
+  }
+  .creation-pill svg { color: var(--primary); }
+
+  .hist-modal > footer {
+    padding: 12px 24px;
+    border-top: 1px solid var(--border);
+    background: var(--bg-subtle);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .hist-modal > footer .lf {
+    font-size: 11.5px;
+    color: var(--text-faint);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  /* Variant switcher */
+  .variant-switcher {
+    position: fixed;
+    top: 16px; right: 16px;
+    z-index: 3;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    padding: 3px;
+    display: flex;
+    gap: 2px;
+    box-shadow: var(--shadow-sm);
+  }
+  .variant-switcher button {
+    padding: 6px 10px;
+    font-size: 11px;
+    color: var(--text-muted);
+    border-radius: var(--r-sm);
+    transition: all 120ms ease;
+    font-family: var(--font-mono);
+  }
+  .variant-switcher button.active {
+    background: var(--bg-subtle);
+    color: var(--text-strong);
+    font-weight: 600;
+  }
+  .variant-switcher .lab {
+    font-size: 10px;
+    color: var(--text-faint);
+    padding: 6px 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+
+  /* Variant: short shows 2 events; long shows truncated copy */
+  body[data-variant="short"] [data-only="long"] { display: none; }
+  body[data-variant="long"]  [data-only="short"] { display: none; }
+</style>
+</head>
+<body data-variant="short">
+
+<div class="variant-switcher" aria-label="Variant">
+  <span class="lab">Pamja</span>
+  <button class="active" onclick="setVariant('short')">Default</button>
+  <button onclick="setVariant('long')">Tekst i gjatë</button>
+</div>
+
+<div class="hist-modal" role="dialog" aria-labelledby="histTitle">
+
+  <header>
+    <div>
+      <h3 id="histTitle">Historia e ndryshimeve <span class="vt">· Vizita e 14.05.2026</span></h3>
+      <div class="sub">Era Krasniqi · <span id="evCount">2</span> ngjarje</div>
+    </div>
+    <button class="x" aria-label="Mbyll" onclick="window.close()">×</button>
+  </header>
+
+  <div class="hist-body">
+
+    <!-- Short: 2 events -->
+    <div data-only="short" class="hist-event">
+      <div class="rail"><span class="dot"></span><span class="line"></span></div>
+      <div class="body">
+        <div>
+          <span class="who">Dr. Taulant Shala</span>
+          <span class="when">14.05.2026 · 13:47</span>
+          <span class="ip">94.140.•.•</span>
+        </div>
+
+        <div class="field-diff">
+          <div class="fld-head">Diagnoza</div>
+          <div class="diff-row then">
+            <div class="key">më parë</div>
+            <div class="val then"><code>J03.9</code>Tonsillitis acuta</div>
+          </div>
+          <div class="diff-row now">
+            <div class="key">tani</div>
+            <div class="val now-code"><code>J03.9</code>Tonsillopharyngitis acuta</div>
+          </div>
+        </div>
+
+        <div class="field-diff">
+          <div class="fld-head">Terapia</div>
+          <div class="diff-row then">
+            <div class="key">më parë</div>
+            <div class="val">Paracetamol 250mg s.3x</div>
+          </div>
+          <div class="diff-row now">
+            <div class="key">tani</div>
+            <div class="val">Paracetamol 250mg s.3x<br>Ibuprofen susp. 100mg/5ml s.n.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Long: truncated -->
+    <div data-only="long" class="hist-event">
+      <div class="rail"><span class="dot"></span><span class="line"></span></div>
+      <div class="body">
+        <div>
+          <span class="who">Dr. Taulant Shala</span>
+          <span class="when">14.05.2026 · 13:47</span>
+          <span class="ip">94.140.•.•</span>
+        </div>
+
+        <div class="field-diff">
+          <div class="fld-head">Ankesa</div>
+          <div class="diff-row then">
+            <div class="key">më parë</div>
+            <div class="val truncate">Pacientja ka 3 ditë me temperaturë të lartë (deri 39.2°C), dhimbje grykë e fortë.</div>
+          </div>
+          <div class="diff-row now">
+            <div class="key">tani</div>
+            <div>
+              <div class="val truncate">Pacientja ka 3 ditë me temperaturë të lartë (deri 39.2°C), dhimbje grykë e fortë, vështirësi në gëlltitje, refuzon ushqimin solid. Nëna raporton që dy ditë më parë ka pasur kontakt me një fëmijë tjetër me simptoma të ngjashme në çerdhe. Pa kollë, pa rinit. Përdorur paracetamol për 24 orë pa përmirësim të qartë të temperaturës.</div>
+              <button class="show-more" onclick="toggleExpand(this)">Shfaq plotësisht</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Creation event always last -->
+    <div class="hist-event creation">
+      <div class="rail"><span class="dot"></span><span class="line"></span></div>
+      <div class="body">
+        <div>
+          <span class="who">Dr. Taulant Shala</span>
+          <span class="when">14.05.2026 · 11:23</span>
+          <span class="ip">94.140.•.•</span>
+        </div>
+        <div class="creation-pill">
+          <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 1.5v9M1.5 6h9"/></svg>
+          Krijuar (vizita e re)
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    <span class="lf">
+      <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="8" height="6" rx="1"/><path d="M4 5V3.5a2 2 0 0 1 4 0V5"/></svg>
+      Vetëm-lexim · audit log
+    </span>
+    <button class="btn btn-secondary" onclick="window.close()">Mbyll</button>
+  </footer>
+</div>
+
+<script>
+  function setVariant(v) {
+    document.body.dataset.variant = v;
+    document.querySelectorAll('.variant-switcher button').forEach(b => b.classList.remove('active'));
+    [...document.querySelectorAll('.variant-switcher button')]
+      .find(b => b.getAttribute('onclick').includes(`'${v}'`))
+      ?.classList.add('active');
+    document.getElementById('evCount').textContent = v === 'long' ? '2' : '2';
+  }
+  function toggleExpand(btn) {
+    const v = btn.previousElementSibling;
+    v.classList.toggle('expanded');
+    btn.textContent = v.classList.contains('expanded') ? 'Shfaq më pak' : 'Shfaq plotësisht';
+  }
+  // Esc closes
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') window.close(); });
+</script>
+
+</body>
+</html>

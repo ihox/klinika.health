@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="sq">
+<head>
+<meta charset="UTF-8">
+<title>Klinika · Components</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="../styles.css">
+<style>
+  :root { --r-pill: 999px; }
+  body {
+    min-height: 100vh;
+    background: var(--bg);
+    padding: 48px 32px 80px;
+  }
+
+  .page-head {
+    max-width: 1100px;
+    margin: 0 auto 40px;
+  }
+  .page-head .crumb {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--text-faint);
+    font-weight: 600;
+    margin-bottom: 12px;
+  }
+  .page-head h1 {
+    font-size: 32px;
+    letter-spacing: -0.025em;
+    margin-bottom: 8px;
+  }
+  .page-head .lede {
+    color: var(--text-muted);
+    font-size: 14px;
+    max-width: 680px;
+    line-height: 1.55;
+  }
+
+  .grid {
+    max-width: 1100px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 16px;
+  }
+
+  .item {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: var(--r-lg);
+    padding: 16px 18px;
+    text-decoration: none;
+    color: inherit;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    box-shadow: var(--shadow-xs);
+    transition: all 150ms ease;
+  }
+  .item:hover {
+    border-color: var(--border-strong);
+    box-shadow: var(--shadow-sm);
+    transform: translateY(-1px);
+  }
+  .item .ix {
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    color: var(--primary-dark);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    font-weight: 600;
+  }
+  .item h3 {
+    font-family: var(--font-display);
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+  .item .file {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-faint);
+    margin-top: 2px;
+  }
+  .item .sub {
+    font-size: 12.5px;
+    color: var(--text-muted);
+    line-height: 1.45;
+    margin-top: 4px;
+  }
+
+  .back {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-top: 24px;
+  }
+  .back:hover { color: var(--primary); }
+</style>
+</head>
+<body>
+
+<div class="page-head">
+  <div class="crumb">Klinika · Design system</div>
+  <h1>Components</h1>
+  <div class="lede">
+    Pjesët e veçanta të sistemit, çdo file i pavarur dhe i përdorshëm si referencë.
+    Çdo komponent përdor tokens nga <code style="font-family: var(--font-mono); font-size: 12.5px; background: var(--bg-subtle); padding: 1px 6px; border-radius: 3px;">../styles.css</code>.
+  </div>
+</div>
+
+<div class="grid">
+
+  <a class="item" href="clinic-login.html">
+    <span class="ix">Item 1 · Auth</span>
+    <h3>Clinic login</h3>
+    <span class="file">clinic-login.html</span>
+    <span class="sub">DonetaMED-branded login me logo + emrin e klinikës.</span>
+  </a>
+
+  <a class="item" href="password-reset.html">
+    <span class="ix">Item 2 · Auth</span>
+    <h3>Password reset flow</h3>
+    <span class="file">password-reset.html</span>
+    <span class="sub">3 hapa — email, dërgim, fjalëkalim i ri me strength + haveibeenpwned.</span>
+  </a>
+
+  <a class="item" href="mfa-verify.html">
+    <span class="ix">Item 3 · Auth</span>
+    <h3>MFA verification</h3>
+    <span class="file">mfa-verify.html</span>
+    <span class="sub">6-shifror auto-advance, masked email, cooldown, gabim, bllokim.</span>
+  </a>
+
+  <a class="item" href="edit-history-modal.html">
+    <span class="ix">Item 4 · Audit</span>
+    <h3>Edit history modal</h3>
+    <span class="file">edit-history-modal.html</span>
+    <span class="sub">Diff për fusha + krijimi + "Shfaq plotësisht" për tekstet e gjata.</span>
+  </a>
+
+  <a class="item" href="dicom-lightbox.html">
+    <span class="ix">Item 5 · DICOM</span>
+    <h3>DICOM lightbox viewer</h3>
+    <span class="file">dicom-lightbox.html</span>
+    <span class="sub">Imazh i centruar, navigim me ◀ ▶, zoom 1×/2×, numëruesi.</span>
+  </a>
+
+  <a class="item" href="dicom-picker.html">
+    <span class="ix">Item 6 · DICOM</span>
+    <h3>DICOM study picker</h3>
+    <span class="file">dicom-picker.html</span>
+    <span class="sub">10 studimet e fundit, thumb strip, klik për të zgjedhur.</span>
+  </a>
+
+  <a class="item" href="vertetim-dialog.html">
+    <span class="ix">Item 7 · Print</span>
+    <h3>Vërtetim issue dialog</h3>
+    <span class="file">vertetim-dialog.html</span>
+    <span class="sub">Periudha + quick chips + preview live + validim Deri &gt;= Nga.</span>
+  </a>
+
+  <a class="item" href="growth-chart-modal.html">
+    <span class="ix">Item 8 · Charts</span>
+    <h3>WHO growth chart</h3>
+    <span class="file">growth-chart-modal.html</span>
+    <span class="sub">3 tabs, P3-P97 banda, tooltip, sparkline kompakt.</span>
+  </a>
+
+  <a class="item" href="toast-undo.html">
+    <span class="ix">Item 9 · Feedback</span>
+    <h3>Soft-delete undo toast</h3>
+    <span class="file">toast-undo.html</span>
+    <span class="sub">Pill i errët në fund, numërues 30s, slide-up/slide-down.</span>
+  </a>
+
+  <a class="item" href="save-failure-dialog.html">
+    <span class="ix">Item 10 · Errors</span>
+    <h3>Save-failure dialog</h3>
+    <span class="file">save-failure-dialog.html</span>
+    <span class="sub">Lista e fushave të paruajtura + Provo përsëri / Ruaj lokalisht.</span>
+  </a>
+
+  <a class="item" href="empty-states.html">
+    <span class="ix">Item 11 · States</span>
+    <h3>Empty &amp; error states</h3>
+    <span class="file">empty-states.html</span>
+    <span class="sub">404, 403, listë boshe vizita/vërtetim, DICOM, matje, rrjeti.</span>
+  </a>
+
+  <a class="item" href="loading-skeletons.html">
+    <span class="ix">Item 12 · States</span>
+    <h3>Loading skeletons</h3>
+    <span class="file">loading-skeletons.html</span>
+    <span class="sub">Master strip, lista vizitash, kolona kalendari — pulsim 1.4s.</span>
+  </a>
+
+  <a class="item" href="connection-status.html">
+    <span class="ix">Item 13 · Status</span>
+    <h3>Connection status indicator</h3>
+    <span class="file">connection-status.html</span>
+    <span class="sub">Online (i padukshëm), Offline (ambër), Po lidhet (pulsim).</span>
+  </a>
+
+</div>
+
+<a class="back" href="../index.html">← Te prototipi i plotë</a>
+
+</body>
+</html>

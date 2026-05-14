@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="sq">
+<head>
+<meta charset="UTF-8">
+<title>Klinika · Loading skeletons</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="../styles.css">
+<style>
+  :root { --r-pill: 999px; }
+  body {
+    min-height: 100vh;
+    background: var(--bg);
+    padding: 40px 32px 80px;
+  }
+
+  .page-head {
+    max-width: 1200px;
+    margin: 0 auto 36px;
+  }
+  .page-head .crumb {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--text-faint);
+    font-weight: 600;
+    margin-bottom: 10px;
+  }
+  .page-head h1 {
+    font-size: 28px;
+    letter-spacing: -0.025em;
+    margin-bottom: 6px;
+  }
+  .page-head .lede {
+    color: var(--text-muted);
+    font-size: 14px;
+    max-width: 680px;
+    line-height: 1.55;
+  }
+
+  .stack {
+    max-width: 1200px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 28px;
+  }
+  .card-label {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text-faint);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-weight: 600;
+    padding: 0 4px 8px;
+  }
+
+  /* Pulse animation */
+  @keyframes sk-pulse {
+    0%, 100% { background-color: var(--bg-muted); }
+    50%      { background-color: var(--bg-subtle); }
+  }
+  .sk {
+    background: var(--bg-muted);
+    border-radius: 4px;
+    animation: sk-pulse 1.4s ease-in-out infinite;
+  }
+
+  /* Master strip skeleton */
+  .sk-master {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: var(--r-lg);
+    padding: 16px 28px;
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    box-shadow: var(--shadow-xs);
+  }
+  .sk-master .sk-id { width: 80px; height: 22px; }
+  .sk-master .sk-name { display: flex; flex-direction: column; gap: 6px; }
+  .sk-master .sk-name .a { width: 220px; height: 22px; }
+  .sk-master .sk-name .b { width: 160px; height: 12px; }
+  .sk-master .sk-divider { width: 1px; height: 44px; background: var(--border); }
+  .sk-master .sk-stat { display: flex; flex-direction: column; gap: 6px; }
+  .sk-master .sk-stat .l { width: 64px; height: 10px; }
+  .sk-master .sk-stat .v { width: 52px; height: 18px; }
+  .sk-master .sk-spacer { flex: 1; }
+  .sk-master .sk-btn { width: 120px; height: 32px; border-radius: 6px; }
+
+  /* Visit list skeleton */
+  .sk-list {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: var(--r-lg);
+    overflow: hidden;
+    width: 480px;
+    max-width: 100%;
+    box-shadow: var(--shadow-xs);
+  }
+  .sk-list .sk-list-head {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .sk-list .sk-list-head .a { width: 100px; height: 14px; }
+  .sk-list .sk-list-head .b { width: 40px; height: 12px; }
+  .sk-list .sk-list-row {
+    display: grid;
+    grid-template-columns: 60px 1fr auto;
+    gap: 14px;
+    align-items: center;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border-soft);
+  }
+  .sk-list .sk-list-row:last-child { border-bottom: none; }
+  .sk-list .sk-list-row .time { width: 50px; height: 12px; }
+  .sk-list .sk-list-row .name { height: 12px; }
+  .sk-list .sk-list-row .badge { width: 44px; height: 18px; border-radius: 999px; }
+
+  /* Calendar day column skeleton */
+  .sk-days {
+    display: flex;
+    gap: 16px;
+    overflow-x: auto;
+    padding-bottom: 8px;
+  }
+  .sk-day {
+    flex: 0 0 200px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: var(--r-lg);
+    overflow: hidden;
+    box-shadow: var(--shadow-xs);
+  }
+  .sk-day .sk-day-head {
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .sk-day .sk-day-head .a { width: 60px; height: 12px; }
+  .sk-day .sk-day-head .b { width: 32px; height: 18px; }
+  .sk-day .sk-day-body {
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .sk-slot {
+    height: 32px;
+    background: var(--bg-muted);
+    border-radius: 4px;
+    animation: sk-pulse 1.4s ease-in-out infinite;
+  }
+  .sk-slot.tall  { height: 56px; }
+  .sk-slot.short { height: 22px; }
+
+  /* Demo toggle */
+  .toggle {
+    position: fixed;
+    top: 16px; right: 16px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    padding: 6px 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    box-shadow: var(--shadow-sm);
+    font-size: 12px;
+    color: var(--text-muted);
+    z-index: 50;
+  }
+  .toggle input { accent-color: var(--primary); }
+  body[data-paused="true"] .sk,
+  body[data-paused="true"] .sk-slot { animation-play-state: paused; }
+</style>
+</head>
+<body data-paused="false">
+
+<label class="toggle">
+  <input type="checkbox" id="pause">
+  Ndalo pulsimin
+</label>
+
+<div class="page-head">
+  <div class="crumb">Klinika · Design system</div>
+  <h1>Loading skeletons</h1>
+  <div class="lede">
+    Pulsim i butë (1.4s) ndërmjet dy tonesh të ngrohta — pa spinner. Lartësia e
+    skeleton-it përputhet me lartësinë reale brenda ±2px që të mos ketë "jump"
+    kur përmbajtja vjen.
+  </div>
+</div>
+
+<div class="stack">
+
+  <div>
+    <div class="card-label">8.1 · Master data strip</div>
+    <div class="sk-master">
+      <div class="sk sk-id"></div>
+      <div class="sk-name">
+        <div class="sk a"></div>
+        <div class="sk b"></div>
+      </div>
+      <div class="sk-divider"></div>
+      <div class="sk-stat"><div class="sk l"></div><div class="sk v"></div></div>
+      <div class="sk-stat"><div class="sk l"></div><div class="sk v"></div></div>
+      <div class="sk-stat"><div class="sk l"></div><div class="sk v"></div></div>
+      <div class="sk-stat"><div class="sk l"></div><div class="sk v"></div></div>
+      <div class="sk-spacer"></div>
+      <div class="sk sk-btn"></div>
+    </div>
+  </div>
+
+  <div>
+    <div class="card-label">8.2 · Visit list</div>
+    <div class="sk-list">
+      <div class="sk-list-head">
+        <div class="sk a"></div>
+        <div class="sk b"></div>
+      </div>
+      <div class="sk-list-row"><div class="sk time"></div><div class="sk name" style="width: 70%;"></div><div class="sk badge"></div></div>
+      <div class="sk-list-row"><div class="sk time"></div><div class="sk name" style="width: 55%;"></div><div class="sk badge"></div></div>
+      <div class="sk-list-row"><div class="sk time"></div><div class="sk name" style="width: 78%;"></div><div class="sk badge"></div></div>
+      <div class="sk-list-row"><div class="sk time"></div><div class="sk name" style="width: 60%;"></div><div class="sk badge"></div></div>
+      <div class="sk-list-row"><div class="sk time"></div><div class="sk name" style="width: 65%;"></div><div class="sk badge"></div></div>
+      <div class="sk-list-row"><div class="sk time"></div><div class="sk name" style="width: 50%;"></div><div class="sk badge"></div></div>
+      <div class="sk-list-row"><div class="sk time"></div><div class="sk name" style="width: 72%;"></div><div class="sk badge"></div></div>
+    </div>
+  </div>
+
+  <div>
+    <div class="card-label">8.3 · Calendar — 5 day columns</div>
+    <div class="sk-days">
+      <div class="sk-day">
+        <div class="sk-day-head"><div class="sk a"></div><div class="sk b"></div></div>
+        <div class="sk-day-body">
+          <div class="sk-slot"></div>
+          <div class="sk-slot tall"></div>
+          <div class="sk-slot short"></div>
+          <div class="sk-slot"></div>
+          <div class="sk-slot"></div>
+          <div class="sk-slot tall"></div>
+        </div>
+      </div>
+      <div class="sk-day">
+        <div class="sk-day-head"><div class="sk a"></div><div class="sk b"></div></div>
+        <div class="sk-day-body">
+          <div class="sk-slot tall"></div>
+          <div class="sk-slot"></div>
+          <div class="sk-slot short"></div>
+          <div class="sk-slot"></div>
+          <div class="sk-slot tall"></div>
+          <div class="sk-slot short"></div>
+        </div>
+      </div>
+      <div class="sk-day">
+        <div class="sk-day-head"><div class="sk a"></div><div class="sk b"></div></div>
+        <div class="sk-day-body">
+          <div class="sk-slot"></div>
+          <div class="sk-slot"></div>
+          <div class="sk-slot tall"></div>
+          <div class="sk-slot short"></div>
+          <div class="sk-slot"></div>
+        </div>
+      </div>
+      <div class="sk-day">
+        <div class="sk-day-head"><div class="sk a"></div><div class="sk b"></div></div>
+        <div class="sk-day-body">
+          <div class="sk-slot short"></div>
+          <div class="sk-slot tall"></div>
+          <div class="sk-slot"></div>
+          <div class="sk-slot"></div>
+          <div class="sk-slot tall"></div>
+        </div>
+      </div>
+      <div class="sk-day">
+        <div class="sk-day-head"><div class="sk a"></div><div class="sk b"></div></div>
+        <div class="sk-day-body">
+          <div class="sk-slot"></div>
+          <div class="sk-slot short"></div>
+          <div class="sk-slot tall"></div>
+          <div class="sk-slot"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  document.getElementById('pause').addEventListener('change', (e) => {
+    document.body.dataset.paused = e.target.checked ? 'true' : 'false';
+  });
+</script>
+
+</body>
+</html>

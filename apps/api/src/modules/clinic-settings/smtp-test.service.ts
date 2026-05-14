@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectPinoLogger, type PinoLogger } from 'nestjs-pino';
 
-import { SmtpError, smtpSendTestMessage } from './smtp-client';
+import { SmtpError, smtpSendMessage } from './smtp-client';
 
 export interface SmtpTestParams {
   host: string;
@@ -21,7 +21,7 @@ export interface SmtpTestResult {
 }
 
 /**
- * Wrapper around {@link smtpSendTestMessage} that translates protocol
+ * Wrapper around {@link smtpSendMessage} that translates protocol
  * failures into structured `{ ok, detail }` results. The endpoint
  * never throws back to the caller — a failed test is normal user
  * feedback, not an exceptional condition.
@@ -51,7 +51,7 @@ export class SmtpTestService {
       return this.stub(params);
     }
     try {
-      await smtpSendTestMessage(
+      await smtpSendMessage(
         {
           host: params.host,
           port: params.port,

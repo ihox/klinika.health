@@ -2,18 +2,22 @@ import { connect as netConnect, type Socket } from 'node:net';
 import { connect as tlsConnect, type TLSSocket } from 'node:tls';
 
 /**
- * Minimal SMTP client (RFC 5321 + AUTH LOGIN + STARTTLS) used by the
- * "Test connection" button on the clinic email settings page, and as
- * the transport for the optional per-clinic SMTP override.
+ * Minimal SMTP client (RFC 5321 + AUTH LOGIN + STARTTLS) used by:
+ *   - the "Test connection" button on the clinic email settings page,
+ *   - the platform-level {@link SmtpSender} in EmailService (when
+ *     `SMTP_HOST` is configured),
+ *   - the optional per-clinic SMTP override (future wire-up).
  *
  * Why not nodemailer? Klinika's tech stack is intentionally narrow
  * (CLAUDE.md §2). This slice only needs: TCP/TLS connect, EHLO,
  * STARTTLS, AUTH LOGIN, MAIL/RCPT/DATA, QUIT. Maybe ~250 lines.
  *
  * Limitations vs nodemailer:
- *   - Plain ASCII/UTF-8 single-part bodies only (no attachments)
- *   - AUTH LOGIN only — AUTH PLAIN as a fallback
- *   - No connection pooling (test endpoint is one-shot)
+ *   - Single-part text or multipart/alternative (text + html), no
+ *     attachments,
+ *   - AUTH LOGIN only,
+ *   - No connection pooling (one TCP session per message — fine at
+ *     our send volume).
  *
  * Production deployments will typically use 465 (implicit TLS) or
  * 587 (STARTTLS). Both are supported; port 25 plaintext works too
@@ -37,6 +41,9 @@ export interface SmtpMessage {
   to: string;
   subject: string;
   text: string;
+  /** Optional HTML body. When present the message is sent as
+   *  multipart/alternative; otherwise text-only. */
+  html?: string;
 }
 
 export type SmtpFailureReason =
@@ -67,20 +74,33 @@ interface Conversation {
   send: (line: string) => Promise<void>;
 }
 
-/** Open the test endpoint's verify-and-send round-trip. */
-export async function smtpSendTestMessage(
+/**
+ * Open a one-shot SMTP session and dispatch a single message.
+ * Used by both the clinic-settings "Test connection" button and the
+ * platform-level SmtpSender. One TCP/TLS session per message; the
+ * EHLO/STARTTLS/AUTH dance runs each call (no connection pooling).
+ */
+export async function smtpSendMessage(
   opts: SmtpDialOptions,
   message: SmtpMessage,
 ): Promise<void> {
-  const session = await openSession(opts);
+  let session = await openSession(opts);
   try {
     await drainGreeting(session);
     await ehlo(session, opts.host);
     if (opts.port !== 465) {
-      // Port 465 is already TLS-wrapped. For 587/25 try to STARTTLS
-      // unless the server didn't advertise it; we re-EHLO after.
+      // Port 465 is already TLS-wrapped. For 587/25 try STARTTLS
+      // (skip when the server didn't advertise it). After upgrade
+      // every subsequent command must run on the TLSSocket — writing
+      // to the original plaintext socket post-STARTTLS would send
+      // plaintext into a TLS-expecting peer and the server stops
+      // responding. Reassign `session` so authenticate/sendOne use
+      // the encrypted transport.
       const upgraded = await maybeStartTls(session, opts.host);
-      if (upgraded) await ehlo(upgraded, opts.host);
+      if (upgraded) {
+        session = upgraded;
+        await ehlo(session, opts.host);
+      }
     }
     await authenticate(session, opts.username, opts.password);
     await sendOne(session, opts, message);
@@ -317,19 +337,45 @@ async function sendOne(s: Conversation, opts: SmtpDialOptions, message: SmtpMess
 function composeMessage(opts: SmtpDialOptions, message: SmtpMessage): string {
   const date = new Date().toUTCString();
   const messageId = `<${Date.now()}-${Math.random().toString(36).slice(2, 10)}@klinika.health>`;
-  const lines = [
+  const headers = [
     `From: ${encodeAddress(opts.fromName, opts.fromAddress)}`,
     `To: <${message.to}>`,
     `Subject: ${encodeHeader(message.subject)}`,
     `Date: ${date}`,
     `Message-ID: ${messageId}`,
     'MIME-Version: 1.0',
+  ];
+
+  if (!message.html) {
+    headers.push('Content-Type: text/plain; charset=utf-8', 'Content-Transfer-Encoding: 8bit', '');
+    return [...headers, ...dotStuff(message.text)].join(CRLF);
+  }
+
+  // multipart/alternative: text first, html second per RFC 2046 §5.1.4
+  // ("the order of body parts is significant ... in increasing order
+  // of preference"). Mail clients capable of HTML pick the last part.
+  const boundary = `=_klinika_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
+  headers.push(`Content-Type: multipart/alternative; boundary="${boundary}"`, '');
+  return [
+    ...headers,
+    `--${boundary}`,
     'Content-Type: text/plain; charset=utf-8',
     'Content-Transfer-Encoding: 8bit',
     '',
-    ...message.text.split('\n').map((l) => (l.startsWith('.') ? `.${l}` : l)),
-  ];
-  return lines.join(CRLF);
+    ...dotStuff(message.text),
+    `--${boundary}`,
+    'Content-Type: text/html; charset=utf-8',
+    'Content-Transfer-Encoding: 8bit',
+    '',
+    ...dotStuff(message.html),
+    `--${boundary}--`,
+  ].join(CRLF);
+}
+
+/** Apply RFC 5321 §4.5.2 dot-stuffing so leading "." in a line isn't
+ *  parsed as end-of-data. */
+function dotStuff(body: string): string[] {
+  return body.split('\n').map((l) => (l.startsWith('.') ? `.${l}` : l));
 }
 
 function encodeAddress(name: string, address: string): string {

@@ -2,6 +2,7 @@ import { Inject, Injectable, Optional } from '@nestjs/common';
 import { InjectPinoLogger, type PinoLogger } from 'nestjs-pino';
 import { Resend } from 'resend';
 
+import { smtpSendMessage, type SmtpDialOptions } from '../clinic-settings/smtp-client';
 import { mfaCodeEmail, type MfaCodeEmailVars } from './templates/mfa-code';
 import { newDeviceEmail, type NewDeviceEmailVars } from './templates/new-device';
 import { passwordResetEmail, type PasswordResetEmailVars } from './templates/password-reset';
@@ -44,11 +45,47 @@ class ResendSender implements EmailSender {
   }
 }
 
+/** SMTP-backed sender — selected when SMTP_HOST / SMTP_USERNAME /
+ *  SMTP_PASSWORD are all set. Reuses the same primitive that the
+ *  clinic-settings "Test connection" button uses, so the format of
+ *  sent messages is identical to what a clinic admin would expect.
+ *
+ *  One-shot per message (no connection pooling). At our volume the
+ *  TCP/TLS handshake cost is acceptable; if email throughput becomes
+ *  a bottleneck a pooled transport can drop in behind this class. */
+class SmtpSender implements EmailSender {
+  constructor(
+    private readonly dial: SmtpDialOptions,
+    private readonly logger: PinoLogger,
+  ) {}
+
+  async send(message: EmailMessage): Promise<void> {
+    await smtpSendMessage(this.dial, {
+      to: message.to,
+      subject: message.subject,
+      text: message.text,
+      html: message.html,
+    });
+    this.logger.debug({ to: message.to, subject: message.subject }, 'Email sent via SMTP');
+  }
+}
+
 /** In-memory capturing sender — selected when no RESEND_API_KEY is set. */
 export class CapturingEmailSender implements EmailSender {
   readonly inbox: EmailMessage[] = [];
   send(message: EmailMessage): Promise<void> {
     this.inbox.push(message);
+    // Dev-only mirror to stdout so the operator can read OTPs, password
+    // reset links, etc. without standing up an SMTP/Resend backend.
+    // Only reachable when `RESEND_API_KEY` is unset (the EmailService
+    // constructor selects this sender only in that case) AND when the
+    // current test isn't injecting its own CapturingEmailSender, so it
+    // never runs in production or under the integration test harness.
+    //
+    // eslint-disable-next-line no-console
+    console.log(
+      `\n[capturing-email] to=${message.to} subject=${message.subject}\n${message.text ?? message.html ?? '(no body)'}\n`,
+    );
     return Promise.resolve();
   }
   takeLatest(forEmail: string): EmailMessage | undefined {
@@ -73,19 +110,48 @@ export class EmailService {
   ) {
     if (injected) {
       this.sender = injected;
-    } else {
-      const apiKey = process.env['RESEND_API_KEY'];
-      const from = process.env['EMAIL_FROM'] ?? 'no-reply@klinika.health';
-      if (apiKey && apiKey.length > 0) {
-        this.sender = new ResendSender(new Resend(apiKey), from, this.logger);
-      } else {
-        this.logger.warn(
-          { from },
-          'RESEND_API_KEY not set — falling back to CapturingEmailSender (dev/test only)',
-        );
-        this.sender = new CapturingEmailSender();
-      }
+      return;
     }
+
+    const from = process.env['EMAIL_FROM'] ?? 'no-reply@klinika.health';
+    const fromName = process.env['EMAIL_FROM_NAME'] ?? 'Klinika';
+
+    // Selection order: SMTP (when host + credentials are present) >
+    // Resend > CapturingEmailSender. Each branch is mutually
+    // exclusive so misconfiguration is loud — if you set SMTP_HOST
+    // without credentials, the API logs and falls through to Resend
+    // rather than silently sending via a broken transport.
+    const smtpHost = process.env['SMTP_HOST'];
+    const smtpUser = process.env['SMTP_USERNAME'];
+    const smtpPass = process.env['SMTP_PASSWORD'];
+    if (smtpHost && smtpUser && smtpPass) {
+      const port = Number(process.env['SMTP_PORT'] ?? 587);
+      this.sender = new SmtpSender(
+        { host: smtpHost, port, username: smtpUser, password: smtpPass, fromName, fromAddress: from },
+        this.logger,
+      );
+      this.logger.info({ host: smtpHost, port, from }, 'Email transport: SMTP');
+      return;
+    }
+    if (smtpHost) {
+      this.logger.warn(
+        { host: smtpHost },
+        'SMTP_HOST is set but SMTP_USERNAME / SMTP_PASSWORD are missing — ignoring SMTP config',
+      );
+    }
+
+    const apiKey = process.env['RESEND_API_KEY'];
+    if (apiKey && apiKey.length > 0) {
+      this.sender = new ResendSender(new Resend(apiKey), from, this.logger);
+      this.logger.info({ from }, 'Email transport: Resend');
+      return;
+    }
+
+    this.logger.warn(
+      { from },
+      'Neither SMTP_* nor RESEND_API_KEY set — falling back to CapturingEmailSender (dev/test only)',
+    );
+    this.sender = new CapturingEmailSender();
   }
 
   setSender(sender: EmailSender): void {

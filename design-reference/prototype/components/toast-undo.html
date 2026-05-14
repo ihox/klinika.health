@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="sq">
+<head>
+<meta charset="UTF-8">
+<title>Klinika · Undo toast</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="../styles.css">
+<style>
+  :root { --r-pill: 999px; }
+  body {
+    min-height: 100vh;
+    background: var(--bg);
+    background-image:
+      linear-gradient(rgba(28,25,23,0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(28,25,23,0.04) 1px, transparent 1px);
+    background-size: 24px 24px;
+    display: grid;
+    place-items: center;
+    padding: 24px;
+    position: relative;
+  }
+
+  /* Demo trigger card — show the app surface where the toast fires from */
+  .demo-surface {
+    width: 100%;
+    max-width: 520px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: var(--r-lg);
+    padding: 24px;
+    box-shadow: var(--shadow-xs);
+  }
+  .demo-surface h3 { font-size: 15px; margin-bottom: 6px; }
+  .demo-surface .desc {
+    font-size: 13px;
+    color: var(--text-muted);
+    line-height: 1.55;
+    margin-bottom: 18px;
+  }
+  .demo-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+  /* Toast */
+  .undo-toast {
+    position: fixed;
+    left: 50%;
+    bottom: 24px;
+    transform: translate(-50%, 120px);
+    z-index: 100;
+    background: rgba(12, 10, 9, 0.92);
+    color: white;
+    padding: 12px 14px 0;
+    border-radius: var(--r-lg);
+    box-shadow: 0 12px 32px rgba(0,0,0,0.28);
+    font-size: 13px;
+    min-width: 360px;
+    backdrop-filter: blur(6px);
+    overflow: hidden;
+    opacity: 0;
+    transition: transform 280ms cubic-bezier(.2,.7,.3,1), opacity 200ms ease;
+    pointer-events: none;
+  }
+  .undo-toast.show {
+    transform: translate(-50%, 0);
+    opacity: 1;
+    pointer-events: auto;
+  }
+  .undo-toast .ut-row {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding-bottom: 11px;
+  }
+  .undo-toast .ic {
+    width: 26px; height: 26px;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.08);
+    display: grid; place-items: center;
+    color: rgba(255,255,255,0.7);
+    flex-shrink: 0;
+  }
+  .undo-toast .msg { flex: 1; line-height: 1.4; }
+  .undo-toast .msg .strong { font-weight: 500; }
+  .undo-toast .msg .dim {
+    color: rgba(255,255,255,0.55);
+    font-size: 11.5px;
+    display: block;
+    margin-top: 1px;
+  }
+  .undo-toast .undo {
+    color: white;
+    font-weight: 600;
+    font-size: 13px;
+    padding: 5px 12px;
+    border: 1px solid rgba(255,255,255,0.18);
+    border-radius: var(--r-sm);
+    background: transparent;
+    cursor: pointer;
+    transition: all 120ms ease;
+  }
+  .undo-toast .undo:hover { background: rgba(255,255,255,0.1); }
+  .ut-bar {
+    height: 2px;
+    background: rgba(255,255,255,0.6);
+    transform-origin: left center;
+    transform: scaleX(1);
+  }
+  .undo-toast.show .ut-bar { animation: drain 30s linear forwards; }
+  @keyframes drain { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+
+  /* Confirmation feedback after Anulo */
+  .restored {
+    margin-top: 12px;
+    padding: 10px 14px;
+    background: var(--primary-tint);
+    border: 1px solid var(--teal-200);
+    color: var(--teal-800);
+    border-radius: var(--r-md);
+    font-size: 12.5px;
+    display: none;
+    align-items: center;
+    gap: 8px;
+  }
+  .restored.show { display: flex; }
+  .restored svg { color: var(--primary); }
+</style>
+</head>
+<body>
+
+<div class="demo-surface">
+  <h3>Demo · soft-delete</h3>
+  <p class="desc">
+    Klikoni një nga butonat më poshtë për të parë toast-in e fshirjes me një numërues
+    30-sekondësh. Klikoni <strong style="color: var(--text); font-weight: 600;">Anulo</strong>
+    për ta kthyer mbrapsht.
+  </p>
+  <div class="demo-actions">
+    <button class="btn btn-danger btn-sm" onclick="fireToast('visit')">Fshij vizitën</button>
+    <button class="btn btn-danger btn-sm" onclick="fireToast('vertetim')">Fshij vërtetimin</button>
+  </div>
+  <div class="restored" id="restored">
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M2 7a5 5 0 0 1 8.5-3.5L12 5"/><path d="M12 2v3h-3"/>
+    </svg>
+    <span><strong>U kthye.</strong> <span style="color: var(--text-muted);">Asgjë nuk u fshi.</span></span>
+  </div>
+</div>
+
+<div class="undo-toast" id="toast" role="status" aria-live="polite">
+  <div class="ut-row">
+    <div class="ic">
+      <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M3 4h8M5 4V3a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v1M4.5 4l.5 7a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1l.5-7"/>
+      </svg>
+    </div>
+    <div class="msg">
+      <span class="strong" id="tMsg">Vizita u fshi.</span>
+      <span class="dim" id="tDim">14.05.2026 · J03.9 Tonsillopharyngitis acuta</span>
+    </div>
+    <button class="undo" onclick="undoIt()">Anulo</button>
+  </div>
+  <div class="ut-bar"></div>
+</div>
+
+<script>
+  const toast = document.getElementById('toast');
+  const restored = document.getElementById('restored');
+  const $msg = document.getElementById('tMsg');
+  const $dim = document.getElementById('tDim');
+  let timer = null;
+
+  const PAYLOADS = {
+    visit:    { msg: 'Vizita u fshi.',    dim: '14.05.2026 · J03.9 Tonsillopharyngitis acuta' },
+    vertetim: { msg: 'Vërtetimi u fshi.', dim: 'VR-2026-0142 · 14.05.2026 · 5 ditë' },
+  };
+
+  function fireToast(kind) {
+    const p = PAYLOADS[kind] || PAYLOADS.visit;
+    $msg.textContent = p.msg;
+    $dim.textContent = p.dim;
+    restored.classList.remove('show');
+    // restart drain animation
+    toast.classList.remove('show');
+    void toast.offsetWidth;
+    toast.classList.add('show');
+    clearTimeout(timer);
+    timer = setTimeout(() => { toast.classList.remove('show'); }, 30000);
+  }
+
+  function undoIt() {
+    toast.classList.remove('show');
+    clearTimeout(timer);
+    restored.classList.add('show');
+    setTimeout(() => restored.classList.remove('show'), 2500);
+  }
+</script>
+
+</body>
+</html>

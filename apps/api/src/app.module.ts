@@ -1,10 +1,16 @@
 import { type MiddlewareConsumer, Module, type NestModule } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 
+// LoggingModule (nestjs-pino LoggerModule.forRoot) MUST be imported
+// last — both the `import` statement here and its position in the
+// `imports` array below. nestjs-pino snapshots all @InjectPinoLogger
+// contexts at the moment forRoot() runs; any service file loaded
+// after that point won't have its per-class PinoLogger provider
+// registered. See common/logging/logger.module.ts for the full
+// explanation.
 import { AuditModule } from './common/audit/audit.module';
 import { ClinicResolutionMiddleware } from './common/middleware/clinic-resolution.middleware';
 import { RolesGuard } from './common/guards/roles.guard';
-import { LoggingModule } from './common/logging/logger.module';
 import { AdminModule } from './modules/admin/admin.module';
 import { AppointmentsModule } from './modules/appointments/appointments.module';
 import { AuthModule } from './modules/auth/auth.module';
@@ -18,10 +24,10 @@ import { RateLimitModule } from './modules/rate-limit/rate-limit.module';
 import { ErrorRateMiddleware } from './modules/telemetry/error-counter';
 import { TelemetryModule } from './modules/telemetry/telemetry.module';
 import { PrismaModule } from './prisma/prisma.module';
+import { LoggingModule } from './common/logging/logger.module';
 
 @Module({
   imports: [
-    LoggingModule,
     PrismaModule,
     AuditModule,
     EmailModule,
@@ -35,6 +41,7 @@ import { PrismaModule } from './prisma/prisma.module';
     PatientsModule,
     AppointmentsModule,
     DoctorDashboardModule,
+    LoggingModule,
   ],
   providers: [
     // RolesGuard is global so `@Roles()` works on any handler without

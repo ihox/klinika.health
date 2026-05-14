@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="sq">
+<head>
+<meta charset="UTF-8">
+<title>Klinika · Verifiko se jeni ju</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="../styles.css">
+<style>
+  :root { --r-pill: 999px; }
+  body {
+    min-height: 100vh;
+    display: grid;
+    place-items: center;
+    background: var(--bg);
+    padding: 40px 24px;
+  }
+  body::before {
+    content: '';
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    background: var(--primary);
+    z-index: 100;
+  }
+
+  .mfa-card { width: 100%; max-width: 400px; }
+
+  .mfa-brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 24px;
+  }
+  .mfa-brand .word {
+    font-family: var(--font-display);
+    font-size: 18px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    color: var(--text-strong);
+  }
+  .mfa-brand .word .ext { color: var(--text-faint); font-weight: 400; }
+
+  .mfa-title {
+    font-family: var(--font-display);
+    font-size: 24px;
+    font-weight: 600;
+    letter-spacing: -0.025em;
+    margin-bottom: 4px;
+  }
+  .mfa-sub {
+    color: var(--text-muted);
+    font-size: 13px;
+    line-height: 1.55;
+    margin-bottom: 22px;
+  }
+  .mfa-sub .email-mask {
+    color: var(--text);
+    font-weight: 500;
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    background: var(--bg-subtle);
+    padding: 1px 6px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+  }
+
+  .mfa-form { display: flex; flex-direction: column; gap: 14px; }
+  .mfa-form .state { display: none; flex-direction: column; gap: 14px; }
+  .mfa-form .state.active { display: flex; }
+
+  .otp-row {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 8px;
+  }
+  .otp-row input {
+    min-width: 0;
+    text-align: center;
+    font-family: var(--font-mono);
+    font-size: 22px;
+    font-weight: 600;
+    padding: 14px 0;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--r-md);
+    background: var(--bg-elevated);
+    color: var(--text-strong);
+    outline: none;
+    transition: border-color 150ms ease, box-shadow 150ms ease;
+    line-height: 1;
+  }
+  .otp-row input:focus { border-color: var(--primary); box-shadow: var(--focus-ring); }
+
+  .mfa-form.error .otp-row input {
+    border-color: var(--amber);
+    background: #FFFBEB;
+    color: var(--amber);
+  }
+
+  .err-line {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12.5px;
+    color: var(--amber);
+  }
+
+  .checkbox-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--text);
+    cursor: pointer;
+    user-select: none;
+  }
+  .checkbox-row input { accent-color: var(--primary); width: 14px; height: 14px; }
+
+  .resend-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 12px;
+    color: var(--text-muted);
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+  }
+  .resend-row .link { color: var(--text-faint); font-weight: 500; }
+  .resend-row .link.active { color: var(--primary); cursor: pointer; }
+  .resend-row .link.active:hover { color: var(--primary-dark); text-decoration: underline; }
+
+  /* Locked-out amber banner */
+  .lockout {
+    display: none;
+    gap: 10px;
+    align-items: flex-start;
+    padding: 12px 14px;
+    background: var(--amber-bg);
+    border: 1px solid var(--amber-soft);
+    border-radius: var(--r-md);
+  }
+  .lockout svg { color: var(--amber); flex-shrink: 0; margin-top: 1px; }
+  .lockout div {
+    font-size: 12.5px;
+    color: #78350F;
+    line-height: 1.5;
+  }
+  .lockout strong { color: var(--amber); font-weight: 600; }
+  body[data-state="locked"] .lockout { display: flex; }
+  body[data-state="locked"] .otp-row,
+  body[data-state="locked"] .checkbox-row,
+  body[data-state="locked"] .resend-row,
+  body[data-state="locked"] button[type="submit"] { display: none; }
+
+  /* Wrong-code state */
+  body[data-state="wrong"] .err-line { display: flex; }
+  .err-line { display: none; }
+  body[data-state="wrong"] .otp-row input {
+    border-color: var(--amber);
+    background: #FFFBEB;
+    color: var(--amber);
+  }
+  body[data-state="wrong"] .resend-row .link { color: var(--primary); }
+  body[data-state="wrong"] .resend-row .link:hover { color: var(--primary-dark); text-decoration: underline; }
+
+  /* Cooldown copy */
+  .cooldown { color: var(--text-faint); }
+  body[data-state="ready"] .cooldown { color: var(--primary); cursor: pointer; }
+
+  /* Variant switcher */
+  .variant-switcher {
+    position: fixed;
+    top: 16px; right: 16px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    padding: 3px;
+    display: flex;
+    gap: 2px;
+    box-shadow: var(--shadow-sm);
+    z-index: 50;
+  }
+  .variant-switcher button {
+    padding: 6px 10px;
+    font-size: 11px;
+    color: var(--text-muted);
+    border-radius: var(--r-sm);
+    transition: all 120ms ease;
+    font-family: var(--font-mono);
+  }
+  .variant-switcher button.active {
+    background: var(--bg-subtle);
+    color: var(--text-strong);
+    font-weight: 600;
+  }
+  .variant-switcher .lab {
+    font-size: 10px;
+    color: var(--text-faint);
+    padding: 6px 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+
+  .back-link {
+    margin-top: 32px;
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+  .back-link a { color: var(--text-muted); }
+  .back-link a:hover { color: var(--primary); }
+</style>
+</head>
+<body data-state="default">
+
+<div class="variant-switcher" aria-label="Variant">
+  <span class="lab">Gjendja</span>
+  <button class="active" onclick="setState('default')">Default</button>
+  <button onclick="setState('wrong')">Gabim</button>
+  <button onclick="setState('ready')">Kohë &gt; 0</button>
+  <button onclick="setState('locked')">Bllokuar</button>
+</div>
+
+<div class="mfa-card">
+  <div class="mfa-brand">
+    <svg width="28" height="28" viewBox="0 0 64 64" fill="none" style="color: var(--primary);">
+      <path d="M32 54 C 12 40, 8 26, 18 18 C 24 14, 30 16, 32 22 C 34 16, 40 14, 46 18 C 56 26, 52 40, 32 54 Z" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M12 34 L 22 34 L 26 28 L 30 40 L 34 30 L 38 36 L 52 36" stroke="var(--teal-800)" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+    </svg>
+    <span class="word">klinika<span class="ext">.</span></span>
+  </div>
+
+  <div class="mfa-title">Verifikoni se jeni ju</div>
+  <div class="mfa-sub">
+    Ne dërguam një kod 6-shifror në
+    <span class="email-mask">t…t@donetamed.com</span>
+  </div>
+
+  <div class="lockout">
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M8 2.5l6 10.5H2z"/><path d="M8 6.5v3M8 11.5v.01"/>
+    </svg>
+    <div>
+      <strong>Tepër përpjekje.</strong> Filloni prej fillimit — hyni përsëri me email + fjalëkalim.
+      <div style="margin-top: 8px;"><a href="../clinic-login.html" style="color: var(--amber); font-weight: 600;">← Kthehu te hyrja</a></div>
+    </div>
+  </div>
+
+  <form class="mfa-form" onsubmit="event.preventDefault(); submitCode();">
+    <div class="field">
+      <label class="field-label">Kodi</label>
+      <div class="otp-row">
+        <input maxlength="1" inputmode="numeric" aria-label="Shifra 1">
+        <input maxlength="1" inputmode="numeric" aria-label="Shifra 2">
+        <input maxlength="1" inputmode="numeric" aria-label="Shifra 3">
+        <input maxlength="1" inputmode="numeric" aria-label="Shifra 4">
+        <input maxlength="1" inputmode="numeric" aria-label="Shifra 5">
+        <input maxlength="1" inputmode="numeric" aria-label="Shifra 6">
+      </div>
+      <div class="err-line">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="7" cy="7" r="5.5"/><path d="M7 4v3.5M7 9.6v.01"/>
+        </svg>
+        Kod i pasaktë. Provoni përsëri.
+        <span style="color: var(--text-faint); margin-left: 6px;">(2 përpjekje të mbetura)</span>
+      </div>
+    </div>
+
+    <label class="checkbox-row">
+      <input type="checkbox" checked>
+      Mos pyet përsëri në këtë pajisje
+    </label>
+
+    <button class="btn btn-primary btn-lg" type="submit" style="margin-top: 4px;">Verifiko</button>
+
+    <div class="resend-row">
+      <span>Nuk e morët kodin?</span>
+      <a href="#" class="link cooldown" id="resendLink" onclick="event.preventDefault();">Dërgoje përsëri (<span id="cd">30</span>s)</a>
+    </div>
+  </form>
+
+  <div class="back-link">
+    <a href="../clinic-login.html">← Kthehu te hyrja</a>
+  </div>
+</div>
+
+<script>
+  // OTP auto-advance
+  const otps = document.querySelectorAll('.otp-row input');
+  const sample = ['4', '8', '2', '6', '1', '3'];
+  otps.forEach((o, i) => {
+    o.value = sample[i] || '';
+    o.addEventListener('input', () => {
+      o.value = o.value.replace(/[^\d]/g, '').slice(0, 1);
+      if (o.value && i < otps.length - 1) otps[i + 1].focus();
+    });
+    o.addEventListener('keydown', (e) => {
+      if (e.key === 'Backspace' && !o.value && i > 0) otps[i - 1].focus();
+    });
+  });
+
+  // 30s cooldown
+  let cd = 30;
+  const cdEl = document.getElementById('cd');
+  const resendLink = document.getElementById('resendLink');
+  const tick = setInterval(() => {
+    cd -= 1;
+    if (cd <= 0) {
+      cd = 0;
+      document.body.dataset.state = document.body.dataset.state === 'locked' ? 'locked' : 'ready';
+      resendLink.innerHTML = 'Dërgoje përsëri';
+      clearInterval(tick);
+    } else {
+      cdEl.textContent = cd;
+    }
+  }, 1000);
+
+  function submitCode() {
+    // demo: anything other than the sample code triggers "wrong"
+    const code = [...otps].map(o => o.value).join('');
+    if (code !== sample.join('')) setState('wrong');
+  }
+
+  function setState(s) {
+    document.body.dataset.state = s;
+    document.querySelectorAll('.variant-switcher button').forEach(b => b.classList.remove('active'));
+    [...document.querySelectorAll('.variant-switcher button')]
+      .find(b => b.getAttribute('onclick').includes(`'${s}'`))
+      ?.classList.add('active');
+  }
+</script>
+
+</body>
+</html>

@@ -42,7 +42,16 @@ export class ClinicResolutionMiddleware implements NestMiddleware {
     const ctx = buildBaseContext(req);
     req.ctx = ctx;
 
-    const host = (req.headers['host'] ?? '').toString().toLowerCase();
+    // Behind a trusted proxy (Caddy in prod, the Next.js dev-server
+    // rewrite in development) the original Host travels in
+    // X-Forwarded-Host while `Host` reflects the upstream. Prefer the
+    // forwarded value when present so subdomain routing keeps working.
+    // `trust proxy` is set in main.ts, so we only honour this header
+    // from sources Express recognises as trusted.
+    const forwardedHost = req.headers['x-forwarded-host'];
+    const forwardedHostStr = Array.isArray(forwardedHost) ? forwardedHost[0] : forwardedHost;
+    const rawHost = (forwardedHostStr ?? req.headers['host'] ?? '').toString();
+    const host = rawHost.toLowerCase();
     const overrideHeader = req.headers['x-clinic-subdomain'];
     const override = typeof overrideHeader === 'string' ? overrideHeader.toLowerCase() : null;
 
@@ -110,14 +119,25 @@ export function resolveSubdomain(host: string, override: string | null): Resolve
     return { kind: 'tenant', subdomain: override };
   }
   const hostWithoutPort = host.split(':')[0] ?? host;
-  if (hostWithoutPort === 'localhost' || hostWithoutPort.endsWith('.localhost')) {
-    return { kind: 'localhost', subdomain: null };
-  }
-  if (hostWithoutPort === ADMIN_HOST_PREFIX + 'klinika.health'.replace(/^\./, '')) {
-    return { kind: 'admin', subdomain: null };
-  }
+  // Admin host wins over the generic localhost fallback so
+  // `admin.localhost` works for dev the same way `admin.klinika.health`
+  // works in prod.
   if (hostWithoutPort.startsWith(ADMIN_HOST_PREFIX)) {
     return { kind: 'admin', subdomain: null };
+  }
+  // Tenant subdomains on .localhost (e.g. donetamed.localhost) — used
+  // in dev so the subdomain-driven clinic resolution can be exercised
+  // without DNS. Bare `localhost` falls through to the no-context
+  // branch below.
+  if (hostWithoutPort.endsWith('.localhost')) {
+    const sub = hostWithoutPort.slice(0, -'.localhost'.length);
+    if (sub && /^[a-z0-9][a-z0-9-]{0,40}$/.test(sub)) {
+      return { kind: 'tenant', subdomain: sub };
+    }
+    return { kind: 'localhost', subdomain: null };
+  }
+  if (hostWithoutPort === 'localhost') {
+    return { kind: 'localhost', subdomain: null };
   }
   if (hostWithoutPort === 'klinika.health' || hostWithoutPort === 'app.klinika.health') {
     return { kind: 'apex', subdomain: null };

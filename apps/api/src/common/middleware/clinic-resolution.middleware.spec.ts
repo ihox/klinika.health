@@ -11,7 +11,13 @@ describe('resolveSubdomain', () => {
     ['app.klinika.health', { kind: 'apex', subdomain: null }],
     ['localhost', { kind: 'localhost', subdomain: null }],
     ['localhost:3000', { kind: 'localhost', subdomain: null }],
-    ['donetamed.localhost', { kind: 'localhost', subdomain: null }],
+    // *.localhost is the dev-time mirror of *.klinika.health so the
+    // subdomain routing can be exercised without /etc/hosts gymnastics
+    // for every tenant.
+    ['admin.localhost', { kind: 'admin', subdomain: null }],
+    ['admin.localhost:3000', { kind: 'admin', subdomain: null }],
+    ['donetamed.localhost', { kind: 'tenant', subdomain: 'donetamed' }],
+    ['donetamed.localhost:3000', { kind: 'tenant', subdomain: 'donetamed' }],
     ['other-domain.com', { kind: 'apex', subdomain: null }],
     // Lowercase-only subdomain regex enforced by the middleware; the
     // caller is expected to lowercase the host before passing it in

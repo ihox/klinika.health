@@ -45,6 +45,16 @@ services:
       # the Makefile / root .env that points at `localhost:5432`.
       DATABASE_URL: postgresql://klinika:klinika@postgres:5432/klinika?schema=public
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3000}
+      # Email transport (see .env / .env.example for the full selection
+      # order). Forwarded from the host .env so a developer can switch
+      # between SMTP / Resend / capturing-stdout without editing compose.
+      EMAIL_FROM: ${EMAIL_FROM:-no-reply@klinika.health}
+      EMAIL_FROM_NAME: ${EMAIL_FROM_NAME:-Klinika}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
     ports:
       - "3001:3001"
     volumes:
@@ -63,7 +73,11 @@ services:
     environment:
       TZ: Europe/Belgrade
       NODE_ENV: development
-      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:3001}
+      # Browser talks to the same host as the page; Next.js rewrites
+      # /api/* and /health/* to API_INTERNAL_URL server-side. Avoids
+      # CORS / cross-host cookie issues on *.localhost subdomains.
+      NEXT_PUBLIC_API_URL: ""
+      API_INTERNAL_URL: ${API_INTERNAL_URL:-http://api:3001}
     ports:
       - "3000:3000"
     volumes:

@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html lang="sq">
+<head>
+<meta charset="UTF-8">
+<title>Klinika · WHO Growth Chart</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="../styles.css">
+<style>
+  :root { --r-pill: 999px; }
+  body {
+    min-height: 100vh;
+    background: var(--bg);
+    display: grid;
+    place-items: center;
+    padding: 24px;
+  }
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: rgba(28,25,23,0.62);
+    backdrop-filter: blur(3px);
+    z-index: 1;
+  }
+
+  .who-modal {
+    position: relative;
+    z-index: 2;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: var(--r-lg);
+    box-shadow: 0 24px 64px rgba(28,25,23,0.38), 0 4px 12px rgba(28,25,23,0.14);
+    width: 100%;
+    max-width: 1040px;
+    max-height: calc(100vh - 48px);
+    display: flex; flex-direction: column;
+    overflow: hidden;
+    animation: in 200ms cubic-bezier(.2,.7,.3,1);
+  }
+  @keyframes in { from { opacity: 0; transform: translateY(8px) scale(0.985);} to {opacity: 1; transform: none;} }
+
+  /* Header */
+  .who-head {
+    display: flex; align-items: flex-start; justify-content: space-between;
+    gap: 16px;
+    padding: 18px 24px 14px;
+    border-bottom: 1px solid var(--border-soft);
+  }
+  .who-head .title-block { min-width: 0; }
+  .who-head h2 {
+    font-family: var(--font-display);
+    font-size: 18px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    margin: 0 0 5px;
+    line-height: 1.2;
+  }
+  .who-head .who-meta {
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    font-size: 11.5px;
+    color: var(--text-muted);
+  }
+  .who-head .who-meta .badge {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-family: var(--font-mono);
+    font-size: 10px; font-weight: 600;
+    color: var(--teal-800);
+    background: var(--primary-soft);
+    border: 1px solid var(--teal-200);
+    padding: 2px 7px;
+    border-radius: 3px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+  .who-head .who-meta .sep { color: var(--border-strong); }
+  .tabs {
+    display: flex; gap: 4px;
+    background: var(--bg-subtle);
+    padding: 3px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+  }
+  .tabs button {
+    border: none;
+    background: transparent;
+    padding: 7px 14px;
+    font-size: 12.5px;
+    color: var(--text-muted);
+    border-radius: 5px;
+    cursor: pointer;
+    transition: all 120ms ease;
+    white-space: nowrap;
+    font-family: var(--font-ui);
+  }
+  .tabs button:hover { color: var(--text); }
+  .tabs button.active {
+    background: var(--bg-elevated);
+    color: var(--text-strong);
+    font-weight: 500;
+    box-shadow: 0 1px 2px rgba(28,25,23,0.08);
+  }
+  .close-btn {
+    width: 32px; height: 32px;
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    border-radius: var(--r-sm);
+    cursor: pointer;
+    font-size: 22px;
+    line-height: 1;
+  }
+  .close-btn:hover { background: var(--bg-subtle); color: var(--text); }
+
+  /* Body — chart left, side right */
+  .who-body {
+    display: grid;
+    grid-template-columns: 1fr 240px;
+    gap: 0;
+    min-height: 0;
+    flex: 1;
+  }
+  .who-chart-wrap {
+    padding: 16px 16px 12px 24px;
+    background: var(--bg-elevated);
+    position: relative;
+  }
+  .who-chart { width: 100%; height: auto; display: block; }
+
+  .who-side {
+    padding: 18px 22px;
+    background: var(--bg-subtle);
+    border-left: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: 22px;
+    overflow-y: auto;
+  }
+  .who-side h4 {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--text-faint);
+    font-weight: 600;
+    margin: 0 0 8px;
+  }
+  .who-current-pill {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    padding: 12px 14px;
+  }
+  .who-current-pill .v {
+    font-family: var(--font-display);
+    font-size: 22px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+  }
+  .who-current-pill .v .u {
+    font-size: 12px;
+    color: var(--text-faint);
+    font-weight: 400;
+    margin-left: 2px;
+  }
+  .pct-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 8px;
+    font-size: 12px;
+    color: var(--teal-800);
+    background: var(--primary-soft);
+    border: 1px solid var(--teal-200);
+    padding: 3px 8px;
+    border-radius: var(--r-pill);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+  .pct-tag .swatch {
+    width: 8px; height: 8px;
+    border-radius: 999px;
+    background: var(--primary);
+  }
+
+  .who-legend {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+  .who-legend-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .who-legend-row .key {
+    width: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .who-legend-row .key .line {
+    width: 18px; height: 2px;
+    background: var(--teal-600);
+    border-radius: 2px;
+  }
+  .who-legend-row .key .line.outer { background: var(--teal-300); height: 1.5px; }
+  .who-legend-row .key .line.dashed {
+    background: transparent;
+    border-top: 1.5px dashed var(--teal-400);
+    height: 0;
+  }
+  .who-legend-row .key .dot {
+    width: 8px; height: 8px;
+    border-radius: 999px;
+    background: var(--primary);
+  }
+  .who-legend-row .l { color: var(--text-faint); }
+
+  .who-data-table {
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    gap: 6px 12px;
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+  }
+  .who-data-table .h {
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-faint);
+    font-weight: 600;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 4px;
+  }
+  .who-data-table .v { color: var(--text); }
+  .who-data-table .pct { color: var(--teal-700); font-weight: 500; }
+
+  /* Footer */
+  .who-foot {
+    padding: 12px 24px;
+    border-top: 1px solid var(--border);
+    background: var(--bg-subtle);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .who-foot .src { font-size: 11.5px; color: var(--text-faint); }
+  .who-foot .actions { display: flex; gap: 10px; }
+
+  /* Tooltip */
+  .chart-tooltip {
+    position: absolute;
+    pointer-events: none;
+    background: var(--text-strong);
+    color: white;
+    padding: 8px 10px;
+    border-radius: var(--r-sm);
+    font-size: 11.5px;
+    line-height: 1.4;
+    box-shadow: var(--shadow-lg);
+    font-variant-numeric: tabular-nums;
+    opacity: 0;
+    transition: opacity 120ms ease;
+    transform: translate(-50%, calc(-100% - 10px));
+    white-space: nowrap;
+    z-index: 5;
+  }
+  .chart-tooltip.show { opacity: 1; }
+  .chart-tooltip .dim { color: rgba(255,255,255,0.6); font-size: 10.5px; display: block; margin-top: 1px; }
+
+  /* Compact sparkline strip below the modal (component preview) */
+  .sparkline-strip {
+    position: relative;
+    z-index: 2;
+    max-width: 1040px;
+    width: 100%;
+    margin-top: 12px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: var(--r-lg);
+    padding: 8px 0;
+  }
+  .sparkline-strip .strip-title {
+    padding: 8px 16px 4px;
+    font-size: 11px;
+    color: var(--text-faint);
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    font-weight: 600;
+  }
+  .growth-card {
+    padding: 10px 16px;
+    cursor: pointer;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    grid-template-areas: "head pct" "svg svg";
+    gap: 4px 12px;
+    transition: background 120ms ease;
+  }
+  .growth-card + .growth-card { border-top: 1px solid var(--border-soft); }
+  .growth-card:hover { background: var(--bg-subtle); }
+  .growth-card .t {
+    grid-area: head;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text);
+  }
+  .growth-card .pct {
+    grid-area: pct;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--teal-700);
+    font-weight: 600;
+  }
+  .growth-card .pct.warn { color: var(--amber); }
+  .growth-card .growth-svg {
+    grid-area: svg;
+    width: 100%;
+    height: 56px;
+    display: block;
+  }
+</style>
+</head>
+<body>
+
+<!-- ──────────────── WHO Growth Chart Modal ──────────────── -->
+<div class="who-modal" role="dialog" aria-labelledby="whoTitle">
+  <div class="who-head">
+    <div class="title-block">
+      <h2 id="whoTitle">Pesha sipas moshës</h2>
+      <div class="who-meta">
+        <span class="badge">WHO 0–2 vjet</span>
+        <span>Vajzë</span>
+        <span class="sep">·</span>
+        <span>Era Krasniqi · 2v 9m</span>
+        <span class="sep">·</span>
+        <span>5 matje</span>
+      </div>
+    </div>
+    <div style="display:flex; gap:8px; align-items:center;">
+      <div class="tabs" role="tablist" aria-label="Metric">
+        <button data-metric="weight" class="active" onclick="setMetric('weight', this)">Pesha sipas moshës</button>
+        <button data-metric="length" onclick="setMetric('length', this)">Gjatësia sipas moshës</button>
+        <button data-metric="hc"     onclick="setMetric('hc', this)">Perimetri kokës</button>
+      </div>
+      <button class="close-btn" onclick="window.close()" aria-label="Mbyll">×</button>
+    </div>
+  </div>
+
+  <div class="who-body">
+    <div class="who-chart-wrap">
+      <svg class="who-chart" id="whoChart" viewBox="0 0 760 460" preserveAspectRatio="xMidYMid meet"></svg>
+      <div class="chart-tooltip" id="tip"></div>
+    </div>
+
+    <aside class="who-side">
+      <div>
+        <h4>Matja e sotme</h4>
+        <div class="who-current-pill">
+          <div class="v" id="curV">13.6<span class="u">kg</span></div>
+          <div class="pct-tag"><span class="swatch"></span><span id="curPct">P50</span></div>
+        </div>
+      </div>
+
+      <div>
+        <h4>Legjenda</h4>
+        <div class="who-legend">
+          <div class="who-legend-row"><span class="key"><span class="line outer"></span></span><span>P3 / P97 <span class="l">— kufijtë</span></span></div>
+          <div class="who-legend-row"><span class="key"><span class="line dashed"></span></span><span>P15 / P85</span></div>
+          <div class="who-legend-row"><span class="key"><span class="line"></span></span><span>P50 <span class="l">— mesatarja</span></span></div>
+          <div class="who-legend-row"><span class="key"><span class="dot"></span></span><span>Era K. <span class="l">— pacientja</span></span></div>
+        </div>
+      </div>
+
+      <div>
+        <h4>Të dhënat</h4>
+        <div class="who-data-table" id="dataTable">
+          <!-- filled by JS -->
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <div class="who-foot">
+    <span class="src">Standardet e rritjes · WHO Child Growth Standards (referencë)</span>
+    <div class="actions">
+      <button class="btn btn-secondary btn-sm" onclick="window.print()">Printo grafikin</button>
+      <button class="btn btn-primary btn-sm" onclick="window.close()">Mbyll</button>
+    </div>
+  </div>
+</div>
+
+<!-- Compact sparkline strip (component preview, mirrors chart.html right column) -->
+<div class="sparkline-strip">
+  <div class="strip-title">Sparkline (kompakt) — për kolonën djathtas të chart.html</div>
+  <div class="growth-card" onclick="setMetric('weight', document.querySelector('[data-metric=weight]'))">
+    <span class="t">Pesha sipas moshës</span>
+    <span class="pct">P50</span>
+    <svg class="growth-svg" viewBox="0 0 380 100" preserveAspectRatio="none">
+      <path d="M 0,82 C 90,78 180,72 270,62 S 380,40 380,40 L 380,100 L 0,100 Z" fill="rgba(204,251,241,0.4)"/>
+      <path d="M 0,68 C 90,62 180,52 270,40 S 380,18 380,18" stroke="rgba(45,212,191,0.5)" stroke-width="1" fill="none"/>
+      <path d="M 0,76 C 90,72 180,64 270,52 S 380,28 380,28" stroke="var(--teal-600)" stroke-width="1.5" fill="none"/>
+      <circle cx="42" cy="80" r="2.5" fill="var(--primary)"/>
+      <circle cx="120" cy="72" r="2.5" fill="var(--primary)"/>
+      <circle cx="195" cy="64" r="2.5" fill="var(--primary)"/>
+      <circle cx="280" cy="52" r="2.5" fill="var(--primary)"/>
+      <circle cx="358" cy="42" r="2.5" fill="var(--primary)"/>
+    </svg>
+  </div>
+  <div class="growth-card" onclick="setMetric('length', document.querySelector('[data-metric=length]'))">
+    <span class="t">Gjatësia sipas moshës</span>
+    <span class="pct">P50</span>
+    <svg class="growth-svg" viewBox="0 0 380 100" preserveAspectRatio="none">
+      <path d="M 0,76 C 80,70 160,62 240,52 S 380,30 380,30 L 380,100 L 0,100 Z" fill="rgba(204,251,241,0.4)"/>
+      <path d="M 0,72 C 80,66 160,56 240,44 S 380,22 380,22" stroke="var(--teal-600)" stroke-width="1.5" fill="none"/>
+      <circle cx="42" cy="74" r="2.5" fill="var(--primary)"/>
+      <circle cx="120" cy="64" r="2.5" fill="var(--primary)"/>
+      <circle cx="195" cy="54" r="2.5" fill="var(--primary)"/>
+      <circle cx="280" cy="42" r="2.5" fill="var(--primary)"/>
+      <circle cx="358" cy="32" r="2.5" fill="var(--primary)"/>
+    </svg>
+  </div>
+  <div class="growth-card" onclick="setMetric('hc', document.querySelector('[data-metric=hc]'))">
+    <span class="t">Perimetri i kokës</span>
+    <span class="pct warn">P40</span>
+    <svg class="growth-svg" viewBox="0 0 380 100" preserveAspectRatio="none">
+      <path d="M 0,82 C 80,76 160,66 240,56 S 380,36 380,36 L 380,100 L 0,100 Z" fill="rgba(254,243,199,0.5)"/>
+      <path d="M 0,76 C 80,68 160,58 240,46 S 380,26 380,26" stroke="var(--amber)" stroke-width="1.5" fill="none"/>
+      <circle cx="42" cy="80" r="2.5" fill="var(--amber)"/>
+      <circle cx="120" cy="72" r="2.5" fill="var(--amber)"/>
+      <circle cx="195" cy="64" r="2.5" fill="var(--amber)"/>
+      <circle cx="280" cy="54" r="2.5" fill="var(--amber)"/>
+      <circle cx="358" cy="46" r="2.5" fill="var(--amber)"/>
+    </svg>
+  </div>
+</div>
+
+<script>
+  // Reference data per metric (0-24 months). Synthetic — close in shape to the
+  // WHO LMS reference but not pulled from WHO data — for a prototype.
+  const WHO_META = {
+    weight: { title: 'Pesha sipas moshës',          unit: 'kg', yMin: 2,  yMax: 16, yStep: 2 },
+    length: { title: 'Gjatësia sipas moshës',       unit: 'cm', yMin: 44, yMax: 96, yStep: 4 },
+    hc:     { title: 'Perimetri i kokës sipas moshës', unit: 'cm', yMin: 30, yMax: 52, yStep: 2 },
+  };
+
+  // x = months (0..24), y values per percentile
+  const REF = {
+    weight: {
+      P3:  [2.4, 3.2, 3.9, 4.5, 5.0, 5.5, 5.9, 6.3, 6.7, 7.0, 7.3, 7.6, 7.8, 8.0, 8.2, 8.4, 8.6, 8.8, 9.0, 9.1, 9.3, 9.5, 9.7, 9.8, 10.0],
+      P15: [2.7, 3.5, 4.3, 5.0, 5.5, 6.0, 6.4, 6.8, 7.2, 7.5, 7.9, 8.2, 8.4, 8.6, 8.9, 9.1, 9.3, 9.5, 9.7, 9.9, 10.1, 10.3, 10.5, 10.6, 10.8],
+      P50: [3.2, 4.2, 5.1, 5.8, 6.4, 7.0, 7.5, 7.9, 8.3, 8.7, 9.0, 9.4, 9.6, 9.9, 10.1, 10.4, 10.6, 10.8, 11.0, 11.2, 11.4, 11.6, 11.8, 12.0, 12.2],
+      P85: [3.8, 4.9, 6.0, 6.8, 7.5, 8.2, 8.7, 9.2, 9.6, 10.0, 10.4, 10.8, 11.1, 11.4, 11.7, 12.0, 12.3, 12.5, 12.8, 13.0, 13.3, 13.5, 13.7, 13.9, 14.2],
+      P97: [4.3, 5.6, 6.7, 7.7, 8.5, 9.2, 9.8, 10.3, 10.8, 11.3, 11.7, 12.1, 12.5, 12.8, 13.2, 13.5, 13.8, 14.1, 14.4, 14.7, 15.0, 15.2, 15.5, 15.7, 16.0],
+    },
+    length: {
+      P3:  [45.0, 49.0, 53.0, 56.0, 58.5, 60.5, 62.0, 63.5, 65.0, 66.5, 68.0, 69.0, 70.0, 71.0, 72.0, 73.0, 74.0, 75.0, 76.0, 77.0, 78.0, 79.0, 80.0, 80.5, 81.5],
+      P15: [47.0, 51.0, 55.0, 58.0, 60.0, 62.0, 64.0, 65.5, 67.0, 68.5, 70.0, 71.0, 72.0, 73.0, 74.0, 75.0, 76.0, 77.0, 78.0, 79.0, 80.0, 81.0, 82.0, 83.0, 84.0],
+      P50: [49.0, 53.5, 57.5, 61.0, 63.0, 65.0, 66.5, 68.0, 70.0, 71.5, 73.0, 74.0, 75.5, 76.5, 78.0, 79.0, 80.0, 81.0, 82.0, 83.0, 84.0, 85.0, 86.0, 87.0, 88.0],
+      P85: [51.0, 56.0, 60.0, 63.5, 66.0, 68.0, 70.0, 71.5, 73.0, 74.5, 76.0, 77.0, 78.5, 79.5, 81.0, 82.0, 83.0, 84.0, 85.5, 86.5, 87.5, 88.5, 90.0, 91.0, 92.0],
+      P97: [53.0, 58.0, 62.0, 65.5, 68.0, 70.0, 72.0, 73.5, 75.0, 77.0, 78.5, 80.0, 81.5, 82.5, 84.0, 85.0, 86.5, 87.5, 89.0, 90.0, 91.0, 92.0, 93.5, 94.5, 96.0],
+    },
+    hc: {
+      P3:  [31.5, 34.5, 36.5, 38.0, 39.0, 40.0, 40.5, 41.0, 41.5, 42.0, 42.5, 43.0, 43.0, 43.5, 43.5, 44.0, 44.0, 44.5, 44.5, 45.0, 45.0, 45.0, 45.5, 45.5, 45.5],
+      P15: [32.5, 35.5, 37.5, 39.0, 40.0, 41.0, 41.5, 42.0, 42.5, 43.0, 43.5, 44.0, 44.0, 44.5, 44.5, 45.0, 45.0, 45.5, 45.5, 46.0, 46.0, 46.0, 46.5, 46.5, 46.5],
+      P50: [34.0, 37.0, 39.0, 40.5, 41.5, 42.5, 43.0, 43.5, 44.0, 44.5, 45.0, 45.5, 45.5, 46.0, 46.0, 46.5, 46.5, 47.0, 47.0, 47.5, 47.5, 47.5, 48.0, 48.0, 48.0],
+      P85: [35.5, 38.5, 40.5, 42.0, 43.0, 44.0, 44.5, 45.0, 45.5, 46.0, 46.5, 47.0, 47.0, 47.5, 47.5, 48.0, 48.0, 48.5, 48.5, 49.0, 49.0, 49.0, 49.5, 49.5, 49.5],
+      P97: [37.0, 40.0, 42.0, 43.5, 44.5, 45.5, 46.0, 46.5, 47.0, 47.5, 48.0, 48.5, 48.5, 49.0, 49.0, 49.5, 49.5, 50.0, 50.0, 50.5, 50.5, 50.5, 51.0, 51.0, 51.0],
+    },
+  };
+
+  // Patient data (Era — synthetic; 5 measurements).
+  const PATIENT_PTS = {
+    weight: [
+      { m: 0,  v: 3.3, date: '15.08.2023' },
+      { m: 3,  v: 6.0, date: '14.11.2023' },
+      { m: 9,  v: 8.4, date: '13.05.2024' },
+      { m: 15, v: 10.5, date: '11.11.2024' },
+      { m: 24, v: 13.6, date: '14.05.2026' },
+    ],
+    length: [
+      { m: 0,  v: 50,   date: '15.08.2023' },
+      { m: 3,  v: 60,   date: '14.11.2023' },
+      { m: 9,  v: 71,   date: '13.05.2024' },
+      { m: 15, v: 78,   date: '11.11.2024' },
+      { m: 24, v: 86.5, date: '14.05.2026' },
+    ],
+    hc: [
+      { m: 0,  v: 34.5, date: '15.08.2023' },
+      { m: 3,  v: 40.5, date: '14.11.2023' },
+      { m: 9,  v: 44.0, date: '13.05.2024' },
+      { m: 15, v: 45.5, date: '11.11.2024' },
+      { m: 24, v: 47.0, date: '14.05.2026' },
+    ],
+  };
+
+  function pctFor(metric, age, v) {
+    const ref = REF[metric];
+    const months = Math.max(0, Math.min(24, age));
+    const i = Math.floor(months);
+    const t = months - i;
+    const at = (arr) => arr[i] + (arr[Math.min(24, i + 1)] - arr[i]) * t;
+    const pts = [['P3', at(ref.P3)], ['P15', at(ref.P15)], ['P50', at(ref.P50)], ['P85', at(ref.P85)], ['P97', at(ref.P97)]];
+    let best = pts[0]; let bestD = Math.abs(pts[0][1] - v);
+    for (const p of pts) { const d = Math.abs(p[1] - v); if (d < bestD) { best = p; bestD = d; } }
+    return best[0];
+  }
+
+  function renderChart(metric) {
+    const meta = WHO_META[metric];
+    const ref  = REF[metric];
+    const pts  = PATIENT_PTS[metric];
+
+    const W = 760, H = 460;
+    const M = { top: 24, right: 56, bottom: 46, left: 56 };
+    const innerW = W - M.left - M.right;
+    const innerH = H - M.top - M.bottom;
+
+    const xScale = (m) => M.left + (m / 24) * innerW;
+    const yScale = (v) => M.top + ((meta.yMax - v) / (meta.yMax - meta.yMin)) * innerH;
+
+    const lineFor = (arr) => {
+      let d = '';
+      for (let m = 0; m <= 24; m++) {
+        const cmd = m === 0 ? 'M' : 'L';
+        d += `${cmd}${xScale(m).toFixed(1)},${yScale(arr[m]).toFixed(1)} `;
+      }
+      return d.trim();
+    };
+    const bandFor = (lower, upper) => {
+      let d = `M${xScale(0).toFixed(1)},${yScale(upper[0]).toFixed(1)} `;
+      for (let m = 1; m <= 24; m++) d += `L${xScale(m).toFixed(1)},${yScale(upper[m]).toFixed(1)} `;
+      for (let m = 24; m >= 0; m--) d += `L${xScale(m).toFixed(1)},${yScale(lower[m]).toFixed(1)} `;
+      d += 'Z';
+      return d;
+    };
+
+    let svg = '';
+
+    // Outer extreme band P3..P15 + P85..P97 (lighter)
+    svg += `<path d="${bandFor(ref.P3, ref.P15)}" fill="rgba(94,234,212,0.13)"/>`;
+    svg += `<path d="${bandFor(ref.P85, ref.P97)}" fill="rgba(94,234,212,0.13)"/>`;
+    // Inner P15..P85 (richer)
+    svg += `<path d="${bandFor(ref.P15, ref.P85)}" fill="rgba(94,234,212,0.22)"/>`;
+
+    // Grid + ticks
+    const gridColor = 'rgba(28,25,23,0.05)';
+    const tickColor = 'var(--text-faint)';
+    for (let v = meta.yMin; v <= meta.yMax; v += meta.yStep) {
+      const y = yScale(v);
+      svg += `<line x1="${M.left}" y1="${y}" x2="${W - M.right}" y2="${y}" stroke="${gridColor}"/>`;
+      svg += `<text x="${M.left - 8}" y="${y + 4}" text-anchor="end" font-size="11" fill="${tickColor}" font-family="var(--font-mono)">${v}</text>`;
+    }
+    for (let m = 0; m <= 24; m += 3) {
+      const x = xScale(m);
+      svg += `<line x1="${x}" y1="${M.top}" x2="${x}" y2="${H - M.bottom}" stroke="${gridColor}"/>`;
+      svg += `<text x="${x}" y="${H - M.bottom + 18}" text-anchor="middle" font-size="11" fill="${tickColor}" font-family="var(--font-mono)">${m}</text>`;
+    }
+    // Axis labels
+    svg += `<text x="${M.left}" y="14" font-size="10.5" fill="${tickColor}" font-family="var(--font-ui)" font-weight="500" letter-spacing="0.04em">${meta.unit.toUpperCase()}</text>`;
+    svg += `<text x="${W - M.right}" y="${H - 8}" text-anchor="end" font-size="10.5" fill="${tickColor}" font-family="var(--font-ui)" font-weight="500" letter-spacing="0.04em">MUAJ</text>`;
+
+    // Percentile lines
+    svg += `<path d="${lineFor(ref.P3)}" stroke="rgba(94,234,212,0.65)" stroke-width="1.3" fill="none"/>`;
+    svg += `<path d="${lineFor(ref.P97)}" stroke="rgba(94,234,212,0.65)" stroke-width="1.3" fill="none"/>`;
+    svg += `<path d="${lineFor(ref.P15)}" stroke="rgba(45,212,191,0.55)" stroke-width="1" stroke-dasharray="3 3" fill="none"/>`;
+    svg += `<path d="${lineFor(ref.P85)}" stroke="rgba(45,212,191,0.55)" stroke-width="1" stroke-dasharray="3 3" fill="none"/>`;
+    svg += `<path d="${lineFor(ref.P50)}" stroke="var(--teal-600)" stroke-width="1.8" fill="none"/>`;
+
+    // Percentile labels on right edge
+    [['P3', ref.P3[24]], ['P15', ref.P15[24]], ['P50', ref.P50[24]], ['P85', ref.P85[24]], ['P97', ref.P97[24]]].forEach(([k, v]) => {
+      svg += `<text x="${W - M.right + 6}" y="${yScale(v) + 3}" font-size="10" fill="var(--teal-700)" font-family="var(--font-mono)" font-weight="600">${k}</text>`;
+    });
+
+    // Patient line + dots
+    let pl = '';
+    pts.forEach((p, i) => { pl += (i === 0 ? 'M' : 'L') + xScale(p.m).toFixed(1) + ',' + yScale(p.v).toFixed(1) + ' '; });
+    svg += `<path d="${pl.trim()}" stroke="var(--teal-700)" stroke-width="2" fill="none"/>`;
+
+    pts.forEach((p, i) => {
+      const cx = xScale(p.m), cy = yScale(p.v);
+      const pct = pctFor(metric, p.m, p.v);
+      svg += `<g class="dp" data-i="${i}" data-cx="${cx}" data-cy="${cy}" data-date="${p.date}" data-v="${p.v}" data-pct="${pct}" data-m="${p.m}">`;
+      svg += `<circle cx="${cx}" cy="${cy}" r="11" fill="transparent" pointer-events="auto" style="cursor: pointer;"/>`;
+      svg += `<circle cx="${cx}" cy="${cy}" r="4.5" fill="var(--bg-elevated)" stroke="var(--primary)" stroke-width="2"/>`;
+      svg += `</g>`;
+    });
+
+    document.getElementById('whoChart').innerHTML = svg;
+
+    // Side: data table
+    const tbl = document.getElementById('dataTable');
+    tbl.innerHTML = '<div class="h">Data</div><div class="h">Vlera</div><div class="h">P</div>' +
+      pts.slice().reverse().map(p => `<div class="v">${p.date}</div><div class="v" style="text-align:right">${p.v} ${meta.unit}</div><div class="pct" style="text-align:right">${pctFor(metric, p.m, p.v)}</div>`).join('');
+
+    // Side: current
+    const last = pts[pts.length - 1];
+    document.getElementById('curV').innerHTML = `${last.v}<span class="u">${meta.unit}</span>`;
+    document.getElementById('curPct').textContent = pctFor(metric, last.m, last.v);
+
+    // Tooltip
+    const tip = document.getElementById('tip');
+    document.querySelectorAll('#whoChart .dp').forEach(g => {
+      g.addEventListener('mouseenter', (e) => {
+        const cx = +g.dataset.cx, cy = +g.dataset.cy;
+        const svgEl = document.getElementById('whoChart');
+        const rect = svgEl.getBoundingClientRect();
+        const wrap = svgEl.parentElement.getBoundingClientRect();
+        const ratio = rect.width / 760;
+        const sx = rect.left - wrap.left + cx * ratio;
+        const sy = rect.top  - wrap.top  + cy * ratio;
+        tip.style.left = sx + 'px';
+        tip.style.top  = sy + 'px';
+        tip.innerHTML = `Data: ${g.dataset.date} · Vlera: ${g.dataset.v} ${meta.unit}<span class="dim">Mosha: ${g.dataset.m} muaj · ${g.dataset.pct}</span>`;
+        tip.classList.add('show');
+      });
+      g.addEventListener('mouseleave', () => tip.classList.remove('show'));
+    });
+  }
+
+  function setMetric(m, btn) {
+    document.querySelectorAll('.tabs button').forEach(b => b.classList.remove('active'));
+    document.querySelector('[data-metric="' + m + '"]').classList.add('active');
+    document.querySelector('#whoTitle').textContent = WHO_META[m].title;
+    renderChart(m);
+  }
+
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') window.close(); });
+  renderChart('weight');
+</script>
+
+</body>
+</html>
