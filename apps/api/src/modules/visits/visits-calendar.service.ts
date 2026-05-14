@@ -7,7 +7,7 @@ import {
 import type { Prisma } from '@prisma/client';
 
 import { AuditLogService, type AuditFieldDiff } from '../../common/audit/audit-log.service';
-import { utcMidnight } from '../../common/datetime';
+import { localDateToday, utcMidnight } from '../../common/datetime';
 import { isReceptionistOnly } from '../../common/request-context/role-helpers';
 import type { RequestContext } from '../../common/request-context/request-context';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -219,7 +219,9 @@ export class VisitsCalendarService {
     ctx: RequestContext,
   ): Promise<CalendarEntryDto[]> {
     const lookbackUtcStart = new Date(Date.now() - 7 * 86_400_000);
-    const today = utcToLocalParts(new Date()).date;
+    // Canonical "today in Belgrade" via the shared helper — matches
+    // doctor-dashboard.service.ts § "today's visit log".
+    const today = localDateToday();
     const todayStartUtc = localClockToUtc(today, '00:00');
 
     const rows = await this.prisma.visit.findMany({
@@ -340,7 +342,6 @@ export class VisitsCalendarService {
     if (!patient) throw new NotFoundException('Pacienti nuk u gjet.');
 
     const now = new Date();
-    const local = utcToLocalParts(now);
     // Walk-ins skip 'scheduled'. Default initial state is 'arrived'
     // (receptionist registers, doctor sees them shortly); the
     // receptionist may also open in 'in_progress' when the doctor takes
@@ -353,9 +354,9 @@ export class VisitsCalendarService {
         clinicId,
         patientId: patient.id,
         // Walk-ins anchor to today's local date. The visit_date column
-        // is DATE (not Timestamptz) — utcMidnight produces the operand
-        // Prisma's runtime parser expects (ADR-006 §DATE vs Timestamptz).
-        visitDate: utcMidnight(local.date),
+        // is DATE (not Timestamptz) — `utcMidnight(localDateToday())`
+        // is the canonical pattern (ADR-006 §DATE vs Timestamptz).
+        visitDate: utcMidnight(localDateToday()),
         scheduledFor: null,
         durationMinutes: null,
         isWalkIn: true,
@@ -386,7 +387,7 @@ export class VisitsCalendarService {
       type: 'visit.created',
       clinicId,
       visitId: created.id,
-      localDate: local.date,
+      localDate: localDateToday(),
       isWalkIn: true,
       status: created.status,
       emittedAt: new Date().toISOString(),
