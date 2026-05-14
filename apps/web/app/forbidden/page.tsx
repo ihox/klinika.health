@@ -15,7 +15,7 @@ export default function ForbiddenPage() {
         tone="amber"
         code="Gabim 403"
         title="Ju nuk keni qasje në këtë seksion"
-        subtitle="Kontaktoni admin-in e klinikës nëse ju duhet qasje."
+        subtitle="Kontaktoni administratorin e klinikës nëse mendoni se është gabim."
         icon={
           <svg
             width="22"
