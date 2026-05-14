@@ -1,0 +1,938 @@
+'use client';
+
+import Link from 'next/link';
+import { useCallback, useEffect, useMemo, useState, type ReactElement } from 'react';
+
+import { EmptyState } from '@/components/empty-state';
+import { MasterDataStrip } from '@/components/patient/master-data-strip';
+import { Skeleton } from '@/components/skeleton';
+import { Button } from '@/components/ui/button';
+import { ApiError } from '@/lib/api';
+import {
+  ageLabelChart,
+  formatDob,
+  patientClient,
+  type ChartVertetimDto,
+  type ChartVisitDto,
+  type PatientChartDto,
+} from '@/lib/patient-client';
+import { cn } from '@/lib/utils';
+
+const HISTORY_COMPACT_LIMIT = 10;
+
+interface Props {
+  patientId: string;
+  /** Optional pre-selected visit id from the `/vizita/:visitId` URL. */
+  initialVisitId?: string;
+}
+
+/**
+ * Patient chart shell — doctor's working surface.
+ *
+ * URL layout:
+ *   /pacient/:id              — defaults to the most recent visit
+ *   /pacient/:id/vizita/:vid  — specific visit
+ *
+ * Navigation between visits updates the URL via shallow-style
+ * `router.replace` so the doctor can deep-link or browser-back
+ * without losing context.
+ *
+ * The form area on the left is intentionally a placeholder in this
+ * slice — slice 12 fills it in. Right column carries the static
+ * stubs that the rest of the chart cards (growth charts, ultrazeri,
+ * history list, vërtetime list) need so the navigation pieces can
+ * be wired up end-to-end.
+ */
+export function ChartView({ patientId, initialVisitId }: Props): ReactElement {
+  const [data, setData] = useState<PatientChartDto | null>(null);
+  const [error, setError] = useState<'forbidden' | 'not-found' | 'unknown' | null>(null);
+  const [activeVisitId, setActiveVisitId] = useState<string | null>(initialVisitId ?? null);
+  const [showAllHistory, setShowAllHistory] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    setError(null);
+    setData(null);
+    (async () => {
+      try {
+        const res = await patientClient.getChart(patientId);
+        if (!cancelled) setData(res);
+      } catch (err) {
+        if (cancelled) return;
+        if (err instanceof ApiError) {
+          if (err.status === 401) {
+            window.location.href = '/login?reason=session-expired';
+            return;
+          }
+          if (err.status === 403) setError('forbidden');
+          else if (err.status === 404) setError('not-found');
+          else setError('unknown');
+        } else {
+          setError('unknown');
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [patientId]);
+
+  // Default to the most-recent visit when no explicit visit id is in
+  // the URL. Reflect the resolved visit in the URL via the History
+  // API (NOT `router.replace`) so the chart shell doesn't re-mount
+  // across visit switches — Next.js treats `/pacient/:id` and
+  // `/pacient/:id/vizita/:vid` as separate routes, but they render
+  // the same `ChartView`, so we keep all client state in place.
+  useEffect(() => {
+    if (!data) return;
+    if (data.visits.length === 0) {
+      if (activeVisitId !== null) setActiveVisitId(null);
+      return;
+    }
+    const matches = activeVisitId
+      ? data.visits.find((v) => v.id === activeVisitId)
+      : null;
+    if (!matches) {
+      const first = data.visits[0]!;
+      setActiveVisitId(first.id);
+      replaceUrl(`/pacient/${patientId}/vizita/${first.id}`);
+    }
+  }, [data, activeVisitId, patientId]);
+
+  const activeIndex = useMemo(() => {
+    if (!data || !activeVisitId) return -1;
+    return data.visits.findIndex((v) => v.id === activeVisitId);
+  }, [data, activeVisitId]);
+
+  const navigateVisit = useCallback(
+    (visitId: string) => {
+      setActiveVisitId(visitId);
+      replaceUrl(`/pacient/${patientId}/vizita/${visitId}`);
+    },
+    [patientId],
+  );
+
+  // ← / → arrow keys jump between visits. Skip when focus is on an
+  // editable element so the doctor's free-text typing isn't hijacked.
+  useEffect(() => {
+    if (!data) return;
+    function onKey(e: KeyboardEvent): void {
+      if (isEditableTarget(e.target)) return;
+      if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+      if (!data) return;
+      if (activeIndex === -1) return;
+      // Visits are sorted newest-first; ← moves to the previous
+      // (older) visit, → to the next (newer) one.
+      if (e.key === 'ArrowLeft') {
+        const next = data.visits[activeIndex + 1];
+        if (next) {
+          e.preventDefault();
+          navigateVisit(next.id);
+        }
+      } else {
+        const prev = data.visits[activeIndex - 1];
+        if (prev) {
+          e.preventDefault();
+          navigateVisit(prev.id);
+        }
+      }
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [data, activeIndex, navigateVisit]);
+
+  if (error === 'forbidden') {
+    return <ForbiddenChart />;
+  }
+  if (error === 'not-found') {
+    return <NotFoundChart />;
+  }
+  if (error === 'unknown') {
+    return <UnknownErrorChart />;
+  }
+
+  return (
+    <main className="min-h-screen bg-surface pb-24">
+      <ChartTopBar />
+
+      {data == null ? (
+        <ChartSkeleton />
+      ) : (
+        <>
+          <div className="sticky top-[60px] z-20 border-b border-line bg-surface-elevated">
+            <div className="mx-auto max-w-page px-page-x">
+              <MasterDataStrip
+                patient={data.patient}
+                daysSinceLastVisit={data.daysSinceLastVisit}
+                visitCount={data.visitCount}
+              />
+            </div>
+          </div>
+
+          {data.visits.length === 0 ? (
+            <EmptyVisitsState patientId={patientId} />
+          ) : (
+            <>
+              <VisitNav
+                visits={data.visits}
+                activeIndex={activeIndex}
+                onSelect={navigateVisit}
+              />
+
+              <div className="mx-auto grid max-w-page grid-cols-1 gap-6 px-page-x pt-5 lg:grid-cols-[60fr_40fr]">
+                <VisitFormPlaceholder
+                  visit={data.visits[activeIndex] ?? null}
+                  patientName={`${data.patient.firstName} ${data.patient.lastName}`}
+                />
+
+                <RightColumn
+                  visits={data.visits}
+                  vertetime={data.vertetime}
+                  activeVisitId={activeVisitId}
+                  showAllHistory={showAllHistory}
+                  onToggleHistory={() => setShowAllHistory((s) => !s)}
+                  onSelectVisit={navigateVisit}
+                />
+              </div>
+
+              <ActionBar />
+            </>
+          )}
+        </>
+      )}
+    </main>
+  );
+}
+
+// =========================================================================
+// Top bar (mirrors the doctor dashboard's layout for visual continuity)
+// =========================================================================
+
+function ChartTopBar(): ReactElement {
+  return (
+    <header className="sticky top-0 z-30 border-b border-line bg-surface-elevated">
+      <div className="mx-auto flex max-w-page items-center justify-between px-page-x py-3">
+        <div className="flex items-center gap-8">
+          <Link
+            href="/doctor"
+            className="font-display text-[17px] font-semibold tracking-[-0.015em] text-ink-strong"
+          >
+            klinika<span className="text-primary">.</span>
+          </Link>
+          <nav className="flex items-center gap-5 text-[14px]">
+            <Link href="/doctor" className="text-ink-muted hover:text-ink">
+              Sot
+            </Link>
+            <span className="font-medium text-ink-strong">Pacientët</span>
+          </nav>
+        </div>
+        <Link href="/profili-im" className="text-[13px] text-ink-muted hover:text-ink">
+          Profili im →
+        </Link>
+      </div>
+    </header>
+  );
+}
+
+// =========================================================================
+// Visit navigation bar
+// =========================================================================
+
+interface VisitNavProps {
+  visits: ChartVisitDto[];
+  activeIndex: number;
+  onSelect: (visitId: string) => void;
+}
+
+function VisitNav({ visits, activeIndex, onSelect }: VisitNavProps): ReactElement {
+  // Visits are newest-first; the human-readable counter wants
+  // oldest-first numbering ("Vizita 4 nga 12" = 4th from the start).
+  const totalVisits = visits.length;
+  const displayedNumber = activeIndex >= 0 ? totalVisits - activeIndex : 0;
+  const isAtNewest = activeIndex <= 0;
+  const isAtOldest = activeIndex >= totalVisits - 1;
+  const prevVisit = visits[activeIndex + 1] ?? null; // older
+  const nextVisit = visits[activeIndex - 1] ?? null; // newer
+
+  const sincePrevious = useMemo(() => {
+    const current = visits[activeIndex];
+    if (!current || !prevVisit) return null;
+    return daysBetweenIso(prevVisit.visitDate, current.visitDate);
+  }, [visits, activeIndex, prevVisit]);
+
+  return (
+    <div className="border-b border-line bg-surface-subtle">
+      <div className="mx-auto flex max-w-page flex-wrap items-center justify-between gap-3 px-page-x py-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            className="inline-flex h-8 items-center gap-1 rounded-md px-2.5 text-[13px] text-ink-muted enabled:hover:bg-surface-elevated enabled:hover:text-ink disabled:opacity-40"
+            disabled={!prevVisit}
+            onClick={() => prevVisit && onSelect(prevVisit.id)}
+            aria-label="Vizita paraprake"
+            title="Vizita paraprake (←)"
+          >
+            ← Paraprake
+          </button>
+          <div className="font-display text-[14px] font-semibold tabular-nums">
+            Vizita{' '}
+            <span className="text-ink-strong">{displayedNumber}</span>{' '}
+            <span className="text-ink-muted">nga {totalVisits}</span>
+          </div>
+          <select
+            aria-label="Zgjidh vizitën"
+            value={visits[activeIndex]?.id ?? ''}
+            onChange={(e) => onSelect(e.target.value)}
+            className="h-8 rounded-sm border border-line-strong bg-surface-elevated px-2 text-[12.5px] text-ink"
+          >
+            {visits.map((v, idx) => (
+              <option key={v.id} value={v.id}>
+                {formatDob(v.visitDate)}
+                {v.primaryDiagnosis
+                  ? ` — ${v.primaryDiagnosis.latinDescription}`
+                  : v.legacyDiagnosis
+                    ? ` — ${truncate(v.legacyDiagnosis, 32)}`
+                    : idx === 0
+                      ? ' — vizita më e re'
+                      : ''}
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            className="inline-flex h-8 items-center gap-1 rounded-md px-2.5 text-[13px] text-ink-muted enabled:hover:bg-surface-elevated enabled:hover:text-ink disabled:opacity-40"
+            disabled={!nextVisit}
+            onClick={() => nextVisit && onSelect(nextVisit.id)}
+            aria-label="Vizita e ardhshme"
+            title="Vizita e ardhshme (→)"
+          >
+            Ardhshme →
+          </button>
+
+          {sincePrevious != null ? (
+            <span className="border-l border-line pl-3 text-[12px] text-ink-muted">
+              Nga vizita paraprake:{' '}
+              <strong className="font-medium text-ink">
+                {sincePrevious} {sincePrevious === 1 ? 'ditë' : 'ditë'}
+              </strong>
+            </span>
+          ) : null}
+        </div>
+
+        <div className="text-[11px] text-ink-faint">
+          {isAtNewest ? 'Vizita më e re' : isAtOldest ? 'Vizita më e vjetër' : ''}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// =========================================================================
+// Left column — visit form placeholder
+// =========================================================================
+
+interface VisitFormPlaceholderProps {
+  visit: ChartVisitDto | null;
+  patientName: string;
+}
+
+function VisitFormPlaceholder({
+  visit,
+  patientName,
+}: VisitFormPlaceholderProps): ReactElement {
+  return (
+    <section
+      aria-label="Forma e vizitës"
+      className="overflow-hidden rounded-lg border border-line bg-surface-elevated shadow-xs"
+    >
+      <div className="border-b border-line px-5 py-3.5">
+        <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-muted">
+          Vizita
+        </div>
+        <div className="mt-1 flex items-baseline gap-2 text-[13px] text-ink">
+          <span className="font-mono text-[12px] tabular-nums">
+            {visit ? formatDob(visit.visitDate) : '—'}
+          </span>
+          {visit?.primaryDiagnosis ? (
+            <span className="text-ink-muted">
+              · {visit.primaryDiagnosis.code} {visit.primaryDiagnosis.latinDescription}
+            </span>
+          ) : visit?.legacyDiagnosis ? (
+            <span className="italic text-ink-muted">· {visit.legacyDiagnosis}</span>
+          ) : null}
+        </div>
+      </div>
+      <div className="space-y-4 px-5 py-6 text-[13px] text-ink-muted">
+        <p>
+          Forma e plotë e vizitës ({patientName}) vjen në fazën tjetër — Ankesa,
+          Ushqimi, Vitalat, Ekzaminime, Diagnoza, Terapia, Plani dhe Pagesa.
+        </p>
+        <p className="text-[12px] text-ink-faint">
+          Kjo është një hapje e kartelës: navigimi mes vizitave dhe paneli në
+          të djathtë janë aktive — fushat e mëposhtme do të aktivizohen sapo
+          slice-i i ardhshëm i implementon.
+        </p>
+        <div className="rounded-md border border-dashed border-line-strong bg-surface-subtle px-4 py-8 text-center text-[12px] text-ink-faint">
+          Fushat e formës — vendos placeholder
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// =========================================================================
+// Right column — context panels (stubs for this slice)
+// =========================================================================
+
+interface RightColumnProps {
+  visits: ChartVisitDto[];
+  vertetime: ChartVertetimDto[];
+  activeVisitId: string | null;
+  showAllHistory: boolean;
+  onToggleHistory: () => void;
+  onSelectVisit: (id: string) => void;
+}
+
+function RightColumn({
+  visits,
+  vertetime,
+  activeVisitId,
+  showAllHistory,
+  onToggleHistory,
+  onSelectVisit,
+}: RightColumnProps): ReactElement {
+  return (
+    <aside aria-label="Konteksti klinik" className="flex flex-col gap-4">
+      <StubPanel
+        title="Diagramet e rritjes"
+        meta="WHO"
+        body="Sparkline e peshës, gjatësisë dhe perimetrit të kokës — bashkëngjitet në fazën tjetër."
+      />
+      <StubPanel
+        title="Ultrazeri"
+        meta="Studimet"
+        body="Lidh studime DICOM për vizitën aktuale — vjen më vonë."
+      />
+      <HistoryPanel
+        visits={visits}
+        activeVisitId={activeVisitId}
+        showAll={showAllHistory}
+        onToggle={onToggleHistory}
+        onSelectVisit={onSelectVisit}
+      />
+      <VertetimePanel vertetime={vertetime} />
+    </aside>
+  );
+}
+
+function StubPanel({
+  title,
+  meta,
+  body,
+}: {
+  title: string;
+  meta?: string;
+  body: string;
+}): ReactElement {
+  return (
+    <section className="overflow-hidden rounded-lg border border-line bg-surface-elevated shadow-xs">
+      <header className="flex items-center justify-between border-b border-line px-4 py-2.5">
+        <h3 className="text-[12.5px] font-semibold text-ink-strong">{title}</h3>
+        {meta ? <span className="text-[11px] text-ink-faint">{meta}</span> : null}
+      </header>
+      <div className="px-4 py-5 text-[12.5px] text-ink-muted">{body}</div>
+    </section>
+  );
+}
+
+// =========================================================================
+// History list (compact, jump-to)
+// =========================================================================
+
+interface HistoryPanelProps {
+  visits: ChartVisitDto[];
+  activeVisitId: string | null;
+  showAll: boolean;
+  onToggle: () => void;
+  onSelectVisit: (id: string) => void;
+}
+
+function HistoryPanel({
+  visits,
+  activeVisitId,
+  showAll,
+  onToggle,
+  onSelectVisit,
+}: HistoryPanelProps): ReactElement {
+  const slice = showAll ? visits : visits.slice(0, HISTORY_COMPACT_LIMIT);
+  const hidden = visits.length - slice.length;
+  return (
+    <section
+      aria-label="Historia e vizitave"
+      className="overflow-hidden rounded-lg border border-line bg-surface-elevated shadow-xs"
+    >
+      <header className="flex items-center justify-between border-b border-line px-4 py-2.5">
+        <h3 className="text-[12.5px] font-semibold text-ink-strong">
+          Historia e shkurtër
+        </h3>
+        <span className="text-[11px] text-ink-faint">
+          {visits.length} {visits.length === 1 ? 'vizitë' : 'vizita'}
+        </span>
+      </header>
+      <ul className="divide-y divide-line-soft">
+        {slice.map((v) => (
+          <li key={v.id}>
+            <button
+              type="button"
+              onClick={() => onSelectVisit(v.id)}
+              aria-current={v.id === activeVisitId ? 'true' : undefined}
+              className={cn(
+                'grid w-full grid-cols-[68px_1fr_auto] items-center gap-2 px-4 py-2 text-left transition hover:bg-surface-subtle',
+                v.id === activeVisitId &&
+                  'border-l-2 border-l-primary bg-primary-soft/40 pl-[14px]',
+              )}
+            >
+              <span className="font-mono text-[11px] tabular-nums text-ink-muted">
+                {formatShortDate(v.visitDate)}
+              </span>
+              <span className="min-w-0 truncate text-[12px] text-ink">
+                {v.primaryDiagnosis ? (
+                  <>
+                    <strong className="font-semibold text-ink-strong">
+                      {v.primaryDiagnosis.code}
+                    </strong>{' '}
+                    {v.primaryDiagnosis.latinDescription}
+                  </>
+                ) : v.legacyDiagnosis ? (
+                  <span className="italic text-ink-muted">
+                    {truncate(v.legacyDiagnosis, 48)}
+                  </span>
+                ) : (
+                  <span className="text-ink-faint">Pa diagnozë</span>
+                )}
+              </span>
+              <span className="font-mono text-[11px] tabular-nums text-ink-muted">
+                {v.paymentCode ?? '—'}
+              </span>
+            </button>
+          </li>
+        ))}
+      </ul>
+      {hidden > 0 ? (
+        <button
+          type="button"
+          onClick={onToggle}
+          className="block w-full border-t border-line-soft py-2 text-center text-[12px] font-medium text-primary hover:underline"
+        >
+          {showAll ? 'Shfaq më pak' : `Shfaq më shumë (${hidden})`}
+        </button>
+      ) : null}
+    </section>
+  );
+}
+
+// =========================================================================
+// Vërtetime list
+// =========================================================================
+
+interface VertetimePanelProps {
+  vertetime: ChartVertetimDto[];
+}
+
+function VertetimePanel({ vertetime }: VertetimePanelProps): ReactElement {
+  return (
+    <section
+      aria-label="Vërtetime të lëshuara"
+      className="overflow-hidden rounded-lg border border-line bg-surface-elevated shadow-xs"
+    >
+      <header className="flex items-center justify-between border-b border-line px-4 py-2.5">
+        <h3 className="text-[12.5px] font-semibold text-ink-strong">Vërtetime</h3>
+        <span className="text-[11px] text-ink-faint">{vertetime.length}</span>
+      </header>
+      {vertetime.length === 0 ? (
+        <div className="px-4 py-5 text-[12.5px] italic text-ink-muted">
+          Asnjë vërtetim i lëshuar për këtë pacient
+        </div>
+      ) : (
+        <ul className="divide-y divide-line-soft">
+          {vertetime.map((c) => (
+            <li
+              key={c.id}
+              className="grid grid-cols-[68px_1fr_auto] items-start gap-3 px-4 py-2.5"
+            >
+              <span className="font-mono text-[11px] font-semibold tabular-nums text-ink-strong">
+                {formatShortDate(c.issuedAt.slice(0, 10))}
+              </span>
+              <div className="min-w-0">
+                <div className="text-[12.5px] tabular-nums text-ink">
+                  {formatDob(c.absenceFrom)} – {formatDob(c.absenceTo)}{' '}
+                  <span className="text-ink-muted">
+                    · {c.durationDays} {c.durationDays === 1 ? 'ditë' : 'ditë'}
+                  </span>
+                </div>
+                <div className="truncate text-[11.5px] text-ink-muted">
+                  {c.diagnosisSnapshot}
+                </div>
+              </div>
+              <div className="flex items-center gap-1 opacity-60">
+                <IconButton
+                  label="Shiko"
+                  disabled
+                  title="Shiko vërtetimin (vjen më vonë)"
+                >
+                  <EyeIcon />
+                </IconButton>
+                <IconButton
+                  label="Printo"
+                  disabled
+                  title="Printo vërtetimin (vjen më vonë)"
+                >
+                  <PrinterIcon />
+                </IconButton>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+function IconButton({
+  children,
+  label,
+  ...rest
+}: {
+  children: ReactElement;
+  label: string;
+} & React.ButtonHTMLAttributes<HTMLButtonElement>): ReactElement {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      className="grid h-8 w-8 place-items-center rounded-sm text-ink-muted enabled:hover:bg-surface-subtle enabled:hover:text-primary disabled:cursor-not-allowed"
+      {...rest}
+    >
+      {children}
+    </button>
+  );
+}
+
+// =========================================================================
+// Sticky bottom action bar
+// =========================================================================
+
+function ActionBar(): ReactElement {
+  return (
+    <div className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface-elevated shadow-[0_-2px_8px_rgba(28,25,23,0.04)]">
+      <div className="mx-auto flex max-w-page flex-wrap items-center justify-between gap-3 px-page-x py-2.5">
+        <div className="flex flex-wrap gap-2">
+          <Button variant="secondary" size="sm" disabled title="Aktivizohet në fazat e ardhshme">
+            Fshij vizitën
+          </Button>
+          <Button variant="secondary" size="sm" disabled title="Aktivizohet në fazat e ardhshme">
+            + Vizitë e re
+          </Button>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="secondary" size="sm" disabled title="Aktivizohet në fazat e ardhshme">
+            Printo
+          </Button>
+          <Button variant="secondary" size="sm" disabled title="Aktivizohet në fazat e ardhshme">
+            Vërtetim
+          </Button>
+          <Button variant="secondary" size="sm" disabled title="Aktivizohet në fazat e ardhshme">
+            Histori
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// =========================================================================
+// States
+// =========================================================================
+
+function ChartSkeleton(): ReactElement {
+  return (
+    <>
+      {/* Master strip skeleton — mirrors loading-skeletons.html §8.1 */}
+      <div className="border-b border-line bg-surface-elevated">
+        <div className="mx-auto flex max-w-page items-center gap-6 px-page-x py-4">
+          <Skeleton className="h-[22px] w-20" />
+          <div className="flex flex-col gap-1.5">
+            <Skeleton className="h-[22px] w-[220px]" />
+            <Skeleton className="h-3 w-40" />
+          </div>
+          <span className="h-11 w-px bg-line" />
+          {[0, 1, 2, 3].map((i) => (
+            <div key={i} className="flex flex-col gap-1.5">
+              <Skeleton className="h-[10px] w-16" />
+              <Skeleton className="h-[18px] w-14" />
+            </div>
+          ))}
+          <span className="flex-1" />
+          <Skeleton className="h-8 w-[120px] rounded-sm" />
+        </div>
+      </div>
+      {/* Visit area skeleton — boxed columns, no spinner */}
+      <div className="mx-auto grid max-w-page grid-cols-1 gap-6 px-page-x pt-5 lg:grid-cols-[60fr_40fr]">
+        <div className="overflow-hidden rounded-lg border border-line bg-surface-elevated">
+          <div className="space-y-4 px-5 py-5">
+            <Skeleton className="h-3 w-24" />
+            <Skeleton className="h-24" />
+            <Skeleton className="h-24" />
+            <Skeleton className="h-16" />
+          </div>
+        </div>
+        <div className="flex flex-col gap-4">
+          {[0, 1, 2].map((i) => (
+            <div
+              key={i}
+              className="overflow-hidden rounded-lg border border-line bg-surface-elevated"
+            >
+              <div className="space-y-3 px-4 py-4">
+                <Skeleton className="h-3 w-32" />
+                <Skeleton className="h-3 w-full" />
+                <Skeleton className="h-3 w-2/3" />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </>
+  );
+}
+
+function EmptyVisitsState({ patientId }: { patientId: string }): ReactElement {
+  void patientId;
+  return (
+    <div className="mx-auto max-w-page px-page-x py-12">
+      <EmptyState
+        title="Asnjë vizitë e regjistruar"
+        subtitle={
+          <>
+            Shtoni të parën për këtë pacient — formularët aktivizohen sapo
+            slice-i i radhës i lidh.
+          </>
+        }
+        icon={
+          <svg
+            width="22"
+            height="22"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden
+          >
+            <rect x="4" y="5" width="16" height="15" rx="2" />
+            <path d="M8 3v4M16 3v4M4 10h16" />
+          </svg>
+        }
+        actions={
+          <Button
+            disabled
+            title="Aktivizohet në fazat e ardhshme"
+          >
+            + Vizitë e re
+          </Button>
+        }
+      />
+    </div>
+  );
+}
+
+function ForbiddenChart(): ReactElement {
+  return (
+    <main className="grid min-h-screen place-items-center bg-surface px-6 py-10">
+      <EmptyState
+        tall
+        tone="amber"
+        code="Gabim 403"
+        title="Ju nuk keni qasje në këtë seksion"
+        subtitle="Kartelat e pacientëve janë të dukshme vetëm për mjekun."
+        icon={
+          <svg
+            width="22"
+            height="22"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.7"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden
+          >
+            <rect x="5" y="10" width="14" height="11" rx="2" />
+            <path d="M8 10V7a4 4 0 0 1 8 0v3" />
+          </svg>
+        }
+        actions={
+          <Link
+            href="/"
+            className="rounded-md border border-line-strong bg-surface-elevated px-3.5 py-2 text-[13px] font-medium text-ink hover:bg-surface-subtle"
+          >
+            Kthehu mbrapa
+          </Link>
+        }
+      />
+    </main>
+  );
+}
+
+function NotFoundChart(): ReactElement {
+  return (
+    <main className="grid min-h-screen place-items-center bg-surface px-6 py-10">
+      <EmptyState
+        tall
+        code="Gabim 404"
+        title="Pacienti nuk u gjet"
+        subtitle="Linku mund të jetë i vjetëruar."
+        icon={
+          <svg
+            width="22"
+            height="22"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.6"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden
+          >
+            <circle cx="11" cy="11" r="7" />
+            <path d="M16 16l5 5" />
+          </svg>
+        }
+        actions={
+          <Link
+            href="/doctor"
+            className="rounded-md bg-teal-600 px-3.5 py-2 text-[13px] font-medium text-white hover:bg-teal-700"
+          >
+            Te pamja e ditës
+          </Link>
+        }
+      />
+    </main>
+  );
+}
+
+function UnknownErrorChart(): ReactElement {
+  return (
+    <main className="grid min-h-screen place-items-center bg-surface px-6 py-10">
+      <EmptyState
+        tall
+        tone="amber"
+        title="Diçka shkoi keq"
+        subtitle="Provoni përsëri pasi lidhja kthehet."
+        icon={
+          <svg
+            width="22"
+            height="22"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.6"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden
+          >
+            <path d="M12 8v5M12 16.5v.01" />
+            <circle cx="12" cy="12" r="9" />
+          </svg>
+        }
+        actions={
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            className="rounded-md bg-teal-600 px-3.5 py-2 text-[13px] font-medium text-white hover:bg-teal-700"
+          >
+            Provo përsëri
+          </button>
+        }
+      />
+    </main>
+  );
+}
+
+// =========================================================================
+// Helpers
+// =========================================================================
+
+function isEditableTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  const tag = target.tagName.toLowerCase();
+  if (tag === 'input' || tag === 'textarea' || tag === 'select') return true;
+  if (target.isContentEditable) return true;
+  return false;
+}
+
+function replaceUrl(path: string): void {
+  if (typeof window === 'undefined') return;
+  window.history.replaceState(window.history.state, '', path);
+}
+
+function formatShortDate(iso: string): string {
+  // dd.MM.yy — used in the dense history & vërtetime rows.
+  const [y, m, d] = iso.split('-');
+  if (!y || !m || !d) return iso;
+  return `${d}.${m}.${y.slice(2)}`;
+}
+
+function truncate(s: string, max: number): string {
+  return s.length > max ? `${s.slice(0, max - 1)}…` : s;
+}
+
+function daysBetweenIso(earlierIso: string, laterIso: string): number {
+  const a = new Date(`${earlierIso}T00:00:00Z`).getTime();
+  const b = new Date(`${laterIso}T00:00:00Z`).getTime();
+  return Math.max(0, Math.round((b - a) / 86_400_000));
+}
+
+function EyeIcon(): ReactElement {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
+  );
+}
+
+function PrinterIcon(): ReactElement {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M6 9V2h12v7" />
+      <rect x="6" y="14" width="12" height="8" />
+      <path d="M6 18H2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5h-4" />
+    </svg>
+  );
+}
+
+// `ageLabelChart` is exported from patient-client.ts but we re-export
+// it here so the chart-shell module is a one-stop import for any
+// downstream consumer (e.g. unit tests).
+export { ageLabelChart };

@@ -1,11 +1,12 @@
 import { Module } from '@nestjs/common';
 
 import { AuthModule } from '../auth/auth.module';
+import { PatientChartService } from './patient-chart.service';
 import { PatientsController } from './patients.controller';
 import { PatientsService } from './patients.service';
 
 /**
- * Patient master data and search surface.
+ * Patient master data, search, and chart surface.
  *
  * Imports AuthModule so AuthGuard (applied per-route on the controller)
  * can resolve SessionService at module instantiation time. The global
@@ -18,7 +19,7 @@ import { PatientsService } from './patients.service';
 @Module({
   imports: [AuthModule],
   controllers: [PatientsController],
-  providers: [PatientsService],
+  providers: [PatientsService, PatientChartService],
   exports: [PatientsService],
 })
 export class PatientsModule {}

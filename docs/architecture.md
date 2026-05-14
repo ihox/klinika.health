@@ -31,6 +31,7 @@
 17. Slice 08 — receptionist calendar and appointment lifecycle
 18. Slice 09 — booking dialog and conflict-aware flows
 19. Slice 10 — doctor's home dashboard (Pamja e ditës)
+20. Slice 11 — patient chart shell
 
 ## Slice 01 — skeleton
 
@@ -998,4 +999,116 @@ list only.
 - Stats aggregation ([`doctor-dashboard.stats.spec.ts`](../apps/api/src/modules/doctor-dashboard/doctor-dashboard.stats.spec.ts)) — payment sums, lunch-break cap on the average, sort robustness.
 - Integration ([`doctor-dashboard.integration.spec.ts`](../apps/api/src/modules/doctor-dashboard/doctor-dashboard.integration.spec.ts)) — doctor sees the full snapshot, receptionist 403s, payment aggregation against multiple codes.
 - E2E ([`doctor-home.spec.ts`](../apps/web/tests/e2e/doctor-home.spec.ts)) — greeting + day stats render, next-patient card shows the allergy chip, click-through lands on the patient browser with `?patientId=…`, quick-search filters the appointment list.
+
+## Slice 11 — patient chart shell
+
+The doctor's per-patient working surface lives at `/pacient/:id`
+(with an alias at `/pacient/:id/vizita/:visitId` for visit deep-links).
+The shell wraps the visit form (slice 12 fills it in) with the dense
+master-data strip, a visit-navigation bar, and a right-column stack
+of clinical-context panels (growth charts, ultrazeri, history list,
+issued vërtetime).
+
+### One round-trip for the whole chart
+
+`GET /api/patients/:id/chart`
+([`patient-chart.service.ts`](../apps/api/src/modules/patients/patient-chart.service.ts))
+returns the master record, the full visit timeline (newest first),
+and the issued vërtetime list in one shot. The chart-shell wires
+this to its UI without a waterfall — the master strip, the visit
+nav dropdown, and the history list all render from the same
+payload, and a navigation between visits is a pure client-side
+swap (no second fetch).
+
+The endpoint is **doctor / clinic-admin only**. The receptionist
+cannot read the visit timeline because it carries PHI per
+CLAUDE.md §1.2. RLS provides the second layer.
+
+Every chart open writes a `patient.chart.viewed` audit row with
+`changes: null` (CLAUDE.md §5.3 — sensitive reads).
+
+### URL strategy
+
+- `/pacient/:id` defaults to the most-recent visit.
+- `/pacient/:id/vizita/:visitId` opens a specific visit.
+
+Both routes mount the same `ChartView`. Internal navigation (◀ / ▶
+buttons, ← / → arrows, dropdown, history-row click) uses
+`window.history.replaceState` rather than `router.replace` so the
+shell does **not** re-mount across the two-route boundary —
+otherwise every visit switch would re-fetch the chart bundle and
+lose client-side scroll/selection state.
+
+### Master data strip
+
+Two stacked rows plus an optional amber wash for `alergjiTjera`:
+
+- **Row 1** — `#PT-NNNNN` · Name · sex pill · color indicator chip ·
+  age (compact "2v 3m" / "11m" / "12 ditë" form) · place of birth ·
+  phone. Sticky at the top of the viewport on scroll.
+- **Row 2 (Lindja)** — birth date · pesha · gjatësia · PK · total
+  visit count.
+- **Row 3 (conditional)** — amber "Alergji / Tjera" strip with the
+  full text in `title=` so a long note shows on hover without
+  blowing the layout. Rendered only when the field is populated
+  and only for the doctor (the strip imports `PatientFullDto`, so
+  TypeScript blocks any accidental use in a receptionist view).
+
+The color indicator chip uses
+[`daysSinceVisitColor`](../apps/api/src/modules/patients/patient-chart.format.ts)
+(mirrored in [`patient-client.ts`](../apps/web/lib/patient-client.ts)):
+
+- 1–7 days → red (very recent — likely a follow-up).
+- 8–30 days → amber.
+- &gt; 30 days, 0, or `null` → green.
+
+### Visit navigation
+
+The bar above the form shows a "Vizita X nga Y" counter (oldest-first
+numbering, so "Vizita 4 nga 12" is the fourth chronologically),
+◀/▶ buttons that disable at the boundaries, a dropdown listing
+every visit with the date and primary diagnosis, and a small
+"since previous visit" note.
+
+Keyboard: `←` jumps to the older visit, `→` to the newer one.
+Both are ignored when focus is inside an `<input>` / `<textarea>`
+/ `<select>` / `contenteditable` element so free-text typing in
+the form (slice 12+) is never hijacked.
+
+### Right-column stubs
+
+The growth-charts panel and the ultrazeri panel are placeholders
+in this slice (filled in slices 14 and 16). The history list and
+vërtetime list are live:
+
+- **Historia e shkurtër** — newest-first; ten by default with a
+  "Shfaq më shumë" toggle for the rest. Each row carries `date ·
+  diagnosis short · payment code`; clicking jumps the form to
+  that visit (and updates the URL).
+- **Vërtetime** — newest-first; each row shows the issue date,
+  absence range, duration in days, and a truncated diagnosis
+  snapshot. The 👁 view + 🖨 reprint actions are stubbed
+  (`disabled`) — they wire up in slice 15. The empty state copy
+  is "Asnjë vërtetim i lëshuar për këtë pacient".
+
+### Loading + error + empty states
+
+- **Loading** — master-strip skeleton + two-column block skeleton
+  ([`loading-skeletons.html`](../design-reference/prototype/components/loading-skeletons.html)
+  §8.1). No spinner.
+- **No visits** — empty-state card per
+  [`empty-states.html`](../design-reference/prototype/components/empty-states.html)
+  §7.3 with the disabled "+ Vizitë e re" CTA (enabled in slice 12).
+- **403** — full-page empty state with the "Gabim 403" code and an
+  amber lock icon (§7.2 of the prototype). Routed when the API
+  refuses the request — receptionists, deactivated users.
+- **404** — when the patient id resolves to nothing.
+- **Network error** — a retry CTA, no auto-retry.
+
+### Tests
+
+- Unit ([`patient-chart.format.spec.ts`](../apps/api/src/modules/patients/patient-chart.format.spec.ts)) — `ageLabelChart` for every band (days / months / years / mixed), `daysSinceVisitColor` for all three thresholds.
+- Unit ([`patient-chart.spec.ts`](../apps/api/src/modules/patients/patient-chart.spec.ts)) — `computeDaysSince`, `daysInclusive` (vërtetim duration), `dateToIso`.
+- Integration ([`patients.integration.spec.ts`](../apps/api/src/modules/patients/patients.integration.spec.ts)) — receptionist 403 on the chart endpoint, doctor receives master + visits + vërtetime with the expected ordering, audit row written on view, 404 on unknown patient id, empty timeline returned as empty arrays.
+- E2E ([`chart.spec.ts`](../apps/web/tests/e2e/chart.spec.ts)) — master strip renders, ← / → keyboard navigation works, clicking a history row jumps to that visit, 403 path renders the forbidden screen, zero-visit patient renders the empty state.
 

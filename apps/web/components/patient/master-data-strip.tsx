@@ -1,117 +1,209 @@
 'use client';
 
 import {
-  ageLabel,
+  ageLabelChart,
+  daysSinceVisitColor,
   formatDob,
+  type DaysSinceVisitColor,
   type PatientFullDto,
 } from '@/lib/patient-client';
+import { cn } from '@/lib/utils';
 
 interface Props {
   patient: PatientFullDto;
-  /** Optional days-since-last-visit; renders the green/yellow/red indicator chip when present. */
+  /**
+   * Days since this patient's most recent non-deleted visit. Drives
+   * the green/amber/red indicator chip. `null` means "no prior visit
+   * recorded" — the chip is hidden entirely.
+   */
   daysSinceLastVisit?: number | null;
-  /** Total visit count for display. */
+  /** Total visit count; if provided, rendered alongside the master data. */
   visitCount?: number | null;
 }
 
 /**
- * Doctor's master-data strip — the dense horizontal header that sits
- * above the visit chart (slice 11 will adopt this).
+ * Doctor's master-data strip — the dense header that sits above the
+ * chart's visit form. Mirrors design-reference/prototype/chart.html
+ * lines 1578-1638.
  *
- * NEVER rendered for receptionists. The component imports
- * `PatientFullDto` directly; a TypeScript build error is the safety
- * net against accidental use in a receptionist screen.
+ * Layout:
  *
- * Color indicator chip:
- *   green   — last visit > 30 days ago (or no prior visits)
- *   yellow  — last visit 7–30 days ago
- *   red     — last visit 1–7 days ago
+ *   Row 1: ID · Name (+sex pill +indicator chip) · age · place · phone
+ *   Row 2: Lindja: birth date · pesha · gjatësia · PK · Vizita
+ *   Row 3 (only when populated): amber "Alergji / Tjera" wash with
+ *           full text visible on hover (rest of the text is clipped
+ *           with an ellipsis so a long note doesn't blow the layout).
+ *
+ * NEVER rendered for receptionists — `PatientFullDto` is the doctor's
+ * shape. The TypeScript build is the safety net.
  */
 export function MasterDataStrip({ patient, daysSinceLastVisit, visitCount }: Props) {
-  const indicator = colorForDaysSinceVisit(daysSinceLastVisit);
+  const indicator =
+    daysSinceLastVisit != null ? daysSinceVisitColor(daysSinceLastVisit) : null;
   return (
-    <div className="rounded-lg border border-stone-200 bg-white">
-      <div className="flex flex-wrap items-center gap-x-6 gap-y-2 px-5 py-3">
-        <span className="font-mono text-[12.5px] text-stone-500">
+    <div className="bg-surface-elevated">
+      {/* ── Row 1: identity ─────────────────────────────────────────── */}
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-2 px-1 py-4">
+        <span className="font-mono text-[11px] tabular-nums text-ink-faint rounded-xs border border-line bg-surface-subtle px-2 py-0.5">
           {patient.legacyId != null
             ? `#PT-${String(patient.legacyId).padStart(5, '0')}`
             : `#${patient.id.slice(0, 8)}`}
         </span>
 
         <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <span className="font-display text-[17px] font-semibold tracking-[-0.01em] text-stone-900">
+          <div className="flex items-center gap-2.5">
+            <span className="font-display text-[22px] font-semibold leading-[1.1] tracking-[-0.02em] text-ink-strong">
               {patient.firstName} {patient.lastName}
             </span>
             {patient.sex ? (
               <span
-                className="inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-stone-100 px-1.5 text-[11px] font-semibold text-stone-600"
+                className={cn(
+                  'inline-flex h-5 min-w-[20px] items-center justify-center rounded-xs border px-1.5 text-[10px] font-semibold uppercase tracking-[0.05em]',
+                  patient.sex === 'f'
+                    ? 'border-pink-200 bg-pink-50 text-pink-700'
+                    : 'border-blue-200 bg-blue-50 text-blue-700',
+                )}
                 aria-label={patient.sex === 'f' ? 'Femër' : 'Mashkull'}
               >
-                {patient.sex === 'f' ? 'F' : 'M'}
+                {patient.sex.toUpperCase()}
               </span>
             ) : null}
-            {indicator ? (
-              <span
-                className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11.5px] font-medium ${indicator.cls}`}
-                title={indicator.label}
-              >
-                <span className={`h-1.5 w-1.5 rounded-full ${indicator.dot}`} aria-hidden />
-                {daysSinceLastVisit} ditë
-              </span>
+            {indicator && daysSinceLastVisit != null ? (
+              <IndicatorChip color={indicator} days={daysSinceLastVisit} />
             ) : null}
           </div>
-          <div className="mt-0.5 flex flex-wrap items-center gap-x-2 text-[12.5px] text-stone-500">
+          <div className="mt-1 flex flex-wrap items-center gap-x-2.5 text-[12px] text-ink-muted">
             {patient.dateOfBirth ? (
-              <>
-                <strong className="text-stone-700">{ageLabel(patient.dateOfBirth)}</strong>
-                <span>· lindur {formatDob(patient.dateOfBirth)}</span>
-              </>
+              <strong className="font-medium text-ink">
+                {ageLabelChart(patient.dateOfBirth)}
+              </strong>
             ) : (
-              <span>DL pa caktuar</span>
+              <span className="italic">DL pa caktuar</span>
             )}
             {patient.placeOfBirth ? (
               <>
-                <span aria-hidden>·</span>
+                <Sep />
                 <span>{patient.placeOfBirth}</span>
               </>
             ) : null}
             {patient.phone ? (
               <>
-                <span aria-hidden>·</span>
+                <Sep />
                 <span className="tabular-nums">{patient.phone}</span>
               </>
             ) : null}
           </div>
         </div>
+      </div>
 
-        <span className="hidden h-8 w-px bg-stone-200 sm:block" />
-
-        <Stat label="Pesha lindjes" value={patient.birthWeightG} unit="g" format={formatInt} />
-        <Stat label="Gjat. lindjes" value={patient.birthLengthCm} unit="cm" format={formatDecimal} />
-        <Stat label="PK lindjes" value={patient.birthHeadCircumferenceCm} unit="cm" format={formatDecimal} />
-
+      {/* ── Row 2: Lindja sub-row ───────────────────────────────────── */}
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-2 border-t border-line-soft px-1 py-2.5">
+        <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-ink-faint">
+          Lindja
+        </span>
+        <Stat
+          label="Data"
+          value={patient.dateOfBirth ? formatDob(patient.dateOfBirth) : null}
+          mono
+        />
+        <Stat
+          label="Pesha"
+          value={patient.birthWeightG}
+          unit="g"
+          format={formatInt}
+        />
+        <Stat
+          label="Gjatësia"
+          value={patient.birthLengthCm}
+          unit="cm"
+          format={formatDecimal}
+        />
+        <Stat
+          label="PK"
+          value={patient.birthHeadCircumferenceCm}
+          unit="cm"
+          format={formatDecimal}
+        />
         {visitCount != null ? (
           <>
-            <span className="hidden h-8 w-px bg-stone-200 sm:block" />
+            <span className="hidden h-7 w-px bg-line sm:block" />
             <Stat label="Vizita" value={visitCount} />
           </>
         ) : null}
       </div>
 
+      {/* ── Row 3 (conditional): Alergji / Tjera ───────────────────── */}
       {patient.alergjiTjera ? (
-        <div className="flex items-start gap-2 border-t border-stone-100 bg-amber-50/40 px-5 py-2.5">
-          <span
-            aria-hidden
-            className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-200 text-[12px] font-semibold text-amber-800"
-          >
-            !
-          </span>
-          <div className="text-[13px] text-amber-900">
-            <span className="font-medium">Alergji / Tjera:</span> {patient.alergjiTjera}
-          </div>
-        </div>
+        <AllergiesRow text={patient.alergjiTjera} />
       ) : null}
+    </div>
+  );
+}
+
+function Sep() {
+  return (
+    <span aria-hidden className="text-line-strong">
+      ·
+    </span>
+  );
+}
+
+function IndicatorChip({
+  color,
+  days,
+}: {
+  color: DaysSinceVisitColor;
+  days: number;
+}) {
+  const tone =
+    color === 'red'
+      ? 'border-danger-soft bg-danger-bg text-danger'
+      : color === 'amber'
+        ? 'border-warning-soft bg-warning-bg text-warning'
+        : 'border-success-soft bg-success-bg text-success';
+  const dot =
+    color === 'red' ? 'bg-danger' : color === 'amber' ? 'bg-warning' : 'bg-success';
+  const label =
+    color === 'red'
+      ? 'Vizitë e fundit brenda javës'
+      : color === 'amber'
+        ? 'Vizitë e fundit brenda muajit'
+        : 'Vizitë e fundit më shumë se 30 ditë më parë';
+  return (
+    <span
+      className={cn(
+        'inline-flex items-center gap-1.5 rounded-pill border px-2 py-0.5 text-[11px] font-medium tabular-nums',
+        tone,
+      )}
+      title={label}
+    >
+      <span className={cn('h-1.5 w-1.5 rounded-full', dot)} aria-hidden />
+      {days} {days === 1 ? 'ditë' : 'ditë'}
+    </span>
+  );
+}
+
+function AllergiesRow({ text }: { text: string }) {
+  // The full text is in `title` so a long allergy note (rare —
+  // doctors keep it terse) doesn't blow up the strip layout while
+  // staying accessible on hover.
+  return (
+    <div
+      className="group flex items-center gap-2.5 border-t border-warning-soft bg-warning-bg px-1 py-2 text-[12.5px] text-amber-900"
+      title={text}
+    >
+      <span
+        aria-hidden
+        className="inline-flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-warning text-[11px] font-bold leading-none text-white"
+      >
+        !
+      </span>
+      <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-warning">
+        Alergji / Tjera
+      </span>
+      <span className="min-w-0 flex-1 truncate font-medium text-amber-900 group-hover:whitespace-normal group-hover:break-words">
+        {text}
+      </span>
     </div>
   );
 }
@@ -121,19 +213,36 @@ function Stat({
   value,
   unit,
   format,
+  mono,
 }: {
   label: string;
-  value: number | null | undefined;
+  value: number | string | null | undefined;
   unit?: string;
   format?: (n: number) => string;
+  mono?: boolean;
 }) {
+  const rendered =
+    value == null
+      ? '—'
+      : typeof value === 'number' && format
+        ? format(value)
+        : value;
   return (
-    <div className="flex flex-col">
-      <span className="text-[11px] uppercase tracking-wide text-stone-400">{label}</span>
-      <span className="text-[14px] font-medium text-stone-900">
-        {value == null ? '—' : format ? format(value) : value}
+    <div className="flex flex-col gap-0.5">
+      <span className="text-[10px] font-medium uppercase tracking-[0.07em] text-ink-faint">
+        {label}
+      </span>
+      <span
+        className={cn(
+          'text-[15px] font-semibold leading-none tabular-nums text-ink-strong',
+          mono && 'font-mono text-[13px]',
+        )}
+      >
+        {rendered}
         {value != null && unit ? (
-          <small className="ml-0.5 text-stone-400">{unit}</small>
+          <small className="ml-0.5 text-[11px] font-normal tracking-normal text-ink-faint">
+            {unit}
+          </small>
         ) : null}
       </span>
     </div>
@@ -146,29 +255,4 @@ function formatInt(n: number): string {
 
 function formatDecimal(n: number): string {
   return Number.isInteger(n) ? n.toString() : n.toFixed(1);
-}
-
-function colorForDaysSinceVisit(
-  days: number | null | undefined,
-): { cls: string; dot: string; label: string } | null {
-  if (days == null) return null;
-  if (days <= 7) {
-    return {
-      cls: 'bg-red-50 text-red-700',
-      dot: 'bg-red-500',
-      label: 'Vizitë e fundit brenda javës',
-    };
-  }
-  if (days <= 30) {
-    return {
-      cls: 'bg-amber-50 text-amber-700',
-      dot: 'bg-amber-500',
-      label: 'Vizitë e fundit brenda muajit',
-    };
-  }
-  return {
-    cls: 'bg-emerald-50 text-emerald-700',
-    dot: 'bg-emerald-500',
-    label: 'Asnjë vizitë e fundit',
-  };
 }

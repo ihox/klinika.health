@@ -19,6 +19,8 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import { AuthGuard } from '../../common/guards/auth.guard';
 import { ClinicScopeGuard } from '../../common/guards/clinic-scope.guard';
 import type { RequestContext } from '../../common/request-context/request-context';
+import type { PatientChartDto } from './patient-chart.dto';
+import { PatientChartService } from './patient-chart.service';
 import {
   DoctorCreatePatientSchema,
   DoctorUpdatePatientSchema,
@@ -48,7 +50,10 @@ import { PatientsService } from './patients.service';
 @Controller('api/patients')
 @UseGuards(AuthGuard, ClinicScopeGuard)
 export class PatientsController {
-  constructor(private readonly patients: PatientsService) {}
+  constructor(
+    private readonly patients: PatientsService,
+    private readonly chart: PatientChartService,
+  ) {}
 
   // -------------------------------------------------------------------------
   // Search
@@ -153,6 +158,24 @@ export class PatientsController {
   ): Promise<{ patient: PatientFullDto }> {
     const patient = await this.patients.getById(ctx.clinicId!, id, ctx);
     return { patient };
+  }
+
+  // -------------------------------------------------------------------------
+  // Full chart bundle (master + visits + vërtetime) — DOCTOR ONLY
+  // -------------------------------------------------------------------------
+  //
+  // The chart shell needs all three resources to render the master
+  // strip, the visit navigation/history list, and the vërtetime
+  // panel. Returning them in one shot avoids a request waterfall on
+  // page open.
+
+  @Get(':id/chart')
+  @Roles('doctor', 'clinic_admin')
+  async getChart(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Ctx() ctx: RequestContext,
+  ): Promise<PatientChartDto> {
+    return this.chart.getChart(ctx.clinicId!, id, ctx);
   }
 
   // -------------------------------------------------------------------------

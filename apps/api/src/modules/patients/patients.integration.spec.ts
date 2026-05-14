@@ -34,8 +34,8 @@ const SEED_RECEPTIONIST_PASSWORD = process.env['SEED_RECEPTIONIST_PASSWORD'];
 const ENABLED = Boolean(DATABASE_URL && SEED_DOCTOR_PASSWORD && SEED_RECEPTIONIST_PASSWORD);
 
 const TENANT_HOST = 'donetamed.klinika.health';
-const DOCTOR_EMAIL = 'taulant.shala@donetamed.health';
-const RECEPTIONIST_EMAIL = 'ereblire.krasniqi@donetamed.health';
+const DOCTOR_EMAIL = 'taulant.shala@klinika.health';
+const RECEPTIONIST_EMAIL = 'ereblire.krasniqi@klinika.health';
 
 const RECEPTIONIST_PUBLIC_KEYS = ['id', 'firstName', 'lastName', 'dateOfBirth'].sort();
 
@@ -124,6 +124,12 @@ describe.skipIf(!ENABLED)('Patients integration', () => {
     await prisma.authTrustedDevice.deleteMany({});
     await prisma.authSession.deleteMany({});
     await prisma.auditLog.deleteMany({ where: { clinicId } });
+    // Clinical FKs ahead of patients so the test-only `deleteMany`
+    // below doesn't trip NoAction constraints from the chart tests.
+    await prisma.vertetim.deleteMany({ where: { clinicId } });
+    await prisma.visitDicomLink.deleteMany({});
+    await prisma.visitDiagnosis.deleteMany({});
+    await prisma.visit.deleteMany({ where: { clinicId } });
     await prisma.patient.deleteMany({ where: { clinicId } });
     await prisma.patient.deleteMany({ where: { clinicId: secondClinicId } });
 
@@ -411,6 +417,144 @@ describe.skipIf(!ENABLED)('Patients integration', () => {
       expect(restore.status).toBe(200);
       const reloaded = await prisma.patient.findUniqueOrThrow({ where: { id: dion.id } });
       expect(reloaded.deletedAt).toBeNull();
+    });
+  });
+
+  // ----------------------------------------------------------------------
+  // Chart bundle (master + visits + vërtetime)
+  // ----------------------------------------------------------------------
+
+  describe('chart bundle', () => {
+    it('receptionist GET :id/chart returns 403', async () => {
+      const cookie = await loginAs(RECEPTIONIST_EMAIL, SEED_RECEPTIONIST_PASSWORD!);
+      const patient = await prisma.patient.findFirstOrThrow({ where: { clinicId } });
+      const res = await req()
+        .get(`/api/patients/${patient.id}/chart`)
+        .set('host', TENANT_HOST)
+        .set('Cookie', cookie);
+      expect(res.status).toBe(403);
+    });
+
+    it('doctor GET :id/chart returns patient + visits + vërtetime', async () => {
+      const cookie = await loginAs(DOCTOR_EMAIL, SEED_DOCTOR_PASSWORD!);
+      const era = await prisma.patient.findFirstOrThrow({
+        where: { clinicId, firstName: 'Era' },
+      });
+      const doctor = await prisma.user.findFirstOrThrow({
+        where: { clinicId, email: DOCTOR_EMAIL },
+      });
+
+      // Seed three visits in deterministic order — most recent first
+      // after the chart sorts by visitDate DESC.
+      const visitA = await prisma.visit.create({
+        data: {
+          clinicId,
+          patientId: era.id,
+          visitDate: new Date('2026-04-01'),
+          createdBy: doctor.id,
+          updatedBy: doctor.id,
+          paymentCode: 'A',
+          legacyDiagnosis: 'Tonsillitis',
+        },
+      });
+      const visitB = await prisma.visit.create({
+        data: {
+          clinicId,
+          patientId: era.id,
+          visitDate: new Date('2026-02-22'),
+          createdBy: doctor.id,
+          updatedBy: doctor.id,
+          paymentCode: 'B',
+        },
+      });
+      const visitC = await prisma.visit.create({
+        data: {
+          clinicId,
+          patientId: era.id,
+          visitDate: new Date('2025-12-17'),
+          createdBy: doctor.id,
+          updatedBy: doctor.id,
+          paymentCode: 'A',
+        },
+      });
+
+      // A vërtetim attached to the most-recent visit.
+      await prisma.vertetim.create({
+        data: {
+          clinicId,
+          patientId: era.id,
+          visitId: visitA.id,
+          issuedBy: doctor.id,
+          issuedAt: new Date('2026-04-01T10:30:00Z'),
+          absenceFrom: new Date('2026-04-01'),
+          absenceTo: new Date('2026-04-05'),
+          diagnosisSnapshot: 'J03.9 Tonsillitis acuta',
+        },
+      });
+
+      const res = await req()
+        .get(`/api/patients/${era.id}/chart`)
+        .set('host', TENANT_HOST)
+        .set('Cookie', cookie);
+      expect(res.status).toBe(200);
+      const body = res.body as {
+        patient: { firstName: string; sex: string | null };
+        visits: Array<{ id: string; visitDate: string; paymentCode: string | null }>;
+        vertetime: Array<{ id: string; durationDays: number }>;
+        daysSinceLastVisit: number | null;
+        visitCount: number;
+      };
+      expect(body.patient.firstName).toBe('Era');
+      expect(body.patient.sex).toBe('f');
+      expect(body.visits.map((v) => v.id)).toEqual([
+        visitA.id,
+        visitB.id,
+        visitC.id,
+      ]);
+      expect(body.visits.map((v) => v.paymentCode)).toEqual(['A', 'B', 'A']);
+      expect(body.visitCount).toBe(3);
+      expect(body.daysSinceLastVisit).toBeGreaterThanOrEqual(0);
+      expect(body.vertetime).toHaveLength(1);
+      expect(body.vertetime[0]).toMatchObject({
+        durationDays: 5,
+        diagnosisSnapshot: 'J03.9 Tonsillitis acuta',
+      });
+
+      // Audit row recorded for the sensitive read.
+      const audits = await prisma.auditLog.findMany({
+        where: {
+          clinicId,
+          resourceId: era.id,
+          action: 'patient.chart.viewed',
+        },
+      });
+      expect(audits.length).toBeGreaterThanOrEqual(1);
+      expect(audits[0]?.changes).toBeNull();
+    });
+
+    it('doctor GET :id/chart 404s on unknown patient', async () => {
+      const cookie = await loginAs(DOCTOR_EMAIL, SEED_DOCTOR_PASSWORD!);
+      const res = await req()
+        .get(`/api/patients/00000000-0000-0000-0000-000000000000/chart`)
+        .set('host', TENANT_HOST)
+        .set('Cookie', cookie);
+      expect(res.status).toBe(404);
+    });
+
+    it('doctor GET :id/chart on a patient without visits returns empty arrays', async () => {
+      const cookie = await loginAs(DOCTOR_EMAIL, SEED_DOCTOR_PASSWORD!);
+      const dion = await prisma.patient.findFirstOrThrow({
+        where: { clinicId, firstName: 'Dion' },
+      });
+      const res = await req()
+        .get(`/api/patients/${dion.id}/chart`)
+        .set('host', TENANT_HOST)
+        .set('Cookie', cookie);
+      expect(res.status).toBe(200);
+      expect(res.body.visits).toEqual([]);
+      expect(res.body.vertetime).toEqual([]);
+      expect(res.body.visitCount).toBe(0);
+      expect(res.body.daysSinceLastVisit).toBeNull();
     });
   });
 
