@@ -18,6 +18,13 @@ export interface HeartbeatPayload {
   cpuPercent: number;
   ramPercent: number;
   diskPercent: number;
+  /**
+   * Total bytes consumed by Orthanc's storage (DICOM index + files).
+   * Read from Orthanc's `/statistics` endpoint by the agent. Null when
+   * Orthanc is unreachable or not configured (cloud-only installs).
+   * Used by the platform side to graph DICOM growth per ADR-009.
+   */
+  orthancDiskBytes: number | null;
   lastBackupAt: string | null;
   activeSessions: number;
   queueDepth: number;

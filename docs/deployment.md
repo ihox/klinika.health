@@ -203,3 +203,139 @@ Caddy auto-renews Let's Encrypt certificates via DNS-01 challenge.
 Caddyfile excerpts live in [`infra/caddy/`](../infra/caddy/). For
 on-premise installs the Cloudflare Tunnel terminates TLS at
 Cloudflare; the local Caddy serves plain HTTP on the LAN.
+
+---
+
+## Orthanc (DICOM) — on-premise
+
+Required for clinics using ultrasound (DonetaMED's first install
+ships with a GE Versana Balance). See
+[ADR-009](decisions/009-dicom-storage.md) for the storage decision
+and the rationale behind on-prem-only DICOM.
+
+### Hardware prep
+
+1. Provision a dedicated **2TB HDD** mounted at `/mnt/dicom-storage`.
+   RAID 1 mirror is recommended (+€80 hardware; not enforced).
+2. Verify the disk is reachable from Docker:
+   ```
+   docker run --rm -v /mnt/dicom-storage:/test alpine df -h /test
+   ```
+3. Ensure the partition is at least 2TB free. Klinika reports usage
+   hourly via the telemetry agent; alerts fire at 80% (warning) and
+   95% (critical) per ADR-009.
+
+### Compose stack
+
+[`infra/compose/docker-compose.onprem.yml`](../infra/compose/docker-compose.onprem.yml)
+runs the full stack:
+
+```bash
+# From the repo root, on the clinic's mini-PC
+docker compose -f infra/compose/docker-compose.onprem.yml --env-file .env up -d
+```
+
+Orthanc reads its config from
+[`infra/compose/orthanc/orthanc-onprem.json`](../infra/compose/orthanc/orthanc-onprem.json).
+TLS for the DICOM C-STORE port (`4242`) is **enabled** in the on-prem
+config and must be provisioned before the modality can push studies.
+
+### Orthanc TLS material
+
+Klinika does not ship a CA; each clinic uses an internal CA whose
+certificate is loaded onto the ultrasound modality at install time.
+
+```bash
+# On the mini-PC, as root:
+sudo mkdir -p /etc/orthanc/tls
+sudo cp orthanc.crt /etc/orthanc/tls/orthanc.crt
+sudo cp orthanc.key /etc/orthanc/tls/orthanc.key
+sudo cp ca.crt      /etc/orthanc/tls/trusted.crt
+sudo chmod 0600 /etc/orthanc/tls/orthanc.key
+sudo chown root:root /etc/orthanc/tls/*
+```
+
+The compose file bind-mounts `/etc/orthanc/tls` read-only into the
+Orthanc container.
+
+### Modality allowlist
+
+`orthanc-onprem.json` sets `DicomCheckCalledAet: true`. Add each
+ultrasound by AET in the `DicomModalities` map. For the GE Versana:
+
+```jsonc
+{
+  "DicomModalities": {
+    "ge-versana": ["VERSANA1", "192.168.1.50", 104, "GenericTLS"]
+  }
+}
+```
+
+Restart Orthanc after every modality-list change:
+`docker compose restart orthanc`.
+
+### Webhook secret + image proxy
+
+The on-stored Lua hook
+([`infra/compose/orthanc/on-stored.lua`](../infra/compose/orthanc/on-stored.lua))
+POSTs every received instance to Klinika's internal endpoint. The
+shared secret lives in `.env`:
+
+```
+ORTHANC_USERNAME=klinika
+ORTHANC_PASSWORD=<long random>
+ORTHANC_WEBHOOK_SECRET=<long random>
+ORTHANC_URL=http://orthanc:8042
+```
+
+`ORTHANC_PASSWORD` and `ORTHANC_WEBHOOK_SECRET` are rotated
+quarterly per the runbook. Klinika authenticates to Orthanc using
+the password; Orthanc authenticates to Klinika using the webhook
+secret (via `X-Klinika-Orthanc-Secret`, constant-time-compared at
+the bridge). Orthanc's REST API is **not** published outside the
+Docker network — the browser only ever talks to
+`/api/dicom/instances/:id/preview.png` on the same origin as the
+chart.
+
+### First-receive smoke test
+
+After bringing the stack up:
+
+```bash
+# Verify Klinika sees Orthanc
+curl -s -u klinika:$ORTHANC_PASSWORD http://localhost:8042/system | jq .
+
+# Send a test DICOM (storescu from the dcmtk package)
+storescu --tls-aware -aec KLINIKA -aet TEST 127.0.0.1 4242 sample.dcm
+
+# Within a few seconds, the bridge should log:
+#   "DICOM study indexed" orthancStudyId="…"
+docker logs klinika-api 2>&1 | grep "DICOM study indexed"
+```
+
+If the bridge does not log the ingest, check:
+
+1. `docker logs klinika-orthanc` for the Lua hook's exit status
+2. The webhook URL inside the container resolves to the API
+   (`docker exec klinika-orthanc curl -v $ORTHANC_WEBHOOK_URL`)
+3. `ORTHANC_WEBHOOK_SECRET` matches on both sides of the link
+
+### Backups
+
+Backblaze B2 backups of `/mnt/dicom-storage` are **mandatory** per
+ADR-009. The restic wrapper script is installed at provisioning and
+runs nightly. After every successful run it updates
+`BACKUP_LAST_SUCCESS_AT` in the API container's env — the telemetry
+agent reports it; stale backups raise `backup_failed` alerts on the
+platform side.
+
+### Cloud-only installs
+
+For tenants without ultrasound, leave `ORTHANC_URL` unset. The
+bridge degrades gracefully:
+
+- `OrthancClient.isConfigured()` returns `false`
+- `GET /api/dicom/recent` returns `{ studies: [] }`
+- Telemetry reports `orthancDiskBytes: null`
+- The chart's Ultrazeri panel still mounts; the empty-state copy
+  ("Asnjë studim i lidhur me këtë vizitë.") covers the case.

@@ -1,0 +1,114 @@
+# On-premise production stack for a single clinic (e.g. DonetaMED).
+# Run from the repo root: docker compose -f infra/compose/docker-compose.onprem.yml up -d
+#
+# Differences vs the dev stack:
+#   - Orthanc bind-mounts /mnt/dicom-storage on the 2TB HDD (ADR-009)
+#   - Orthanc TLS is enabled (modality-side TLS for the ultrasound)
+#   - Caddy is the public ingress; Orthanc's REST API is NOT exposed
+#     directly. The browser only ever talks to Klinika's authenticated
+#     image proxy at /api/dicom/instances/:id/preview.png.
+#   - All services run TZ=Europe/Belgrade per ADR-006.
+
+name: klinika-onprem
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: klinika-postgres
+    restart: unless-stopped
+    environment:
+      TZ: Europe/Belgrade
+      PGTZ: Europe/Belgrade
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  api:
+    image: ghcr.io/donetamed/klinika-api:${KLINIKA_VERSION:-latest}
+    container_name: klinika-api
+    restart: unless-stopped
+    environment:
+      TZ: Europe/Belgrade
+      NODE_ENV: production
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?schema=public
+      ORTHANC_URL: http://orthanc:8042
+      ORTHANC_USERNAME: ${ORTHANC_USERNAME}
+      ORTHANC_PASSWORD: ${ORTHANC_PASSWORD}
+      ORTHANC_WEBHOOK_SECRET: ${ORTHANC_WEBHOOK_SECRET}
+      KLINIKA_TENANT_ID: ${KLINIKA_TENANT_ID}
+      TELEMETRY_HEARTBEAT_URL: ${TELEMETRY_HEARTBEAT_URL}
+      TELEMETRY_SHARED_SECRET: ${TELEMETRY_SHARED_SECRET}
+      AUTH_SECRET: ${AUTH_SECRET}
+      EMAIL_FROM: ${EMAIL_FROM}
+      EMAIL_FROM_NAME: ${EMAIL_FROM_NAME}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  web:
+    image: ghcr.io/donetamed/klinika-web:${KLINIKA_VERSION:-latest}
+    container_name: klinika-web
+    restart: unless-stopped
+    environment:
+      TZ: Europe/Belgrade
+      NODE_ENV: production
+      API_INTERNAL_URL: http://api:3001
+    depends_on:
+      - api
+
+  orthanc:
+    image: orthancteam/orthanc:24.7.3
+    container_name: klinika-orthanc
+    restart: unless-stopped
+    environment:
+      TZ: Europe/Belgrade
+      ORTHANC_USERNAME: ${ORTHANC_USERNAME}
+      ORTHANC_PASSWORD: ${ORTHANC_PASSWORD}
+      ORTHANC_WEBHOOK_URL: http://api:3001/api/dicom/internal/orthanc-event
+      ORTHANC_WEBHOOK_SECRET: ${ORTHANC_WEBHOOK_SECRET}
+    ports:
+      # DICOM C-STORE port — published to the clinic LAN so the
+      # ultrasound modality can push studies. Modality-side TLS
+      # required (see orthanc-onprem.json).
+      - "4242:4242"
+    volumes:
+      # Permanent storage on the 2TB HDD. Bind-mount; the path on the
+      # host is the directory mounted from the dedicated disk.
+      - /mnt/dicom-storage:/var/lib/orthanc/db
+      - ./infra/compose/orthanc/orthanc-onprem.json:/etc/orthanc/orthanc.json:ro
+      - ./infra/compose/orthanc/on-stored.lua:/etc/orthanc/on-stored.lua:ro
+      # TLS material for modality-side TLS. Provision via the runbook;
+      # certs are issued by the clinic's internal CA.
+      - /etc/orthanc/tls:/etc/orthanc/tls:ro
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: klinika-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./infra/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - web
+      - api
+
+volumes:
+  postgres-data:
+  caddy-data:
+  caddy-config:

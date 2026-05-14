@@ -5,8 +5,11 @@ import { PrismaService } from '../../prisma/prisma.service';
 import type { HeartbeatPayload } from './telemetry.types';
 
 const TENANT_OFFLINE_THRESHOLD_MS = 5 * 60 * 1000;
+// ADR-009: alerts at 80% and 95% of disk capacity. The warning
+// threshold leaves headroom for the operator to provision more
+// storage / archive before reaching critical.
 const DISK_CRITICAL_PERCENT = 95;
-const DISK_WARNING_PERCENT = 85;
+const DISK_WARNING_PERCENT = 80;
 const BACKUP_STALE_HOURS = 30;
 
 export type AlertKind =

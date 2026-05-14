@@ -15,6 +15,7 @@ import { AdminModule } from './modules/admin/admin.module';
 import { AppointmentsModule } from './modules/appointments/appointments.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { ClinicSettingsModule } from './modules/clinic-settings/clinic-settings.module';
+import { DicomModule } from './modules/dicom/dicom.module';
 import { DoctorDashboardModule } from './modules/doctor-dashboard/doctor-dashboard.module';
 import { EmailModule } from './modules/email/email.module';
 import { HealthModule } from './modules/health/health.module';
@@ -46,6 +47,7 @@ import { LoggingModule } from './common/logging/logger.module';
     VisitsModule,
     VertetimModule,
     PrintModule,
+    DicomModule,
     Icd10Module,
     AppointmentsModule,
     DoctorDashboardModule,

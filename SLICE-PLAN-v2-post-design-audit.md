@@ -37,7 +37,7 @@ Each slice fits in one focused 2-4 hour Claude Code session.
 | 13  | ICD-10 diagnosis picker + Terapia autocomplete             | Pending          |
 | 14  | WHO growth charts (0-24mo)                                 | Pending          |
 | 15  | Print pipeline + visit report + vërtetim + history         | Pending          |
-| 16  | Orthanc + DICOM study picker + image viewer                | Pending          |
+| 16  | Orthanc + DICOM study picker + image viewer                | Done             |
 | 17  | Migration tool (Python, Access → Postgres)                 | Pending          |
 | 18  | Production deploy + on-premise install + DonetaMED cutover | Pending          |
 

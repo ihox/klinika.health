@@ -1,0 +1,37 @@
+{
+  "_comment": "Orthanc runtime config for on-premise installs. TLS for modality-side DICOM is enabled — ultrasound machines must trust the clinic CA. The remote-AET allowlist guards against rogue modalities on the LAN.",
+
+  "Name": "klinika-orthanc",
+
+  "StorageDirectory": "/var/lib/orthanc/db",
+  "IndexDirectory": "/var/lib/orthanc/db",
+
+  "HttpPort": 8042,
+  "DicomPort": 4242,
+  "DicomAet": "KLINIKA",
+  "DicomCheckCalledAet": true,
+
+  "RemoteAccessAllowed": true,
+  "AuthenticationEnabled": true,
+  "RegisteredUsers": {
+    "${ORTHANC_USERNAME}": "${ORTHANC_PASSWORD}"
+  },
+
+  "DicomTlsEnabled": true,
+  "DicomTlsCertificate": "/etc/orthanc/tls/orthanc.crt",
+  "DicomTlsPrivateKey": "/etc/orthanc/tls/orthanc.key",
+  "DicomTlsTrustedCertificates": "/etc/orthanc/tls/trusted.crt",
+
+  "DicomModalities": {
+    "_comment": "Populate per-clinic during onboarding. Each ultrasound modality must be allowlisted by AET. Example: \"ge-versana\": [\"VERSANA1\", \"192.168.1.50\", 104, \"GenericTLS\"]"
+  },
+
+  "LuaScripts": [
+    "/etc/orthanc/on-stored.lua"
+  ],
+
+  "ConcurrentJobs": 2,
+
+  "VerboseLogs": false,
+  "VerboseStartup": false
+}

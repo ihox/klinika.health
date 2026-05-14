@@ -10,6 +10,7 @@ import { MasterDataStrip } from '@/components/patient/master-data-strip';
 import { PrintHistoryDialog } from '@/components/patient/print-history-dialog';
 import { SaveFailureDialog } from '@/components/patient/save-failure-dialog';
 import { SetSexDialog } from '@/components/patient/set-sex-dialog';
+import { UltrazeriPanel } from '@/components/patient/ultrazeri-panel';
 import { VertetimDialog } from '@/components/patient/vertetim-dialog';
 import { VisitForm } from '@/components/patient/visit-form';
 import { Skeleton } from '@/components/skeleton';
@@ -309,6 +310,7 @@ export function ChartView({ patientId, initialVisitId }: Props): ReactElement {
                   visits={data.visits}
                   vertetime={data.vertetime}
                   activeVisitId={activeVisitId}
+                  activeVisitDate={activeVisit?.visitDate ?? null}
                   showAllHistory={showAllHistory}
                   onToggleHistory={() => setShowAllHistory((s) => !s)}
                   onSelectVisit={navigateVisit}
@@ -522,6 +524,7 @@ interface RightColumnProps {
   visits: ChartVisitDto[];
   vertetime: ChartVertetimDto[];
   activeVisitId: string | null;
+  activeVisitDate: string | null;
   showAllHistory: boolean;
   onToggleHistory: () => void;
   onSelectVisit: (id: string) => void;
@@ -536,6 +539,7 @@ function RightColumn({
   visits,
   vertetime,
   activeVisitId,
+  activeVisitDate,
   showAllHistory,
   onToggleHistory,
   onSelectVisit,
@@ -544,6 +548,7 @@ function RightColumn({
   onReprintVertetim,
 }: RightColumnProps): ReactElement {
   const ageMonths = ageInMonths(patient.dateOfBirth);
+  const patientFullName = `${patient.firstName} ${patient.lastName}`;
   return (
     <aside aria-label="Konteksti klinik" className="flex flex-col gap-4">
       <GrowthPanel
@@ -552,11 +557,13 @@ function RightColumn({
         growthPoints={growthPoints}
         onRequestSetSex={onRequestSetSex}
       />
-      <StubPanel
-        title="Ultrazeri"
-        meta="Studimet"
-        body="Lidh studime DICOM për vizitën aktuale — vjen më vonë."
-      />
+      {activeVisitId && activeVisitDate ? (
+        <UltrazeriPanel
+          visitId={activeVisitId}
+          visitDateIso={activeVisitDate}
+          patientName={patientFullName}
+        />
+      ) : null}
       <HistoryPanel
         visits={visits}
         activeVisitId={activeVisitId}
@@ -570,26 +577,6 @@ function RightColumn({
         onReprint={onReprintVertetim}
       />
     </aside>
-  );
-}
-
-function StubPanel({
-  title,
-  meta,
-  body,
-}: {
-  title: string;
-  meta?: string;
-  body: string;
-}): ReactElement {
-  return (
-    <section className="overflow-hidden rounded-lg border border-line bg-surface-elevated shadow-xs">
-      <header className="flex items-center justify-between border-b border-line px-4 py-2.5">
-        <h3 className="text-[12.5px] font-semibold text-ink-strong">{title}</h3>
-        {meta ? <span className="text-[11px] text-ink-faint">{meta}</span> : null}
-      </header>
-      <div className="px-4 py-5 text-[12.5px] text-ink-muted">{body}</div>
-    </section>
   );
 }
 

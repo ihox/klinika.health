@@ -29,6 +29,7 @@ function basePayload(overrides: Partial<HeartbeatPayload> = {}): HeartbeatPayloa
     cpuPercent: 10,
     ramPercent: 20,
     diskPercent: 40,
+    orthancDiskBytes: null,
     lastBackupAt: '2026-05-13T03:00:00.000Z',
     activeSessions: 0,
     queueDepth: 0,
@@ -63,7 +64,7 @@ describe('AlertEngineService.derive', () => {
     expect(alerts[0]?.kind).toBe('disk_critical');
   });
 
-  it('raises a warning at >=85% but below 95%', () => {
+  it('raises a warning at >=80% but below 95% (ADR-009)', () => {
     const alerts = engine.derive(
       'donetamed',
       basePayload({ diskPercent: 90 }),

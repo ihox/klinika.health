@@ -1771,3 +1771,160 @@ call fails (cross-origin or PDF viewer quirk).
   `window.print()` on load, reprint of an existing vërtetim hits
   `GET /api/print/vertetim/:id`, and `Printo historinë` confirms
   before firing.
+
+---
+
+## Slice 16 — DICOM bridge (Orthanc + picker + lightbox)
+
+**Goal.** Wire the doctor's GE Versana Balance ultrasound into Klinika.
+The ultrasound speaks DICOM only on the clinic LAN; Orthanc receives
+the studies and stores them on the clinic's 2TB HDD; Klinika indexes
+them, links them to visits, and serves authenticated previews to the
+browser. **Manual study picker only in v1** — MWL (worklist-driven
+auto-attach) deferred to v2 per ADR-009.
+
+### Data flow
+
+```
+┌──────────────────────┐   DICOM C-STORE (TLS)   ┌──────────────────────┐
+│ GE Versana ultrasound│ ───────────────────────▶│ Orthanc :4242 / :8042│
+└──────────────────────┘                         │ /mnt/dicom-storage   │
+                                                 └──────────┬───────────┘
+                                                            │ on-stored.lua
+                                                            ▼ POST + X-Klinika-Orthanc-Secret
+                                          ┌──────────────────────────────────┐
+                                          │ Klinika API                      │
+                                          │   POST /api/dicom/internal/      │
+                                          │        orthanc-event             │
+                                          │   ↓ upsert dicom_studies         │
+                                          └──────────────────────────────────┘
+                                                            ▲
+                          authenticated proxy GET /api/dicom/instances/:id/preview.png
+                                                            │
+                                                  ┌─────────────────┐
+                                                  │ Browser (chart) │
+                                                  └─────────────────┘
+```
+
+The browser never sees Orthanc's REST API. Every image fetch goes
+through `/api/dicom/instances/:id/preview.png`, which authenticates
+the session, verifies the parent study is indexed under the
+caller's clinic, fetches the rendered PNG from Orthanc internally,
+and streams it back with `Cache-Control: private, no-store`.
+
+### Components
+
+**Backend** — [`apps/api/src/modules/dicom/`](../apps/api/src/modules/dicom/):
+
+- `OrthancClient` ([`orthanc.client.ts`](../apps/api/src/modules/dicom/orthanc.client.ts))
+  is a lean REST wrapper over `/studies/:id`, `/instances/:id`,
+  `/instances/:id/preview`, `/instances/:id/file`, and
+  `/statistics`. Auth header is `Basic <user:pass>` from
+  `ORTHANC_USERNAME` / `ORTHANC_PASSWORD`. Gracefully degrades to
+  `null` returns when `ORTHANC_URL` is unset (cloud-only installs).
+- `DicomService` ([`dicom.service.ts`](../apps/api/src/modules/dicom/dicom.service.ts))
+  is the orchestrator: scopes every query by `clinicId`, writes
+  audit rows on every read/link/unlink, idempotently upserts on the
+  webhook path. The image proxy goes through
+  `authorizeInstanceFetch`, which checks that the requested Orthanc
+  instance's parent study is indexed under the caller's clinic
+  before letting bytes flow back.
+- `DicomController` ([`dicom.controller.ts`](../apps/api/src/modules/dicom/dicom.controller.ts))
+  exposes:
+  - `GET /api/dicom/recent` — picker source (last 10 by `received_at`)
+  - `GET /api/dicom/studies/:id` — detail + instance list (lightbox)
+  - `GET /api/dicom/instances/:id/preview.png` — proxy (audited)
+  - `GET /api/dicom/instances/:id/full.dcm` — full file (audited)
+  - `GET /api/visits/:id/dicom-links` — links for a visit
+  - `POST /api/visits/:id/dicom-links` — link a study (idempotent)
+  - `DELETE /api/visits/:id/dicom-links/:linkId` — unlink
+  - `POST /api/dicom/internal/orthanc-event` — webhook
+    (`AllowAnonymous`, secret-guarded via constant-time compare)
+
+Doctor / clinic-admin only on every user-facing route. The
+receptionist 403s at the guard layer.
+
+**Database** — extends the existing `dicom_studies` model
+([migration `20260514150000_dicom_metadata`](../apps/api/prisma/migrations/20260514150000_dicom_metadata/migration.sql)):
+
+- Adds `study_description` (DICOM 0008,1030 — shown on picker cards)
+- Adds `patient_name_dicom` (DICOM 0010,0010 — kept for v2 MWL
+  fuzzy match; treated as PHI for logging)
+- Adds `received_at` index for the picker's
+  `ORDER BY received_at DESC LIMIT 10` hot path
+
+RLS on `dicom_studies` ships in the initial migration. The
+`visit_dicom_links` join table is protected transitively through
+`visits.clinic_id` and `dicom_studies.clinic_id` (both RLS-scoped).
+
+**Frontend** — [`apps/web/components/patient/`](../apps/web/components/patient/):
+
+- `UltrazeriPanel` ([`ultrazeri-panel.tsx`](../apps/web/components/patient/ultrazeri-panel.tsx))
+  is the right-column card on the chart. It fetches
+  `GET /api/visits/:id/dicom-links` on mount + after every link
+  mutation, renders a 3-column thumbnail grid (or empty state),
+  owns the picker and lightbox state, and threads the active
+  visit's date + patient name into both modals.
+- `DicomPickerDialog` ([`dicom-picker-dialog.tsx`](../apps/web/components/patient/dicom-picker-dialog.tsx))
+  translates `design-reference/prototype/components/dicom-picker.html`
+  1:1 — title + per-study cards (thumb strip + timestamp + relative
+  label + image count + truncated Orthanc id) + footer with
+  "1 i zgjedhur" / "10 studime të fundit" counter.
+- `DicomLightbox` ([`dicom-lightbox.tsx`](../apps/web/components/patient/dicom-lightbox.tsx))
+  translates `design-reference/prototype/components/dicom-lightbox.html`
+  — fullscreen overlay, patient meta + zoom toggle + close in the
+  top bar, ◀ / ▶ navigation arrows hidden when `instanceCount ≤ 1`,
+  counter pill, Esc / arrow / 1 / 2 keyboard shortcuts.
+
+### Telemetry — Orthanc disk usage
+
+The telemetry agent reports Orthanc storage hourly per ADR-009. The
+[`HeartbeatPayload`](../apps/api/src/modules/telemetry/telemetry.types.ts)
+now carries an `orthancDiskBytes: number | null` field, populated
+from Orthanc's `/statistics` endpoint by the
+[`TelemetryCollectorService`](../apps/api/src/modules/telemetry/telemetry-collector.service.ts).
+The platform-side
+[`AlertEngineService`](../apps/api/src/modules/telemetry/alert-engine.service.ts)
+fires `disk_warning` at ≥80% and `disk_critical` at ≥95% — the
+warning threshold was lowered from 85% to align with ADR-009. On
+on-prem installs the same disk usage covers /mnt/dicom-storage
+(that's the volume Orthanc writes to).
+
+### Audit log
+
+Every meaningful interaction writes a row to `audit_log`:
+
+| Action                     | Trigger                                                   | `changes` |
+|----------------------------|-----------------------------------------------------------|-----------|
+| `dicom.study.viewed`       | `GET /api/dicom/recent` (picker opened)                   | `null`    |
+| `dicom.study.linked`       | `POST /api/visits/:id/dicom-links`                         | diff      |
+| `dicom.study.unlinked`     | `DELETE /api/visits/:id/dicom-links/:linkId`               | diff      |
+| `dicom.instance.viewed`    | `GET /api/dicom/instances/:id/preview.png`                 | `null`    |
+| `dicom.instance.exported`  | `GET /api/dicom/instances/:id/full.dcm`                    | `null`    |
+
+No PHI in `audit_log.changes` — we record the study UUID and the
+visit UUID, never the patient name or DICOM tags.
+
+### Tests
+
+- Unit ([`dicom.service.spec.ts`](../apps/api/src/modules/dicom/dicom.service.spec.ts))
+  — `parseOrthancTimestamp` (StudyDate/StudyTime → UTC Date,
+  malformed inputs return `null`), `toStudyDto` shape.
+- Unit ([`orthanc.client.spec.ts`](../apps/api/src/modules/dicom/orthanc.client.spec.ts))
+  — Basic auth header, 404 handling, `/statistics` parse with both
+  byte-string and MB fallback shapes, graceful null when
+  `ORTHANC_URL` is unset (cloud-only).
+- Unit ([`dicom-picker-dialog.spec.ts`](../apps/web/components/patient/dicom-picker-dialog.spec.ts))
+  — date formatting (Belgrade TZ for `formatDateTime`), relative
+  labels for picker cards under 2h old.
+- Integration ([`dicom.integration.spec.ts`](../apps/api/src/modules/dicom/dicom.integration.spec.ts))
+  — webhook secret check (rejects missing + wrong), idempotent
+  ingest, link / unlink + audit, receptionist 403 on every
+  user-facing endpoint, image proxy 200 with `Cache-Control:
+  private, no-store`, 404 on unknown instance.
+- E2E ([`dicom.spec.ts`](../apps/web/tests/e2e/dicom.spec.ts))
+  — chart loads with the existing linked study's thumbnail, picker
+  lists recent studies (already-linked ones disabled), selecting +
+  clicking "Lidh me këtë vizitë" links + closes + updates the
+  panel, lightbox arrows step through instances + counter updates,
+  Esc closes.

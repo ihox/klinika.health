@@ -279,19 +279,14 @@ export function VisitForm({
           />
         </FieldRow>
         <FieldRow label="Ultrazeri" optional>
-          <div className="space-y-2">
-            <Textarea
-              id="visit-ultrasound-notes"
-              value={values.ultrasoundNotes}
-              onChange={onChangeText('ultrasoundNotes')}
-              onBlur={onBlur}
-              rows={3}
-              placeholder="Gjetjet e ultrazerit, nëse ka..."
-            />
-            <div className="rounded-md border border-dashed border-line-strong bg-surface-subtle px-3 py-3 text-[12px] text-ink-faint">
-              Lidhja e studimeve DICOM aktivizohet në fazën e ardhshme.
-            </div>
-          </div>
+          <Textarea
+            id="visit-ultrasound-notes"
+            value={values.ultrasoundNotes}
+            onChange={onChangeText('ultrasoundNotes')}
+            onBlur={onBlur}
+            rows={3}
+            placeholder="Gjetjet e ultrazerit, nëse ka..."
+          />
         </FieldRow>
       </Section>
 

@@ -88,20 +88,33 @@ services:
     depends_on:
       - api
 
+  # Orthanc — DICOM C-STORE receiver + REST API.
+  # See infra/compose/orthanc/orthanc.json for the runtime config:
+  #   - REST API behind HTTP basic auth (admin creds from .env)
+  #   - DICOM AET klinika-orthanc; remote-AET allowlist enforced
+  #   - On every received study, Orthanc fires the webhook to
+  #     POST http://api:3001/api/dicom/internal/orthanc-event so the
+  #     bridge can index it in the dicom_studies table.
+  # The storage volume mounts to /var/lib/orthanc/db in dev. In
+  # production (infra/compose/docker-compose.onprem.yml) it bind-mounts
+  # /mnt/dicom-storage on the clinic's 2TB HDD.
   orthanc:
     image: orthancteam/orthanc:24.7.3
     container_name: klinika-orthanc
     restart: unless-stopped
     environment:
       TZ: Europe/Belgrade
-      ORTHANC__REGISTERED_USERS: |
-        {"${ORTHANC_USERNAME:-klinika}": "${ORTHANC_PASSWORD:-klinika}"}
-      ORTHANC__AUTHENTICATION_ENABLED: "true"
+      ORTHANC_USERNAME: ${ORTHANC_USERNAME:-klinika}
+      ORTHANC_PASSWORD: ${ORTHANC_PASSWORD:-klinika}
+      ORTHANC_WEBHOOK_URL: ${ORTHANC_WEBHOOK_URL:-http://api:3001/api/dicom/internal/orthanc-event}
+      ORTHANC_WEBHOOK_SECRET: ${ORTHANC_WEBHOOK_SECRET:-klinika-webhook-dev}
     ports:
       - "${ORTHANC_HTTP_PORT:-8042}:8042"
       - "${ORTHANC_DICOM_PORT:-4242}:4242"
     volumes:
       - orthanc-data:/var/lib/orthanc/db
+      - ./infra/compose/orthanc/orthanc.json:/etc/orthanc/orthanc.json:ro
+      - ./infra/compose/orthanc/on-stored.lua:/etc/orthanc/on-stored.lua:ro
 
 volumes:
   postgres-data:

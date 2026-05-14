@@ -1,6 +1,7 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { InjectPinoLogger, type PinoLogger } from 'nestjs-pino';
 
+import { OrthancClient } from '../dicom/orthanc.client';
 import { HealthService } from '../health/health.service';
 import { PgBossService } from '../jobs/pg-boss.service';
 import { ErrorRateCounter } from './error-counter';
@@ -27,6 +28,11 @@ export class TelemetryCollectorService {
     private readonly errors: ErrorRateCounter,
     @InjectPinoLogger(TelemetryCollectorService.name)
     private readonly logger: PinoLogger,
+    // Optional so unit tests that don't wire AppModule still work —
+    // the Orthanc disk-bytes field is `null` when the dependency
+    // isn't available.
+    @Optional()
+    private readonly orthanc?: OrthancClient,
   ) {}
 
   async collect(): Promise<HeartbeatPayload> {
@@ -35,6 +41,7 @@ export class TelemetryCollectorService {
     const errorRate = this.errors.drain();
     const lastBackupAt = this.readLastBackupAt();
     const activeSessions = await this.readActiveSessionCount();
+    const orthancDiskBytes = await this.readOrthancDiskBytes();
 
     return {
       tenantId: this.tenantId(),
@@ -46,11 +53,33 @@ export class TelemetryCollectorService {
       cpuPercent: snapshot.system.cpuPercent,
       ramPercent: snapshot.system.ramPercent,
       diskPercent: snapshot.system.diskPercent,
+      orthancDiskBytes,
       lastBackupAt,
       activeSessions,
       queueDepth,
       errorRate5xx: errorRate,
     };
+  }
+
+  /**
+   * Hit Orthanc's /statistics endpoint for cumulative bytes-on-disk.
+   * The agent reports this every minute alongside the heartbeat so
+   * the platform side can graph DICOM growth and fire the
+   * disk-warning / disk-critical alerts (ADR-009 thresholds).
+   */
+  private async readOrthancDiskBytes(): Promise<number | null> {
+    if (!this.orthanc || !this.orthanc.isConfigured()) {
+      return null;
+    }
+    try {
+      return await this.orthanc.getStorageBytes();
+    } catch (err) {
+      this.logger.warn(
+        { err: err instanceof Error ? err.message : String(err) },
+        'Orthanc disk-bytes probe failed',
+      );
+      return null;
+    }
   }
 
   /**

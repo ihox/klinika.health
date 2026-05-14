@@ -1,0 +1,37 @@
+{
+  "_comment": "Orthanc runtime config for Klinika. Values inside ${...} are substituted by Orthanc from the container environment.",
+
+  "Name": "klinika-orthanc",
+
+  "StorageDirectory": "/var/lib/orthanc/db",
+  "IndexDirectory": "/var/lib/orthanc/db",
+
+  "HttpPort": 8042,
+  "DicomPort": 4242,
+  "DicomAet": "KLINIKA",
+  "DicomCheckCalledAet": false,
+
+  "RemoteAccessAllowed": true,
+  "AuthenticationEnabled": true,
+  "RegisteredUsers": {
+    "${ORTHANC_USERNAME}": "${ORTHANC_PASSWORD}"
+  },
+
+  "_comment_tls": "Modality-side TLS — required for ultrasound → Orthanc on production. Enabled when the container is started with the on-prem compose file that mounts the certs.",
+  "DicomTlsEnabled": false,
+  "DicomTlsCertificate": "/etc/orthanc/tls/orthanc.crt",
+  "DicomTlsPrivateKey": "/etc/orthanc/tls/orthanc.key",
+  "DicomTlsTrustedCertificates": "/etc/orthanc/tls/trusted.crt",
+
+  "_comment_webhook": "After every received instance, on-stored.lua POSTs the parent study id to Klinika's bridge endpoint. The bridge debounces and writes one dicom_studies row per study.",
+  "LuaScripts": [
+    "/etc/orthanc/on-stored.lua"
+  ],
+
+  "_comment_concurrency": "Limit Orthanc's job concurrency on small mini-PCs — the ultrasound machine is rarely the bottleneck.",
+  "ConcurrentJobs": 2,
+
+  "_comment_logging": "Keep verbose logging off in production — DICOM payloads can pull PHI into operational logs. Klinika's audit log is the system of record for image access.",
+  "VerboseLogs": false,
+  "VerboseStartup": false
+}

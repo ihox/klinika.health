@@ -506,19 +506,30 @@ model Vertetim {
 /// internal study identifier (used to fetch image data via the proxy).
 /// The image bytes live in Orthanc, not in Postgres; this table is the
 /// index Klinika uses to authorize access and link to visits.
+///
+/// `studyDescription` and `patientNameDicom` are denormalised from the
+/// DICOM tags at ingest time. They are used only for the manual picker
+/// UI (so the doctor sees timestamps + image counts without an extra
+/// Orthanc round-trip) and for fuzzy-match suggestions when MWL lands
+/// in v2. `patientNameDicom` is the raw DICOM Patient Name field — it
+/// is treated as PHI for logging purposes; never log it, but it is
+/// allowed in the database because it's already inside Orthanc.
 model DicomStudy {
-  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  clinicId       String   @map("clinic_id") @db.Uuid
-  orthancStudyId String   @map("orthanc_study_id")
-  receivedAt     DateTime @map("received_at") @db.Timestamptz(6)
-  imageCount     Int      @map("image_count")
-  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  clinicId         String   @map("clinic_id") @db.Uuid
+  orthancStudyId   String   @map("orthanc_study_id")
+  receivedAt       DateTime @map("received_at") @db.Timestamptz(6)
+  imageCount       Int      @map("image_count")
+  studyDescription String?  @map("study_description")
+  patientNameDicom String?  @map("patient_name_dicom")
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
   clinic Clinic           @relation(fields: [clinicId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   links  VisitDicomLink[]
 
   @@unique([clinicId, orthancStudyId], name: "dicom_clinic_orthanc_unique")
   @@index([clinicId])
+  @@index([receivedAt])
   @@map("dicom_studies")
 }
 
