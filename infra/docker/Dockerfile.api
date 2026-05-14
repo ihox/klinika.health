@@ -26,4 +26,9 @@ COPY apps/api ./apps/api
 
 WORKDIR /workspace/apps/api
 EXPOSE 3001
-CMD ["pnpm", "dev"]
+# `pnpm install` above ran before the Prisma schema was copied, so its
+# postinstall `prisma generate` produced a stub `PrismaClient: any`.
+# At runtime apps/api is bind-mounted from the host (live schema), so
+# we regenerate the client on every container start before booting
+# the dev server. Idempotent and cheap (~1s).
+CMD ["sh", "-lc", "pnpm exec prisma generate && pnpm dev"]
