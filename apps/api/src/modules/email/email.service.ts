@@ -6,6 +6,7 @@ import { mfaCodeEmail, type MfaCodeEmailVars } from './templates/mfa-code';
 import { newDeviceEmail, type NewDeviceEmailVars } from './templates/new-device';
 import { passwordResetEmail, type PasswordResetEmailVars } from './templates/password-reset';
 import { tenantSetupEmail, type TenantSetupEmailVars } from './templates/tenant-setup';
+import { userInviteEmail, type UserInviteEmailVars } from './templates/user-invite';
 
 export interface EmailMessage {
   to: string;
@@ -108,6 +109,11 @@ export class EmailService {
 
   async sendTenantSetup(toEmail: string, vars: TenantSetupEmailVars): Promise<void> {
     const t = tenantSetupEmail(vars);
+    await this.sender.send({ to: toEmail, ...t });
+  }
+
+  async sendUserInvite(toEmail: string, vars: UserInviteEmailVars): Promise<void> {
+    const t = userInviteEmail(vars);
     await this.sender.send({ to: toEmail, ...t });
   }
 }

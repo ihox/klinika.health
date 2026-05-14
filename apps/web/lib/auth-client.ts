@@ -109,7 +109,7 @@ export function homePathForRole(role: AuthRole): string {
     case 'receptionist':
       return '/receptionist';
     case 'clinic_admin':
-      return '/clinic';
+      return '/cilesimet';
     case 'platform_admin':
       return '/admin';
   }

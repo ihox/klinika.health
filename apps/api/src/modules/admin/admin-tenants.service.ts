@@ -396,25 +396,37 @@ export class AdminTenantsService {
 }
 
 function defaultHoursConfig(): Prisma.InputJsonValue {
-  // Sensible default that the clinic admin can refine later from the
-  // tenant's own settings page. Europe/Belgrade per CLAUDE.md §5.6.
+  // Mirrors the shape the clinic-settings UI consumes (see
+  // `apps/api/src/modules/clinic-settings/clinic-settings.dto.ts`).
+  // New tenants land on these defaults; admin refines from the
+  // Cilësimet → Orari panel later.
+  const weekday = { open: true as const, start: '09:00', end: '17:00' };
   return {
     timezone: 'Europe/Belgrade',
-    weekday: { open: '09:00', close: '17:00' },
-    saturday: null,
-    sunday: null,
+    days: {
+      mon: weekday,
+      tue: weekday,
+      wed: weekday,
+      thu: weekday,
+      fri: weekday,
+      sat: { open: false },
+      sun: { open: false },
+    },
+    durations: [10, 15, 20, 30, 45],
+    defaultDuration: 15,
   };
 }
 
 function defaultPaymentCodes(): Prisma.InputJsonValue {
-  // Matches the codes the migration tool understands for legacy data;
-  // tenants without a migration to import simply leave them in place.
+  // Matches the codes the migration tool understands for legacy data
+  // and the labels/amounts the clinic-settings DTO validates. Amounts
+  // are in cents; €0–€20 ranges align with DonetaMED's pricing.
   return {
-    E: { label: 'I lirë', description: 'Pacient i lirë — falas' },
-    A: { label: 'Anëtar familje', description: 'Anëtar i familjes' },
-    B: { label: 'Sigurim bazë', description: 'Sigurim shëndetësor bazë' },
-    C: { label: 'Sigurim privat', description: 'Sigurim privat' },
-    D: { label: 'Pagesë e plotë', description: 'Pacient i ri / pagesë e plotë' },
+    E: { label: 'Falas', amountCents: 0 },
+    A: { label: 'Vizitë standarde', amountCents: 1500 },
+    B: { label: 'Vizitë e shkurtër', amountCents: 1000 },
+    C: { label: 'Kontroll', amountCents: 500 },
+    D: { label: 'Vizitë e gjatë', amountCents: 2000 },
   };
 }
 

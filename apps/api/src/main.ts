@@ -6,7 +6,20 @@ import { Logger } from 'nestjs-pino';
 import { AppModule } from './app.module';
 
 async function bootstrap(): Promise<void> {
-  const app = await NestFactory.create<NestExpressApplication>(AppModule, { bufferLogs: true });
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
+    bufferLogs: true,
+    // Logo (2 MB) and signature (1 MB) uploads are base64-encoded in
+    // the request body, so the raw JSON ceiling needs ~6 MB
+    // headroom. Per-route handlers still enforce byte-level limits
+    // via Zod + an explicit byte check; this only raises the
+    // framework default (100 KB) so large uploads don't 413 before
+    // reaching the controller's validation. Switching off Nest's
+    // default body parser and re-registering with a higher limit
+    // avoids importing `express` directly from our code.
+    bodyParser: false,
+  });
+  app.useBodyParser('json', { limit: '6mb' });
+  app.useBodyParser('urlencoded', { limit: '6mb', extended: true });
 
   app.useLogger(app.get(Logger));
 
