@@ -32,6 +32,7 @@
 18. Slice 09 — booking dialog and conflict-aware flows
 19. Slice 10 — doctor's home dashboard (Pamja e ditës)
 20. Slice 11 — patient chart shell
+21. Slice 12 — visit form (auto-save + audit + change history)
 
 ## Slice 01 — skeleton
 
@@ -1111,4 +1112,179 @@ vërtetime list are live:
 - Unit ([`patient-chart.spec.ts`](../apps/api/src/modules/patients/patient-chart.spec.ts)) — `computeDaysSince`, `daysInclusive` (vërtetim duration), `dateToIso`.
 - Integration ([`patients.integration.spec.ts`](../apps/api/src/modules/patients/patients.integration.spec.ts)) — receptionist 403 on the chart endpoint, doctor receives master + visits + vërtetime with the expected ordering, audit row written on view, 404 on unknown patient id, empty timeline returned as empty arrays.
 - E2E ([`chart.spec.ts`](../apps/web/tests/e2e/chart.spec.ts)) — master strip renders, ← / → keyboard navigation works, clicking a history row jumps to that visit, 403 path renders the forbidden screen, zero-visit patient renders the empty state.
+
+## Slice 12 — visit form (auto-save + audit + change history)
+
+This slice lights up the doctor's daily working surface: the visit
+form on the chart's left column. Every keystroke auto-saves, every
+save writes an audit row (coalesced within a 60-second window), and
+the change-history modal reads back that audit trail.
+
+### API surface
+
+```
+POST   /api/visits                 → create a blank visit (today's date)
+GET    /api/visits/:id             → full visit record
+PATCH  /api/visits/:id             → delta save (auto-save target)
+DELETE /api/visits/:id             → soft delete + 30s undo window
+POST   /api/visits/:id/restore     → restore a soft-deleted visit
+GET    /api/visits/:id/history     → change history (audit trail)
+```
+
+All endpoints are `@Roles('doctor', 'clinic_admin')` — the
+receptionist is blocked at the route layer (CLAUDE.md §1.2). RLS
+provides the second layer; cross-clinic access falls back to 404
+because the `WHERE clinic_id = $1` filter never matches.
+
+The PATCH body is exhaustive but every field is optional. Validation
+is forgiving — empty strings normalise to null, blank textareas
+clear the column — and defensive on numerics (negative weight, an
+out-of-range temperature, and bad payment codes all 400).
+
+### Audit log coalescing
+
+Successive saves of the same `(userId, resourceType, resourceId,
+action)` within **60 seconds** collapse into the most-recent audit
+row by merging the `changes` array. This keeps the visit's change
+history clean even when the form auto-saves every 1.5 seconds during
+active typing. The coalescing logic lives in
+[`AuditLogService.record()`](../apps/api/src/common/audit/audit-log.service.ts)
+and uses two rules:
+
+1. **One row per minute, per user, per resource, per action.**
+   Within the 60s window the most-recent matching row is found via
+   an indexed `SELECT … ORDER BY timestamp DESC` and `UPDATE`d in
+   place; the row's timestamp is bumped to "now" so the window
+   slides forward with continued typing.
+2. **Diff merge preserves the oldest `old` and the newest `new`.**
+   If the same field is changed multiple times during the window,
+   the audit log records the value at the moment the user first
+   started editing (anchor) and the value at the most recent save
+   (final). This matches the user's mental model — "this is what
+   the field looked like before I touched it, and this is what it
+   is now."
+
+Sensitive reads (chart open, `visit.history.viewed`) write a row
+with `changes: null` and participate in coalescing too — opening
+the change history modal four times in quick succession produces
+one audit row, not four.
+
+Implications:
+
+- The "Modifikuar nga …" indicator in the form header is driven by
+  `wasUpdated`, which is derived server-side from
+  `updatedAt − createdAt > 2_000ms`. Initial PATCHes during the
+  creation transaction (none in practice, but defensive) don't
+  toggle it.
+- A new audit row is created the first time the user PATCHes a
+  visit they hadn't touched recently — even if the same field
+  changes twice across the 60s boundary, the row split is the
+  meaningful signal that the doctor came back to the visit.
+- The platform-admin "show all audit rows" tooling treats coalesced
+  rows as one entry — there's no way to reconstruct intermediate
+  states, which is intentional.
+
+### Auto-save state machine (web)
+
+The visit form's [Zustand store](../apps/web/lib/use-visit-autosave.ts)
+holds the visit id, server-known values, and the doctor's working
+copy in a five-state machine:
+
+```
+idle  ──setValues──▶  dirty  ──debounce/blur/idle──▶  saving
+  ▲                                                      │
+  └──── reset / no diff ─────────────────────────────────┘
+                                                         │
+                                                    on success
+                                                         │
+                                                         ▼
+                                                  saved-flash → idle (1s)
+                                                         │
+                                                    on failure
+                                                         ▼
+                                                       error  (dialog open, IndexedDB backup written)
+```
+
+Triggers:
+
+| Trigger                       | Behaviour                                      |
+| ----------------------------- | ---------------------------------------------- |
+| Keystroke (`setValues`)       | Re-arm 1.5s debounce, re-arm 30s idle timer    |
+| Field blur                    | Immediate `flush()`                            |
+| Manual `Ruaj tani` button     | Immediate `flush()`                            |
+| 1.5s debounce expires         | Save                                           |
+| 30s idle                      | Save                                           |
+| `beforeunload`                | Keepalive PATCH (best effort)                  |
+| Tab hidden                    | Keepalive PATCH (best effort)                  |
+| Navigation away from visit    | `flush()` before fetch of next visit           |
+
+Only one PATCH is in flight at a time. New keystrokes during a save
+land in `internal.pendingValues` and the coordinator re-runs after
+the current request resolves.
+
+On failure, the dirty values are written to IndexedDB
+([`lib/visit-backup.ts`](../apps/web/lib/visit-backup.ts)) so the
+doctor can refresh the page without losing work. The save-failure
+dialog surfaces a list of unsaved fields plus three actions:
+`Mbyll`, `Ruaj lokalisht`, and `Provo përsëri`. The next successful
+save clears the IndexedDB row. localStorage / sessionStorage are
+NEVER used for PHI (CLAUDE.md §6); IndexedDB is allowed because
+it's same-origin and gets wiped on logout.
+
+### Change history modal
+
+The "Modifikuar nga …" inline indicator in the visit form header
+appears only when `wasUpdated` is true. Clicking it opens a modal
+([`change-history-modal.tsx`](../apps/web/components/patient/change-history-modal.tsx))
+that fetches `/api/visits/:id/history` and renders the audit trail
+newest-first. Each event shows:
+
+- Who (display name derived from `role` + `title` server-side)
+- When (Europe/Belgrade-formatted date + time)
+- IP (redacted to the first two octets)
+- Field-by-field diffs with `më parë` / `tani` labels
+
+The `Krijuar (vizita e re)` event is always last (it has no diff).
+Long values truncate at 120 characters with a `Shfaq plotësisht`
+expander. The modal is read-only — no restore/rollback in v1.
+
+### Delete + 30-second undo
+
+The `Fshij vizitën` button on the visit action bar follows the
+Gmail pattern from [ADR-008](decisions/008-soft-delete-undo.md):
+
+1. Auto-save flushes (pending edits land first)
+2. `DELETE /api/visits/:id` sets `deleted_at = now()`
+3. Audit row written: `visit.deleted` with `changes: [{ field: 'deletedAt', old: null, new: <iso> }]`
+4. Chart reloads (the visit drops out of the timeline)
+5. Toast renders bottom-center: `Vizita u fshi. [Anulo]` with a 30s
+   draining countdown bar
+6. Clicking `Anulo` calls `POST /api/visits/:id/restore` which
+   clears `deleted_at` and writes a `visit.restored` audit row
+7. After 30s without `Anulo`, the toast dismisses; the visit stays
+   soft-deleted (platform admin tooling can purge later).
+
+### Tests
+
+- Unit ([`visits.dto.spec.ts`](../apps/api/src/modules/visits/visits.dto.spec.ts))
+  — DTO validation (negative weight rejected, payment codes
+  restricted, empty strings normalised to null, decimal columns
+  surface as numbers, `wasUpdated` flips after the 2s skew).
+- Unit ([`visits.service.spec.ts`](../apps/api/src/modules/visits/visits.service.spec.ts))
+  — `computeDiffs` for single-field text, null/undefined parity,
+  multiple simultaneous changes, Date and Decimal-like comparisons,
+  the empty-string → null normalisation.
+- Integration ([`visits.integration.spec.ts`](../apps/api/src/modules/visits/visits.integration.spec.ts))
+  — receptionist 403 on every endpoint, doctor create + PATCH +
+  audit diffs, two PATCHes within 60s coalesce into one audit row,
+  a PATCH past the 60s boundary creates a new row, soft delete +
+  restore round-trip, cross-clinic isolation, history endpoint
+  returns events newest-first.
+- E2E ([`chart.spec.ts`](../apps/web/tests/e2e/chart.spec.ts))
+  — typing into Ankesa triggers a PATCH and shows "U ruajt", weight
+  is sent as integer grams, payment dropdown saves, save failure
+  opens the dialog, "Modifikuar nga …" indicator surfaces after an
+  update, change history modal renders the audit timeline, delete
+  shows the undo toast and Anulo restores the visit, "Vizitë e re"
+  posts to /api/visits.
 

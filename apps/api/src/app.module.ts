@@ -23,6 +23,7 @@ import { PatientsModule } from './modules/patients/patients.module';
 import { RateLimitModule } from './modules/rate-limit/rate-limit.module';
 import { ErrorRateMiddleware } from './modules/telemetry/error-counter';
 import { TelemetryModule } from './modules/telemetry/telemetry.module';
+import { VisitsModule } from './modules/visits/visits.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { LoggingModule } from './common/logging/logger.module';
 
@@ -39,6 +40,7 @@ import { LoggingModule } from './common/logging/logger.module';
     AdminModule,
     ClinicSettingsModule,
     PatientsModule,
+    VisitsModule,
     AppointmentsModule,
     DoctorDashboardModule,
     LoggingModule,

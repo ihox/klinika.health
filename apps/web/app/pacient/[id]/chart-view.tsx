@@ -4,9 +4,13 @@ import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState, type ReactElement } from 'react';
 
 import { EmptyState } from '@/components/empty-state';
+import { ChangeHistoryModal } from '@/components/patient/change-history-modal';
 import { MasterDataStrip } from '@/components/patient/master-data-strip';
+import { SaveFailureDialog } from '@/components/patient/save-failure-dialog';
+import { VisitForm } from '@/components/patient/visit-form';
 import { Skeleton } from '@/components/skeleton';
 import { Button } from '@/components/ui/button';
+import { UndoToast } from '@/components/undo-toast';
 import { ApiError } from '@/lib/api';
 import {
   ageLabelChart,
@@ -16,6 +20,8 @@ import {
   type ChartVisitDto,
   type PatientChartDto,
 } from '@/lib/patient-client';
+import { useAutoSaveStore } from '@/lib/use-visit-autosave';
+import { type VisitDto, visitClient } from '@/lib/visit-client';
 import { cn } from '@/lib/utils';
 
 const HISTORY_COMPACT_LIMIT = 10;
@@ -47,7 +53,23 @@ export function ChartView({ patientId, initialVisitId }: Props): ReactElement {
   const [data, setData] = useState<PatientChartDto | null>(null);
   const [error, setError] = useState<'forbidden' | 'not-found' | 'unknown' | null>(null);
   const [activeVisitId, setActiveVisitId] = useState<string | null>(initialVisitId ?? null);
+  const [activeVisit, setActiveVisit] = useState<VisitDto | null>(null);
+  const [historyOpenForVisit, setHistoryOpenForVisit] = useState<VisitDto | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<{
+    visit: VisitDto;
+    restorableUntil: string;
+  } | null>(null);
   const [showAllHistory, setShowAllHistory] = useState(false);
+
+  const refresh = useCallback(async () => {
+    try {
+      const res = await patientClient.getChart(patientId);
+      setData(res);
+    } catch {
+      // Silent — surfaced via the same UI states as the initial load
+      // if it fails again on the next attempt.
+    }
+  }, [patientId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -112,6 +134,44 @@ export function ChartView({ patientId, initialVisitId }: Props): ReactElement {
     [patientId],
   );
 
+  // Fetch the full visit record (auto-save target) whenever the
+  // active visit id changes. The chart bundle only carries a lean
+  // visit list — the form needs the full record (every clinical
+  // field) to render. Switching visits triggers a save flush so the
+  // user's edits to the previous visit aren't dropped.
+  useEffect(() => {
+    if (!activeVisitId) {
+      setActiveVisit(null);
+      return;
+    }
+    let cancelled = false;
+    setActiveVisit(null);
+    (async () => {
+      try {
+        const res = await visitClient.getOne(activeVisitId);
+        if (!cancelled) setActiveVisit(res.visit);
+      } catch (err) {
+        if (cancelled) return;
+        // Silent: the chart view shows a placeholder rather than the
+        // form when this fails. The chart bundle is the source of
+        // truth for "the visit exists" — fetching the row should
+        // not normally fail.
+        void err;
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeVisitId]);
+
+  // When the patient changes (different chart), reset the auto-save
+  // store so a half-edited form from a previous patient doesn't leak.
+  useEffect(() => {
+    return () => {
+      useAutoSaveStore.getState().reset();
+    };
+  }, [patientId]);
+
   // ← / → arrow keys jump between visits. Skip when focus is on an
   // editable element so the doctor's free-text typing isn't hijacked.
   useEffect(() => {
@@ -155,6 +215,30 @@ export function ChartView({ patientId, initialVisitId }: Props): ReactElement {
     <main className="min-h-screen bg-surface pb-24">
       <ChartTopBar />
 
+      {historyOpenForVisit ? (
+        <ChangeHistoryModal
+          visitId={historyOpenForVisit.id}
+          visitDate={historyOpenForVisit.visitDate}
+          patientName={
+            data
+              ? `${data.patient.firstName} ${data.patient.lastName}`
+              : ''
+          }
+          onClose={() => setHistoryOpenForVisit(null)}
+        />
+      ) : null}
+
+      <SaveFailureDialog />
+
+      {pendingDelete ? (
+        <UndoToast
+          message="Vizita u fshi."
+          secondary={formatDeleteSecondary(pendingDelete.visit)}
+          onUndo={() => void undoDelete(pendingDelete.visit.id, refresh)}
+          onDismiss={() => setPendingDelete(null)}
+        />
+      ) : null}
+
       {data == null ? (
         <ChartSkeleton />
       ) : (
@@ -170,7 +254,10 @@ export function ChartView({ patientId, initialVisitId }: Props): ReactElement {
           </div>
 
           {data.visits.length === 0 ? (
-            <EmptyVisitsState patientId={patientId} />
+            <EmptyVisitsState
+              patientId={patientId}
+              onCreateVisit={() => void createNewVisit(patientId, navigateVisit, refresh)}
+            />
           ) : (
             <>
               <VisitNav
@@ -180,10 +267,24 @@ export function ChartView({ patientId, initialVisitId }: Props): ReactElement {
               />
 
               <div className="mx-auto grid max-w-page grid-cols-1 gap-6 px-page-x pt-5 lg:grid-cols-[60fr_40fr]">
-                <VisitFormPlaceholder
-                  visit={data.visits[activeIndex] ?? null}
-                  patientName={`${data.patient.firstName} ${data.patient.lastName}`}
-                />
+                {activeVisit ? (
+                  <VisitForm
+                    visit={activeVisit}
+                    patientName={`${data.patient.firstName} ${data.patient.lastName}`}
+                    visitNumber={data.visits.length - activeIndex}
+                    totalVisits={data.visits.length}
+                    daysSincePrevious={daysSincePreviousFor(data.visits, activeIndex)}
+                    onOpenHistory={() => setHistoryOpenForVisit(activeVisit)}
+                    onDeleteRequest={() =>
+                      void requestDelete(activeVisit, setPendingDelete, refresh)
+                    }
+                    onNewVisitRequest={() =>
+                      void createNewVisit(patientId, navigateVisit, refresh)
+                    }
+                  />
+                ) : (
+                  <VisitFormLoading />
+                )}
 
                 <RightColumn
                   visits={data.visits}
@@ -194,8 +295,6 @@ export function ChartView({ patientId, initialVisitId }: Props): ReactElement {
                   onSelectVisit={navigateVisit}
                 />
               </div>
-
-              <ActionBar />
             </>
           )}
         </>
@@ -328,18 +427,12 @@ function VisitNav({ visits, activeIndex, onSelect }: VisitNavProps): ReactElemen
 }
 
 // =========================================================================
-// Left column — visit form placeholder
+// Visit form area — loading-state placeholder while the full visit
+// record is fetched. The real `VisitForm` mounts as soon as the data
+// lands; the auto-save store is reset on patient changes.
 // =========================================================================
 
-interface VisitFormPlaceholderProps {
-  visit: ChartVisitDto | null;
-  patientName: string;
-}
-
-function VisitFormPlaceholder({
-  visit,
-  patientName,
-}: VisitFormPlaceholderProps): ReactElement {
+function VisitFormLoading(): ReactElement {
   return (
     <section
       aria-label="Forma e vizitës"
@@ -349,32 +442,13 @@ function VisitFormPlaceholder({
         <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-muted">
           Vizita
         </div>
-        <div className="mt-1 flex items-baseline gap-2 text-[13px] text-ink">
-          <span className="font-mono text-[12px] tabular-nums">
-            {visit ? formatDob(visit.visitDate) : '—'}
-          </span>
-          {visit?.primaryDiagnosis ? (
-            <span className="text-ink-muted">
-              · {visit.primaryDiagnosis.code} {visit.primaryDiagnosis.latinDescription}
-            </span>
-          ) : visit?.legacyDiagnosis ? (
-            <span className="italic text-ink-muted">· {visit.legacyDiagnosis}</span>
-          ) : null}
-        </div>
+        <div className="mt-2 h-3 w-40 rounded-sm bg-surface-subtle" />
       </div>
-      <div className="space-y-4 px-5 py-6 text-[13px] text-ink-muted">
-        <p>
-          Forma e plotë e vizitës ({patientName}) vjen në fazën tjetër — Ankesa,
-          Ushqimi, Vitalat, Ekzaminime, Diagnoza, Terapia, Plani dhe Pagesa.
-        </p>
-        <p className="text-[12px] text-ink-faint">
-          Kjo është një hapje e kartelës: navigimi mes vizitave dhe paneli në
-          të djathtë janë aktive — fushat e mëposhtme do të aktivizohen sapo
-          slice-i i ardhshëm i implementon.
-        </p>
-        <div className="rounded-md border border-dashed border-line-strong bg-surface-subtle px-4 py-8 text-center text-[12px] text-ink-faint">
-          Fushat e formës — vendos placeholder
-        </div>
+      <div className="space-y-3 px-5 py-5">
+        <div className="h-3 w-24 rounded-sm bg-surface-subtle" />
+        <div className="h-24 rounded-md bg-surface-subtle" />
+        <div className="h-24 rounded-md bg-surface-subtle" />
+        <div className="h-16 rounded-md bg-surface-subtle" />
       </div>
     </section>
   );
@@ -618,37 +692,10 @@ function IconButton({
   );
 }
 
-// =========================================================================
-// Sticky bottom action bar
-// =========================================================================
-
-function ActionBar(): ReactElement {
-  return (
-    <div className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface-elevated shadow-[0_-2px_8px_rgba(28,25,23,0.04)]">
-      <div className="mx-auto flex max-w-page flex-wrap items-center justify-between gap-3 px-page-x py-2.5">
-        <div className="flex flex-wrap gap-2">
-          <Button variant="secondary" size="sm" disabled title="Aktivizohet në fazat e ardhshme">
-            Fshij vizitën
-          </Button>
-          <Button variant="secondary" size="sm" disabled title="Aktivizohet në fazat e ardhshme">
-            + Vizitë e re
-          </Button>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Button variant="secondary" size="sm" disabled title="Aktivizohet në fazat e ardhshme">
-            Printo
-          </Button>
-          <Button variant="secondary" size="sm" disabled title="Aktivizohet në fazat e ardhshme">
-            Vërtetim
-          </Button>
-          <Button variant="secondary" size="sm" disabled title="Aktivizohet në fazat e ardhshme">
-            Histori
-          </Button>
-        </div>
-      </div>
-    </div>
-  );
-}
+// (Sticky bottom action bar removed — the action bar now lives inside
+// VisitForm so the auto-save state indicator is co-located with the
+// fields. The "Vizitë e re" + "Fshij vizitën" buttons are wired
+// through VisitForm props.)
 
 // =========================================================================
 // States
@@ -705,18 +752,17 @@ function ChartSkeleton(): ReactElement {
   );
 }
 
-function EmptyVisitsState({ patientId }: { patientId: string }): ReactElement {
-  void patientId;
+function EmptyVisitsState({
+  onCreateVisit,
+}: {
+  patientId: string;
+  onCreateVisit: () => void;
+}): ReactElement {
   return (
     <div className="mx-auto max-w-page px-page-x py-12">
       <EmptyState
         title="Asnjë vizitë e regjistruar"
-        subtitle={
-          <>
-            Shtoni të parën për këtë pacient — formularët aktivizohen sapo
-            slice-i i radhës i lidh.
-          </>
-        }
+        subtitle={<>Shtoni të parën për këtë pacient.</>}
         icon={
           <svg
             width="22"
@@ -733,14 +779,7 @@ function EmptyVisitsState({ patientId }: { patientId: string }): ReactElement {
             <path d="M8 3v4M16 3v4M4 10h16" />
           </svg>
         }
-        actions={
-          <Button
-            disabled
-            title="Aktivizohet në fazat e ardhshme"
-          >
-            + Vizitë e re
-          </Button>
-        }
+        actions={<Button onClick={onCreateVisit}>+ Vizitë e re</Button>}
       />
     </div>
   );
@@ -936,3 +975,92 @@ function PrinterIcon(): ReactElement {
 // it here so the chart-shell module is a one-stop import for any
 // downstream consumer (e.g. unit tests).
 export { ageLabelChart };
+
+// =========================================================================
+// Visit lifecycle helpers
+// =========================================================================
+//
+// Kept here (not in patient-client.ts) because they orchestrate
+// fetches across visit + chart endpoints + local store state. The
+// chart-view's effect hooks call these and don't need to coordinate
+// the state themselves.
+
+async function createNewVisit(
+  patientId: string,
+  navigateVisit: (visitId: string) => void,
+  refresh: () => Promise<void>,
+): Promise<void> {
+  // Flush the auto-save store before navigating away from the current
+  // visit so the doctor's pending edits land server-side first.
+  await useAutoSaveStore.getState().save();
+  try {
+    const res = await visitClient.create(patientId);
+    await refresh();
+    navigateVisit(res.visit.id);
+  } catch {
+    // Surface as a generic error — the form's auto-save state will
+    // catch any future PATCH issues, but creation is rare enough to
+    // not warrant its own dialog yet.
+    if (typeof window !== 'undefined') {
+      // eslint-disable-next-line no-alert
+      window.alert('Vizita e re nuk u krijua. Provoni përsëri.');
+    }
+  }
+}
+
+async function requestDelete(
+  visit: VisitDto,
+  setPendingDelete: (value: { visit: VisitDto; restorableUntil: string } | null) => void,
+  refresh: () => Promise<void>,
+): Promise<void> {
+  // Flush in-flight edits first so they aren't orphaned on the
+  // soft-deleted row (they'd still be recoverable via restore, but
+  // the user expects the delete to capture the latest state).
+  await useAutoSaveStore.getState().save();
+  try {
+    const res = await visitClient.softDelete(visit.id);
+    setPendingDelete({ visit, restorableUntil: res.restorableUntil });
+    await refresh();
+  } catch {
+    if (typeof window !== 'undefined') {
+      // eslint-disable-next-line no-alert
+      window.alert('Vizita nuk u fshi. Provoni përsëri.');
+    }
+  }
+}
+
+async function undoDelete(
+  visitId: string,
+  refresh: () => Promise<void>,
+): Promise<void> {
+  try {
+    await visitClient.restore(visitId);
+    await refresh();
+  } catch {
+    if (typeof window !== 'undefined') {
+      // eslint-disable-next-line no-alert
+      window.alert('Rikthimi i vizitës dështoi.');
+    }
+  }
+}
+
+function daysSincePreviousFor(visits: ChartVisitDto[], index: number): number | null {
+  // Visits arrive newest-first; the "previous" visit (older) is at
+  // `index + 1`. Returns `null` for the oldest visit and for
+  // out-of-range indices.
+  const current = visits[index];
+  const previous = visits[index + 1];
+  if (!current || !previous) return null;
+  return daysBetweenIso(previous.visitDate, current.visitDate);
+}
+
+function formatDeleteSecondary(visit: VisitDto): string | undefined {
+  const date = formatDdMmYyyy(visit.visitDate);
+  return date;
+}
+
+function formatDdMmYyyy(iso: string): string {
+  const [y, m, d] = iso.split('-');
+  if (!y || !m || !d) return iso;
+  return `${d}.${m}.${y}`;
+}

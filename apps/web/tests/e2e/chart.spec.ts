@@ -100,6 +100,180 @@ async function mockChart(page: Page, options: ChartFixtureOptions = {}): Promise
   );
 }
 
+// ---------------------------------------------------------------------------
+// Visit form fixtures — used by the slice-12 tests below.
+// ---------------------------------------------------------------------------
+
+function makeVisit(overrides: Partial<VisitFixture> = {}): VisitFixture {
+  return {
+    id: VISIT_NEW,
+    clinicId: 'c-donetamed',
+    patientId: PATIENT_ID,
+    visitDate: '2026-05-14',
+    complaint: null,
+    feedingNotes: null,
+    feedingBreast: false,
+    feedingFormula: false,
+    feedingSolid: false,
+    weightG: null,
+    heightCm: null,
+    headCircumferenceCm: null,
+    temperatureC: null,
+    paymentCode: null,
+    examinations: null,
+    ultrasoundNotes: null,
+    legacyDiagnosis: null,
+    prescription: null,
+    labResults: null,
+    followupNotes: null,
+    otherNotes: null,
+    createdAt: '2026-05-14T08:00:00.000Z',
+    updatedAt: '2026-05-14T08:00:00.000Z',
+    createdBy: 'u-taulant',
+    updatedBy: 'u-taulant',
+    wasUpdated: false,
+    ...overrides,
+  };
+}
+
+interface VisitFixture {
+  id: string;
+  clinicId: string;
+  patientId: string;
+  visitDate: string;
+  complaint: string | null;
+  feedingNotes: string | null;
+  feedingBreast: boolean;
+  feedingFormula: boolean;
+  feedingSolid: boolean;
+  weightG: number | null;
+  heightCm: number | null;
+  headCircumferenceCm: number | null;
+  temperatureC: number | null;
+  paymentCode: string | null;
+  examinations: string | null;
+  ultrasoundNotes: string | null;
+  legacyDiagnosis: string | null;
+  prescription: string | null;
+  labResults: string | null;
+  followupNotes: string | null;
+  otherNotes: string | null;
+  createdAt: string;
+  updatedAt: string;
+  createdBy: string;
+  updatedBy: string;
+  wasUpdated: boolean;
+}
+
+async function mockVisits(
+  page: Page,
+  options: {
+    initial?: VisitFixture;
+    onPatch?: (body: Record<string, unknown>) => Partial<VisitFixture> | null;
+    failPatch?: boolean;
+    history?: Array<{
+      id: string;
+      action: 'visit.created' | 'visit.updated' | 'visit.deleted' | 'visit.restored';
+      timestamp: string;
+      userDisplayName: string;
+      userRole: 'doctor' | 'receptionist' | 'clinic_admin';
+      userId: string;
+      ipAddress: string | null;
+      changes:
+        | Array<{ field: string; old: string | number | boolean | null; new: string | number | boolean | null }>
+        | null;
+    }>;
+  } = {},
+): Promise<void> {
+  let visit = options.initial ?? makeVisit();
+  await page.route(`**/api/visits/${visit.id}`, async (route: Route) => {
+    const method = route.request().method();
+    if (method === 'GET') {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ visit }),
+      });
+      return;
+    }
+    if (method === 'PATCH') {
+      if (options.failPatch) {
+        await route.fulfill({ status: 500, contentType: 'application/json', body: '{}' });
+        return;
+      }
+      const body = JSON.parse(route.request().postData() ?? '{}');
+      const delta = options.onPatch?.(body) ?? body;
+      visit = {
+        ...visit,
+        ...delta,
+        wasUpdated: true,
+        updatedAt: new Date().toISOString(),
+      };
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ visit }),
+      });
+      return;
+    }
+    if (method === 'DELETE') {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          status: 'ok',
+          restorableUntil: new Date(Date.now() + 30_000).toISOString(),
+        }),
+      });
+      return;
+    }
+    await route.fallback();
+  });
+
+  await page.route(`**/api/visits/${visit.id}/restore`, async (route: Route) => {
+    visit = { ...visit };
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ visit }),
+    });
+  });
+
+  await page.route(`**/api/visits/${visit.id}/history*`, async (route: Route) => {
+    const entries =
+      options.history ?? [
+        {
+          id: 'a-1',
+          action: 'visit.created' as const,
+          timestamp: '2026-05-14T08:00:00.000Z',
+          userDisplayName: 'Dr. Taulant Shala',
+          userRole: 'doctor' as const,
+          userId: 'u-taulant',
+          ipAddress: '94.140.10.20',
+          changes: null,
+        },
+      ];
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ entries }),
+    });
+  });
+
+  await page.route('**/api/visits', async (route: Route) => {
+    if (route.request().method() === 'POST') {
+      visit = { ...visit, id: visit.id, createdAt: new Date().toISOString() };
+      await route.fulfill({
+        status: 201,
+        contentType: 'application/json',
+        body: JSON.stringify({ visit }),
+      });
+      return;
+    }
+    await route.fallback();
+  });
+}
+
 test.describe('Patient chart shell', () => {
   test('renders master strip, history, and vërtetime list', async ({ page }) => {
     await mockChart(page);
@@ -172,6 +346,185 @@ test.describe('Patient chart shell', () => {
     await expect(
       page.getByText('Ju nuk keni qasje në këtë seksion'),
     ).toBeVisible();
+  });
+
+  // -------------------------------------------------------------------------
+  // Visit form (slice 12)
+  // -------------------------------------------------------------------------
+
+  test('typing into Ankesa triggers a PATCH and shows "U ruajt"', async ({ page }) => {
+    await mockChart(page);
+    await mockVisits(page);
+
+    const patchPromise = page.waitForRequest(
+      (req) =>
+        req.url().includes(`/api/visits/${VISIT_NEW}`) &&
+        req.method() === 'PATCH',
+    );
+    await page.goto(`/pacient/${PATIENT_ID}`);
+
+    const complaint = page.locator('#visit-complaint');
+    await complaint.fill('Kollë e thatë prej 3 ditësh.');
+
+    // The debounce is 1.5s but blur fires sooner — bump elsewhere to
+    // make sure we're not deadlocked.
+    await page.locator('#visit-examinations').click();
+
+    const req = await patchPromise;
+    expect(req.postDataJSON()).toMatchObject({ complaint: 'Kollë e thatë prej 3 ditësh.' });
+
+    await expect(page.getByText(/U ruajt/).first()).toBeVisible();
+  });
+
+  test('blank-then-typed weight saves the integer-grams payload', async ({ page }) => {
+    await mockChart(page);
+    await mockVisits(page);
+
+    const patchPromise = page.waitForRequest(
+      (req) =>
+        req.url().includes(`/api/visits/${VISIT_NEW}`) &&
+        req.method() === 'PATCH',
+    );
+    await page.goto(`/pacient/${PATIENT_ID}`);
+
+    await page.locator('#visit-weight').fill('13.6');
+    await page.locator('#visit-height').click();
+
+    const req = await patchPromise;
+    // 13.6 kg → 13_600 g.
+    expect(req.postDataJSON()).toMatchObject({ weightG: 13_600 });
+  });
+
+  test('paymentCode dropdown saves the selected code', async ({ page }) => {
+    await mockChart(page);
+    await mockVisits(page);
+
+    const patchPromise = page.waitForRequest(
+      (req) =>
+        req.url().includes(`/api/visits/${VISIT_NEW}`) &&
+        req.method() === 'PATCH',
+    );
+    await page.goto(`/pacient/${PATIENT_ID}`);
+    await page.locator('#visit-payment-code').selectOption('A');
+
+    const req = await patchPromise;
+    expect(req.postDataJSON()).toMatchObject({ paymentCode: 'A' });
+  });
+
+  test('save failure opens the dialog with the unsaved fields listed', async ({
+    page,
+  }) => {
+    await mockChart(page);
+    await mockVisits(page, { failPatch: true });
+
+    await page.goto(`/pacient/${PATIENT_ID}`);
+    await page.locator('#visit-complaint').fill('Ankesë e re që dështon.');
+    await page.locator('#visit-examinations').click();
+
+    const dialog = page.getByRole('alertdialog', { name: 'Ruajtja dështoi' });
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByText('Fusha të paruajtura · 1')).toBeVisible();
+    await expect(dialog.getByText('Ankesa', { exact: true })).toBeVisible();
+  });
+
+  test('"Modifikuar nga..." appears once the visit has been updated', async ({
+    page,
+  }) => {
+    await mockChart(page);
+    await mockVisits(page, {
+      initial: makeVisit({
+        wasUpdated: true,
+        updatedAt: '2026-05-14T13:47:00.000Z',
+        complaint: 'Kollë',
+      }),
+    });
+
+    await page.goto(`/pacient/${PATIENT_ID}`);
+    await expect(page.getByText(/Modifikuar nga/)).toBeVisible();
+  });
+
+  test('clicking "Modifikuar nga..." opens the change-history modal', async ({
+    page,
+  }) => {
+    await mockChart(page);
+    await mockVisits(page, {
+      initial: makeVisit({
+        wasUpdated: true,
+        updatedAt: '2026-05-14T13:47:00.000Z',
+      }),
+      history: [
+        {
+          id: 'a-2',
+          action: 'visit.updated' as const,
+          timestamp: '2026-05-14T13:47:00.000Z',
+          userDisplayName: 'Dr. Taulant Shala',
+          userRole: 'doctor' as const,
+          userId: 'u-taulant',
+          ipAddress: '94.140.10.20',
+          changes: [
+            { field: 'complaint', old: 'Kollë', new: 'Kollë me ethe' },
+          ],
+        },
+        {
+          id: 'a-1',
+          action: 'visit.created' as const,
+          timestamp: '2026-05-14T08:00:00.000Z',
+          userDisplayName: 'Dr. Taulant Shala',
+          userRole: 'doctor' as const,
+          userId: 'u-taulant',
+          ipAddress: '94.140.10.20',
+          changes: null,
+        },
+      ],
+    });
+
+    await page.goto(`/pacient/${PATIENT_ID}`);
+    await page.getByText(/Modifikuar nga/).click();
+
+    const modal = page.getByRole('dialog', { name: /Historia e ndryshimeve/ });
+    await expect(modal).toBeVisible();
+    await expect(modal.getByText('Ankesa')).toBeVisible();
+    await expect(modal.getByText('Kollë me ethe')).toBeVisible();
+    await expect(modal.getByText('Krijuar (vizita e re)')).toBeVisible();
+  });
+
+  test('delete visit shows the undo toast, undo restores the visit', async ({
+    page,
+  }) => {
+    await mockChart(page);
+    await mockVisits(page);
+
+    const deletePromise = page.waitForRequest(
+      (req) =>
+        req.url().includes(`/api/visits/${VISIT_NEW}`) &&
+        req.method() === 'DELETE',
+    );
+    await page.goto(`/pacient/${PATIENT_ID}`);
+    await page.getByRole('button', { name: 'Fshij vizitën' }).click();
+    await deletePromise;
+
+    await expect(page.getByText('Vizita u fshi.')).toBeVisible();
+
+    const restorePromise = page.waitForRequest(
+      (req) =>
+        req.url().includes(`/api/visits/${VISIT_NEW}/restore`) &&
+        req.method() === 'POST',
+    );
+    await page.getByRole('button', { name: 'Anulo' }).click();
+    await restorePromise;
+  });
+
+  test('Vizitë e re button POSTs to /api/visits and navigates', async ({ page }) => {
+    await mockChart(page);
+    await mockVisits(page);
+
+    const createPromise = page.waitForRequest(
+      (req) => req.url().endsWith('/api/visits') && req.method() === 'POST',
+    );
+    await page.goto(`/pacient/${PATIENT_ID}`);
+    await page.getByRole('button', { name: '+ Vizitë e re' }).first().click();
+    const req = await createPromise;
+    expect(req.postDataJSON()).toMatchObject({ patientId: PATIENT_ID });
   });
 
   test('patient with no visits shows the empty-visits state', async ({ page }) => {

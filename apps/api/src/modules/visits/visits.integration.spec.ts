@@ -1,0 +1,465 @@
+// Integration tests for the visits API surface (slice 12).
+//
+// Real Postgres, real Nest app, supertest at the HTTP layer.
+// Covers:
+//
+//   1. Receptionist 403s on every visits endpoint
+//   2. Doctor POST /api/visits creates a fresh visit (today's date)
+//   3. Doctor PATCH /api/visits/:id writes a delta + audit row
+//   4. Two PATCHes within 60s coalesce into one audit row (visit.updated)
+//   5. PATCH > 60s later creates a new audit row instead of merging
+//   6. DELETE soft-deletes; GET 404s afterward; restore brings it back
+//   7. GET :id/history returns events newest-first with diff details
+//   8. Cross-clinic isolation: doctor in clinic A can't PATCH B's visit
+//
+// Skips automatically when DATABASE_URL or seed passwords are unset.
+
+import { execSync } from 'node:child_process';
+import { resolve } from 'node:path';
+
+import { Test, type TestingModule } from '@nestjs/testing';
+import type { NestExpressApplication } from '@nestjs/platform-express';
+import request from 'supertest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+
+import { AppModule } from '../../app.module';
+import { PrismaService } from '../../prisma/prisma.service';
+import { CapturingEmailSender, EMAIL_SENDER, EmailService } from '../email/email.service';
+import { SESSION_COOKIE_NAME } from '../auth/session.service';
+
+const DATABASE_URL = process.env['DATABASE_URL'];
+const SEED_DOCTOR_PASSWORD = process.env['SEED_DOCTOR_PASSWORD'];
+const SEED_RECEPTIONIST_PASSWORD = process.env['SEED_RECEPTIONIST_PASSWORD'];
+const ENABLED = Boolean(DATABASE_URL && SEED_DOCTOR_PASSWORD && SEED_RECEPTIONIST_PASSWORD);
+
+const TENANT_HOST = 'donetamed.klinika.health';
+const DOCTOR_EMAIL = 'taulant.shala@klinika.health';
+const RECEPTIONIST_EMAIL = 'ereblire.krasniqi@klinika.health';
+
+describe.skipIf(!ENABLED)('Visits integration', () => {
+  let app: NestExpressApplication;
+  let module: TestingModule;
+  let prisma: PrismaService;
+  let captured: CapturingEmailSender;
+  let clinicId: string;
+  let secondClinicId: string;
+  let secondClinicPatientId: string;
+  let doctorId: string;
+  let patientId: string;
+
+  beforeAll(async () => {
+    const apiDir = resolve(__dirname, '..', '..', '..');
+    execSync('pnpm exec prisma migrate deploy', { cwd: apiDir, stdio: 'inherit' });
+    for (const f of [
+      '001_rls_indexes_triggers.sql',
+      '002_auth_rls.sql',
+      '003_admin.sql',
+      '004_patients_search.sql',
+    ]) {
+      execSync(
+        `psql "${DATABASE_URL ?? ''}" -v ON_ERROR_STOP=1 -f prisma/sql/${f}`,
+        { cwd: apiDir, stdio: 'inherit' },
+      );
+    }
+    execSync('pnpm seed', { cwd: apiDir, stdio: 'inherit' });
+
+    captured = new CapturingEmailSender();
+    module = await Test.createTestingModule({ imports: [AppModule] })
+      .overrideProvider(EMAIL_SENDER)
+      .useValue(captured)
+      .compile();
+    app = module.createNestApplication<NestExpressApplication>({ bodyParser: false });
+    app.useBodyParser('json', { limit: '6mb' });
+    app.set('trust proxy', true);
+    await app.init();
+    prisma = app.get(PrismaService);
+    app.get(EmailService).setSender(captured);
+
+    const clinic = await prisma.clinic.findFirstOrThrow({
+      where: { subdomain: 'donetamed' },
+    });
+    clinicId = clinic.id;
+
+    const second = await prisma.clinic.upsert({
+      where: { subdomain: 'second-test' },
+      update: {},
+      create: {
+        subdomain: 'second-test',
+        name: 'Klinika Tjetër',
+        shortName: 'Tjetër',
+        address: 'rr. Test',
+        city: 'Prishtinë',
+        phones: ['044 11 22 33'],
+        email: 'info@second.test',
+        hoursConfig: {
+          timezone: 'Europe/Belgrade',
+          days: {
+            mon: { open: true, start: '10:00', end: '18:00' },
+            tue: { open: true, start: '10:00', end: '18:00' },
+            wed: { open: true, start: '10:00', end: '18:00' },
+            thu: { open: true, start: '10:00', end: '18:00' },
+            fri: { open: true, start: '10:00', end: '18:00' },
+            sat: { open: false },
+            sun: { open: false },
+          },
+          durations: [10, 15, 20, 30],
+          defaultDuration: 15,
+        },
+        paymentCodes: { E: { label: 'Falas', amountCents: 0 } },
+        logoUrl: '',
+        signatureUrl: '',
+      },
+    });
+    secondClinicId = second.id;
+
+    const doctor = await prisma.user.findFirstOrThrow({
+      where: { clinicId, email: DOCTOR_EMAIL },
+    });
+    doctorId = doctor.id;
+  });
+
+  afterAll(async () => {
+    await app?.close();
+  });
+
+  beforeEach(async () => {
+    captured.clear();
+    await prisma.rateLimit.deleteMany({});
+    await prisma.authLoginAttempt.deleteMany({});
+    await prisma.authMfaCode.deleteMany({});
+    await prisma.authTrustedDevice.deleteMany({});
+    await prisma.authSession.deleteMany({});
+    await prisma.auditLog.deleteMany({ where: { clinicId } });
+    await prisma.auditLog.deleteMany({ where: { clinicId: secondClinicId } });
+    await prisma.vertetim.deleteMany({ where: { clinicId } });
+    await prisma.visitDicomLink.deleteMany({});
+    await prisma.visitDiagnosis.deleteMany({});
+    await prisma.visit.deleteMany({ where: { clinicId } });
+    await prisma.visit.deleteMany({ where: { clinicId: secondClinicId } });
+    await prisma.patient.deleteMany({ where: { clinicId } });
+    await prisma.patient.deleteMany({ where: { clinicId: secondClinicId } });
+
+    const patient = await prisma.patient.create({
+      data: {
+        clinicId,
+        firstName: 'Era',
+        lastName: 'Krasniqi',
+        dateOfBirth: new Date('2023-08-03'),
+        sex: 'f',
+      },
+    });
+    patientId = patient.id;
+
+    const cross = await prisma.patient.create({
+      data: {
+        clinicId: secondClinicId,
+        firstName: 'Cross',
+        lastName: 'Clinic',
+        dateOfBirth: new Date('2020-01-01'),
+      },
+    });
+    secondClinicPatientId = cross.id;
+  });
+
+  // -------------------------------------------------------------------------
+  // Receptionist surface — all blocked
+  // -------------------------------------------------------------------------
+
+  describe('receptionist', () => {
+    it('POST /api/visits returns 403', async () => {
+      const cookie = await loginAs(RECEPTIONIST_EMAIL, SEED_RECEPTIONIST_PASSWORD!);
+      const res = await req()
+        .post('/api/visits')
+        .set('host', TENANT_HOST)
+        .set('Cookie', cookie)
+        .send({ patientId });
+      expect(res.status).toBe(403);
+    });
+
+    it('GET /api/visits/:id returns 403', async () => {
+      const visit = await createVisit();
+      const cookie = await loginAs(RECEPTIONIST_EMAIL, SEED_RECEPTIONIST_PASSWORD!);
+      const res = await req()
+        .get(`/api/visits/${visit.id}`)
+        .set('host', TENANT_HOST)
+        .set('Cookie', cookie);
+      expect(res.status).toBe(403);
+    });
+
+    it('PATCH /api/visits/:id returns 403', async () => {
+      const visit = await createVisit();
+      const cookie = await loginAs(RECEPTIONIST_EMAIL, SEED_RECEPTIONIST_PASSWORD!);
+      const res = await req()
+        .patch(`/api/visits/${visit.id}`)
+        .set('host', TENANT_HOST)
+        .set('Cookie', cookie)
+        .send({ complaint: 'sneaky' });
+      expect(res.status).toBe(403);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Doctor surface
+  // -------------------------------------------------------------------------
+
+  describe('doctor', () => {
+    it('POST /api/visits creates a visit dated today + audit', async () => {
+      const cookie = await loginAs(DOCTOR_EMAIL, SEED_DOCTOR_PASSWORD!);
+      const res = await req()
+        .post('/api/visits')
+        .set('host', TENANT_HOST)
+        .set('Cookie', cookie)
+        .send({ patientId });
+      expect(res.status).toBe(201);
+      expect(res.body.visit.patientId).toBe(patientId);
+      expect(res.body.visit.wasUpdated).toBe(false);
+      // visitDate is today (Europe/Belgrade) — but locally we accept
+      // any iso-day to avoid TZ flake in CI.
+      expect(res.body.visit.visitDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+
+      const audits = await prisma.auditLog.findMany({
+        where: { clinicId, resourceId: res.body.visit.id, action: 'visit.created' },
+      });
+      expect(audits.length).toBe(1);
+    });
+
+    it('PATCH /api/visits/:id writes a delta + audit diffs', async () => {
+      const visit = await createVisit();
+      const cookie = await loginAs(DOCTOR_EMAIL, SEED_DOCTOR_PASSWORD!);
+      const res = await req()
+        .patch(`/api/visits/${visit.id}`)
+        .set('host', TENANT_HOST)
+        .set('Cookie', cookie)
+        .send({
+          complaint: 'Kollë e thatë me ethe.',
+          weightG: 13_600,
+          paymentCode: 'A',
+        });
+      expect(res.status).toBe(200);
+      expect(res.body.visit.complaint).toContain('Kollë');
+      expect(res.body.visit.weightG).toBe(13_600);
+      expect(res.body.visit.paymentCode).toBe('A');
+      expect(res.body.visit.wasUpdated).toBe(true);
+
+      const audits = await prisma.auditLog.findMany({
+        where: { clinicId, resourceId: visit.id, action: 'visit.updated' },
+      });
+      expect(audits.length).toBe(1);
+      const changes = (audits[0]?.changes ?? []) as Array<{ field: string }>;
+      expect(changes.map((c) => c.field).sort()).toEqual([
+        'complaint',
+        'paymentCode',
+        'weightG',
+      ]);
+    });
+
+    it('two PATCH saves within 60s coalesce into ONE audit row', async () => {
+      const visit = await createVisit();
+      const cookie = await loginAs(DOCTOR_EMAIL, SEED_DOCTOR_PASSWORD!);
+
+      await req()
+        .patch(`/api/visits/${visit.id}`)
+        .set('host', TENANT_HOST)
+        .set('Cookie', cookie)
+        .send({ complaint: 'first' });
+      await req()
+        .patch(`/api/visits/${visit.id}`)
+        .set('host', TENANT_HOST)
+        .set('Cookie', cookie)
+        .send({ complaint: 'second' });
+
+      const audits = await prisma.auditLog.findMany({
+        where: { clinicId, resourceId: visit.id, action: 'visit.updated' },
+      });
+      expect(audits.length).toBe(1);
+      const changes = (audits[0]?.changes ?? []) as Array<{
+        field: string;
+        old: unknown;
+        new: unknown;
+      }>;
+      const complaint = changes.find((c) => c.field === 'complaint');
+      expect(complaint).toBeDefined();
+      // Coalesce keeps the oldest `old` and the newest `new`.
+      expect(complaint?.old).toBeNull();
+      expect(complaint?.new).toBe('second');
+    });
+
+    it('PATCH > 60s later creates a NEW audit row', async () => {
+      const visit = await createVisit();
+      const cookie = await loginAs(DOCTOR_EMAIL, SEED_DOCTOR_PASSWORD!);
+
+      await req()
+        .patch(`/api/visits/${visit.id}`)
+        .set('host', TENANT_HOST)
+        .set('Cookie', cookie)
+        .send({ complaint: 'first' });
+
+      // Backdate the existing audit row past the 60-second coalesce
+      // window — re-emit the next PATCH and expect a second row.
+      await prisma.auditLog.updateMany({
+        where: { clinicId, resourceId: visit.id, action: 'visit.updated' },
+        data: { timestamp: new Date(Date.now() - 5 * 60_000) },
+      });
+
+      await req()
+        .patch(`/api/visits/${visit.id}`)
+        .set('host', TENANT_HOST)
+        .set('Cookie', cookie)
+        .send({ complaint: 'much later' });
+
+      const audits = await prisma.auditLog.findMany({
+        where: { clinicId, resourceId: visit.id, action: 'visit.updated' },
+        orderBy: { timestamp: 'asc' },
+      });
+      expect(audits.length).toBe(2);
+    });
+
+    it('DELETE soft-deletes and GET 404s afterward', async () => {
+      const visit = await createVisit();
+      const cookie = await loginAs(DOCTOR_EMAIL, SEED_DOCTOR_PASSWORD!);
+
+      const del = await req()
+        .delete(`/api/visits/${visit.id}`)
+        .set('host', TENANT_HOST)
+        .set('Cookie', cookie);
+      expect(del.status).toBe(200);
+      expect(del.body.status).toBe('ok');
+      expect(typeof del.body.restorableUntil).toBe('string');
+
+      const after = await prisma.visit.findUniqueOrThrow({ where: { id: visit.id } });
+      expect(after.deletedAt).not.toBeNull();
+
+      const get = await req()
+        .get(`/api/visits/${visit.id}`)
+        .set('host', TENANT_HOST)
+        .set('Cookie', cookie);
+      expect(get.status).toBe(404);
+    });
+
+    it('POST /:id/restore brings a soft-deleted visit back', async () => {
+      const visit = await createVisit();
+      const cookie = await loginAs(DOCTOR_EMAIL, SEED_DOCTOR_PASSWORD!);
+      await req()
+        .delete(`/api/visits/${visit.id}`)
+        .set('host', TENANT_HOST)
+        .set('Cookie', cookie);
+      const restore = await req()
+        .post(`/api/visits/${visit.id}/restore`)
+        .set('host', TENANT_HOST)
+        .set('Cookie', cookie);
+      expect(restore.status).toBe(200);
+      const after = await prisma.visit.findUniqueOrThrow({ where: { id: visit.id } });
+      expect(after.deletedAt).toBeNull();
+    });
+
+    it('GET /:id/history returns events newest first', async () => {
+      const visit = await createVisit();
+      const cookie = await loginAs(DOCTOR_EMAIL, SEED_DOCTOR_PASSWORD!);
+
+      // First save — outside the coalesce window so we end up with two
+      // separate update rows.
+      await req()
+        .patch(`/api/visits/${visit.id}`)
+        .set('host', TENANT_HOST)
+        .set('Cookie', cookie)
+        .send({ complaint: 'Kollë' });
+      await prisma.auditLog.updateMany({
+        where: { clinicId, resourceId: visit.id, action: 'visit.updated' },
+        data: { timestamp: new Date(Date.now() - 5 * 60_000) },
+      });
+      await req()
+        .patch(`/api/visits/${visit.id}`)
+        .set('host', TENANT_HOST)
+        .set('Cookie', cookie)
+        .send({ paymentCode: 'B' });
+
+      const res = await req()
+        .get(`/api/visits/${visit.id}/history`)
+        .set('host', TENANT_HOST)
+        .set('Cookie', cookie);
+      expect(res.status).toBe(200);
+      const entries = res.body.entries as Array<{
+        action: string;
+        timestamp: string;
+      }>;
+      // Two updates + one create = 3 events, newest first.
+      expect(entries.length).toBe(3);
+      expect(entries[0]!.action).toBe('visit.updated');
+      expect(entries.at(-1)!.action).toBe('visit.created');
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Multi-tenant isolation
+  // -------------------------------------------------------------------------
+
+  describe('multi-tenant', () => {
+    it("doctor in clinic A cannot PATCH clinic B's visit", async () => {
+      // Provision a visit in clinic B (no API to do it for us as B's
+      // doctor, so seed it directly).
+      const visit = await prisma.visit.create({
+        data: {
+          clinicId: secondClinicId,
+          patientId: secondClinicPatientId,
+          visitDate: new Date('2026-05-14T00:00:00Z'),
+          createdBy: doctorId, // attribution fine — RLS doesn't read createdBy
+          updatedBy: doctorId,
+        },
+      });
+
+      const cookie = await loginAs(DOCTOR_EMAIL, SEED_DOCTOR_PASSWORD!);
+      const res = await req()
+        .patch(`/api/visits/${visit.id}`)
+        .set('host', TENANT_HOST)
+        .set('Cookie', cookie)
+        .send({ complaint: 'leak attempt' });
+      expect(res.status).toBe(404);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Helpers
+  // -------------------------------------------------------------------------
+
+  function req(): request.Agent {
+    return request(app.getHttpServer());
+  }
+
+  async function createVisit(): Promise<{ id: string }> {
+    const row = await prisma.visit.create({
+      data: {
+        clinicId,
+        patientId,
+        visitDate: new Date('2026-05-14T00:00:00Z'),
+        createdBy: doctorId,
+        updatedBy: doctorId,
+      },
+    });
+    return { id: row.id };
+  }
+
+  async function loginAs(email: string, password: string): Promise<string> {
+    const start = await req()
+      .post('/api/auth/login')
+      .set('host', TENANT_HOST)
+      .send({ email, password, rememberMe: false });
+    expect(start.status).toBe(200);
+    expect(start.body.status).toBe('mfa_required');
+    const pending = start.body.pendingSessionId as string;
+    const msg = captured.takeLatest(email);
+    expect(msg).toBeDefined();
+    const match = msg!.text.match(/(\d{3}) (\d{3})/);
+    const code = match ? `${match[1]}${match[2]}` : '';
+    const verify = await req()
+      .post('/api/auth/mfa/verify')
+      .set('host', TENANT_HOST)
+      .send({ pendingSessionId: pending, code, trustDevice: false });
+    expect(verify.status).toBe(200);
+    const setCookie = verify.headers['set-cookie'];
+    const cookies = Array.isArray(setCookie) ? setCookie : [setCookie as string];
+    const session = cookies.find((c) => c.startsWith(`${SESSION_COOKIE_NAME}=`));
+    expect(session).toBeDefined();
+    captured.clear();
+    return session!.split(';')[0];
+  }
+});
