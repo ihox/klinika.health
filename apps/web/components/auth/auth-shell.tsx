@@ -6,6 +6,12 @@ interface AuthShellProps {
   subtitle?: ReactNode;
   children: ReactNode;
   footer?: ReactNode;
+  /**
+   * Optional header that replaces the default BrandRow above the title.
+   * Used by the clinic login to surface the clinic identity card (logo +
+   * name + subdomain) per design-reference/prototype/components/clinic-login.html.
+   */
+  header?: ReactNode;
 }
 
 /**
@@ -13,14 +19,12 @@ interface AuthShellProps {
  * Right: dark-teal hero with subtle WHO-curve illustration. The hero
  * collapses on viewports < 900px to keep the form usable on tablets.
  */
-export function AuthShell({ title, subtitle, children, footer }: AuthShellProps) {
+export function AuthShell({ title, subtitle, children, footer, header }: AuthShellProps) {
   return (
     <main className="min-h-screen bg-stone-50 grid lg:grid-cols-2">
       <div className="grid place-items-center p-6 lg:p-10">
         <div className="w-full max-w-[380px]">
-          <div className="mb-10">
-            <BrandRow />
-          </div>
+          <div className="mb-10">{header ?? <BrandRow />}</div>
           <h1 className="font-display text-[28px] font-semibold tracking-[-0.025em] text-stone-900">
             {title}
           </h1>

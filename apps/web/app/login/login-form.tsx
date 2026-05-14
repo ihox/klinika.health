@@ -124,7 +124,7 @@ export function LoginForm() {
             className="h-3.5 w-3.5 accent-teal-600"
             {...register('rememberMe')}
           />
-          Më mbaj të kyçur (në këtë pajisje)
+          Më mbaj të kyçur
         </label>
         <Link
           href="/forgot-password"
