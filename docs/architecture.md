@@ -30,6 +30,7 @@
 16. Data lifecycle and backups
 17. Slice 08 — receptionist calendar and appointment lifecycle
 18. Slice 09 — booking dialog and conflict-aware flows
+19. Slice 10 — doctor's home dashboard (Pamja e ditës)
 
 ## Slice 01 — skeleton
 
@@ -849,4 +850,152 @@ shape stays additive — adding a duration to `hours_config` adds an
 option to the response; clinics with only two configured durations
 see only two cards.
 
+## Slice 10 — doctor's home dashboard (Pamja e ditës)
+
+The doctor's first screen of the day. One endpoint composes everything
+the dashboard needs so the client can poll a single URL every 60s and
+keep the four panels (greeting strip, appointments list, next-patient
+card, completed-visit log) internally consistent.
+
+### Module layout
+
+- [`doctor-dashboard.dto.ts`](../apps/api/src/modules/doctor-dashboard/doctor-dashboard.dto.ts)
+  — `DoctorDashboardResponse` and its four sub-shapes
+  (`DashboardAppointmentDto`, `DashboardVisitLogEntry`,
+  `DashboardNextPatientCard`, `DashboardStats`).
+- [`doctor-dashboard.service.ts`](../apps/api/src/modules/doctor-dashboard/doctor-dashboard.service.ts)
+  — single `getDashboard(clinicId, ctx, overrideDate?)` call. Issues
+  three parallel reads (clinic config, today's appointments, today's
+  visits), then a small follow-up for the next-patient card
+  (patient master, last visit, visit count).
+- [`doctor-dashboard.greeting.ts`](../apps/api/src/modules/doctor-dashboard/doctor-dashboard.greeting.ts)
+  — pure helper that returns one of `Mirëmëngjes` / `Mirëdita`
+  / `Mirëmbrëma` / `Natë e mbarë` anchored to Europe/Belgrade
+  (ADR-006). Mirrored on the web side in
+  [`doctor-dashboard-client.ts`](../apps/web/lib/doctor-dashboard-client.ts).
+- [`doctor-dashboard.stats.ts`](../apps/api/src/modules/doctor-dashboard/doctor-dashboard.stats.ts)
+  — pure aggregation (`visitsCompleted`, `appointmentsTotal`,
+  `averageVisitMinutes`, `paymentsCents`). `averageVisitMinutes` is
+  the mean gap between successive `visits.created_at`, each gap
+  capped at 4 hours so a lunch break doesn't skew the dial.
+
+### Endpoint
+
+| Endpoint                                  | Role                       | Notes                                                          |
+|-------------------------------------------|----------------------------|----------------------------------------------------------------|
+| `GET /api/doctor/dashboard[?date=YYYY-MM-DD]` | `doctor`, `clinic_admin` | Returns the full day snapshot. `date` is an override for tests; production callers omit it and the server resolves to today in Europe/Belgrade. |
+
+The endpoint is **doctor-only**. The receptionist has her own calendar
+that exposes name + DOB only (CLAUDE.md §1.2); the dashboard payload
+carries diagnoses, payment amounts, and the `hasAllergyNote` boolean
+that would all be privacy regressions in a receptionist context. The
+controller enforces the role with `@Roles('doctor', 'clinic_admin')`
+and RLS is the defense in depth.
+
+### Response shape
+
+```ts
+{
+  date: '2026-05-14',                  // server-resolved local day
+  serverTime: '2026-05-14T11:30:00Z',  // wall-clock snapshot stamp
+  appointments: [
+    {
+      id, patientId, patient: { firstName, lastName, dateOfBirth },
+      scheduledFor, durationMinutes, status,
+      position: 'current' | 'next' | 'upcoming' | 'past',
+    },
+    …
+  ],
+  todayVisits: [
+    {
+      id, patientId, patient,
+      recordedAt,                      // visit.created_at
+      primaryDiagnosis: { code, latinDescription } | null,
+      paymentCode: 'A' | …, paymentAmountCents,
+    },
+    …
+  ],
+  nextPatient: {
+    appointmentId, patientId, patient: { firstName, lastName, dob, sex },
+    scheduledFor, durationMinutes,
+    visitCount, lastVisitDate, daysSinceLastVisit,
+    lastDiagnosis: { code, latinDescription } | null,
+    lastWeightG,
+    hasAllergyNote: boolean,           // see "Allergy boolean" below
+  } | null,
+  stats: { visitsCompleted, appointmentsTotal, appointmentsCompleted,
+           averageVisitMinutes, paymentsCents },
+}
+```
+
+### Appointment `position`
+
+A precomputed badge so the UI doesn't need to know the wall clock:
+
+- `current` — start ≤ now < start + duration AND status === `scheduled`.
+- `next` — the earliest still-`scheduled` appointment whose start is
+  strictly in the future. Only set when no `current` exists.
+- `past` — already done / cancelled / no-show, OR scheduled but the
+  end time has passed without a status update.
+- `upcoming` — anything else.
+
+The frontend highlights `current` and `next` with the teal border from
+the prototype and uses `current` to drive the "Tani" indicator.
+
+### Allergy boolean (doctor-only safety, no PHI leak)
+
+The next-patient card surfaces a "⚠ Shih kartelën" chip when the
+patient has any `alergjiTjera` text on file. The **string itself is
+never sent in the dashboard payload** — only a `hasAllergyNote:
+boolean`. The full note appears only when the doctor opens the
+chart (slice 11). The narrow surface is intentional: a future
+maintainer who broadens this endpoint's audience cannot
+accidentally leak the contents.
+
+### Payment aggregation
+
+Today's `paymentsCents` sums each visit's `payment_code` against the
+clinic's current `payment_codes` map (slice-06). Unknown codes
+(deleted from the config but still referenced by historical visits)
+contribute 0 rather than throwing — the doctor's stats should never
+500 because of a config drift.
+
+### Refresh strategy
+
+The dashboard polls `GET /api/doctor/dashboard` every 60 seconds and
+on every `visibilitychange` to `visible`. It also subscribes to the
+existing appointments SSE
+([`appointments.events.ts`](../apps/api/src/modules/appointments/appointments.events.ts))
+so the receptionist marking an appointment `completed` or `no_show`
+shows up on the doctor's screen in near-real-time without waiting
+for the next poll. The SSE payload is metadata-only (CLAUDE.md §1.3);
+the dashboard reloads via the polling endpoint when an event fires.
+
+The greeting strip displays "I përditësuar para Xs" so the doctor
+can see the data is live without staring at a spinner.
+
+### Click-through
+
+Every visible row in the dashboard is clickable — appointments,
+visit-log rows, and the next-patient buttons all route to
+`/doctor/pacientet?patientId=<uuid>`. The patient browser honors the
+query param and pre-opens the chart. UUIDs are opaque per CLAUDE.md
+§1.4, so the query parameter carries no PHI.
+
+### Quick-search
+
+The appointments panel contains a quick filter that matches against
+the visible appointment list (client-side, since the response is
+already loaded). Focus shortcuts: `/` and `⌘/Ctrl+K`. The
+receptionist's `GlobalPatientSearch` (slice 7) will be wired into
+the same shortcut chain when the doctor's chart shell lands in
+slice 11; for now the quick filter is a local search over today's
+list only.
+
+### Tests
+
+- Greeting selection ([`doctor-dashboard.greeting.spec.ts`](../apps/api/src/modules/doctor-dashboard/doctor-dashboard.greeting.spec.ts)) — covers the four bands, the CET/CEST boundary, and the DST onset day.
+- Stats aggregation ([`doctor-dashboard.stats.spec.ts`](../apps/api/src/modules/doctor-dashboard/doctor-dashboard.stats.spec.ts)) — payment sums, lunch-break cap on the average, sort robustness.
+- Integration ([`doctor-dashboard.integration.spec.ts`](../apps/api/src/modules/doctor-dashboard/doctor-dashboard.integration.spec.ts)) — doctor sees the full snapshot, receptionist 403s, payment aggregation against multiple codes.
+- E2E ([`doctor-home.spec.ts`](../apps/web/tests/e2e/doctor-home.spec.ts)) — greeting + day stats render, next-patient card shows the allergy chip, click-through lands on the patient browser with `?patientId=…`, quick-search filters the appointment list.
 

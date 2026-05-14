@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -22,12 +23,17 @@ import { PatientFullForm } from './patient-full-form';
  * server's role-based serialiser does the filtering.
  */
 export function DoctorPatientsView() {
+  const searchParams = useSearchParams();
+  // Allow deep-linking from the doctor's home dashboard: `?patientId=…`
+  // pre-opens that patient on first render. UUIDs are opaque per
+  // CLAUDE.md §1.4 so this is not a PHI-in-URL violation.
+  const initialPatientId = searchParams?.get('patientId') ?? null;
   const [query, setQuery] = useState('');
   const [debounced, setDebounced] = useState('');
   const [results, setResults] = useState<PatientFullDto[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [openId, setOpenId] = useState<string | null>(null);
+  const [openId, setOpenId] = useState<string | null>(initialPatientId);
   const [creating, setCreating] = useState(false);
   const [toast, setToast] = useState<{ message: string; tone: 'success' | 'error' } | null>(null);
 
@@ -54,6 +60,33 @@ export function DoctorPatientsView() {
   useEffect(() => {
     void runSearch(debounced);
   }, [debounced, runSearch]);
+
+  // When the URL carries `?patientId=…` but the search list doesn't
+  // include that patient (e.g. the dashboard linked directly to one
+  // not on the first page), fetch the row separately so the detail
+  // pane can render. We do not push the fetched row into `results` so
+  // the visible list stays in sync with the search query.
+  useEffect(() => {
+    if (!initialPatientId) return;
+    if (results.some((p) => p.id === initialPatientId)) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await patientClient.getOne(initialPatientId);
+        if (!cancelled) {
+          setResults((prev) =>
+            prev.some((p) => p.id === res.patient.id) ? prev : [res.patient, ...prev],
+          );
+        }
+      } catch {
+        // Silent — the user will just see "select a patient" if the
+        // ID is invalid (likely a stale dashboard link).
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [initialPatientId, results]);
 
   const openPatient = useMemo(
     () => results.find((p) => p.id === openId) ?? null,
