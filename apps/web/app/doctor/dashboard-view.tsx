@@ -364,7 +364,7 @@ function AppointmentsPanel({
           <div className="px-4 py-8 text-center text-[12.5px] text-ink-muted">
             {filter.trim()
               ? 'Asnjë termin nuk përputhet me kërkimin.'
-              : 'Sot nuk ka termine të planifikuara.'}
+              : 'Asnjë termin i caktuar.'}
           </div>
         ) : (
           filtered.map((a) => (
