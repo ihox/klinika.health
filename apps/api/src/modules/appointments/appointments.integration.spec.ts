@@ -359,6 +359,63 @@ describe.skipIf(!ENABLED)('Appointments integration', () => {
     expect(ids).toContain(stale.id);
   });
 
+  // ----------------------------------------------------------------------
+  // Translation-layer invariant (Phase 1 of the visits merge, ADR-011)
+  //
+  // After the merge, appointments and visits share a single `visits` table.
+  // The appointments endpoints must therefore filter every read by
+  // `scheduled_for IS NOT NULL` (the APPT_BASE_WHERE predicate in
+  // AppointmentsService) so a doctor-only clinical visit — one created
+  // via "[Vizitë e re]" with no prior booking — never leaks into the
+  // receptionist's calendar feed.
+  //
+  // We seed a row that satisfies the doctor-side invariant (clinical
+  // content present, `scheduled_for=null`, status='completed') and assert
+  // it is invisible to `GET /api/appointments` even when the local day
+  // matches and the patient is in the same clinic.
+  // ----------------------------------------------------------------------
+
+  it('doctor-only visits (scheduled_for=null) are invisible to GET /api/appointments', async () => {
+    const cookie = await loginAs(RECEPTIONIST_EMAIL, SEED_RECEPTIONIST_PASSWORD!);
+    const date = nextOpenDate();
+    const creator = await prisma.user.findFirstOrThrow({ where: { clinicId } });
+
+    // Doctor-only visit — same clinic + patient + local day as the
+    // appointments query, but `scheduled_for` is null so it must stay
+    // off the receptionist's calendar.
+    const doctorOnly = await prisma.visit.create({
+      data: {
+        clinicId,
+        patientId,
+        visitDate: new Date(`${date}T00:00:00Z`),
+        // scheduledFor omitted — null
+        // durationMinutes omitted — null
+        status: 'completed',
+        complaint: 'Kontroll pa terminim — i regjistruar drejtpërdrejt nga mjeku.',
+        paymentCode: 'A',
+        createdBy: creator.id,
+        updatedBy: creator.id,
+      },
+    });
+
+    // And a normal appointment so the response isn't trivially empty.
+    const booking = await req()
+      .post('/api/appointments')
+      .set('host', TENANT_HOST)
+      .set('Cookie', cookie)
+      .send({ patientId, date, time: '13:00', durationMinutes: 15 });
+    expect(booking.status).toBe(201);
+
+    const list = await req()
+      .get(`/api/appointments?from=${date}&to=${date}`)
+      .set('host', TENANT_HOST)
+      .set('Cookie', cookie);
+    expect(list.status).toBe(200);
+    const ids = (list.body.appointments as Array<{ id: string }>).map((a) => a.id);
+    expect(ids).toContain(booking.body.appointment.id);
+    expect(ids).not.toContain(doctorOnly.id);
+  });
+
   it('RLS isolation: clinic A cookie cannot reach clinic B data', async () => {
     // Seed an appointment in clinic B that we will try (and fail) to
     // read with clinic A's session.
