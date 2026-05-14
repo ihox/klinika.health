@@ -174,7 +174,11 @@ describe.skipIf(!ENABLED)('Appointments integration', () => {
     expect(listRes.body.appointments).toHaveLength(1);
 
     const audit = await prisma.auditLog.findMany({
-      where: { clinicId, resourceType: 'appointment', resourceId: created.id },
+      // Post-merge (ADR-011): the audit row points at the unified
+      // `visits` row via `resource_type='visit'`; the `action` prefix
+      // stays `appointment.*` so receptionist-scheduling intent is
+      // still legible.
+      where: { clinicId, resourceType: 'visit', resourceId: created.id },
     });
     expect(audit.length).toBeGreaterThanOrEqual(1);
     const create = audit.find((a) => a.action === 'appointment.created');
@@ -357,6 +361,54 @@ describe.skipIf(!ENABLED)('Appointments integration', () => {
     expect(res.status).toBe(200);
     const ids = (res.body.appointments as Array<{ id: string }>).map((a) => a.id);
     expect(ids).toContain(stale.id);
+  });
+
+  // Audit-shape invariant (Phase 1 of the visits merge, ADR-011)
+  //
+  // The translation layer keeps the `action` prefix `appointment.*` so a
+  // receptionist-side scheduling change still reads as such in the
+  // history, but the row's `resource_type` is `'visit'` because the
+  // underlying record lives in the unified `visits` table — there is no
+  // longer an `appointments` table to point at. This test pins both
+  // halves of the contract across the create / update / soft-delete /
+  // restore cycle, and asserts no orphaned `resource_type='appointment'`
+  // rows are produced.
+  it('appointment mutations write audit rows with resource_type=visit + action=appointment.*', async () => {
+    const cookie = await loginAs(RECEPTIONIST_EMAIL, SEED_RECEPTIONIST_PASSWORD!);
+    const date = nextOpenDate();
+    const create = await req()
+      .post('/api/appointments')
+      .set('host', TENANT_HOST)
+      .set('Cookie', cookie)
+      .send({ patientId, date, time: '11:15', durationMinutes: 15 });
+    expect(create.status).toBe(201);
+    const id = create.body.appointment.id;
+
+    await req()
+      .patch(`/api/appointments/${id}`)
+      .set('host', TENANT_HOST)
+      .set('Cookie', cookie)
+      .send({ status: 'no_show' });
+
+    await req()
+      .delete(`/api/appointments/${id}`)
+      .set('host', TENANT_HOST)
+      .set('Cookie', cookie);
+
+    const rows = await prisma.auditLog.findMany({
+      where: { clinicId, resourceId: id },
+    });
+    expect(rows.length).toBeGreaterThanOrEqual(3);
+    for (const r of rows) {
+      expect(r.resourceType).toBe('visit');
+      expect(r.action).toMatch(/^appointment\./);
+    }
+    // No stray `resource_type='appointment'` rows anywhere in this
+    // clinic's log after the merge.
+    const legacy = await prisma.auditLog.count({
+      where: { clinicId, resourceType: 'appointment' },
+    });
+    expect(legacy).toBe(0);
   });
 
   // ----------------------------------------------------------------------

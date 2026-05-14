@@ -558,6 +558,67 @@ describe.skipIf(!ENABLED)('Patients integration', () => {
       expect(res.status).toBe(404);
     });
 
+    // Translation-layer invariant (companion to the appointments
+    // module's invariant in appointments.integration.spec.ts). After
+    // the visits-merge (ADR-011) scheduled appointments live in the
+    // same `visits` table as completed clinical visits. The chart's
+    // history list must only show rows the doctor has touched —
+    // i.e. `status IN ('completed', 'in_progress')`. Scheduled /
+    // arrived / no_show / cancelled rows are receptionist-controlled
+    // lifecycle states and stay out of the clinical timeline.
+    it('chart history excludes scheduled appointments (status != completed/in_progress)', async () => {
+      const cookie = await loginAs(DOCTOR_EMAIL, SEED_DOCTOR_PASSWORD!);
+      const era = await prisma.patient.findFirstOrThrow({
+        where: { clinicId, firstName: 'Era' },
+      });
+      const doctor = await prisma.user.findFirstOrThrow({
+        where: { clinicId, email: DOCTOR_EMAIL },
+      });
+      const receptionist = await prisma.user.findFirstOrThrow({
+        where: { clinicId, email: RECEPTIONIST_EMAIL },
+      });
+
+      // 1 completed clinical visit (the doctor has touched it).
+      const completed = await prisma.visit.create({
+        data: {
+          clinicId,
+          patientId: era.id,
+          visitDate: new Date('2026-04-10'),
+          status: 'completed',
+          paymentCode: 'A',
+          complaint: 'Test complaint',
+          createdBy: doctor.id,
+          updatedBy: doctor.id,
+        },
+      });
+
+      // 1 scheduled appointment (still in the receptionist's
+      // calendar). Must NOT appear in the chart's history list.
+      const scheduledFor = new Date('2026-05-20T08:00:00Z');
+      const scheduled = await prisma.visit.create({
+        data: {
+          clinicId,
+          patientId: era.id,
+          visitDate: new Date('2026-05-20'),
+          scheduledFor,
+          durationMinutes: 15,
+          status: 'scheduled',
+          createdBy: receptionist.id,
+          updatedBy: receptionist.id,
+        },
+      });
+
+      const res = await req()
+        .get(`/api/patients/${era.id}/chart`)
+        .set('host', TENANT_HOST)
+        .set('Cookie', cookie);
+      expect(res.status).toBe(200);
+      const ids = (res.body.visits as Array<{ id: string }>).map((v) => v.id);
+      expect(ids).toContain(completed.id);
+      expect(ids).not.toContain(scheduled.id);
+      expect(res.body.visitCount).toBe(1);
+    });
+
     it('doctor GET :id/chart on a patient without visits returns empty arrays', async () => {
       const cookie = await loginAs(DOCTOR_EMAIL, SEED_DOCTOR_PASSWORD!);
       const dion = await prisma.patient.findFirstOrThrow({

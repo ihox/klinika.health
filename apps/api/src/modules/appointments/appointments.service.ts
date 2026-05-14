@@ -275,10 +275,16 @@ export class AppointmentsService {
       },
     });
 
+    // Post-merge (ADR-011): the underlying row lives in `visits`, so
+    // the audit log points at it via `resource_type='visit'`. The
+    // `action` prefix `appointment.*` is preserved so historical intent
+    // (a receptionist-side scheduling change vs a clinical edit) is
+    // legible to anyone querying the audit history. Every audit call
+    // in this service follows the same pattern.
     await this.audit.record({
       ctx,
       action: 'appointment.created',
-      resourceType: 'appointment',
+      resourceType: 'visit',
       resourceId: created.id,
       changes: [
         { field: 'patientId', old: null, new: payload.patientId },
@@ -391,7 +397,7 @@ export class AppointmentsService {
     await this.audit.record({
       ctx,
       action: 'appointment.updated',
-      resourceType: 'appointment',
+      resourceType: 'visit',
       resourceId: id,
       changes: diffs,
     });
@@ -428,7 +434,7 @@ export class AppointmentsService {
     await this.audit.record({
       ctx,
       action: 'appointment.deleted',
-      resourceType: 'appointment',
+      resourceType: 'visit',
       resourceId: id,
       changes: [{ field: 'deletedAt', old: null, new: now.toISOString() }],
     });
@@ -464,7 +470,7 @@ export class AppointmentsService {
     await this.audit.record({
       ctx,
       action: 'appointment.restored',
-      resourceType: 'appointment',
+      resourceType: 'visit',
       resourceId: id,
       changes: [{ field: 'deletedAt', old: row.deletedAt?.toISOString() ?? null, new: null }],
     });
@@ -578,7 +584,7 @@ export class AppointmentsService {
     await this.audit.record({
       ctx,
       action: 'appointment.completed',
-      resourceType: 'appointment',
+      resourceType: 'visit',
       resourceId: candidate.id,
       changes: [{ field: 'status', old: 'scheduled', new: 'completed' }],
     });
