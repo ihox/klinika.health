@@ -89,6 +89,7 @@ async function mockChart(page: Page, options: ChartFixtureOptions = {}): Promise
       ],
       daysSinceLastVisit: 0,
       visitCount: 3,
+      growthPoints: [],
     } as const);
 
   await page.route(`**/api/patients/${PATIENT_ID}/chart`, (route: Route) =>
@@ -744,6 +745,7 @@ test.describe('Patient chart shell', () => {
         vertetime: [],
         daysSinceLastVisit: null,
         visitCount: 0,
+        growthPoints: [],
       },
     });
     await page.goto(`/pacient/${PATIENT_ID}`);

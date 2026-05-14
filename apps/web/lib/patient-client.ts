@@ -93,12 +93,25 @@ export interface ChartVertetimDto {
   diagnosisSnapshot: string;
 }
 
+export interface ChartGrowthPointDto {
+  visitId: string;
+  /** ISO yyyy-mm-dd of the visit (or visit creation date as fallback). */
+  visitDate: string;
+  /** Patient's age at the visit in whole months. Drives the WHO chart x-axis. */
+  ageMonths: number;
+  weightKg: number | null;
+  heightCm: number | null;
+  headCircumferenceCm: number | null;
+}
+
 export interface PatientChartDto {
   patient: PatientFullDto;
   visits: ChartVisitDto[];
   vertetime: ChartVertetimDto[];
   daysSinceLastVisit: number | null;
   visitCount: number;
+  /** Growth-chart points, oldest first. Empty when no measurements recorded. */
+  growthPoints: ChartGrowthPointDto[];
 }
 
 // ---------------------------------------------------------------------------

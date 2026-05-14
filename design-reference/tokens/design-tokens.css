@@ -59,6 +59,18 @@
   --red-bg:     #FEE2E2;
   --red-soft:   #FECACA;
 
+  /* ---------- WHO growth charts: sex-specific patient line / dot ----- */
+  /* Standard pediatric convention: blue for boys, pink for girls. The
+     "soft" tints back the "Djalë" / "Vajzë" chip in the modal header so
+     color is the primary signal and the text label is the backup for
+     accessibility (some doctors are color-blind). */
+  --chart-male:        #4A90D9;
+  --chart-male-soft:   #DCEAF7;
+  --chart-male-strong: #2F6FB8;
+  --chart-female:        #E8728E;
+  --chart-female-soft:   #FBE0E6;
+  --chart-female-strong: #B84966;
+
   /* ---------- Overlays / selection ------------------------------------- */
   --selection-bg: #99F6E4;
   --selection-fg: #134E4A;

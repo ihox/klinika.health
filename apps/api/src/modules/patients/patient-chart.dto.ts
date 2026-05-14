@@ -40,6 +40,30 @@ export interface ChartVertetimDto {
   diagnosisSnapshot: string;
 }
 
+/**
+ * A single growth-chart measurement point. Each row corresponds to a
+ * saved (non-deleted) visit that recorded at least one of weight,
+ * height, or head circumference. Slice 14 plots these against WHO
+ * percentile reference curves.
+ *
+ * `ageMonths` is the patient's age at `visitDate`, rounded down to
+ * whole months — the WHO chart's x-axis. The frontend filters points
+ * to the 0–24 month band for the standard chart and offers the
+ * "historik 0–24 muaj" view for older patients with infancy data.
+ *
+ * `weightKg`, `heightCm`, `headCircumferenceCm` are the canonical
+ * units the UI plots — the API converts from the stored integer
+ * grams so the frontend doesn't have to know about the storage unit.
+ */
+export interface ChartGrowthPointDto {
+  visitId: string;
+  visitDate: string;
+  ageMonths: number;
+  weightKg: number | null;
+  heightCm: number | null;
+  headCircumferenceCm: number | null;
+}
+
 export interface PatientChartDto {
   patient: PatientFullDto;
   visits: ChartVisitDto[];
@@ -52,4 +76,11 @@ export interface PatientChartDto {
   daysSinceLastVisit: number | null;
   /** Total non-deleted visits. Equivalent to `visits.length` today. */
   visitCount: number;
+  /**
+   * Growth-chart measurement points across the patient's full visit
+   * history (oldest first). Includes points outside the 0–24 month
+   * WHO band — the frontend filters or routes them to the historical
+   * view. Visits with no measurements are omitted.
+   */
+  growthPoints: ChartGrowthPointDto[];
 }

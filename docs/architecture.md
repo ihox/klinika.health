@@ -33,6 +33,8 @@
 19. Slice 10 — doctor's home dashboard (Pamja e ditës)
 20. Slice 11 — patient chart shell
 21. Slice 12 — visit form (auto-save + audit + change history)
+22. Slice 13 — diagnosis picker + Terapia plain text
+23. Slice 14 — WHO growth charts
 
 ## Slice 01 — skeleton
 
@@ -1412,3 +1414,127 @@ the suggestion experience the original prototype sketched.
   — typing in the picker shows the dropdown and picking adds a chip;
   drag-to-reorder swaps the primary; clicking × removes a chip;
   typing in Terapia auto-saves the prescription text.
+
+## Slice 14 — WHO growth charts
+
+The patient chart's right column carries three compact sparkline
+cards (Pesha / Gjatësia / Perimetri kokës) for patients aged 0–24
+months. Click any card to open a full-size modal with three tabs,
+WHO percentile bands (P3–P97), and a tooltipped data table on the
+right rail. Mirrors
+[chart.html](../design-reference/prototype/chart.html) lines
+1844–1924 and
+[growth-chart-modal.html](../design-reference/prototype/components/growth-chart-modal.html).
+
+### WHO Child Growth Standards — data source
+
+Reference percentile values are embedded as a static TypeScript
+module at
+[`apps/web/lib/who-growth-data/who-growth-data.ts`](../apps/web/lib/who-growth-data/who-growth-data.ts).
+The values come from the WHO Multicentre Growth Reference Study
+(MGRS, 2006) expanded percentile tables published on
+<https://www.who.int/tools/child-growth-standards/standards>:
+
+- `wfa_*_p_exp.txt` — weight-for-age
+- `lhfa_*_p_exp.txt` — length/height-for-age
+- `hcfa_*_p_exp.txt` — head-circumference-for-age
+
+We ship the clinically conventional 5-percentile subset
+(P3, P15, P50, P85, P97) at monthly granularity, 0 through 24 months,
+by sex. The supine length curve covers the full 0–24 month range
+(the standing-height curves take over for older children, but
+Klinika hides the WHO panel past 24 months so we don't need them).
+
+WHO Child Growth Standards are public domain — no licensing fee
+and no attribution beyond a sensible "WHO Child Growth Standards"
+reference in the UI (`Standardet e rritjes · WHO Child Growth
+Standards (referencë)` in the modal footer). The reference module's
+[README.md](../apps/web/lib/who-growth-data/README.md) records the
+provenance and the update procedure: if WHO releases revised
+tables, replace the values verbatim from the CSVs and bump the
+file header.
+
+### Color convention (blue / pink)
+
+The chart's line and dots follow the standard pediatric convention:
+**blue for boys, pink for girls.** Two design tokens carry the
+colors (`--chart-male` / `--chart-female` in
+[`design-reference/tokens/design-tokens.css`](../design-reference/tokens/design-tokens.css),
+with `bg-chart-male`, `bg-chart-female`, plus `-soft` and `-strong`
+variants exposed via Tailwind).
+
+The colored line is always accompanied by a text chip — "Djalë" or
+"Vajzë" — in the modal header. Color is the primary signal; the
+text is the accessibility backup for color-blind doctors. This
+mirrors the `data-tone="male"|"female"` attribute on the sparkline
+cards so automated tests can pin the convention.
+
+### Sex resolution
+
+WHO percentile curves are sex-specific — the chart cannot render
+without knowing the patient's sex.
+[`resolveSex`](../apps/web/lib/growth-chart.ts) picks one with a
+three-step fallback:
+
+1. Explicit `patient.sex` column (`'m'` or `'f'`).
+2. Albanian first-name inference (curated lists for common
+   masculine / feminine names plus suffix heuristics).
+3. Otherwise `null` — the panel renders a
+   `Përcaktoni gjininë e pacientit për të parë grafikët.`
+   placeholder with an inline "Cakto gjininë" button that opens
+   [`set-sex-dialog.tsx`](../apps/web/components/patient/set-sex-dialog.tsx)
+   and `PATCH`es `/api/patients/:id` with the chosen value.
+
+Inference deliberately stops short of an exhaustive name database;
+when in doubt, prompt the doctor rather than render the wrong
+curves.
+
+### Age cutoff at 24 months
+
+- Patient ≤ 24 months → three sparkline cards visible.
+- Patient > 24 months with 0–24 month measurements →
+  "Shiko grafikët historikë" link replaces the sparklines; click
+  opens the same modal under a `Historiku 0-24 muaj` title.
+- Patient > 24 months with no infancy data → the panel hides
+  entirely; the right column collapses to ultrasound + history +
+  vërtetime.
+
+The cutoff lives in
+[`isToddlerAge`](../apps/web/lib/growth-chart.ts) — 24 months
+inclusive is still in-band.
+
+### API surface
+
+`GET /api/patients/:id/chart` adds a `growthPoints` array — one
+entry per non-deleted visit that recorded at least one of weight,
+height, or head circumference. Each point carries
+`visitId`, `visitDate`, `ageMonths`, `weightKg`, `heightCm`,
+`headCircumferenceCm`. Points are emitted oldest-first so the
+time-axis plot reads left-to-right without resort. Weight is
+returned in kilograms (converted from the stored integer grams so
+the frontend doesn't need to know about the storage unit).
+[`buildGrowthPoints`](../apps/api/src/modules/patients/patient-chart.service.ts)
+is the chokepoint and is unit-tested in
+[`patient-chart.spec.ts`](../apps/api/src/modules/patients/patient-chart.spec.ts).
+
+### Tests
+
+- Unit ([`growth-chart.spec.ts`](../apps/web/lib/growth-chart.spec.ts))
+  — age-in-months calendar math, isToddlerAge cutoff,
+  `pointsForMetric` filter (0–24mo default, `'all'` for the
+  historical view), null-value skipping, color/tone selection,
+  Albanian first-name inference, `resolveSex` precedence.
+- Unit ([`who-growth-data.spec.ts`](../apps/web/lib/who-growth-data/who-growth-data.spec.ts))
+  — fixture shape (25 monthly points × 5 percentiles × 6 sex/metric
+  combinations), strictly-increasing percentile values, monotone
+  growth, boy-vs-girl divergence, percentile interpolation and
+  out-of-band markers.
+- Unit ([`patient-chart.spec.ts`](../apps/api/src/modules/patients/patient-chart.spec.ts))
+  — calendar `monthsBetween`, `buildGrowthPoints` empty/missing-DOB
+  paths, unit conversion (grams → kg), oldest-first ordering.
+- E2E ([`growth-chart.spec.ts`](../apps/web/tests/e2e/growth-chart.spec.ts))
+  — boy under 24mo renders blue sparklines and "Djalë" chip in the
+  opened modal; girl renders pink + "Vajzë"; empty-state with
+  `Asnjë e dhënë e regjistruar`; > 24mo with infancy data shows
+  the historical link; unresolved-sex placeholder + inline
+  PATCH-and-render flow.

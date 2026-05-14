@@ -5,9 +5,11 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  buildGrowthPoints,
   computeDaysSince,
   daysInclusive,
   dateToIso,
+  monthsBetween,
 } from './patient-chart.service';
 
 describe('computeDaysSince', () => {
@@ -71,5 +73,127 @@ describe('daysInclusive', () => {
 describe('dateToIso', () => {
   it('serialises a Date column to a yyyy-mm-dd string', () => {
     expect(dateToIso(new Date('2026-05-14T00:00:00Z'))).toBe('2026-05-14');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// monthsBetween — drives the growth-chart x-axis
+// ---------------------------------------------------------------------------
+
+describe('monthsBetween', () => {
+  it('returns 0 on the day of birth', () => {
+    expect(
+      monthsBetween(
+        new Date('2024-08-15T00:00:00Z'),
+        new Date('2024-08-15T00:00:00Z'),
+      ),
+    ).toBe(0);
+  });
+
+  it('returns 0 for visits that pre-date the DOB (defensive)', () => {
+    expect(
+      monthsBetween(
+        new Date('2024-08-15T00:00:00Z'),
+        new Date('2024-08-14T00:00:00Z'),
+      ),
+    ).toBe(0);
+  });
+
+  it('uses calendar arithmetic, not a 30-day approximation', () => {
+    expect(
+      monthsBetween(
+        new Date('2024-01-31T00:00:00Z'),
+        new Date('2025-01-31T00:00:00Z'),
+      ),
+    ).toBe(12);
+    // The day before the anniversary is still 11 months.
+    expect(
+      monthsBetween(
+        new Date('2024-01-31T00:00:00Z'),
+        new Date('2025-01-30T00:00:00Z'),
+      ),
+    ).toBe(11);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// buildGrowthPoints — projects visits into a sex-agnostic series
+// ---------------------------------------------------------------------------
+
+describe('buildGrowthPoints', () => {
+  const dob = new Date('2024-01-15T00:00:00Z');
+
+  it('returns an empty list when the patient has no DOB', () => {
+    expect(
+      buildGrowthPoints(null, [
+        {
+          id: 'v1',
+          visitDate: new Date('2025-01-15T00:00:00Z'),
+          createdAt: new Date('2025-01-15T00:00:00Z'),
+          weightG: 9500,
+          heightCm: null,
+          headCircumferenceCm: null,
+        },
+      ]),
+    ).toEqual([]);
+  });
+
+  it('skips visits with no measurements at all', () => {
+    const pts = buildGrowthPoints(dob, [
+      {
+        id: 'v1',
+        visitDate: new Date('2025-01-15T00:00:00Z'),
+        createdAt: new Date('2025-01-15T00:00:00Z'),
+        weightG: null,
+        heightCm: null,
+        headCircumferenceCm: null,
+      },
+    ]);
+    expect(pts).toEqual([]);
+  });
+
+  it('keeps visits with at least one measurement and converts to chart units', () => {
+    const pts = buildGrowthPoints(dob, [
+      {
+        id: 'v1',
+        visitDate: new Date('2025-01-15T00:00:00Z'),
+        createdAt: new Date('2025-01-15T00:00:00Z'),
+        weightG: 9500,
+        heightCm: { toString: () => '74.5' },
+        headCircumferenceCm: { toString: () => '45.0' },
+      },
+    ]);
+    expect(pts).toHaveLength(1);
+    expect(pts[0]).toMatchObject({
+      visitId: 'v1',
+      ageMonths: 12,
+      weightKg: 9.5,
+      heightCm: 74.5,
+      headCircumferenceCm: 45,
+    });
+  });
+
+  it('emits points oldest-first regardless of input order', () => {
+    const pts = buildGrowthPoints(dob, [
+      // The chart service hands us newest-first; the builder must
+      // reverse so the time-axis plot reads left-to-right.
+      {
+        id: 'v2',
+        visitDate: new Date('2025-07-15T00:00:00Z'),
+        createdAt: new Date('2025-07-15T00:00:00Z'),
+        weightG: 10500,
+        heightCm: null,
+        headCircumferenceCm: null,
+      },
+      {
+        id: 'v1',
+        visitDate: new Date('2024-04-15T00:00:00Z'),
+        createdAt: new Date('2024-04-15T00:00:00Z'),
+        weightG: 7000,
+        heightCm: null,
+        headCircumferenceCm: null,
+      },
+    ]);
+    expect(pts.map((p) => p.visitId)).toEqual(['v1', 'v2']);
   });
 });

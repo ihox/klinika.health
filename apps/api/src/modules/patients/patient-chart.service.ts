@@ -4,6 +4,7 @@ import { AuditLogService } from '../../common/audit/audit-log.service';
 import type { RequestContext } from '../../common/request-context/request-context';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
+  type ChartGrowthPointDto,
   type ChartVertetimDto,
   type ChartVisitDto,
   type PatientChartDto,
@@ -64,6 +65,8 @@ export class PatientChartService {
       }),
     ]);
 
+    const growthPoints = buildGrowthPoints(patient.dateOfBirth, visits);
+
     // Sensitive read — record a single audit row covering the entire
     // chart open. Per CLAUDE.md §5.3, sensitive reads carry
     // `changes: null` so the row exists for forensic timelines
@@ -106,6 +109,7 @@ export class PatientChartService {
       vertetime: vertetimDtos,
       daysSinceLastVisit: computeDaysSince(visits[0]?.visitDate ?? null, new Date()),
       visitCount: visits.length,
+      growthPoints,
     };
   }
 }
@@ -138,4 +142,77 @@ export function computeDaysSince(
 
 function startOfDayUtc(d: Date): Date {
   return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+}
+
+interface GrowthVisitRow {
+  id: string;
+  visitDate: Date;
+  createdAt: Date;
+  weightG: number | null;
+  heightCm: { toString(): string } | null;
+  headCircumferenceCm: { toString(): string } | null;
+}
+
+/**
+ * Build the growth-point series for the chart bundle. One row per
+ * non-deleted visit that recorded at least one of weight, height, or
+ * head circumference. Points are emitted oldest-first so the WHO
+ * sparklines and modal can stream them without sorting.
+ *
+ * When the visit lacks a `visitDate` we fall back to `createdAt` per
+ * the slice spec — the field-level NOT NULL on `visitDate` makes this
+ * a defensive no-op today, but it costs nothing to keep the contract
+ * explicit.
+ */
+export function buildGrowthPoints(
+  dateOfBirth: Date | null,
+  visits: GrowthVisitRow[],
+): ChartGrowthPointDto[] {
+  if (!dateOfBirth) return [];
+  const points: ChartGrowthPointDto[] = [];
+  for (const v of visits) {
+    const weightKg =
+      v.weightG != null && Number.isFinite(v.weightG) ? v.weightG / 1000 : null;
+    const heightCm = v.heightCm != null ? Number(v.heightCm.toString()) : null;
+    const headCircumferenceCm =
+      v.headCircumferenceCm != null ? Number(v.headCircumferenceCm.toString()) : null;
+    if (weightKg == null && heightCm == null && headCircumferenceCm == null) {
+      continue;
+    }
+    const visitDate = v.visitDate ?? v.createdAt;
+    const ageMonths = monthsBetween(dateOfBirth, visitDate);
+    points.push({
+      visitId: v.id,
+      visitDate: dateToIso(visitDate),
+      ageMonths,
+      weightKg,
+      heightCm: heightCm != null && Number.isFinite(heightCm) ? heightCm : null,
+      headCircumferenceCm:
+        headCircumferenceCm != null && Number.isFinite(headCircumferenceCm)
+          ? headCircumferenceCm
+          : null,
+    });
+  }
+  // visits arrive newest-first from the chart loader — emit oldest-
+  // first for the time-axis-aligned plot.
+  points.reverse();
+  return points;
+}
+
+/**
+ * Whole months between DOB and a visit date, calendar-aware (not
+ * ms/30-day approximations). Matches the front-end `ageLabelChart`
+ * derivation so the sparkline x-axis lines up with the master-strip
+ * "2v 3m" label.
+ *
+ * Returns 0 when the visit predates the DOB (paranoia — shouldn't
+ * happen but the chart shouldn't crash on bad data).
+ */
+export function monthsBetween(dob: Date, visit: Date): number {
+  if (visit.getTime() < dob.getTime()) return 0;
+  let months =
+    (visit.getUTCFullYear() - dob.getUTCFullYear()) * 12 +
+    (visit.getUTCMonth() - dob.getUTCMonth());
+  if (visit.getUTCDate() < dob.getUTCDate()) months -= 1;
+  return Math.max(0, months);
 }

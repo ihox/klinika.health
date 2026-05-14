@@ -53,6 +53,12 @@ module.exports = {
         success: { DEFAULT: '#15803D', bg: '#DCFCE7', soft: '#BBF7D0' },
         warning: { DEFAULT: '#B45309', bg: '#FEF3C7', soft: '#FDE68A' },
         danger:  { DEFAULT: '#B91C1C', bg: '#FEE2E2', soft: '#FECACA' },
+        // Sex-specific WHO growth-chart accents. Standard pediatric
+        // convention: blue for boys, pink for girls. `soft` tints back
+        // the "Djalë" / "Vajzë" chip; `strong` is the patient line
+        // and the dot fill at the current measurement.
+        'chart-male':   { DEFAULT: '#4A90D9', soft: '#DCEAF7', strong: '#2F6FB8' },
+        'chart-female': { DEFAULT: '#E8728E', soft: '#FBE0E6', strong: '#B84966' },
       },
 
       spacing: {

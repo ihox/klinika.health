@@ -5,20 +5,25 @@ import { useCallback, useEffect, useMemo, useState, type ReactElement } from 're
 
 import { EmptyState } from '@/components/empty-state';
 import { ChangeHistoryModal } from '@/components/patient/change-history-modal';
+import { GrowthPanel } from '@/components/patient/growth-panel';
 import { MasterDataStrip } from '@/components/patient/master-data-strip';
 import { SaveFailureDialog } from '@/components/patient/save-failure-dialog';
+import { SetSexDialog } from '@/components/patient/set-sex-dialog';
 import { VisitForm } from '@/components/patient/visit-form';
 import { Skeleton } from '@/components/skeleton';
 import { Button } from '@/components/ui/button';
 import { UndoToast } from '@/components/undo-toast';
 import { ApiError } from '@/lib/api';
+import { ageInMonths } from '@/lib/growth-chart';
 import {
   ageLabelChart,
   formatDob,
   patientClient,
+  type ChartGrowthPointDto,
   type ChartVertetimDto,
   type ChartVisitDto,
   type PatientChartDto,
+  type PatientFullDto,
 } from '@/lib/patient-client';
 import { useAutoSaveStore } from '@/lib/use-visit-autosave';
 import { type VisitDto, visitClient } from '@/lib/visit-client';
@@ -60,6 +65,7 @@ export function ChartView({ patientId, initialVisitId }: Props): ReactElement {
     restorableUntil: string;
   } | null>(null);
   const [showAllHistory, setShowAllHistory] = useState(false);
+  const [setSexOpen, setSetSexOpen] = useState(false);
 
   const refresh = useCallback(async () => {
     try {
@@ -287,16 +293,30 @@ export function ChartView({ patientId, initialVisitId }: Props): ReactElement {
                 )}
 
                 <RightColumn
+                  patient={data.patient}
+                  growthPoints={data.growthPoints}
                   visits={data.visits}
                   vertetime={data.vertetime}
                   activeVisitId={activeVisitId}
                   showAllHistory={showAllHistory}
                   onToggleHistory={() => setShowAllHistory((s) => !s)}
                   onSelectVisit={navigateVisit}
+                  onRequestSetSex={() => setSetSexOpen(true)}
                 />
               </div>
             </>
           )}
+          {data ? (
+            <SetSexDialog
+              open={setSexOpen}
+              patient={data.patient}
+              onClose={() => setSetSexOpen(false)}
+              onSaved={(updated) => {
+                setSetSexOpen(false);
+                setData((d) => (d ? { ...d, patient: updated } : d));
+              }}
+            />
+          ) : null}
         </>
       )}
     </main>
@@ -459,28 +479,36 @@ function VisitFormLoading(): ReactElement {
 // =========================================================================
 
 interface RightColumnProps {
+  patient: PatientFullDto;
+  growthPoints: ChartGrowthPointDto[];
   visits: ChartVisitDto[];
   vertetime: ChartVertetimDto[];
   activeVisitId: string | null;
   showAllHistory: boolean;
   onToggleHistory: () => void;
   onSelectVisit: (id: string) => void;
+  onRequestSetSex: () => void;
 }
 
 function RightColumn({
+  patient,
+  growthPoints,
   visits,
   vertetime,
   activeVisitId,
   showAllHistory,
   onToggleHistory,
   onSelectVisit,
+  onRequestSetSex,
 }: RightColumnProps): ReactElement {
+  const ageMonths = ageInMonths(patient.dateOfBirth);
   return (
     <aside aria-label="Konteksti klinik" className="flex flex-col gap-4">
-      <StubPanel
-        title="Diagramet e rritjes"
-        meta="WHO"
-        body="Sparkline e peshës, gjatësisë dhe perimetrit të kokës — bashkëngjitet në fazën tjetër."
+      <GrowthPanel
+        patient={patient}
+        ageMonths={ageMonths}
+        growthPoints={growthPoints}
+        onRequestSetSex={onRequestSetSex}
       />
       <StubPanel
         title="Ultrazeri"
