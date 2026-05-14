@@ -1,7 +1,12 @@
 import { defineConfig, devices } from '@playwright/test';
 
 const PORT = Number(process.env.WEB_PORT ?? 3000);
-const BASE_URL = process.env.PLAYWRIGHT_BASE_URL ?? `http://localhost:${PORT}`;
+// Default baseURL points at the tenant subdomain — the bulk of the
+// E2E suite exercises clinic flows (doctor, receptionist, chart,
+// booking, …) which only render at a tenant host under the ADR-005
+// boundary model. Apex/admin tests pass full `http://localhost:PORT`
+// URLs explicitly so they're easy to spot.
+const BASE_URL = process.env.PLAYWRIGHT_BASE_URL ?? `http://donetamed.localhost:${PORT}`;
 
 export default defineConfig({
   testDir: './tests/e2e',
@@ -22,7 +27,7 @@ export default defineConfig({
   ],
   webServer: {
     command: 'pnpm dev',
-    url: BASE_URL,
+    url: `http://localhost:${PORT}`,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
   },

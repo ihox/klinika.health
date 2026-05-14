@@ -7,12 +7,32 @@ import { expect, test, type Page, type Route } from '@playwright/test';
  * them fast. The auth.integration.spec.ts file exercises the live API
  * end of the stack.
  *
+ * Per the ADR-005 boundary fix, the clinic login form lives at the
+ * tenant subdomain — apex `/login` renders the platform-admin form.
+ * The Playwright config sets `baseURL` to `donetamed.localhost`, so
+ * all relative paths here resolve against the tenant host and the
+ * Next.js middleware classifies them as `tenant` scope.
+ *
  * Each test installs a small in-memory state machine on `page.route`
  * for the relevant endpoints. The mocks are intentionally
  * pessimistic about request shape (assert what the controller would
  * accept) so a regression on the frontend payload trips a test
  * failure.
  */
+
+function mockClinicIdentity(page: Page) {
+  return page.route('**/api/auth/clinic-identity', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        subdomain: 'donetamed',
+        name: 'DonetaMED',
+        shortName: 'DM',
+      }),
+    });
+  });
+}
 
 function mockLoginMfaRequired(page: Page) {
   return page.route('**/api/auth/login', async (route: Route) => {
@@ -62,6 +82,7 @@ test.describe('Login + MFA', () => {
     await mockLoginMfaRequired(page);
     await mockMfaVerifySuccess(page);
 
+    await mockClinicIdentity(page);
     await page.goto('/login');
     await expect(page.getByRole('heading', { name: 'Mirë se erdhët' })).toBeVisible();
 
@@ -90,6 +111,7 @@ test.describe('Login + MFA', () => {
         body: JSON.stringify({ message: 'Email-i ose fjalëkalimi është i pasaktë.' }),
       });
     });
+    await mockClinicIdentity(page);
     await page.goto('/login');
     await page.getByLabel('Email').fill('taulant.shala@klinika.health');
     await page.getByLabel('Fjalëkalimi').fill('wrong');
@@ -101,6 +123,7 @@ test.describe('Login + MFA', () => {
     await mockLoginMfaRequired(page);
     await mockMfaVerifySuccess(page, '482613');
 
+    await mockClinicIdentity(page);
     await page.goto('/login');
     await page.getByLabel('Email').fill('taulant.shala@klinika.health');
     await page.getByLabel('Fjalëkalimi').fill('valid-password-here');
@@ -133,6 +156,7 @@ test.describe('Login + MFA', () => {
       });
     });
 
+    await mockClinicIdentity(page);
     await page.goto('/login');
     await page.getByLabel('Email').fill('taulant.shala@klinika.health');
     await page.getByLabel('Fjalëkalimi').fill('valid-password-here');
@@ -171,6 +195,7 @@ test.describe('Trusted device (second login)', () => {
         body: JSON.stringify({ status: 'authenticated', role: 'doctor' }),
       });
     });
+    await mockClinicIdentity(page);
     await page.goto('/login');
     await page.getByLabel('Email').fill('taulant.shala@klinika.health');
     await page.getByLabel('Fjalëkalimi').fill('valid-password-here');

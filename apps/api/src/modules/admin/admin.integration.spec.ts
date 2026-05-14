@@ -28,7 +28,10 @@ const SEED_PLATFORM_ADMIN_PASSWORD = process.env['SEED_PLATFORM_ADMIN_PASSWORD']
 const SEED_DOCTOR_PASSWORD = process.env['SEED_DOCTOR_PASSWORD'];
 const ENABLED = Boolean(DATABASE_URL && SEED_PLATFORM_ADMIN_PASSWORD && SEED_DOCTOR_PASSWORD);
 
-const ADMIN_HOST = 'admin.klinika.health';
+// Platform-admin context lives at the APEX host now (ADR-005 boundary
+// fix). The old `admin.klinika.health` is treated as a reserved
+// subdomain and rejected with 400.
+const ADMIN_HOST = 'klinika.health';
 const TENANT_HOST = 'donetamed.klinika.health';
 const FOUNDER_EMAIL = 'founder@klinika.health';
 const DOCTOR_EMAIL = 'taulant.shala@klinika.health';
@@ -235,6 +238,9 @@ describe.skipIf(!ENABLED)('Admin integration', () => {
     expect(suspend.body.tenant.status).toBe('suspended');
 
     // Login on tenant subdomain is now blocked with the suspended reason.
+    // 403 (not 401) here is intentional — the web layer needs the
+    // `clinic_suspended` signal to redirect to `/suspended` instead of
+    // showing a generic "wrong credentials" message.
     const blockedLogin = await request(app.getHttpServer())
       .post('/api/auth/login')
       .set('host', TENANT_HOST)

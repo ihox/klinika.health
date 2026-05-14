@@ -5,13 +5,21 @@ import { expect, test, type Page, type Route } from '@playwright/test';
  * layer so these run without a live NestJS — the
  * `admin.integration.spec.ts` in apps/api covers the live wiring.
  *
+ * Platform admin lives at the APEX domain (ADR-005 boundary fix), so
+ * these tests pass full `http://localhost:PORT/...` URLs to land on
+ * apex even though the suite's default baseURL is the tenant
+ * subdomain (where the majority of E2E tests run).
+ *
  * Coverage:
- *   - Auth gate redirects unauthenticated visitors to /admin/login
+ *   - Auth gate redirects unauthenticated visitors to /login
  *   - Full login → MFA → tenants table flow
  *   - Tenant creation form posts and lands on the new tenant detail
  *   - Suspend → status chip flips
  *   - Activate → status chip flips back
  */
+
+const PORT = process.env.WEB_PORT ?? '3000';
+const APEX_BASE_URL = `http://localhost:${PORT}`;
 
 const TENANT_DONETAMED = {
   id: '11111111-1111-1111-1111-111111111111',
@@ -233,16 +241,18 @@ async function mockAdminApi(
 }
 
 test.describe('Platform admin', () => {
-  test('unauthenticated visitor is bounced to /admin/login', async ({ page }) => {
+  test('unauthenticated visitor is bounced to /login', async ({ page }) => {
+    // Platform admin login now lives at the apex `/login` route
+    // (ADR-005 boundary fix). There is no dedicated `/admin/login`.
     await mockAdminApi(page, { authed: false });
-    await page.goto('/admin');
-    await expect(page).toHaveURL(/\/admin\/login\?redirect=/);
+    await page.goto(`${APEX_BASE_URL}/admin`);
+    await expect(page).toHaveURL(/\/login\?redirect=/);
   });
 
   test('full login → MFA → tenants list', async ({ page }) => {
     await mockAdminApi(page, { authed: false });
 
-    await page.goto('/admin/login');
+    await page.goto(`${APEX_BASE_URL}/login`);
     await expect(page.getByRole('heading', { name: 'Hyrja për admin' })).toBeVisible();
 
     await page.getByLabel('Email').fill('founder@klinika.health');
@@ -260,7 +270,7 @@ test.describe('Platform admin', () => {
 
   test('create-tenant form posts and lands on the new tenant detail', async ({ page }) => {
     await mockAdminApi(page, { authed: true });
-    await page.goto('/admin/tenants/new');
+    await page.goto(`${APEX_BASE_URL}/admin/tenants/new`);
 
     await page.getByLabel('Emri i plotë').fill('Aurora Pediatri');
     await page.getByLabel('Emri i shkurtuar').fill('AURORA-PED');
@@ -282,7 +292,7 @@ test.describe('Platform admin', () => {
 
   test('suspend then activate flips the status chip', async ({ page }) => {
     await mockAdminApi(page, { authed: true });
-    await page.goto(`/admin/tenants/${TENANT_DONETAMED.id}`);
+    await page.goto(`${APEX_BASE_URL}/admin/tenants/${TENANT_DONETAMED.id}`);
 
     await expect(page.locator('[data-testid="tenant-status"]')).toHaveText('Aktive');
 
@@ -296,7 +306,7 @@ test.describe('Platform admin', () => {
 
   test('reserved subdomain blocks the submit button', async ({ page }) => {
     await mockAdminApi(page, { authed: true });
-    await page.goto('/admin/tenants/new');
+    await page.goto(`${APEX_BASE_URL}/admin/tenants/new`);
 
     await page.getByLabel('Emri i plotë').fill('Admin Klinike');
     await page.getByLabel('Emri i shkurtuar').fill('ADMIN');
