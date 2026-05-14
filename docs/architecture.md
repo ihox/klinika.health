@@ -28,6 +28,7 @@
 14. Deployment topologies (cloud + on-premise)
 15. Observability
 16. Data lifecycle and backups
+17. Slice 08 — receptionist calendar and appointment lifecycle
 
 ## Slice 01 — skeleton
 
@@ -585,4 +586,130 @@ suggestive moment, the receptionist sees only id + name + DOB.
 Every mutation emits an audit-log row. `GET /:id` writes a
 `patient.viewed` row with `changes: null` per CLAUDE.md §5.3
 (sensitive read).
+
+## Slice 08 — receptionist calendar and appointment lifecycle
+
+The receptionist's daily working surface is a six-day calendar grid
+(today + the next five OPEN clinic days; closed days are skipped per
+`hours_config`). The visit timeline of an appointment moves through a
+state machine that captures the realities of a busy pediatric front
+desk:
+
+```
+                  (receptionist creates from picker)
+                              │
+                              ▼
+                       ┌─────────────┐
+                       │  scheduled  │
+                       └─────┬───────┘
+                             │
+            ┌────────────────┼────────────────┐
+            │                │                │
+   (doctor saves visit) (no-show)        (cancelled at door)
+            │                │                │
+            ▼                ▼                ▼
+       completed          no_show         cancelled
+            │                │                │
+            └────── soft-delete (set deleted_at) ──────┐
+                                                       ▼
+                                                   (purged
+                                                    later by
+                                                    admin CLI)
+```
+
+Five guarantees frame the design:
+
+1. **Receptionist sees only name + DOB on cards.** Per CLAUDE.md §1.2
+   and §8, the API response shape (`AppointmentDto`) inlines exactly
+   `patient.firstName`, `patient.lastName`, `patient.dateOfBirth` — and
+   nothing else from the patient row. No clinical context, no payment
+   code, no address, even though some of those fields exist on the
+   underlying `patients` table.
+2. **Conflict detection is server-authoritative.** The frontend offers
+   a snap-to-10-min visual ghost, but every create + update goes
+   through the same `findConflict()` check on the server. Two
+   appointments overlap iff `aStart < bEnd && bStart < aEnd`; a row
+   that matches gets a 400 with `reason: 'conflict'` and a localised
+   Albanian message. The check excludes the row being updated so a
+   pure status change can't conflict with itself.
+3. **Working hours come from `hours_config` JSONB, not code.** Each
+   clinic defines its own open days and times in
+   [`clinic-settings.dto.ts`](../apps/api/src/modules/clinic-settings/clinic-settings.dto.ts);
+   the appointment service rejects any slot before open or past close
+   with `reason: 'before_open' | 'after_close' | 'closed_day'`. Sundays
+   default closed for DonetaMED; the schema allows arbitrary closed
+   days for future tenants.
+4. **Audit log captures every transition.** `appointment.created`,
+   `appointment.updated`, `appointment.completed` (from a linked visit
+   save), `appointment.deleted`, `appointment.restored`. Successive
+   saves coalesce via the same 60-second window the audit log uses
+   for every resource; the receptionist's "Cancel → re-schedule"
+   flurry shows up as one row in the audit panel.
+5. **Real-time receptionist updates without page reload.** Slice 11/12
+   will wire `appointments.markCompletedFromVisit()` into the visit
+   save path; the appointment row flips to `completed` and the
+   receptionist's grid receives a `appointment.updated` SSE event over
+   `GET /api/appointments/stream`. The event carries only the
+   appointment id + local day — never a patient name (CLAUDE.md §1.3).
+   If SSE fails, the calendar polls stats every 30s as a backstop.
+
+### Color indicator chip (last-visit recency)
+
+The grid surfaces a small green/yellow/red chip on each card so the
+receptionist can spot the "patient was here yesterday" case at a glance:
+
+| Days since last visit | Color  |
+|-----------------------|--------|
+| no prior visit        | (none) |
+| ≤ 7 days              | red    |
+| 7–30 days             | yellow |
+| > 30 days             | green  |
+
+The mapping lives in
+[`colorIndicatorForLastVisit`](../apps/api/src/modules/appointments/appointments.dto.ts)
+and is re-exported to the frontend
+([`appointment-client.ts`](../apps/web/lib/appointment-client.ts)).
+The server pre-computes the lookup map (one GROUP BY against
+`visits`) and embeds `lastVisitAt` + `isNewPatient` on every DTO so
+the grid never issues an N+1.
+
+### Time zone discipline
+
+`scheduled_for` is `TIMESTAMPTZ` stored in UTC; the UI renders in
+`Europe/Belgrade`. The conversion helpers
+([`appointments.tz.ts`](../apps/api/src/modules/appointments/appointments.tz.ts))
+handle DST transitions (CET ↔ CEST) by recomputing the offset at the
+resolved instant, not by hard-coding `+01:00` / `+02:00`. The
+round-trip is pinned by a unit test that includes the spring-forward
+and fall-back days.
+
+### End-of-day prompt
+
+Past appointments still in `scheduled` after the clinic closes surface
+as a soft prompt at the top of the next morning's calendar
+(`GET /api/appointments/unmarked-past`). The receptionist gets a
+dropdown of {Kryer, Mungoi, Anulluar} per row; the system never
+auto-marks. Older than seven days drops out of the list — at that
+point the entry is treated as a record of what actually happened, not
+a TODO. Each mark emits an `appointment.updated` audit row.
+
+### Endpoints
+
+| Endpoint                                              | Roles                              | Response                          |
+|-------------------------------------------------------|------------------------------------|-----------------------------------|
+| `GET /api/appointments?from=...&to=...`               | doctor / receptionist / admin      | `{ appointments, serverTime }`    |
+| `GET /api/appointments/stats?date=...`                | doctor / receptionist / admin      | `AppointmentStatsResponse`        |
+| `GET /api/appointments/unmarked-past`                 | doctor / receptionist / admin      | `{ appointments }`                |
+| `POST /api/appointments`                              | doctor / receptionist / admin      | `{ appointment }`                 |
+| `PATCH /api/appointments/:id`                         | doctor / receptionist / admin      | `{ appointment }`                 |
+| `DELETE /api/appointments/:id`                        | doctor / receptionist / admin      | `{ restorableUntil }`             |
+| `POST /api/appointments/:id/restore`                  | doctor / receptionist / admin      | `{ appointment }`                 |
+| `GET /api/appointments/stream` (SSE)                  | doctor / receptionist / admin      | event-stream                      |
+
+All endpoints are clinic-scoped at the API layer (`ClinicScopeGuard`)
+and reinforced by Postgres RLS on `appointments`. The SSE bus filters
+by `clinicId` before delivering events so a receptionist on tenant A
+never sees an event from tenant B even if a future refactor forgets
+to pass scope down.
+
 

@@ -6,6 +6,7 @@ import { ClinicResolutionMiddleware } from './common/middleware/clinic-resolutio
 import { RolesGuard } from './common/guards/roles.guard';
 import { LoggingModule } from './common/logging/logger.module';
 import { AdminModule } from './modules/admin/admin.module';
+import { AppointmentsModule } from './modules/appointments/appointments.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { ClinicSettingsModule } from './modules/clinic-settings/clinic-settings.module';
 import { EmailModule } from './modules/email/email.module';
@@ -31,6 +32,7 @@ import { PrismaModule } from './prisma/prisma.module';
     AdminModule,
     ClinicSettingsModule,
     PatientsModule,
+    AppointmentsModule,
   ],
   providers: [
     // RolesGuard is global so `@Roles()` works on any handler without
