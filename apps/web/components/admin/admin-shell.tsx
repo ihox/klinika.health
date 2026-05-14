@@ -26,8 +26,12 @@ const NAV_ITEMS: NavItem[] = [
 
 /**
  * Shared chrome for every `/admin/*` page. Pulls the admin profile
- * via `/api/admin/auth/me`; a 401 redirects to `/admin/login` so the
+ * via `/api/admin/auth/me`; a 401 redirects to `/login` so the
  * deep-link survives a fresh browser session.
+ *
+ * Per the ADR-005 boundary fix, the platform-admin login lives at the
+ * apex `/login` route (host-aware). There is no dedicated
+ * `/admin/login` anymore.
  *
  * The identity stripe at the top is a deliberate visual signal that
  * the user is on the platform-admin surface (not a clinic). Same hue
@@ -52,7 +56,7 @@ export function AdminShell({ children }: AdminShellProps) {
         if (err instanceof ApiError && (err.status === 401 || err.status === 403)) {
           // Carry the current path so we can return after login.
           const redirect = encodeURIComponent(pathname ?? '/admin');
-          router.replace(`/admin/login?redirect=${redirect}`);
+          router.replace(`/login?redirect=${redirect}`);
           return;
         }
         if (!cancelled) setLoading(false);
@@ -67,7 +71,7 @@ export function AdminShell({ children }: AdminShellProps) {
     try {
       await adminClient.logout();
     } finally {
-      router.replace('/admin/login');
+      router.replace('/login');
     }
   };
 

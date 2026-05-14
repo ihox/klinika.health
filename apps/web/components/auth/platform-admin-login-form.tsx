@@ -30,12 +30,15 @@ interface MfaState {
 }
 
 /**
- * Admin login with inline MFA — the form switches to a 6-digit code
- * input after the password step instead of routing to a separate
- * page. Same shape as the tenant flow but tighter (no rememberMe,
- * no trustDevice — MFA every time).
+ * Platform-admin login form rendered on the apex domain at `/login`.
+ *
+ * Identical shape to the previous /admin/login form but lives in
+ * `components/` now because the apex `/login` page is host-aware
+ * (ADR-005 boundary fix). The form switches inline to the MFA step
+ * after the password is accepted — no separate /verify route for
+ * platform admins.
  */
-export function AdminLoginForm() {
+export function PlatformAdminLoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirect = searchParams?.get('redirect') ?? '/admin';
@@ -64,9 +67,6 @@ export function AdminLoginForm() {
         });
         return;
       }
-      // Defensive — the admin flow always requires MFA, but if the
-      // contract ever changes to support trusted-device skipping, we
-      // honour an immediate success too.
       router.replace(redirect);
     } catch (err) {
       setFormError(authErrorMessage(err));
@@ -108,7 +108,7 @@ export function AdminLoginForm() {
       <div className="flex items-baseline gap-2.5 mb-8">
         <BrandRow size={28} />
         <span className="text-[11px] font-semibold uppercase tracking-wider text-teal-800 bg-teal-50 border border-teal-200 px-2 py-0.5 rounded-full">
-          Platform Admin
+          Admini i Platformës
         </span>
       </div>
 
