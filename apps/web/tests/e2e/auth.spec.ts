@@ -191,7 +191,7 @@ test.describe('Password reset', () => {
     await page.goto('/forgot-password');
     await page.getByLabel('Email').fill('taulant.shala@donetamed.health');
     await page.getByRole('button', { name: /Dërgo lidhjen/ }).click();
-    await expect(page.getByText('Kontrolloni email-in')).toBeVisible();
+    await expect(page.getByText('Email-i u dërgua')).toBeVisible();
   });
 
   test('confirm: type new password → land on login with success banner', async ({ page }) => {
@@ -215,6 +215,39 @@ test.describe('Password reset', () => {
     await page.getByRole('button', { name: /Vendos fjalëkalimin/ }).click();
     await expect(page).toHaveURL(/\/login\?reason=password-changed/);
     await expect(page.getByRole('alert')).toContainText('Fjalëkalimi u rivendos');
+  });
+
+  test('confirm: pwned password renders dedicated warning block', async ({ page }) => {
+    // Backend returns 400 with a "gjetur" message when HIBP flags the
+    // password. Per components/password-reset.html that surfaces as the
+    // dedicated .pwned-warn block with canonical Albanian copy — not the
+    // generic error banner.
+    await page.route('**/api/auth/password-strength', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ strength: 'strong', acceptable: true }),
+      });
+    });
+    await page.route('**/api/auth/password-reset/confirm', async (route) => {
+      await route.fulfill({
+        status: 400,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          message: 'Fjalëkalimi është gjetur në lista publike. Zgjidhni një tjetër.',
+        }),
+      });
+    });
+    await page.goto('/reset-password?t=valid-token-xyz');
+    await page.getByLabel('Fjalëkalimi i ri').fill('Password123!');
+    await page.getByLabel('Konfirmo').fill('Password123!');
+    await page.getByRole('button', { name: /Vendos fjalëkalimin/ }).click();
+
+    const warn = page
+      .locator('[role="alert"]')
+      .filter({ hasText: 'shkelje të dhënash' });
+    await expect(warn).toBeVisible();
+    await expect(warn).toContainText('Zgjidhni një tjetër');
   });
 
   test('reset page without token shows error and link to forgot-password', async ({ page }) => {

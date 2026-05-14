@@ -32,6 +32,7 @@ export function ResetPasswordForm() {
   const token = params.get('t');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pwned, setPwned] = useState(false);
 
   const {
     register,
@@ -52,12 +53,22 @@ export function ResetPasswordForm() {
     }
     setSubmitting(true);
     setError(null);
+    setPwned(false);
     try {
       await authClient.passwordResetConfirm({ token, newPassword: values.newPassword });
       router.replace('/login?reason=password-changed');
     } catch (err) {
       if (err instanceof ApiError) {
-        setError(err.body.message ?? 'Rivendosja dështoi. Provoni përsëri.');
+        // The API throws BadRequestException with the haveibeenpwned
+        // message string when the password matches a known breach. We
+        // render that as the dedicated pwned-warn block (see
+        // components/password-reset.html) with canonical Albanian copy
+        // instead of a generic error banner.
+        if (err.status === 400 && err.body.message?.includes('gjetur')) {
+          setPwned(true);
+        } else {
+          setError(err.body.message ?? 'Rivendosja dështoi. Provoni përsëri.');
+        }
       } else {
         setError('Gabim i rrjetit. Provoni përsëri.');
       }
@@ -100,6 +111,34 @@ export function ResetPasswordForm() {
         </div>
         <PasswordStrengthIndicator password={newPassword} />
       </div>
+      {pwned ? (
+        <div
+          role="alert"
+          className="grid grid-cols-[16px_1fr] items-start gap-2.5 rounded-md border border-amber-200 bg-amber-50 px-3 py-2.5 text-[12.5px] leading-relaxed text-amber-900"
+        >
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 14 14"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.6"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="mt-0.5 text-amber-700"
+            aria-hidden="true"
+          >
+            <path d="M7 1.5l5.5 9.5h-11z" />
+            <path d="M7 5.5V8M7 9.6v.01" />
+          </svg>
+          <div>
+            <strong className="font-semibold text-amber-700">
+              Ky fjalëkalim është gjetur në shkelje të dhënash.
+            </strong>{' '}
+            Zgjidhni një tjetër.
+          </div>
+        </div>
+      ) : null}
       <Field label="Konfirmo" htmlFor="confirmPassword" error={errors.confirmPassword?.message}>
         <Input
           id="confirmPassword"

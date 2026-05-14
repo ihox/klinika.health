@@ -21,6 +21,7 @@ type FormValues = z.infer<typeof Schema>;
 export function ForgotPasswordForm() {
   const [submitting, setSubmitting] = useState(false);
   const [sent, setSent] = useState(false);
+  const [sentEmail, setSentEmail] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const {
     register,
@@ -36,6 +37,7 @@ export function ForgotPasswordForm() {
     setError(null);
     try {
       await authClient.passwordResetRequest({ email: values.email });
+      setSentEmail(values.email);
       setSent(true);
     } catch (err) {
       // The API returns 200 even for unknown emails to prevent
@@ -53,15 +55,66 @@ export function ForgotPasswordForm() {
 
   if (sent) {
     return (
-      <div className="rounded-md border border-teal-100 bg-teal-50 p-5 text-[13px] text-teal-900">
-        <div className="font-medium text-teal-900 mb-1">Kontrolloni email-in</div>
-        Nëse llogaria ekziston, do të merrni një lidhje për të vendosur fjalëkalimin e ri.
-        Lidhja vlen për 60 minuta.
-        <div className="mt-4">
-          <Link href="/login" className="text-teal-700 hover:underline font-medium text-[13px]">
-            ← Kthehu te hyrja
-          </Link>
+      <div className="flex flex-col gap-4">
+        <div
+          aria-hidden="true"
+          className="grid h-14 w-14 place-items-center rounded-full border border-teal-200 bg-teal-100 text-teal-800"
+        >
+          <svg
+            width="24"
+            height="24"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M3 7l9 6 9-6" />
+            <rect x="3" y="5" width="18" height="14" rx="2" />
+          </svg>
         </div>
+        <div>
+          <div className="font-display text-[20px] font-semibold tracking-tight text-stone-900">
+            Email-i u dërgua
+          </div>
+          <div className="mt-1.5 text-[13px] leading-relaxed text-stone-500">
+            Kontrolloni kutinë e{' '}
+            <span className="inline-block rounded border border-stone-200 bg-stone-100 px-1.5 py-px font-mono text-[12.5px] font-medium text-stone-700">
+              {sentEmail ?? 'email-it tuaj'}
+            </span>{' '}
+            — link-u vlen për 60 minuta.
+          </div>
+        </div>
+        <div className="grid grid-cols-[16px_1fr] items-start gap-2.5 rounded-md border border-stone-200 bg-stone-50 px-3.5 py-3 text-[12.5px] leading-relaxed text-stone-600">
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 14 14"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.6"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="mt-0.5 text-stone-400"
+            aria-hidden="true"
+          >
+            <circle cx="7" cy="7" r="5.5" />
+            <path d="M7 4v3.5l2 1.2" />
+          </svg>
+          <div>
+            Nuk e gjeni? Kontrolloni dosjen{' '}
+            <strong className="font-semibold text-stone-800">Spam</strong> ose{' '}
+            <strong className="font-semibold text-stone-800">Promotions</strong>. Email-i vjen nga{' '}
+            <code className="font-mono text-[11.5px] text-stone-700">noreply@klinika.health</code>.
+          </div>
+        </div>
+        <Link
+          href="/login"
+          className="self-start text-[13px] text-stone-500 hover:text-stone-700 hover:underline"
+        >
+          ← Kthehu te hyrja
+        </Link>
       </div>
     );
   }
