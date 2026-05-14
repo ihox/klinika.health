@@ -7,13 +7,15 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { ApiError } from '@/lib/api';
 import {
-  type AppointmentDto,
-  type AvailabilityOption,
-  appointmentClient,
   formatDob,
   minutesToTime,
   timeToMinutes,
 } from '@/lib/appointment-client';
+import {
+  type AvailabilityOption,
+  type CalendarEntry,
+  calendarClient,
+} from '@/lib/visits-calendar-client';
 import type { DayKey, HoursConfig } from '@/lib/clinic-client';
 import type { PatientPublicDto } from '@/lib/patient-client';
 import { patientInitials } from '@/lib/patient-client';
@@ -22,7 +24,7 @@ const TIME_STEP_MIN = 10;
 const DAY_ORDER: DayKey[] = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
 
 export interface BookingDialogResult {
-  appointment: AppointmentDto;
+  entry: CalendarEntry;
   /** What the receptionist sees as the toast message. */
   toast: string;
 }
@@ -106,10 +108,10 @@ export function BookingDialog({
     }
     (async () => {
       try {
-        const res = await appointmentClient.availability({
+        const res = await calendarClient.availability({
           date,
           time,
-          excludeAppointmentId: mode === 'edit' ? appointmentId : undefined,
+          excludeVisitId: mode === 'edit' ? appointmentId : undefined,
         });
         if (!cancelled) setAvailability(res.options);
       } catch (err) {
@@ -179,27 +181,27 @@ export function BookingDialog({
     try {
       const dur = duration!;
       if (mode === 'create') {
-        const res = await appointmentClient.create({
+        const res = await calendarClient.createScheduled({
           patientId: patient.id,
           date,
           time,
           durationMinutes: dur,
         });
         onBooked({
-          appointment: res.appointment,
+          entry: res.entry,
           toast: formatBookingToast(date, time, dur),
         });
       } else {
         if (!appointmentId) {
           throw new Error('Edit mode requires appointmentId');
         }
-        const res = await appointmentClient.update(appointmentId, {
+        const res = await calendarClient.reschedule(appointmentId, {
           date,
           time,
           durationMinutes: dur,
         });
         onBooked({
-          appointment: res.appointment,
+          entry: res.entry,
           toast: formatRescheduleToast(date, time, dur),
         });
       }

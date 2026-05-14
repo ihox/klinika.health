@@ -520,7 +520,7 @@ export function CalendarView(): ReactElement {
   // ----- Booking submitted (success path for both paths and edit mode)
   const onBooked = useCallback(
     (result: BookingDialogResult) => {
-      const apt = result.appointment;
+      const apt = result.entry;
       const isEdit = booking?.mode === 'edit';
       setBooking(null);
       void refreshEntries();
