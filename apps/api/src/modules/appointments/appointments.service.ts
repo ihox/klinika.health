@@ -11,6 +11,7 @@ import type { RequestContext } from '../../common/request-context/request-contex
 import { PrismaService } from '../../prisma/prisma.service';
 import { parseHoursOrDefault } from '../clinic-settings/clinic-settings.service';
 import {
+  APPOINTMENT_STATUSES,
   type AppointmentAvailabilityResponse,
   type AppointmentDto,
   type AppointmentListResponse,
@@ -28,6 +29,31 @@ import { localClockToUtc, utcToLocalParts } from './appointments.tz';
 interface RangeIso {
   from: string;
   to: string;
+}
+
+// After the visits-merge (ADR-011) appointments live as rows in the
+// `visits` table with `scheduled_for IS NOT NULL`. Every query in this
+// service narrows by that predicate so the API can never read or write
+// a doctor-only clinical visit (one created via "[Vizitë e re]" with no
+// prior booking).
+const APPT_BASE_WHERE = { scheduledFor: { not: null } } as const;
+
+/**
+ * Narrow the unified `visits.status` TEXT column to the AppointmentDto
+ * status enum on read. The DB CHECK constraint allows six values
+ * (`scheduled | arrived | in_progress | completed | no_show | cancelled`);
+ * the four appointment-facing values are a subset and the only ones
+ * Phase-1 writes. `arrived` and `in_progress` are Phase-2 lifecycle
+ * states that the appointment endpoint never returns directly — when
+ * encountered they collapse to `scheduled` so the receptionist's
+ * calendar keeps rendering them as upcoming work rather than an
+ * unknown state.
+ */
+function narrowStatusForAppointment(value: string): AppointmentStatus {
+  if ((APPOINTMENT_STATUSES as readonly string[]).includes(value)) {
+    return value as AppointmentStatus;
+  }
+  return 'scheduled';
 }
 
 @Injectable()
@@ -50,10 +76,11 @@ export class AppointmentsService {
     const fromUtc = new Date(localClockToUtc(range.from, '00:00').getTime() - 86_400_000);
     const toUtc = new Date(localClockToUtc(range.to, '23:59').getTime() + 86_400_000);
 
-    const rows = await this.prisma.appointment.findMany({
+    const rows = await this.prisma.visit.findMany({
       where: {
         clinicId,
         deletedAt: null,
+        ...APPT_BASE_WHERE,
         scheduledFor: { gte: fromUtc, lte: toUtc },
       },
       orderBy: { scheduledFor: 'asc' },
@@ -64,6 +91,10 @@ export class AppointmentsService {
 
     const lastVisitMap = await this.fetchLastVisitMap(clinicId, rows.map((r) => r.patientId));
     const filtered = rows.filter((r) => {
+      // `scheduledFor` is non-null on every row thanks to APPT_BASE_WHERE,
+      // but the Prisma client types it as `Date | null` for the optional
+      // column — narrow once at the boundary.
+      if (r.scheduledFor == null) return false;
       const { date } = utcToLocalParts(r.scheduledFor);
       return date >= range.from && date <= range.to;
     });
@@ -81,10 +112,11 @@ export class AppointmentsService {
     const dayStartUtc = new Date(localClockToUtc(dateIso, '00:00').getTime() - 86_400_000);
     const dayEndUtc = new Date(localClockToUtc(dateIso, '23:59').getTime() + 86_400_000);
 
-    const rows = await this.prisma.appointment.findMany({
+    const rows = await this.prisma.visit.findMany({
       where: {
         clinicId,
         deletedAt: null,
+        ...APPT_BASE_WHERE,
         scheduledFor: { gte: dayStartUtc, lte: dayEndUtc },
       },
       orderBy: { scheduledFor: 'asc' },
@@ -92,22 +124,34 @@ export class AppointmentsService {
         patient: { select: { firstName: true, lastName: true, dateOfBirth: true } },
       },
     });
-    const onDay = rows.filter((r) => utcToLocalParts(r.scheduledFor).date === dateIso);
+    // `scheduledFor` and `durationMinutes` are non-null on every row thanks
+    // to APPT_BASE_WHERE; the type stays `T | null` because the column is
+    // optional. We narrow once and then use `!` below.
+    const onDay = rows.filter(
+      (r) => r.scheduledFor != null && utcToLocalParts(r.scheduledFor).date === dateIso,
+    );
 
     const counts = { scheduled: 0, completed: 0, no_show: 0, cancelled: 0 };
     let firstStart: Date | null = null;
     let lastEnd: Date | null = null;
     for (const r of onDay) {
-      counts[r.status] += 1;
-      if (!firstStart || r.scheduledFor < firstStart) firstStart = r.scheduledFor;
-      const endAt = new Date(r.scheduledFor.getTime() + r.durationMinutes * 60_000);
+      const start = r.scheduledFor!;
+      const duration = r.durationMinutes ?? 0;
+      const narrowed = narrowStatusForAppointment(r.status);
+      counts[narrowed] += 1;
+      if (!firstStart || start < firstStart) firstStart = start;
+      const endAt = new Date(start.getTime() + duration * 60_000);
       if (!lastEnd || endAt > lastEnd) lastEnd = endAt;
     }
 
     const now = new Date();
     const upcoming = onDay
-      .filter((r) => r.status === 'scheduled' && r.scheduledFor >= now)
-      .sort((a, b) => a.scheduledFor.getTime() - b.scheduledFor.getTime());
+      .filter(
+        (r) =>
+          narrowStatusForAppointment(r.status) === 'scheduled' &&
+          r.scheduledFor! >= now,
+      )
+      .sort((a, b) => a.scheduledFor!.getTime() - b.scheduledFor!.getTime());
     const next = upcoming[0] ?? null;
 
     return {
@@ -122,8 +166,8 @@ export class AppointmentsService {
       nextAppointment: next
         ? {
             id: next.id,
-            scheduledFor: next.scheduledFor.toISOString(),
-            durationMinutes: next.durationMinutes,
+            scheduledFor: next.scheduledFor!.toISOString(),
+            durationMinutes: next.durationMinutes ?? 0,
             patient: {
               firstName: next.patient.firstName,
               lastName: next.patient.lastName,
@@ -150,10 +194,11 @@ export class AppointmentsService {
     const today = utcToLocalParts(new Date()).date;
     const todayStartUtc = localClockToUtc(today, '00:00');
 
-    const rows = await this.prisma.appointment.findMany({
+    const rows = await this.prisma.visit.findMany({
       where: {
         clinicId,
         deletedAt: null,
+        ...APPT_BASE_WHERE,
         status: 'scheduled',
         scheduledFor: { gte: lookbackUtcStart, lt: todayStartUtc },
       },
@@ -205,14 +250,25 @@ export class AppointmentsService {
       });
     }
 
-    const created = await this.prisma.appointment.create({
+    // Post-merge: an appointment is a visit row with `scheduled_for` set.
+    // The clinical fields stay null until the doctor opens the chart and
+    // begins recording (still a separate row in Phase 1 — Phase 2 will
+    // unify the doctor's "[Vizitë e re]" into this same row).
+    //
+    // `visit_date` is NOT NULL on visits, so we anchor it to the local
+    // booking date (Europe/Belgrade). `updated_by` is required too —
+    // we set it to the creator on the first insert.
+    const created = await this.prisma.visit.create({
       data: {
         clinicId,
         patientId: patient.id,
+        visitDate: new Date(`${payload.date}T00:00:00Z`),
         scheduledFor,
         durationMinutes: payload.durationMinutes,
-        createdBy: ctx.userId,
+        isWalkIn: false,
         status: 'scheduled',
+        createdBy: ctx.userId,
+        updatedBy: ctx.userId,
       },
       include: {
         patient: { select: { id: true, firstName: true, lastName: true, dateOfBirth: true } },
@@ -226,7 +282,7 @@ export class AppointmentsService {
       resourceId: created.id,
       changes: [
         { field: 'patientId', old: null, new: payload.patientId },
-        { field: 'scheduledFor', old: null, new: created.scheduledFor.toISOString() },
+        { field: 'scheduledFor', old: null, new: created.scheduledFor!.toISOString() },
         { field: 'durationMinutes', old: null, new: created.durationMinutes },
         { field: 'status', old: null, new: created.status },
       ],
@@ -236,7 +292,7 @@ export class AppointmentsService {
       type: 'appointment.created',
       clinicId,
       appointmentId: created.id,
-      scheduledForDate: utcToLocalParts(created.scheduledFor).date,
+      scheduledForDate: utcToLocalParts(created.scheduledFor!).date,
       emittedAt: new Date().toISOString(),
     });
 
@@ -254,19 +310,21 @@ export class AppointmentsService {
     payload: UpdateAppointmentInput,
     ctx: RequestContext,
   ): Promise<AppointmentDto> {
-    const before = await this.prisma.appointment.findFirst({
-      where: { id, clinicId, deletedAt: null },
+    const before = await this.prisma.visit.findFirst({
+      where: { id, clinicId, deletedAt: null, ...APPT_BASE_WHERE },
       include: {
         patient: { select: { id: true, firstName: true, lastName: true, dateOfBirth: true } },
       },
     });
-    if (!before) throw new NotFoundException('Termini nuk u gjet.');
+    if (!before || before.scheduledFor == null) throw new NotFoundException('Termini nuk u gjet.');
 
     const targetDate =
       payload.date ?? utcToLocalParts(before.scheduledFor).date;
     const targetTime =
       payload.time ?? utcToLocalParts(before.scheduledFor).time;
-    const targetDuration = payload.durationMinutes ?? before.durationMinutes;
+    const targetDuration =
+      payload.durationMinutes ?? before.durationMinutes ?? 0;
+    const beforeStatus = narrowStatusForAppointment(before.status);
 
     let nextScheduledFor = before.scheduledFor;
     if (payload.date || payload.time || payload.durationMinutes) {
@@ -289,17 +347,23 @@ export class AppointmentsService {
       }
     }
 
-    const data: Prisma.AppointmentUpdateInput = {};
+    const data: Prisma.VisitUpdateInput = {};
     const diffs: AuditFieldDiff[] = [];
     if (nextScheduledFor.getTime() !== before.scheduledFor.getTime()) {
       data.scheduledFor = nextScheduledFor;
+      // Keep `visit_date` in sync with the local booking date so the
+      // doctor's day-view bucket follows the move.
+      data.visitDate = new Date(`${targetDate}T00:00:00Z`);
       diffs.push({
         field: 'scheduledFor',
         old: before.scheduledFor.toISOString(),
         new: nextScheduledFor.toISOString(),
       });
     }
-    if (payload.durationMinutes !== undefined && payload.durationMinutes !== before.durationMinutes) {
+    if (
+      payload.durationMinutes !== undefined &&
+      payload.durationMinutes !== before.durationMinutes
+    ) {
       data.durationMinutes = payload.durationMinutes;
       diffs.push({
         field: 'durationMinutes',
@@ -307,9 +371,9 @@ export class AppointmentsService {
         new: payload.durationMinutes,
       });
     }
-    if (payload.status !== undefined && payload.status !== before.status) {
+    if (payload.status !== undefined && payload.status !== beforeStatus) {
       data.status = payload.status;
-      diffs.push({ field: 'status', old: before.status, new: payload.status });
+      diffs.push({ field: 'status', old: beforeStatus, new: payload.status });
     }
 
     if (diffs.length === 0) {
@@ -317,7 +381,7 @@ export class AppointmentsService {
       return this.toDto(before, lastVisitMap);
     }
 
-    const after = await this.prisma.appointment.update({
+    const after = await this.prisma.visit.update({
       where: { id },
       data,
       include: {
@@ -335,7 +399,7 @@ export class AppointmentsService {
       type: 'appointment.updated',
       clinicId,
       appointmentId: id,
-      scheduledForDate: utcToLocalParts(after.scheduledFor).date,
+      scheduledForDate: utcToLocalParts(after.scheduledFor!).date,
       emittedAt: new Date().toISOString(),
     });
 
@@ -352,12 +416,12 @@ export class AppointmentsService {
     id: string,
     ctx: RequestContext,
   ): Promise<SoftDeleteResponse> {
-    const before = await this.prisma.appointment.findFirst({
-      where: { id, clinicId, deletedAt: null },
+    const before = await this.prisma.visit.findFirst({
+      where: { id, clinicId, deletedAt: null, ...APPT_BASE_WHERE },
     });
-    if (!before) throw new NotFoundException('Termini nuk u gjet.');
+    if (!before || before.scheduledFor == null) throw new NotFoundException('Termini nuk u gjet.');
     const now = new Date();
-    await this.prisma.appointment.update({
+    await this.prisma.visit.update({
       where: { id },
       data: { deletedAt: now },
     });
@@ -386,11 +450,11 @@ export class AppointmentsService {
     id: string,
     ctx: RequestContext,
   ): Promise<AppointmentDto> {
-    const row = await this.prisma.appointment.findFirst({
-      where: { id, clinicId, deletedAt: { not: null } },
+    const row = await this.prisma.visit.findFirst({
+      where: { id, clinicId, deletedAt: { not: null }, ...APPT_BASE_WHERE },
     });
     if (!row) throw new NotFoundException('Termini nuk u gjet.');
-    const restored = await this.prisma.appointment.update({
+    const restored = await this.prisma.visit.update({
       where: { id },
       data: { deletedAt: null },
       include: {
@@ -408,7 +472,7 @@ export class AppointmentsService {
       type: 'appointment.updated',
       clinicId,
       appointmentId: id,
-      scheduledForDate: utcToLocalParts(restored.scheduledFor).date,
+      scheduledForDate: utcToLocalParts(restored.scheduledFor!).date,
       emittedAt: new Date().toISOString(),
     });
     const lastVisitMap = await this.fetchLastVisitMap(clinicId, [restored.patientId]);
@@ -449,11 +513,16 @@ export class AppointmentsService {
     // One round-trip: pull every appointment on the day for conflict math.
     const dayStartUtc = new Date(localClockToUtc(date, '00:00').getTime() - 86_400_000);
     const dayEndUtc = new Date(localClockToUtc(date, '23:59').getTime() + 86_400_000);
-    const dayRows = await this.prisma.appointment.findMany({
+    const dayRows = await this.prisma.visit.findMany({
       where: {
         clinicId,
         deletedAt: null,
-        status: { in: ['scheduled', 'completed'] },
+        ...APPT_BASE_WHERE,
+        // `scheduled` and `completed` are the only statuses that block
+        // a slot. The post-merge `arrived` and `in_progress` are also
+        // active sessions — include them defensively so a Phase-2 row
+        // can't be double-booked over.
+        status: { in: ['scheduled', 'arrived', 'in_progress', 'completed'] },
         scheduledFor: { gte: dayStartUtc, lte: dayEndUtc },
         ...(excludeId ? { NOT: { id: excludeId } } : {}),
       },
@@ -463,10 +532,12 @@ export class AppointmentsService {
     // Convert each row to a local-minute interval so the pure helper
     // can do the overlap math without re-binding to TIMESTAMPTZ.
     const occupied: OccupiedInterval[] = dayRows.flatMap((r) => {
+      if (r.scheduledFor == null) return [];
       const local = utcToLocalParts(r.scheduledFor);
       if (local.date !== date) return [];
       const startMin = toMinutes(local.time);
-      return [{ startMin, endMin: startMin + r.durationMinutes }];
+      const duration = r.durationMinutes ?? 0;
+      return [{ startMin, endMin: startMin + duration }];
     });
 
     const { slotUnitMinutes, options } = computeAvailability(hours, date, time, occupied);
@@ -488,18 +559,19 @@ export class AppointmentsService {
     const { clinicId, patientId, visitDate, ctx } = opts;
     const dayStart = localClockToUtc(visitDate, '00:00');
     const dayEnd = new Date(dayStart.getTime() + 86_400_000);
-    const candidate = await this.prisma.appointment.findFirst({
+    const candidate = await this.prisma.visit.findFirst({
       where: {
         clinicId,
         patientId,
         deletedAt: null,
+        ...APPT_BASE_WHERE,
         status: 'scheduled',
         scheduledFor: { gte: dayStart, lt: dayEnd },
       },
       orderBy: { scheduledFor: 'asc' },
     });
-    if (!candidate) return false;
-    await this.prisma.appointment.update({
+    if (!candidate || candidate.scheduledFor == null) return false;
+    await this.prisma.visit.update({
       where: { id: candidate.id },
       data: { status: 'completed' },
     });
@@ -514,7 +586,7 @@ export class AppointmentsService {
       type: 'appointment.updated',
       clinicId,
       appointmentId: candidate.id,
-      scheduledForDate: utcToLocalParts(candidate.scheduledFor).date,
+      scheduledForDate: utcToLocalParts(candidate.scheduledFor!).date,
       emittedAt: new Date().toISOString(),
     });
     return true;
@@ -540,8 +612,8 @@ export class AppointmentsService {
    * Two intervals overlap iff `aStart < bEnd && bStart < aEnd`. We use
    * a slightly conservative SQL filter (`scheduledFor < endInstant` AND
    * existing.scheduledFor + duration > startInstant). Because pg-prisma
-   * can't express the arithmetic cleanly with `Prisma.AppointmentWhereInput`,
-   * we fetch any appointment that *starts* inside `[start - 3h, end]` and
+   * can't express the arithmetic cleanly with `Prisma.VisitWhereInput`,
+   * we fetch any appointment-style visit that *starts* inside `[start - 3h, end]` and
    * intersect in JS. 3h is well above the schema cap (180m).
    */
   private async findConflict(
@@ -552,18 +624,21 @@ export class AppointmentsService {
   ): Promise<{ id: string } | null> {
     const end = new Date(start.getTime() + durationMinutes * 60_000);
     const lookbackStart = new Date(start.getTime() - 3 * 60 * 60_000);
-    const rows = await this.prisma.appointment.findMany({
+    const rows = await this.prisma.visit.findMany({
       where: {
         clinicId,
         deletedAt: null,
-        status: { in: ['scheduled', 'completed'] },
+        ...APPT_BASE_WHERE,
+        status: { in: ['scheduled', 'arrived', 'in_progress', 'completed'] },
         scheduledFor: { gte: lookbackStart, lt: end },
         ...(excludeId ? { NOT: { id: excludeId } } : {}),
       },
       select: { id: true, scheduledFor: true, durationMinutes: true },
     });
     for (const r of rows) {
-      const rEnd = new Date(r.scheduledFor.getTime() + r.durationMinutes * 60_000);
+      if (r.scheduledFor == null) continue;
+      const duration = r.durationMinutes ?? 0;
+      const rEnd = new Date(r.scheduledFor.getTime() + duration * 60_000);
       if (r.scheduledFor < end && rEnd > start) {
         return { id: r.id };
       }
@@ -575,9 +650,9 @@ export class AppointmentsService {
     row: {
       id: string;
       patientId: string;
-      scheduledFor: Date;
-      durationMinutes: number;
-      status: AppointmentStatus;
+      scheduledFor: Date | null;
+      durationMinutes: number | null;
+      status: string;
       createdAt: Date;
       updatedAt: Date;
       patient: { firstName: string; lastName: string; dateOfBirth: Date | string | null };
@@ -593,9 +668,13 @@ export class AppointmentsService {
         lastName: row.patient.lastName,
         dateOfBirth: this.serializeDob(row.patient.dateOfBirth),
       },
-      scheduledFor: row.scheduledFor.toISOString(),
-      durationMinutes: row.durationMinutes,
-      status: row.status,
+      // The appointments surface only ever receives rows where
+      // `scheduledFor IS NOT NULL` (filtered at every query), but the
+      // column is optional in the schema so we narrow once at the DTO
+      // boundary.
+      scheduledFor: row.scheduledFor!.toISOString(),
+      durationMinutes: row.durationMinutes ?? 0,
+      status: narrowStatusForAppointment(row.status),
       lastVisitAt: lastVisit ? lastVisit.toISOString() : null,
       isNewPatient: lastVisit == null,
       createdAt: row.createdAt.toISOString(),
@@ -625,9 +704,18 @@ export class AppointmentsService {
   ): Promise<Map<string, Date>> {
     if (patientIds.length === 0) return new Map();
     const unique = Array.from(new Set(patientIds));
+    // Only completed visits count toward the "recent clinical visit"
+    // signal. Post-merge the `visits` table also stores scheduled rows
+    // whose `visitDate` reflects a future booking, not a clinical
+    // encounter — those must not bias the color indicator.
     const rows = await this.prisma.visit.groupBy({
       by: ['patientId'],
-      where: { clinicId, patientId: { in: unique }, deletedAt: null },
+      where: {
+        clinicId,
+        patientId: { in: unique },
+        deletedAt: null,
+        status: 'completed',
+      },
       _max: { visitDate: true },
     });
     const map = new Map<string, Date>();

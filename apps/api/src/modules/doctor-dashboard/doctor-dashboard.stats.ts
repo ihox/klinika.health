@@ -25,7 +25,11 @@ export interface VisitLike {
 }
 
 export interface AppointmentLike {
-  status: 'scheduled' | 'completed' | 'no_show' | 'cancelled';
+  // Post-merge `visits.status` is TEXT with six allowed values
+  // (`scheduled | arrived | in_progress | completed | no_show | cancelled`);
+  // the stats only need to count 'completed' vs everything else, so the
+  // type is intentionally widened to `string` to accept the unified column.
+  status: string;
 }
 
 export type PaymentAmountResolver = (code: string) => number | null;

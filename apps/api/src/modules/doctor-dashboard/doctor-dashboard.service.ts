@@ -11,11 +11,33 @@ import { parsePaymentCodesOrDefault } from '../clinic-settings/clinic-settings.s
 import type { PaymentCodes } from '../clinic-settings/clinic-settings.dto';
 import {
   type DashboardAppointmentDto,
+  type DashboardAppointmentStatus,
   type DashboardNextPatientCard,
   type DashboardVisitLogEntry,
   type DoctorDashboardResponse,
 } from './doctor-dashboard.dto';
 import { computeDayStats } from './doctor-dashboard.stats';
+
+const DASHBOARD_APPOINTMENT_STATUSES: readonly DashboardAppointmentStatus[] = [
+  'scheduled',
+  'completed',
+  'no_show',
+  'cancelled',
+];
+
+/**
+ * Collapse the unified `visits.status` TEXT column to the dashboard's
+ * four-value enum. Phase-2 statuses (`arrived`, `in_progress`) fold to
+ * `scheduled` so the doctor's day-view treats them as still-pending
+ * work; Phase 1 data never writes those values so this is a defensive
+ * mapping.
+ */
+function narrowDashboardStatus(value: string): DashboardAppointmentStatus {
+  if ((DASHBOARD_APPOINTMENT_STATUSES as readonly string[]).includes(value)) {
+    return value as DashboardAppointmentStatus;
+  }
+  return 'scheduled';
+}
 
 const UNKNOWN_DOB_ISO = '1900-01-01';
 
@@ -59,11 +81,15 @@ export class DoctorDashboardService {
         where: { id: clinicId },
         select: { paymentCodes: true },
       }),
-      this.prisma.appointment.findMany({
+      // Appointments view: every visit row carrying a `scheduled_for`
+      // anchored on the day. Post-merge (ADR-011) the appointment list
+      // and the clinical visit list both live in `visits`; the two
+      // queries below split them by the relevant predicate.
+      this.prisma.visit.findMany({
         where: {
           clinicId,
           deletedAt: null,
-          scheduledFor: { gte: dayQueryStart, lte: dayQueryEnd },
+          scheduledFor: { gte: dayQueryStart, lte: dayQueryEnd, not: null },
         },
         orderBy: { scheduledFor: 'asc' },
         include: {
@@ -77,10 +103,14 @@ export class DoctorDashboardService {
           },
         },
       }),
+      // Today's visit log: clinical visits with payment + diagnoses,
+      // anchored on `visit_date`. Restricted to `status='completed'`
+      // so scheduled-but-not-yet-seen rows don't appear in the log.
       this.prisma.visit.findMany({
         where: {
           clinicId,
           deletedAt: null,
+          status: 'completed',
           visitDate: utcMidnight(today),
         },
         orderBy: { createdAt: 'asc' },
@@ -110,9 +140,21 @@ export class DoctorDashboardService {
     const paymentAmount = (code: string): number | null =>
       paymentCodes[code]?.amountCents ?? null;
 
-    const appointments = rawAppointments.filter(
-      (a) => utcToLocalParts(a.scheduledFor).date === today,
-    );
+    // Post-merge: `scheduledFor`, `durationMinutes` and the TEXT
+    // `status` column are all schema-nullable / loosely typed even
+    // though the query only pulls rows where `scheduledFor IS NOT
+    // NULL`. Project to the classifier's strict shape at the boundary.
+    const appointments = rawAppointments
+      .filter((a): a is typeof a & { scheduledFor: Date } => a.scheduledFor != null)
+      .filter((a) => utcToLocalParts(a.scheduledFor).date === today)
+      .map((a) => ({
+        id: a.id,
+        patientId: a.patientId,
+        scheduledFor: a.scheduledFor,
+        durationMinutes: a.durationMinutes ?? 0,
+        status: narrowDashboardStatus(a.status),
+        patient: a.patient,
+      }));
 
     const dashboardAppointments = this.classifyAppointments(appointments, now);
 
@@ -169,8 +211,8 @@ export class DoctorDashboardService {
       id: string;
       patientId: string;
       scheduledFor: Date;
-      durationMinutes: number;
-      status: 'scheduled' | 'completed' | 'no_show' | 'cancelled';
+      durationMinutes: number | null;
+      status: string;
       patient: {
         firstName: string;
         lastName: string;
@@ -182,9 +224,9 @@ export class DoctorDashboardService {
     let nextIndex = -1;
     let currentIndex = -1;
     appointments.forEach((a, idx) => {
-      if (a.status !== 'scheduled') return;
+      if (narrowDashboardStatus(a.status) !== 'scheduled') return;
       const start = a.scheduledFor.getTime();
-      const end = start + a.durationMinutes * 60_000;
+      const end = start + (a.durationMinutes ?? 0) * 60_000;
       const nowMs = now.getTime();
       if (start <= nowMs && nowMs < end && currentIndex === -1) {
         currentIndex = idx;
@@ -194,21 +236,23 @@ export class DoctorDashboardService {
       // No appointment is in-progress; the next is the earliest
       // scheduled one whose start is strictly in the future.
       appointments.forEach((a, idx) => {
-        if (a.status !== 'scheduled') return;
+        if (narrowDashboardStatus(a.status) !== 'scheduled') return;
         if (a.scheduledFor.getTime() <= now.getTime()) return;
         if (nextIndex === -1) nextIndex = idx;
       });
     }
     return appointments.map((a, idx) => {
+      const narrowedStatus = narrowDashboardStatus(a.status);
+      const duration = a.durationMinutes ?? 0;
       let position: DashboardAppointmentDto['position'];
       if (idx === currentIndex) {
         position = 'current';
       } else if (idx === nextIndex) {
         position = 'next';
-      } else if (a.status !== 'scheduled') {
+      } else if (narrowedStatus !== 'scheduled') {
         position = 'past';
       } else if (
-        a.scheduledFor.getTime() + a.durationMinutes * 60_000 <
+        a.scheduledFor.getTime() + duration * 60_000 <
         now.getTime()
       ) {
         position = 'past';
@@ -224,8 +268,8 @@ export class DoctorDashboardService {
           dateOfBirth: serializeDob(a.patient.dateOfBirth),
         },
         scheduledFor: a.scheduledFor.toISOString(),
-        durationMinutes: a.durationMinutes,
-        status: a.status,
+        durationMinutes: duration,
+        status: narrowedStatus,
         position,
       };
     });
@@ -260,8 +304,17 @@ export class DoctorDashboardService {
           alergjiTjera: true,
         },
       }),
+      // "Last visit" and visit count drive the doctor's at-a-glance
+      // patient context — both must reflect completed clinical visits
+      // only. Post-merge a scheduled (future) row also lives in
+      // `visits`; we filter it out via `status='completed'`.
       this.prisma.visit.findFirst({
-        where: { clinicId, patientId: target.patientId, deletedAt: null },
+        where: {
+          clinicId,
+          patientId: target.patientId,
+          deletedAt: null,
+          status: 'completed',
+        },
         orderBy: { visitDate: 'desc' },
         select: {
           id: true,
@@ -277,7 +330,12 @@ export class DoctorDashboardService {
         },
       }),
       this.prisma.visit.count({
-        where: { clinicId, patientId: target.patientId, deletedAt: null },
+        where: {
+          clinicId,
+          patientId: target.patientId,
+          deletedAt: null,
+          status: 'completed',
+        },
       }),
     ]);
     if (!patient) return null;

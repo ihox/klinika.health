@@ -239,6 +239,167 @@ async function seedIcd10(): Promise<number> {
   return total;
 }
 
+// ---------------------------------------------------------------------------
+// Sample clinical fixtures (post-visits-merge: 2026-05-14).
+//
+// Idempotent via a sentinel — if any patient already exists for the
+// clinic, we assume sample data is already in place and skip. This
+// keeps `make db-seed` safe to re-run without piling up duplicates.
+//
+// The fixtures cover both lifecycle ends of the unified `visits` table:
+//   - completed visits (clinical content, no `scheduled_for`) so the
+//     doctor's home + visit log have rows to render
+//   - scheduled visits (the receptionist's calendar view) anchored to
+//     today + tomorrow in Europe/Belgrade
+//
+// All timestamps are anchored to "today" at seed run-time so the
+// fixtures land in the same local-day buckets the UI shows.
+// ---------------------------------------------------------------------------
+
+async function seedSampleClinical(clinicId: string): Promise<void> {
+  const existing = await prisma.patient.count({ where: { clinicId } });
+  if (existing > 0) {
+    // eslint-disable-next-line no-console
+    console.log('  · Sample patients already present — skipping clinical seed');
+    return;
+  }
+
+  const doctor = await prisma.user.findFirstOrThrow({
+    where: { email: 'taulant.shala@klinika.health' },
+  });
+  const receptionist = await prisma.user.findFirstOrThrow({
+    where: { email: 'ereblire.krasniqi@klinika.health' },
+  });
+
+  // Patients — three pediatric DOBs spread across age bands so the
+  // master-data strip exercises both infants and older children.
+  const era = await prisma.patient.create({
+    data: {
+      clinicId,
+      firstName: 'Era',
+      lastName: 'Krasniqi',
+      dateOfBirth: new Date('2023-08-03'),
+      sex: 'f',
+      alergjiTjera: 'Penicilinë',
+      phone: '044 123 456',
+    },
+  });
+  const dion = await prisma.patient.create({
+    data: {
+      clinicId,
+      firstName: 'Dion',
+      lastName: 'Hoxha',
+      dateOfBirth: new Date('2024-02-12'),
+      sex: 'm',
+    },
+  });
+  const lira = await prisma.patient.create({
+    data: {
+      clinicId,
+      firstName: 'Lira',
+      lastName: 'Berisha',
+      dateOfBirth: new Date('2019-04-22'),
+      sex: 'f',
+    },
+  });
+
+  // Anchor everything to today in Europe/Belgrade. We pick a deterministic
+  // UTC moment from `toLocaleDateString('sv-SE', { timeZone })` and combine
+  // with offsets in minutes for each fixture row.
+  const todayIso = new Date().toLocaleDateString('sv-SE', {
+    timeZone: 'Europe/Belgrade',
+  });
+  const todayMidnightUtc = new Date(`${todayIso}T00:00:00Z`);
+  const tomorrowIso = new Date(todayMidnightUtc.getTime() + 86_400_000)
+    .toISOString()
+    .slice(0, 10);
+
+  function at(dateIso: string, hh: number, mm: number): Date {
+    // Belgrade is UTC+2 in May (CEST). The seed runs once and the
+    // resulting TIMESTAMPTZ values are stored in UTC, so we materialise
+    // them as `${date}T${hh-2}:${mm}:00Z`. The UI's timezone helper does
+    // the inverse on read.
+    const utcHour = hh - 2;
+    const pad = (n: number): string => String(n).padStart(2, '0');
+    return new Date(`${dateIso}T${pad(utcHour)}:${pad(mm)}:00Z`);
+  }
+
+  // Two completed clinical visits earlier today — these drive the
+  // doctor's visit log + payment stats on the home screen.
+  await prisma.visit.create({
+    data: {
+      clinicId,
+      patientId: era.id,
+      visitDate: todayMidnightUtc,
+      status: 'completed',
+      complaint: 'Temperaturë e lehtë dhe kollë e thatë.',
+      weightG: 9_400,
+      heightCm: 76 as unknown as Prisma.Decimal,
+      temperatureC: 37.8 as unknown as Prisma.Decimal,
+      paymentCode: 'A',
+      examinations: 'Inspekcion: faringe e kuqe. Auskultim normal.',
+      prescription: 'Paracetamol sirup 120 mg/5 ml — 2.5 ml çdo 6 orë.',
+      createdBy: doctor.id,
+      updatedBy: doctor.id,
+    },
+  });
+  await prisma.visit.create({
+    data: {
+      clinicId,
+      patientId: dion.id,
+      visitDate: todayMidnightUtc,
+      status: 'completed',
+      complaint: 'Kontroll i rregullt 6-mujor.',
+      weightG: 8_100,
+      heightCm: 70 as unknown as Prisma.Decimal,
+      paymentCode: 'C',
+      examinations: 'Zhvillim i mirë. Reflekse normale.',
+      createdBy: doctor.id,
+      updatedBy: doctor.id,
+    },
+  });
+
+  // Scheduled appointments — one later today, two tomorrow morning. The
+  // calendar view should render these on the receptionist's screen and
+  // the doctor's "next patient" card binds to the soonest upcoming one.
+  await prisma.visit.create({
+    data: {
+      clinicId,
+      patientId: lira.id,
+      visitDate: todayMidnightUtc,
+      scheduledFor: at(todayIso, 16, 0),
+      durationMinutes: 20,
+      status: 'scheduled',
+      createdBy: receptionist.id,
+      updatedBy: receptionist.id,
+    },
+  });
+  await prisma.visit.create({
+    data: {
+      clinicId,
+      patientId: era.id,
+      visitDate: new Date(`${tomorrowIso}T00:00:00Z`),
+      scheduledFor: at(tomorrowIso, 10, 30),
+      durationMinutes: 15,
+      status: 'scheduled',
+      createdBy: receptionist.id,
+      updatedBy: receptionist.id,
+    },
+  });
+  await prisma.visit.create({
+    data: {
+      clinicId,
+      patientId: dion.id,
+      visitDate: new Date(`${tomorrowIso}T00:00:00Z`),
+      scheduledFor: at(tomorrowIso, 11, 0),
+      durationMinutes: 15,
+      status: 'scheduled',
+      createdBy: receptionist.id,
+      updatedBy: receptionist.id,
+    },
+  });
+}
+
 async function main(): Promise<void> {
   // eslint-disable-next-line no-console
   console.log('Seeding Klinika database...');
@@ -262,6 +423,10 @@ async function main(): Promise<void> {
   const icd10Count = await seedIcd10();
   // eslint-disable-next-line no-console
   console.log(`  ✓ ICD-10 codes loaded: ${icd10Count}`);
+
+  await seedSampleClinical(clinicId);
+  // eslint-disable-next-line no-console
+  console.log('  ✓ Sample patients + visits');
 
   // eslint-disable-next-line no-console
   console.log('Seed complete.');

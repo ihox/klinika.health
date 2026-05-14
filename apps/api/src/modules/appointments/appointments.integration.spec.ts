@@ -120,8 +120,11 @@ describe.skipIf(!ENABLED)('Appointments integration', () => {
     await prisma.authTrustedDevice.deleteMany({});
     await prisma.authSession.deleteMany({});
     await prisma.auditLog.deleteMany({ where: { clinicId } });
-    await prisma.appointment.deleteMany({ where: { clinicId } });
-    await prisma.appointment.deleteMany({ where: { clinicId: secondClinicId } });
+    // Post-merge (ADR-011): appointments now live as `visits` rows with
+    // `scheduled_for IS NOT NULL`. We wipe every visit row in each test
+    // clinic to keep the test isolated.
+    await prisma.visit.deleteMany({ where: { clinicId } });
+    await prisma.visit.deleteMany({ where: { clinicId: secondClinicId } });
     await prisma.patient.deleteMany({ where: { clinicId } });
     await prisma.patient.deleteMany({ where: { clinicId: secondClinicId } });
 
@@ -333,14 +336,17 @@ describe.skipIf(!ENABLED)('Appointments integration', () => {
     // it lands on the prior local day in Europe/Belgrade.
     const yesterday = new Date(Date.now() - 86_400_000);
     yesterday.setUTCHours(10, 0, 0, 0);
-    const stale = await prisma.appointment.create({
+    const creator = await prisma.user.findFirstOrThrow({ where: { clinicId } });
+    const stale = await prisma.visit.create({
       data: {
         clinicId,
         patientId,
+        visitDate: new Date(`${yesterday.toISOString().slice(0, 10)}T00:00:00Z`),
         scheduledFor: yesterday,
         durationMinutes: 15,
         status: 'scheduled',
-        createdBy: (await prisma.user.findFirstOrThrow({ where: { clinicId } })).id,
+        createdBy: creator.id,
+        updatedBy: creator.id,
       },
     });
 
@@ -383,14 +389,16 @@ describe.skipIf(!ENABLED)('Appointments integration', () => {
     });
     const futureUtc = new Date(Date.now() + 7 * 86_400_000);
     futureUtc.setUTCHours(10, 0, 0, 0);
-    const apptB = await prisma.appointment.create({
+    const apptB = await prisma.visit.create({
       data: {
         clinicId: secondClinicId,
         patientId: patientB.id,
+        visitDate: new Date(`${futureUtc.toISOString().slice(0, 10)}T00:00:00Z`),
         scheduledFor: futureUtc,
         durationMinutes: 15,
         status: 'scheduled',
         createdBy: userB.id,
+        updatedBy: userB.id,
       },
     });
 

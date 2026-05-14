@@ -149,16 +149,6 @@ END
 $$;
 
 -- ---------------------------------------------------------------------------
--- appointments
--- ---------------------------------------------------------------------------
-ALTER TABLE "appointments" ENABLE ROW LEVEL SECURITY;
-ALTER TABLE "appointments" FORCE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS tenant_isolation ON "appointments";
-CREATE POLICY tenant_isolation ON "appointments"
-  USING ("clinic_id" = current_setting('app.clinic_id', true)::uuid)
-  WITH CHECK ("clinic_id" = current_setting('app.clinic_id', true)::uuid);
-
--- ---------------------------------------------------------------------------
 -- vertetime
 -- ---------------------------------------------------------------------------
 ALTER TABLE "vertetime" ENABLE ROW LEVEL SECURITY;
@@ -214,9 +204,6 @@ CREATE INDEX IF NOT EXISTS "patients_clinic_id_deleted_at_idx"
 CREATE INDEX IF NOT EXISTS "visits_clinic_id_deleted_at_idx"
   ON "visits" ("clinic_id", "deleted_at");
 
-CREATE INDEX IF NOT EXISTS "appointments_clinic_id_deleted_at_idx"
-  ON "appointments" ("clinic_id", "deleted_at");
-
 -- ===========================================================================
 -- 4. updated_at trigger
 -- ===========================================================================
@@ -253,10 +240,6 @@ CREATE TRIGGER set_updated_at BEFORE UPDATE ON "patients"
 
 DROP TRIGGER IF EXISTS set_updated_at ON "visits";
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON "visits"
-  FOR EACH ROW EXECUTE FUNCTION set_updated_at();
-
-DROP TRIGGER IF EXISTS set_updated_at ON "appointments";
-CREATE TRIGGER set_updated_at BEFORE UPDATE ON "appointments"
   FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
 COMMIT;
