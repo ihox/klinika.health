@@ -11,6 +11,7 @@ import { ClinicSettingsModule } from './modules/clinic-settings/clinic-settings.
 import { EmailModule } from './modules/email/email.module';
 import { HealthModule } from './modules/health/health.module';
 import { JobsModule } from './modules/jobs/jobs.module';
+import { PatientsModule } from './modules/patients/patients.module';
 import { RateLimitModule } from './modules/rate-limit/rate-limit.module';
 import { ErrorRateMiddleware } from './modules/telemetry/error-counter';
 import { TelemetryModule } from './modules/telemetry/telemetry.module';
@@ -29,6 +30,7 @@ import { PrismaModule } from './prisma/prisma.module';
     AuthModule,
     AdminModule,
     ClinicSettingsModule,
+    PatientsModule,
   ],
   providers: [
     // RolesGuard is global so `@Roles()` works on any handler without

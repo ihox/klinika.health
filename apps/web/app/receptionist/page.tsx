@@ -13,9 +13,15 @@ export default function ReceptionistHome() {
           Kalendari
         </h1>
         <p className="mt-2 text-stone-500 text-[14px]">
-          Faqja e recepsionistit do të ndërtohet në një slice të mëvonshëm.
+          Pamja e plotë e kalendarit do të ndërtohet në një slice të mëvonshëm.
         </p>
-        <div className="mt-6">
+        <div className="mt-6 flex items-center gap-4">
+          <Link
+            href="/receptionist/pacientet"
+            className="text-teal-700 hover:underline font-medium text-[14px]"
+          >
+            Pacientët →
+          </Link>
           <Link href="/profili-im" className="text-teal-700 hover:underline font-medium text-[14px]">
             Profili im →
           </Link>

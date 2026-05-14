@@ -494,3 +494,95 @@ reserved-word list blocks names the platform itself serves: `admin`,
 `static`, `cdn`, `auth`, `login`, `staging`, `test`, `dev`,
 `internal`, `klinika`.
 
+## Slice 07 — patient model with role-scoped DTOs
+
+This slice establishes the patient model and the **role-scoped DTO
+pattern** — the single most load-bearing privacy mechanism in Klinika.
+
+### The role-scoped DTO pattern
+
+CLAUDE.md §1.2 ("receptionist sees only patient name and DOB") is the
+non-negotiable rule that drives this slice. Postgres RLS enforces
+cross-tenant isolation but does NOT help here: receptionist and doctor
+read the *same* `patients` rows; the question is which columns reach
+the wire. The pattern:
+
+1. **One row, two DTOs.**
+   [`PatientPublicDto`](../apps/api/src/modules/patients/patients.dto.ts)
+   exposes exactly `id`, `firstName`, `lastName`, `dateOfBirth`.
+   `PatientFullDto` exposes every master-data field.
+2. **Single chokepoint.** Controllers never spread Prisma rows into
+   responses. They call `toPublicDto()` / `toFullDto()`, which build
+   each response object field-by-field. A future column on the
+   `patients` table can NOT leak into the receptionist response unless
+   someone explicitly extends `PatientPublicDto` AND `toPublicDto` AND
+   updates the unit test that asserts the exact key set.
+3. **Defense in depth at the SELECT.**
+   [`PatientsService.selectForRole`](../apps/api/src/modules/patients/patients.service.ts)
+   restricts the Prisma `select` clause to the receptionist's four
+   columns. If a maintainer ever forgets the DTO converter, the row
+   itself doesn't contain the forbidden columns.
+4. **Role-scoped request bodies.**
+   `ReceptionistCreatePatientSchema` is `.strict()`: tampering with the
+   body to inject `phone`/`alergjiTjera` triggers a 400. Even if
+   strictness ever loosens, the service explicitly writes only the
+   three permitted fields — `phone`, `alergjiTjera`, `birthWeightG`,
+   etc. are never read from the receptionist's payload at any layer.
+5. **TypeScript reinforcement on the frontend.**
+   [`apps/web/lib/patient-client.ts`](../apps/web/lib/patient-client.ts)
+   exposes `PatientPublicDto` and `PatientFullDto` as separate types.
+   The receptionist screen imports `PatientPublicDto` only; a build
+   error catches accidental rendering of doctor-only fields.
+6. **Property-style tests.** `patients.dto.spec.ts` proves the
+   chokepoint never returns keys outside the four allowed even when
+   given a fully-populated row plus 200 garbage extras; the
+   integration test proves the wire contract holds end-to-end.
+
+The same pattern generalises to every future role/data combination:
+when role A is a strict subset of role B's view, define both DTOs
+explicitly, write the chokepoint converter, and pin the contract with
+a property-style unit test plus an HTTP-layer integration test. No
+shortcuts — patient privacy is the rule that doesn't bend.
+
+### Fuzzy search
+
+Patient lookup uses Postgres `pg_trgm` for trigram similarity and
+`unaccent` for diacritic-insensitive matching. The
+[`klinika_unaccent_lower`](../apps/api/prisma/migrations/manual/004_patients_search.sql)
+IMMUTABLE wrapper composes the two and powers three GIN indexes:
+
+- `patients_first_name_trgm_idx`
+- `patients_last_name_trgm_idx`
+- `patients_full_name_trgm_idx` (on `first_name || ' ' || last_name`)
+
+The query also accepts a 4-digit year (interpreted as DOB year) and a
+`#`-prefixed integer (interpreted as `legacy_id` from the Access
+migration). Tokens are classified by
+[`parseSearchTerm`](../apps/api/src/modules/patients/patients.service.ts);
+unit tests pin the classifier.
+
+### Soft duplicate notice (informational only)
+
+Per the locked design decision, the receptionist's quick-add modal
+shows likely duplicates as the user types — but NEVER blocks creation.
+`POST /api/patients/duplicate-check` returns up to 5 candidates with
+trigram similarity ≥ 0.55 and DOB within ±14 days. Both candidates and
+"continue as new" produce a `PatientPublicDto` — even at the most
+suggestive moment, the receptionist sees only id + name + DOB.
+
+### Endpoints
+
+| Endpoint                                | Roles                          | Response shape         |
+|-----------------------------------------|--------------------------------|------------------------|
+| `GET /api/patients?q=...`               | doctor / receptionist / admin  | role-scoped            |
+| `POST /api/patients/duplicate-check`    | doctor / receptionist / admin  | `PatientPublicDto[]`   |
+| `POST /api/patients`                    | doctor / receptionist / admin  | role-scoped            |
+| `GET /api/patients/:id`                 | doctor / clinic_admin          | `PatientFullDto`       |
+| `PATCH /api/patients/:id`               | doctor / clinic_admin          | `PatientFullDto`       |
+| `DELETE /api/patients/:id`              | doctor / clinic_admin          | `{ restorableUntil }`  |
+| `POST /api/patients/:id/restore`        | doctor / clinic_admin          | `PatientFullDto`       |
+
+Every mutation emits an audit-log row. `GET /:id` writes a
+`patient.viewed` row with `changes: null` per CLAUDE.md §5.3
+(sensitive read).
+

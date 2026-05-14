@@ -61,6 +61,17 @@ enum AppointmentStatus {
   @@map("appointment_status")
 }
 
+/// Biological sex used for WHO growth charts and master-data display.
+/// Optional on the patient row — names alone are often enough to
+/// derive at display time, but the doctor may set it explicitly when
+/// the chart matters (slice-07 §6).
+enum PatientSex {
+  m
+  f
+
+  @@map("patient_sex")
+}
+
 // ---------------------------------------------------------------------------
 // Tenancy
 // ---------------------------------------------------------------------------
@@ -269,10 +280,11 @@ model Patient {
   lastName                 String    @map("last_name")
   dateOfBirth              DateTime  @map("date_of_birth") @db.Date
   placeOfBirth             String?   @map("place_of_birth")
-  birthWeightG             Int?      @map("birth_weight_g")
-  birthHeadCircumferenceCm Decimal?  @map("birth_head_circumference_cm") @db.Decimal(5, 2)
-  birthLengthCm            Decimal?  @map("birth_length_cm") @db.Decimal(5, 2)
-  alergjiTjera             String?   @map("alergji_tjera") @db.Text
+  sex                      PatientSex? @map("sex")
+  birthWeightG             Int?        @map("birth_weight_g")
+  birthHeadCircumferenceCm Decimal?    @map("birth_head_circumference_cm") @db.Decimal(5, 2)
+  birthLengthCm            Decimal?    @map("birth_length_cm") @db.Decimal(5, 2)
+  alergjiTjera             String?     @map("alergji_tjera") @db.Text
   phone                    String?
   createdAt                DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt                DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
