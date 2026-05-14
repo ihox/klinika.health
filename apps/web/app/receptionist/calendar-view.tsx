@@ -6,6 +6,7 @@ import type { ReactElement } from 'react';
 
 import { Skeleton } from '@/components/skeleton';
 import { Button } from '@/components/ui/button';
+import { UndoToast } from '@/components/undo-toast';
 import { cn } from '@/lib/utils';
 import { ApiError } from '@/lib/api';
 import {
@@ -39,8 +40,10 @@ interface UndoState {
   patientName: string;
   /** Server-stamped expiry. */
   restorableUntil: string;
-  /** What the toast says before the "Anulo" affordance. */
+  /** Main toast line, e.g. "Termini u fshi." */
   message: string;
+  /** Optional dim sub-line, e.g. "Eriona Krasniqi · 14:30". */
+  secondary?: string;
   /**
    * What "Anulo" should do:
    *   `restore-deleted` — call POST /restore (post-delete undo)
@@ -298,7 +301,8 @@ export function CalendarView(): ReactElement {
           id: appointment.id,
           patientName: `${appointment.patient.firstName} ${appointment.patient.lastName}`,
           restorableUntil: res.restorableUntil,
-          message: `Termini i ${appointment.patient.firstName} ${appointment.patient.lastName} u fshi.`,
+          message: 'Termini u fshi.',
+          secondary: `${appointment.patient.firstName} ${appointment.patient.lastName} · ${toLocalParts(new Date(appointment.scheduledFor)).time}`,
           intent: 'restore-deleted',
         });
       } catch {
@@ -654,20 +658,12 @@ export function CalendarView(): ReactElement {
 
       {/* Undo toast (post-booking + post-delete) */}
       {undo ? (
-        <div
-          role="status"
-          aria-live="polite"
-          className="fixed bottom-6 right-6 z-[120] flex items-center gap-3 rounded-md border border-line bg-surface-elevated px-4 py-2.5 text-[13px] text-ink shadow-modal"
-        >
-          <span>{undo.message}</span>
-          <button
-            type="button"
-            onClick={runUndo}
-            className="font-medium text-primary-dark hover:underline"
-          >
-            Anulo
-          </button>
-        </div>
+        <UndoToast
+          message={undo.message}
+          secondary={undo.secondary}
+          onUndo={runUndo}
+          onDismiss={() => setUndo(null)}
+        />
       ) : null}
     </main>
   );
