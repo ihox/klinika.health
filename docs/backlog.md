@@ -12,6 +12,13 @@
 
 ## Cleanup tasks
 - Stale slice-XX branches (slice-01 through slice-16) can be pruned
+- E2E mocks in apps/web/tests/e2e/{booking,kalendari}.spec.ts still mock the
+  pre-Phase-2a `/api/appointments/*` URL space and `{appointments: [...]}`
+  payload shape. Rewrite the route handlers to the new
+  `/api/visits/calendar/*` paths + `{entries: [...]}` payloads + the new
+  stream event names (visit.created / visit.updated / visit.status_changed
+  / visit.deleted / visit.restored). doctor-home.spec.ts was already
+  updated in commit 34fad6b; these two are the remaining stragglers.
 
 ## v2 candidates
 - DICOM MWL (auto study-patient linkage)

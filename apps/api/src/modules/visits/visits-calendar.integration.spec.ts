@@ -1,0 +1,655 @@
+// Integration tests for the unified visits calendar API.
+//
+// Mirrors the patients integration pattern (real Postgres, real Nest
+// app, supertest at the HTTP layer). Covers:
+//
+//   1. Receptionist creates a scheduled visit; list returns it
+//   2. Working-hours validation rejects out-of-hours slots
+//   3. Conflict detection rejects overlapping bookings
+//   4. PATCH /:id/scheduling reschedules and writes an audit diff
+//   5. PATCH /:id/status validates the lifecycle matrix
+//   6. POST /walkin creates a walk-in with arrived_at + status=arrived
+//   7. Stats endpoint reflects walk-ins + scheduled separately
+//   8. Soft delete + restore round-trip
+//   9. Soft delete refused on rows carrying clinical data
+//  10. Receptionist response shape redacts paymentCode
+//  11. Cross-clinic RLS isolation
+//  12. Audit-shape: resource_type=visit, action=visit.*
+//
+// Skips automatically when DATABASE_URL or seed passwords are unset.
+
+import { execSync } from 'node:child_process';
+import { resolve } from 'node:path';
+
+import { Test, type TestingModule } from '@nestjs/testing';
+import type { NestExpressApplication } from '@nestjs/platform-express';
+import request from 'supertest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+
+import { AppModule } from '../../app.module';
+import { PrismaService } from '../../prisma/prisma.service';
+import { SESSION_COOKIE_NAME } from '../auth/session.service';
+import { CapturingEmailSender, EMAIL_SENDER, EmailService } from '../email/email.service';
+
+const DATABASE_URL = process.env['DATABASE_URL'];
+const SEED_DOCTOR_PASSWORD = process.env['SEED_DOCTOR_PASSWORD'];
+const SEED_RECEPTIONIST_PASSWORD = process.env['SEED_RECEPTIONIST_PASSWORD'];
+const ENABLED = Boolean(DATABASE_URL && SEED_DOCTOR_PASSWORD && SEED_RECEPTIONIST_PASSWORD);
+
+const TENANT_HOST = 'donetamed.klinika.health';
+const RECEPTIONIST_EMAIL = 'ereblire.krasniqi@klinika.health';
+const DOCTOR_EMAIL = 'taulant.shala@klinika.health';
+
+describe.skipIf(!ENABLED)('Visits calendar integration', () => {
+  let app: NestExpressApplication;
+  let module: TestingModule;
+  let prisma: PrismaService;
+  let captured: CapturingEmailSender;
+  let clinicId: string;
+  let secondClinicId: string;
+  let patientId: string;
+
+  beforeAll(async () => {
+    const apiDir = resolve(__dirname, '..', '..', '..');
+    execSync('pnpm exec prisma migrate deploy', { cwd: apiDir, stdio: 'inherit' });
+    for (const f of [
+      '001_rls_indexes_triggers.sql',
+      '002_auth_rls.sql',
+      '003_admin.sql',
+      '004_patients_search.sql',
+    ]) {
+      execSync(
+        `psql "${DATABASE_URL ?? ''}" -v ON_ERROR_STOP=1 -f prisma/sql/${f}`,
+        { cwd: apiDir, stdio: 'inherit' },
+      );
+    }
+    execSync('pnpm seed', { cwd: apiDir, stdio: 'inherit' });
+
+    captured = new CapturingEmailSender();
+    module = await Test.createTestingModule({ imports: [AppModule] })
+      .overrideProvider(EMAIL_SENDER)
+      .useValue(captured)
+      .compile();
+    app = module.createNestApplication<NestExpressApplication>({ bodyParser: false });
+    app.useBodyParser('json', { limit: '6mb' });
+    app.set('trust proxy', true);
+    await app.init();
+    prisma = app.get(PrismaService);
+    app.get(EmailService).setSender(captured);
+
+    const clinic = await prisma.clinic.findFirstOrThrow({ where: { subdomain: 'donetamed' } });
+    clinicId = clinic.id;
+
+    const second = await prisma.clinic.upsert({
+      where: { subdomain: 'second-calendar' },
+      update: {},
+      create: {
+        subdomain: 'second-calendar',
+        name: 'Klinika Tjetër',
+        shortName: 'Tjetër',
+        address: 'rr. Test',
+        city: 'Prishtinë',
+        phones: ['044 11 22 33'],
+        email: 'info@second.test',
+        hoursConfig: {
+          timezone: 'Europe/Belgrade',
+          days: {
+            mon: { open: true, start: '10:00', end: '18:00' },
+            tue: { open: true, start: '10:00', end: '18:00' },
+            wed: { open: true, start: '10:00', end: '18:00' },
+            thu: { open: true, start: '10:00', end: '18:00' },
+            fri: { open: true, start: '10:00', end: '18:00' },
+            sat: { open: false },
+            sun: { open: false },
+          },
+          durations: [10, 15, 20, 30],
+          defaultDuration: 15,
+        },
+        paymentCodes: { E: { label: 'Falas', amountCents: 0 } },
+        logoUrl: '',
+        signatureUrl: '',
+      },
+    });
+    secondClinicId = second.id;
+  });
+
+  afterAll(async () => {
+    await app?.close();
+  });
+
+  beforeEach(async () => {
+    captured.clear();
+    await prisma.rateLimit.deleteMany({});
+    await prisma.authLoginAttempt.deleteMany({});
+    await prisma.authMfaCode.deleteMany({});
+    await prisma.authTrustedDevice.deleteMany({});
+    await prisma.authSession.deleteMany({});
+    await prisma.auditLog.deleteMany({ where: { clinicId } });
+    await prisma.visit.deleteMany({ where: { clinicId } });
+    await prisma.visit.deleteMany({ where: { clinicId: secondClinicId } });
+    await prisma.patient.deleteMany({ where: { clinicId } });
+    await prisma.patient.deleteMany({ where: { clinicId: secondClinicId } });
+
+    const patient = await prisma.patient.create({
+      data: {
+        clinicId,
+        firstName: 'Era',
+        lastName: 'Krasniqi',
+        dateOfBirth: new Date('2023-08-03'),
+      },
+    });
+    patientId = patient.id;
+  });
+
+  // Anchor tests to a deterministic open weekday a week in the future so
+  // the stats endpoint exercises the nextAppointment branch.
+  function nextOpenDate(daysAhead = 7): string {
+    const d = new Date();
+    d.setUTCDate(d.getUTCDate() + daysAhead);
+    while (d.getUTCDay() !== 3) {
+      d.setUTCDate(d.getUTCDate() + 1);
+    }
+    return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
+  }
+
+  // -----------------------------------------------------------------------
+  // 1. Create scheduled + list
+  // -----------------------------------------------------------------------
+
+  it('receptionist creates a scheduled visit; list returns it with status=scheduled and isWalkIn=false', async () => {
+    const cookie = await loginAs(RECEPTIONIST_EMAIL, SEED_RECEPTIONIST_PASSWORD!);
+    const date = nextOpenDate();
+    const created = await req()
+      .post('/api/visits/scheduled')
+      .set('host', TENANT_HOST)
+      .set('Cookie', cookie)
+      .send({ patientId, date, time: '10:30', durationMinutes: 15 });
+    expect(created.status).toBe(201);
+    const entry = created.body.entry;
+    expect(entry.status).toBe('scheduled');
+    expect(entry.isWalkIn).toBe(false);
+    expect(entry.scheduledFor).toBeTruthy();
+    expect(entry.durationMinutes).toBe(15);
+    expect(entry.arrivedAt).toBeNull();
+    expect(entry.patient.firstName).toBe('Era');
+    // Receptionist privacy boundary: paymentCode is redacted.
+    expect(entry.paymentCode).toBeNull();
+
+    const list = await req()
+      .get(`/api/visits/calendar?from=${date}&to=${date}`)
+      .set('host', TENANT_HOST)
+      .set('Cookie', cookie);
+    expect(list.status).toBe(200);
+    expect(list.body.entries).toHaveLength(1);
+    expect(list.body.entries[0].id).toBe(entry.id);
+
+    const audit = await prisma.auditLog.findMany({
+      where: { clinicId, resourceType: 'visit', resourceId: entry.id },
+    });
+    const create = audit.find((a) => a.action === 'visit.scheduled');
+    expect(create).toBeDefined();
+    const changes = create!.changes as Array<{ field: string }>;
+    expect(changes.map((c) => c.field)).toEqual(
+      expect.arrayContaining(['patientId', 'scheduledFor', 'durationMinutes', 'status']),
+    );
+  });
+
+  // -----------------------------------------------------------------------
+  // 2. Working-hours validation
+  // -----------------------------------------------------------------------
+
+  it('rejects scheduled visits outside working hours', async () => {
+    const cookie = await loginAs(RECEPTIONIST_EMAIL, SEED_RECEPTIONIST_PASSWORD!);
+    const date = nextOpenDate();
+    const res = await req()
+      .post('/api/visits/scheduled')
+      .set('host', TENANT_HOST)
+      .set('Cookie', cookie)
+      .send({ patientId, date, time: '08:00', durationMinutes: 15 });
+    expect(res.status).toBe(400);
+    expect(res.body.reason).toBe('before_open');
+  });
+
+  // -----------------------------------------------------------------------
+  // 3. Conflict detection
+  // -----------------------------------------------------------------------
+
+  it('rejects overlapping scheduled visits', async () => {
+    const cookie = await loginAs(RECEPTIONIST_EMAIL, SEED_RECEPTIONIST_PASSWORD!);
+    const date = nextOpenDate();
+    const first = await req()
+      .post('/api/visits/scheduled')
+      .set('host', TENANT_HOST)
+      .set('Cookie', cookie)
+      .send({ patientId, date, time: '10:30', durationMinutes: 20 });
+    expect(first.status).toBe(201);
+
+    const conflict = await req()
+      .post('/api/visits/scheduled')
+      .set('host', TENANT_HOST)
+      .set('Cookie', cookie)
+      .send({ patientId, date, time: '10:40', durationMinutes: 15 });
+    expect(conflict.status).toBe(400);
+    expect(conflict.body.reason).toBe('conflict');
+  });
+
+  // -----------------------------------------------------------------------
+  // 4. Reschedule via PATCH /:id/scheduling
+  // -----------------------------------------------------------------------
+
+  it('PATCH /:id/scheduling moves a booking and writes a scheduledFor diff', async () => {
+    const cookie = await loginAs(RECEPTIONIST_EMAIL, SEED_RECEPTIONIST_PASSWORD!);
+    const date = nextOpenDate();
+    const create = await req()
+      .post('/api/visits/scheduled')
+      .set('host', TENANT_HOST)
+      .set('Cookie', cookie)
+      .send({ patientId, date, time: '10:30', durationMinutes: 15 });
+    const id = create.body.entry.id;
+
+    const patch = await req()
+      .patch(`/api/visits/${id}/scheduling`)
+      .set('host', TENANT_HOST)
+      .set('Cookie', cookie)
+      .send({ time: '11:00' });
+    expect(patch.status).toBe(200);
+    expect(patch.body.entry.id).toBe(id);
+
+    const audit = await prisma.auditLog.findFirst({
+      where: { clinicId, action: 'visit.rescheduled', resourceId: id },
+    });
+    expect(audit).toBeDefined();
+    const changes = audit!.changes as Array<{ field: string; old: unknown; new: unknown }>;
+    const sf = changes.find((c) => c.field === 'scheduledFor');
+    expect(sf).toBeDefined();
+    expect(sf!.old).not.toEqual(sf!.new);
+  });
+
+  // -----------------------------------------------------------------------
+  // 5. PATCH /:id/status — validates the lifecycle matrix
+  // -----------------------------------------------------------------------
+
+  it('PATCH /:id/status allows scheduled → arrived and stamps arrivedAt', async () => {
+    const cookie = await loginAs(RECEPTIONIST_EMAIL, SEED_RECEPTIONIST_PASSWORD!);
+    const date = nextOpenDate();
+    const create = await req()
+      .post('/api/visits/scheduled')
+      .set('host', TENANT_HOST)
+      .set('Cookie', cookie)
+      .send({ patientId, date, time: '10:30', durationMinutes: 15 });
+    const id = create.body.entry.id;
+
+    const ok = await req()
+      .patch(`/api/visits/${id}/status`)
+      .set('host', TENANT_HOST)
+      .set('Cookie', cookie)
+      .send({ status: 'arrived' });
+    expect(ok.status).toBe(200);
+    expect(ok.body.entry.status).toBe('arrived');
+    expect(ok.body.entry.arrivedAt).not.toBeNull();
+
+    const audit = await prisma.auditLog.findFirst({
+      where: { clinicId, action: 'visit.status_changed', resourceId: id },
+    });
+    expect(audit).toBeDefined();
+    const changes = audit!.changes as Array<{ field: string; old: unknown; new: unknown }>;
+    const statusChange = changes.find((c) => c.field === 'status');
+    expect(statusChange).toEqual({ field: 'status', old: 'scheduled', new: 'arrived' });
+  });
+
+  it('PATCH /:id/status rejects scheduled → in_progress (not in matrix)', async () => {
+    const cookie = await loginAs(RECEPTIONIST_EMAIL, SEED_RECEPTIONIST_PASSWORD!);
+    const date = nextOpenDate();
+    const create = await req()
+      .post('/api/visits/scheduled')
+      .set('host', TENANT_HOST)
+      .set('Cookie', cookie)
+      .send({ patientId, date, time: '10:30', durationMinutes: 15 });
+    const id = create.body.entry.id;
+
+    const bad = await req()
+      .patch(`/api/visits/${id}/status`)
+      .set('host', TENANT_HOST)
+      .set('Cookie', cookie)
+      .send({ status: 'in_progress' });
+    expect(bad.status).toBe(400);
+    expect(bad.body.reason).toBe('invalid_transition');
+    expect(bad.body.from).toBe('scheduled');
+    expect(bad.body.to).toBe('in_progress');
+  });
+
+  it('PATCH /:id/status allows no_show → arrived (Rikthe te paraqitur)', async () => {
+    const cookie = await loginAs(RECEPTIONIST_EMAIL, SEED_RECEPTIONIST_PASSWORD!);
+    const date = nextOpenDate();
+    const create = await req()
+      .post('/api/visits/scheduled')
+      .set('host', TENANT_HOST)
+      .set('Cookie', cookie)
+      .send({ patientId, date, time: '10:30', durationMinutes: 15 });
+    const id = create.body.entry.id;
+
+    await req()
+      .patch(`/api/visits/${id}/status`)
+      .set('host', TENANT_HOST)
+      .set('Cookie', cookie)
+      .send({ status: 'no_show' })
+      .expect(200);
+
+    const reopen = await req()
+      .patch(`/api/visits/${id}/status`)
+      .set('host', TENANT_HOST)
+      .set('Cookie', cookie)
+      .send({ status: 'arrived' });
+    expect(reopen.status).toBe(200);
+    expect(reopen.body.entry.status).toBe('arrived');
+    expect(reopen.body.entry.arrivedAt).not.toBeNull();
+  });
+
+  // -----------------------------------------------------------------------
+  // 6. Walk-in
+  // -----------------------------------------------------------------------
+
+  it('POST /walkin creates an arrived row with no scheduledFor / durationMinutes', async () => {
+    const cookie = await loginAs(RECEPTIONIST_EMAIL, SEED_RECEPTIONIST_PASSWORD!);
+    const res = await req()
+      .post('/api/visits/walkin')
+      .set('host', TENANT_HOST)
+      .set('Cookie', cookie)
+      .send({ patientId });
+    expect(res.status).toBe(201);
+    const entry = res.body.entry;
+    expect(entry.isWalkIn).toBe(true);
+    expect(entry.status).toBe('arrived');
+    expect(entry.scheduledFor).toBeNull();
+    expect(entry.durationMinutes).toBeNull();
+    expect(entry.arrivedAt).toBeTruthy();
+
+    const audit = await prisma.auditLog.findFirst({
+      where: { clinicId, action: 'visit.walkin.added', resourceId: entry.id },
+    });
+    expect(audit).toBeDefined();
+    expect(audit!.resourceType).toBe('visit');
+  });
+
+  // -----------------------------------------------------------------------
+  // 7. Stats endpoint
+  // -----------------------------------------------------------------------
+
+  it('stats counts walk-ins and scheduled separately, and aggregates payments', async () => {
+    const cookie = await loginAs(RECEPTIONIST_EMAIL, SEED_RECEPTIONIST_PASSWORD!);
+    // Create a walk-in for today.
+    const todayIso = await req()
+      .post('/api/visits/walkin')
+      .set('host', TENANT_HOST)
+      .set('Cookie', cookie)
+      .send({ patientId });
+    expect(todayIso.status).toBe(201);
+    const today = todayIso.body.entry.arrivedAt.slice(0, 10);
+
+    // Insert a completed clinical visit anchored to the same local day.
+    const creator = await prisma.user.findFirstOrThrow({ where: { clinicId } });
+    await prisma.visit.create({
+      data: {
+        clinicId,
+        patientId,
+        visitDate: new Date(`${today}T00:00:00Z`),
+        scheduledFor: new Date(`${today}T08:00:00Z`),
+        durationMinutes: 15,
+        isWalkIn: false,
+        status: 'completed',
+        paymentCode: 'A',
+        complaint: 'kontroll',
+        createdBy: creator.id,
+        updatedBy: creator.id,
+      },
+    });
+
+    const res = await req()
+      .get(`/api/visits/calendar/stats?date=${today}`)
+      .set('host', TENANT_HOST)
+      .set('Cookie', cookie);
+    expect(res.status).toBe(200);
+    expect(res.body.walkIn).toBe(1);
+    expect(res.body.scheduled + res.body.completed + res.body.arrived).toBeGreaterThanOrEqual(2);
+    // Receptionist sees the aggregate; A is 1500 cents in the seed.
+    expect(typeof res.body.paymentTotalCents).toBe('number');
+  });
+
+  // -----------------------------------------------------------------------
+  // 8. Soft delete + restore round-trip
+  // -----------------------------------------------------------------------
+
+  it('soft-delete + restore round-trips with a 30s window', async () => {
+    const cookie = await loginAs(RECEPTIONIST_EMAIL, SEED_RECEPTIONIST_PASSWORD!);
+    const date = nextOpenDate();
+    const create = await req()
+      .post('/api/visits/scheduled')
+      .set('host', TENANT_HOST)
+      .set('Cookie', cookie)
+      .send({ patientId, date, time: '11:00', durationMinutes: 15 });
+    const id = create.body.entry.id;
+
+    const del = await req()
+      .delete(`/api/visits/calendar/${id}`)
+      .set('host', TENANT_HOST)
+      .set('Cookie', cookie);
+    expect(del.status).toBe(200);
+    expect(typeof del.body.restorableUntil).toBe('string');
+
+    const list1 = await req()
+      .get(`/api/visits/calendar?from=${date}&to=${date}`)
+      .set('host', TENANT_HOST)
+      .set('Cookie', cookie);
+    expect(list1.body.entries).toHaveLength(0);
+
+    const restore = await req()
+      .post(`/api/visits/calendar/${id}/restore`)
+      .set('host', TENANT_HOST)
+      .set('Cookie', cookie);
+    expect(restore.status).toBe(200);
+
+    const list2 = await req()
+      .get(`/api/visits/calendar?from=${date}&to=${date}`)
+      .set('host', TENANT_HOST)
+      .set('Cookie', cookie);
+    expect(list2.body.entries).toHaveLength(1);
+  });
+
+  // -----------------------------------------------------------------------
+  // 9. Delete refused on rows with clinical data
+  // -----------------------------------------------------------------------
+
+  it('DELETE refuses 403 when the row carries clinical data', async () => {
+    const cookie = await loginAs(RECEPTIONIST_EMAIL, SEED_RECEPTIONIST_PASSWORD!);
+    const date = nextOpenDate();
+    const create = await req()
+      .post('/api/visits/scheduled')
+      .set('host', TENANT_HOST)
+      .set('Cookie', cookie)
+      .send({ patientId, date, time: '11:30', durationMinutes: 15 });
+    const id = create.body.entry.id;
+
+    // Backdoor in some clinical content (the doctor's auto-save would
+    // normally do this; we shortcut for the test).
+    await prisma.visit.update({
+      where: { id },
+      data: { complaint: 'temperaturë', paymentCode: 'A' },
+    });
+
+    const del = await req()
+      .delete(`/api/visits/calendar/${id}`)
+      .set('host', TENANT_HOST)
+      .set('Cookie', cookie);
+    expect(del.status).toBe(403);
+    expect(del.body.reason).toBe('has_clinical_data');
+    expect(typeof del.body.message).toBe('string');
+    expect(del.body.message).toMatch(/Pastro përmes formularit të mjekut/);
+  });
+
+  // -----------------------------------------------------------------------
+  // 10. Receptionist response shape redacts paymentCode
+  // -----------------------------------------------------------------------
+
+  it('receptionist GET response redacts paymentCode but doctor sees it', async () => {
+    const recCookie = await loginAs(RECEPTIONIST_EMAIL, SEED_RECEPTIONIST_PASSWORD!);
+    const docCookie = await loginAs(DOCTOR_EMAIL, SEED_DOCTOR_PASSWORD!);
+
+    const date = nextOpenDate();
+    const create = await req()
+      .post('/api/visits/scheduled')
+      .set('host', TENANT_HOST)
+      .set('Cookie', recCookie)
+      .send({ patientId, date, time: '12:00', durationMinutes: 15 });
+    const id = create.body.entry.id;
+    // Doctor stamps a payment code (simulating a completed visit).
+    await prisma.visit.update({
+      where: { id },
+      data: { status: 'completed', paymentCode: 'A' },
+    });
+
+    const recList = await req()
+      .get(`/api/visits/calendar?from=${date}&to=${date}`)
+      .set('host', TENANT_HOST)
+      .set('Cookie', recCookie);
+    const recEntry = recList.body.entries.find(
+      (e: { id: string }) => e.id === id,
+    );
+    expect(recEntry).toBeDefined();
+    expect(recEntry.paymentCode).toBeNull();
+
+    const docList = await req()
+      .get(`/api/visits/calendar?from=${date}&to=${date}`)
+      .set('host', TENANT_HOST)
+      .set('Cookie', docCookie);
+    const docEntry = docList.body.entries.find(
+      (e: { id: string }) => e.id === id,
+    );
+    expect(docEntry).toBeDefined();
+    expect(docEntry.paymentCode).toBe('A');
+  });
+
+  // -----------------------------------------------------------------------
+  // 11. RLS isolation
+  // -----------------------------------------------------------------------
+
+  it('RLS isolation: clinic A cookie cannot reach clinic B data', async () => {
+    const cookieA = await loginAs(RECEPTIONIST_EMAIL, SEED_RECEPTIONIST_PASSWORD!);
+    let userB = await prisma.user.findFirst({ where: { clinicId: secondClinicId } });
+    if (!userB) {
+      userB = await prisma.user.create({
+        data: {
+          clinicId: secondClinicId,
+          email: 'second-rls@second-calendar.health',
+          passwordHash: 'x',
+          roles: ['receptionist'],
+          firstName: 'X',
+          lastName: 'Y',
+        },
+      });
+    }
+    const patientB = await prisma.patient.create({
+      data: {
+        clinicId: secondClinicId,
+        firstName: 'Cross',
+        lastName: 'Tenant',
+        dateOfBirth: new Date('2022-01-01'),
+      },
+    });
+    const futureUtc = new Date(Date.now() + 7 * 86_400_000);
+    futureUtc.setUTCHours(10, 0, 0, 0);
+    const visitB = await prisma.visit.create({
+      data: {
+        clinicId: secondClinicId,
+        patientId: patientB.id,
+        visitDate: new Date(`${futureUtc.toISOString().slice(0, 10)}T00:00:00Z`),
+        scheduledFor: futureUtc,
+        durationMinutes: 15,
+        status: 'scheduled',
+        createdBy: userB.id,
+        updatedBy: userB.id,
+      },
+    });
+
+    const date = nextOpenDate();
+    const res = await req()
+      .get(`/api/visits/calendar?from=${date}&to=${date}`)
+      .set('host', TENANT_HOST)
+      .set('Cookie', cookieA);
+    expect(res.status).toBe(200);
+    const ids = (res.body.entries as Array<{ id: string }>).map((e) => e.id);
+    expect(ids).not.toContain(visitB.id);
+  });
+
+  // -----------------------------------------------------------------------
+  // 12. Audit-shape invariant
+  // -----------------------------------------------------------------------
+
+  it('calendar mutations write audit rows with resource_type=visit and action=visit.*', async () => {
+    const cookie = await loginAs(RECEPTIONIST_EMAIL, SEED_RECEPTIONIST_PASSWORD!);
+    const date = nextOpenDate();
+    const create = await req()
+      .post('/api/visits/scheduled')
+      .set('host', TENANT_HOST)
+      .set('Cookie', cookie)
+      .send({ patientId, date, time: '13:30', durationMinutes: 15 });
+    const id = create.body.entry.id;
+
+    await req()
+      .patch(`/api/visits/${id}/status`)
+      .set('host', TENANT_HOST)
+      .set('Cookie', cookie)
+      .send({ status: 'arrived' });
+
+    await req()
+      .delete(`/api/visits/calendar/${id}`)
+      .set('host', TENANT_HOST)
+      .set('Cookie', cookie);
+
+    const rows = await prisma.auditLog.findMany({
+      where: { clinicId, resourceId: id },
+    });
+    expect(rows.length).toBeGreaterThanOrEqual(3);
+    for (const r of rows) {
+      expect(r.resourceType).toBe('visit');
+      expect(r.action).toMatch(/^visit\./);
+    }
+    // No stray legacy resource_type='appointment' rows post-Phase 2a.
+    const legacy = await prisma.auditLog.count({
+      where: { clinicId, resourceType: 'appointment' },
+    });
+    expect(legacy).toBe(0);
+  });
+
+  // -----------------------------------------------------------------------
+  // Helpers (mirror patients.integration.spec.ts)
+  // -----------------------------------------------------------------------
+
+  function req(): request.Agent {
+    return request(app.getHttpServer());
+  }
+
+  async function loginAs(email: string, password: string): Promise<string> {
+    const start = await req()
+      .post('/api/auth/login')
+      .set('host', TENANT_HOST)
+      .send({ email, password, rememberMe: false });
+    expect(start.status).toBe(200);
+    expect(start.body.status).toBe('mfa_required');
+    const pending = start.body.pendingSessionId as string;
+    const msg = captured.takeLatest(email);
+    expect(msg).toBeDefined();
+    const match = msg!.text.match(/(\d{3}) (\d{3})/);
+    const code = match ? `${match[1]}${match[2]}` : '';
+    const verify = await req()
+      .post('/api/auth/mfa/verify')
+      .set('host', TENANT_HOST)
+      .send({ pendingSessionId: pending, code, trustDevice: false });
+    expect(verify.status).toBe(200);
+    const setCookie = verify.headers['set-cookie'];
+    const cookies = Array.isArray(setCookie) ? setCookie : [setCookie as string];
+    const session = cookies.find((c) => c.startsWith(`${SESSION_COOKIE_NAME}=`));
+    expect(session).toBeDefined();
+    captured.clear();
+    return session!.split(';')[0];
+  }
+});
