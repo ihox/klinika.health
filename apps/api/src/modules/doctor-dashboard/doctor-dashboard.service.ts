@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 
+import { localDateToday, utcMidnight } from '../../common/datetime';
 import type { RequestContext } from '../../common/request-context/request-context';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
@@ -40,7 +41,10 @@ export class DoctorDashboardService {
   ): Promise<DoctorDashboardResponse> {
     void ctx;
     const now = new Date();
-    const today = overrideDate ?? utcToLocalParts(now).date;
+    const today = overrideDate ?? localDateToday();
+    // Appointments are Timestamptz; visit_date is @db.Date. Each gets
+    // the operand type Postgres expects — mixing them caused the
+    // dashboard "today's visits" bug fixed in ADR-006.
     const dayStartUtc = localClockToUtc(today, '00:00');
     const dayEndUtc = new Date(dayStartUtc.getTime() + 86_400_000);
 
@@ -77,7 +81,7 @@ export class DoctorDashboardService {
         where: {
           clinicId,
           deletedAt: null,
-          visitDate: { gte: dayStartUtc, lt: dayEndUtc },
+          visitDate: utcMidnight(today),
         },
         orderBy: { createdAt: 'asc' },
         include: {

@@ -1,11 +1,11 @@
 import { Injectable } from '@nestjs/common';
 
+import { localMonthStart, utcMidnight } from '../../common/datetime';
 import { PrismaService } from '../../prisma/prisma.service';
 import { HealthService } from '../health/health.service';
 import type { PlatformHealthSnapshot } from './admin.dto';
 
 const ACTIVE_USER_WINDOW_MS = 24 * 60 * 60_000; // last 24h
-const VISITS_THIS_MONTH_FROM_DAY = 1;
 const HEARTBEAT_FRESHNESS_MS = 10 * 60_000;
 const RECENT_ALERTS_LIMIT = 20;
 
@@ -30,7 +30,12 @@ export class AdminHealthService {
 
   async snapshot(): Promise<PlatformHealthSnapshot> {
     const now = new Date();
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), VISITS_THIS_MONTH_FROM_DAY);
+    // visits.visit_date is @db.Date — compare against a YYYY-MM-DD
+    // string anchored to the Belgrade-local month start. A host-default
+    // `new Date(year, month, 1)` would land on `YYYY-(MM-1)-30T22:00Z`
+    // in summer and silently leak last month's final days into the
+    // count.
+    const monthStart = utcMidnight(localMonthStart());
     const activeUserCutoff = new Date(now.getTime() - ACTIVE_USER_WINDOW_MS);
     const heartbeatCutoff = new Date(now.getTime() - HEARTBEAT_FRESHNESS_MS);
 
