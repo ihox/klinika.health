@@ -740,6 +740,251 @@ describe.skipIf(!ENABLED)('Visits calendar integration', () => {
   });
 
   // -----------------------------------------------------------------------
+  // 13. Receptionist edit-lock (daily-report integrity)
+  // -----------------------------------------------------------------------
+  //
+  // The lock rule is "past day OR today+completed" for receptionist-only
+  // sessions. The seed doctor user carries BOTH `doctor` and
+  // `clinic_admin` roles — logging in as them exercises the bypass path
+  // for both privileges in one test. Locked rows can't be created via
+  // the public API (the date validation prevents past creation), so the
+  // setup directly inserts via Prisma with the desired visit_date /
+  // scheduledFor / status / arrivedAt fields.
+
+  /**
+   * Insert a visit row directly via Prisma for lock setup. Bypasses
+   * the controller's date validation so tests can plant rows on past
+   * days and in any status.
+   */
+  async function createVisitRaw(opts: {
+    visitDate: string; // YYYY-MM-DD (local)
+    scheduledFor?: Date | null;
+    arrivedAt?: Date | null;
+    durationMinutes?: number;
+    status: 'scheduled' | 'arrived' | 'in_progress' | 'completed' | 'no_show' | 'cancelled';
+    isWalkIn?: boolean;
+    deletedAt?: Date | null;
+  }): Promise<string> {
+    const seed = await prisma.user.findFirstOrThrow({
+      where: { clinicId, roles: { has: 'doctor' } },
+    });
+    const row = await prisma.visit.create({
+      data: {
+        clinicId,
+        patientId,
+        visitDate: new Date(`${opts.visitDate}T00:00:00Z`),
+        scheduledFor: opts.scheduledFor ?? null,
+        durationMinutes: opts.durationMinutes ?? (opts.isWalkIn ? 5 : 15),
+        isWalkIn: opts.isWalkIn ?? false,
+        arrivedAt: opts.arrivedAt ?? null,
+        status: opts.status,
+        deletedAt: opts.deletedAt ?? null,
+        createdBy: seed.id,
+        updatedBy: seed.id,
+      },
+    });
+    return row.id;
+  }
+
+  function yesterdayIso(): string {
+    const d = new Date();
+    d.setUTCDate(d.getUTCDate() - 1);
+    return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
+  }
+
+  function todayIso(): string {
+    const d = new Date();
+    return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
+  }
+
+  it('lock: receptionist PATCH /:id/status on yesterday + scheduled → 403 locked + audit', async () => {
+    const cookie = await loginAs(RECEPTIONIST_EMAIL, SEED_RECEPTIONIST_PASSWORD!);
+    const yIso = yesterdayIso();
+    const id = await createVisitRaw({
+      visitDate: yIso,
+      scheduledFor: new Date(`${yIso}T10:00:00Z`),
+      status: 'scheduled',
+    });
+
+    const res = await req()
+      .patch(`/api/visits/${id}/status`)
+      .set('host', TENANT_HOST)
+      .set('Cookie', cookie)
+      .send({ status: 'no_show' });
+    expect(res.status).toBe(403);
+    expect(res.body.reason).toBe('locked');
+    expect(typeof res.body.message).toBe('string');
+
+    const blocked = await prisma.auditLog.findFirst({
+      where: { clinicId, action: 'visit.edit_blocked', resourceId: id },
+    });
+    expect(blocked).toBeDefined();
+    const changes = blocked!.changes as Array<{ field: string; new: unknown }>;
+    const byField = Object.fromEntries(changes.map((c) => [c.field, c.new]));
+    expect(byField['reason']).toBe('locked');
+    expect(byField['operation']).toBe('status_change');
+    expect(byField['actorRole']).toBe('receptionist');
+    expect(byField['visitStatus']).toBe('scheduled');
+    expect(byField['visitDate']).toBe(yIso);
+  });
+
+  it('lock: receptionist PATCH /:id/status on today + completed → 403', async () => {
+    const cookie = await loginAs(RECEPTIONIST_EMAIL, SEED_RECEPTIONIST_PASSWORD!);
+    const tIso = todayIso();
+    const id = await createVisitRaw({
+      visitDate: tIso,
+      scheduledFor: new Date(`${tIso}T10:00:00Z`),
+      status: 'completed',
+    });
+
+    const res = await req()
+      .patch(`/api/visits/${id}/status`)
+      .set('host', TENANT_HOST)
+      .set('Cookie', cookie)
+      .send({ status: 'arrived' });
+    expect(res.status).toBe(403);
+    expect(res.body.reason).toBe('locked');
+  });
+
+  it('lock: receptionist PATCH /:id/status on today + scheduled → 200', async () => {
+    const cookie = await loginAs(RECEPTIONIST_EMAIL, SEED_RECEPTIONIST_PASSWORD!);
+    const tIso = todayIso();
+    const id = await createVisitRaw({
+      visitDate: tIso,
+      scheduledFor: new Date(`${tIso}T10:00:00Z`),
+      status: 'scheduled',
+    });
+
+    const res = await req()
+      .patch(`/api/visits/${id}/status`)
+      .set('host', TENANT_HOST)
+      .set('Cookie', cookie)
+      .send({ status: 'arrived' });
+    expect(res.status).toBe(200);
+    expect(res.body.entry.status).toBe('arrived');
+  });
+
+  it('lock: receptionist PATCH /:id/scheduling on yesterday → 403', async () => {
+    const cookie = await loginAs(RECEPTIONIST_EMAIL, SEED_RECEPTIONIST_PASSWORD!);
+    const yIso = yesterdayIso();
+    const id = await createVisitRaw({
+      visitDate: yIso,
+      scheduledFor: new Date(`${yIso}T10:00:00Z`),
+      status: 'scheduled',
+    });
+
+    const res = await req()
+      .patch(`/api/visits/${id}/scheduling`)
+      .set('host', TENANT_HOST)
+      .set('Cookie', cookie)
+      .send({ time: '11:00' });
+    expect(res.status).toBe(403);
+    expect(res.body.reason).toBe('locked');
+  });
+
+  it('lock: receptionist DELETE on yesterday → 403', async () => {
+    const cookie = await loginAs(RECEPTIONIST_EMAIL, SEED_RECEPTIONIST_PASSWORD!);
+    const yIso = yesterdayIso();
+    const id = await createVisitRaw({
+      visitDate: yIso,
+      scheduledFor: new Date(`${yIso}T10:00:00Z`),
+      status: 'scheduled',
+    });
+
+    const res = await req()
+      .delete(`/api/visits/calendar/${id}`)
+      .set('host', TENANT_HOST)
+      .set('Cookie', cookie);
+    expect(res.status).toBe(403);
+    expect(res.body.reason).toBe('locked');
+  });
+
+  it('lock: receptionist POST /restore on a visit deleted yesterday → 403', async () => {
+    const cookie = await loginAs(RECEPTIONIST_EMAIL, SEED_RECEPTIONIST_PASSWORD!);
+    const yIso = yesterdayIso();
+    const id = await createVisitRaw({
+      visitDate: yIso,
+      scheduledFor: new Date(`${yIso}T10:00:00Z`),
+      status: 'scheduled',
+      deletedAt: new Date(`${yIso}T11:00:00Z`),
+    });
+
+    const res = await req()
+      .post(`/api/visits/calendar/${id}/restore`)
+      .set('host', TENANT_HOST)
+      .set('Cookie', cookie);
+    expect(res.status).toBe(403);
+    expect(res.body.reason).toBe('locked');
+  });
+
+  it('lock: receptionist POST /walkin with locked pairing target (yesterday + scheduled) → 400 + locked audit on the target', async () => {
+    const cookie = await loginAs(RECEPTIONIST_EMAIL, SEED_RECEPTIONIST_PASSWORD!);
+    const yIso = yesterdayIso();
+    const targetId = await createVisitRaw({
+      visitDate: yIso,
+      scheduledFor: new Date(`${yIso}T10:00:00Z`),
+      status: 'scheduled',
+    });
+
+    const res = await req()
+      .post('/api/visits/walkin')
+      .set('host', TENANT_HOST)
+      .set('Cookie', cookie)
+      .send({ patientId, pairedWithVisitId: targetId });
+    expect(res.status).toBe(400);
+    expect(res.body.reason).toBe('locked');
+
+    const blocked = await prisma.auditLog.findFirst({
+      where: { clinicId, action: 'visit.edit_blocked', resourceId: targetId },
+    });
+    expect(blocked).toBeDefined();
+    const changes = blocked!.changes as Array<{ field: string; new: unknown }>;
+    const byField = Object.fromEntries(changes.map((c) => [c.field, c.new]));
+    expect(byField['operation']).toBe('walkin_pairing');
+  });
+
+  it('lock: doctor+clinic_admin bypasses the lock — PATCH /:id/status on yesterday → 200', async () => {
+    const cookie = await loginAs(DOCTOR_EMAIL, SEED_DOCTOR_PASSWORD!);
+    const yIso = yesterdayIso();
+    const id = await createVisitRaw({
+      visitDate: yIso,
+      scheduledFor: new Date(`${yIso}T10:00:00Z`),
+      status: 'scheduled',
+    });
+
+    const res = await req()
+      .patch(`/api/visits/${id}/status`)
+      .set('host', TENANT_HOST)
+      .set('Cookie', cookie)
+      .send({ status: 'no_show' });
+    expect(res.status).toBe(200);
+    expect(res.body.entry.status).toBe('no_show');
+
+    // No `visit.edit_blocked` audit row for the doctor — only the
+    // normal status_changed entry.
+    const blocked = await prisma.auditLog.count({
+      where: { clinicId, action: 'visit.edit_blocked', resourceId: id },
+    });
+    expect(blocked).toBe(0);
+  });
+
+  it('lock: doctor+clinic_admin bypasses the lock — DELETE on yesterday → 200', async () => {
+    const cookie = await loginAs(DOCTOR_EMAIL, SEED_DOCTOR_PASSWORD!);
+    const yIso = yesterdayIso();
+    const id = await createVisitRaw({
+      visitDate: yIso,
+      scheduledFor: new Date(`${yIso}T10:00:00Z`),
+      status: 'scheduled',
+    });
+
+    const res = await req()
+      .delete(`/api/visits/calendar/${id}`)
+      .set('host', TENANT_HOST)
+      .set('Cookie', cookie);
+    expect(res.status).toBe(200);
+  });
+
+  // -----------------------------------------------------------------------
   // Helpers (mirror patients.integration.spec.ts)
   // -----------------------------------------------------------------------
 
