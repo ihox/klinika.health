@@ -166,10 +166,10 @@ export class VisitsService {
     const visitDate = payload.visitDate
       ? utcMidnight(payload.visitDate)
       : utcMidnight(today);
-    const arrivedAt = await this.calendar.computeWalkInArrivedAt(
-      clinicId,
-      new Date(),
-    );
+    const [arrivedAt, durationMinutes] = await Promise.all([
+      this.calendar.computeWalkInArrivedAt(clinicId, new Date()),
+      this.calendar.getClinicWalkInDuration(clinicId),
+    ]);
 
     const created = await this.prisma.visit.create({
       data: {
@@ -177,7 +177,7 @@ export class VisitsService {
         patientId: patient.id,
         visitDate,
         scheduledFor: null,
-        durationMinutes: null,
+        durationMinutes,
         isWalkIn: true,
         arrivedAt,
         status: 'in_progress',

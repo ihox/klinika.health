@@ -91,16 +91,21 @@ const STATUS_LABEL: Record<VisitStatus, string> = {
   cancelled: 'Anuluar',
 };
 
-// Walk-ins have no durationMinutes; height is purely visual. The
-// `in_progress` variant needs the extra room for the "Në vizitë" badge.
-export const WALKIN_HEIGHT_PX: Record<VisitStatus, number> = {
-  scheduled: 24,
-  arrived: 24,
-  in_progress: 36,
-  completed: 24,
-  no_show: 24,
-  cancelled: 24,
-};
+// Default duration assumed for walk-in rows missing one (legacy data
+// pre-Phase 2b). 5 min mirrors the schema default and the snap unit.
+export const WALKIN_DEFAULT_DURATION_MIN = 5;
+
+/**
+ * Pixel height for a walk-in card on the receptionist calendar.
+ *
+ * Walk-in cards used to be a fixed 24/36px regardless of duration;
+ * Phase 2b makes the duration clinic-configurable (5–60 min) and ties
+ * the visual height to it via `durationMinutes * PX_PER_MIN`. A clinic
+ * setting of 10 yields 20px-tall strips; 60 yields 120px blocks.
+ */
+export function walkInHeightPx(durationMinutes: number | null): number {
+  return (durationMinutes ?? WALKIN_DEFAULT_DURATION_MIN) * PX_PER_MIN;
+}
 
 // Out-of-range visits (scheduled_for or arrived_at outside the grid's
 // open band) used to render with negative `top` and overlap the column
@@ -1259,7 +1264,7 @@ function WalkInCard({
   const parts = toLocalParts(anchor);
   const startMin = timeToMinutes(parts.time);
   const inlineTop = (startMin - gridStartMin) * PX_PER_MIN;
-  const height = WALKIN_HEIGHT_PX[entry.status] ?? 24;
+  const height = walkInHeightPx(entry.durationMinutes);
 
   const isInProgress = entry.status === 'in_progress';
   const isCompleted = entry.status === 'completed';

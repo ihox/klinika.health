@@ -6,12 +6,12 @@
 
 import { describe, expect, it } from 'vitest';
 
-import type { CalendarEntry, VisitStatus } from '@/lib/visits-calendar-client';
-import { VISIT_STATUSES } from '@/lib/visits-calendar-client';
+import type { CalendarEntry } from '@/lib/visits-calendar-client';
 import {
-  WALKIN_HEIGHT_PX,
+  WALKIN_DEFAULT_DURATION_MIN,
   classifyEntriesByGrid,
   groupWalkInsByDay,
+  walkInHeightPx,
 } from './calendar-grid';
 import { timeToMinutes, toLocalParts } from '@/lib/appointment-client';
 
@@ -175,27 +175,20 @@ describe('classifyEntriesByGrid', () => {
   });
 });
 
-describe('WALKIN_HEIGHT_PX', () => {
-  it('reserves extra room for the in_progress badge', () => {
-    expect(WALKIN_HEIGHT_PX.in_progress).toBe(36);
+describe('walkInHeightPx', () => {
+  // Phase 2b — walk-in card height is now duration-driven (clinic
+  // setting × PX_PER_MIN), not status-driven. Default duration is 5 min
+  // so legacy rows fall back to 10px; clinic admins can configure
+  // up to 60 min (120px) per CLAUDE.md §14.
+  it('scales linearly with duration at 2px per minute', () => {
+    expect(walkInHeightPx(5)).toBe(10);
+    expect(walkInHeightPx(10)).toBe(20);
+    expect(walkInHeightPx(30)).toBe(60);
+    expect(walkInHeightPx(60)).toBe(120);
   });
 
-  it('keeps every other status at the compact 24px height', () => {
-    const compactStatuses: VisitStatus[] = [
-      'arrived',
-      'completed',
-      'no_show',
-      'cancelled',
-      'scheduled',
-    ];
-    for (const s of compactStatuses) {
-      expect(WALKIN_HEIGHT_PX[s]).toBe(24);
-    }
-  });
-
-  it('covers every status in VISIT_STATUSES (no silent fallbacks)', () => {
-    for (const s of VISIT_STATUSES) {
-      expect(WALKIN_HEIGHT_PX[s]).toBeGreaterThan(0);
-    }
+  it('falls back to the 5-min default for legacy rows without a duration', () => {
+    expect(walkInHeightPx(null)).toBe(WALKIN_DEFAULT_DURATION_MIN * 2);
+    expect(walkInHeightPx(null)).toBe(10);
   });
 });

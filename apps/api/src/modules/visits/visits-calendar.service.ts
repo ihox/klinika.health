@@ -389,7 +389,10 @@ export class VisitsCalendarService {
     // the patient straight in. No other initial states are allowed —
     // the DTO Zod schema enforces it.
     const initialStatus: 'arrived' | 'in_progress' = payload.initialStatus ?? 'arrived';
-    const arrivedAt = await this.computeWalkInArrivedAt(clinicId, new Date());
+    const [arrivedAt, durationMinutes] = await Promise.all([
+      this.computeWalkInArrivedAt(clinicId, new Date()),
+      this.getClinicWalkInDuration(clinicId),
+    ]);
 
     const created = await this.prisma.visit.create({
       data: {
@@ -400,7 +403,7 @@ export class VisitsCalendarService {
         // is the canonical pattern (ADR-006 §DATE vs Timestamptz).
         visitDate: utcMidnight(localDateToday()),
         scheduledFor: null,
-        durationMinutes: null,
+        durationMinutes,
         isWalkIn: true,
         arrivedAt,
         status: initialStatus,
@@ -770,6 +773,24 @@ export class VisitsCalendarService {
 
     const { slotUnitMinutes, options } = computeAvailability(hours, date, time, occupied);
     return { date, time, slotUnitMinutes, options };
+  }
+
+  // -------------------------------------------------------------------------
+  // Walk-in defaults (duration) — sourced from the clinic setting.
+  // -------------------------------------------------------------------------
+
+  /**
+   * The clinic-configurable default duration (minutes) for new walk-ins.
+   * Falls back to 5 (the schema default) if the row is somehow missing —
+   * the FK on Visit.clinicId guarantees it isn't, but the safety keeps
+   * the call total.
+   */
+  async getClinicWalkInDuration(clinicId: string): Promise<number> {
+    const clinic = await this.prisma.clinic.findUnique({
+      where: { id: clinicId },
+      select: { walkinDurationMinutes: true },
+    });
+    return clinic?.walkinDurationMinutes ?? 5;
   }
 
   // -------------------------------------------------------------------------
