@@ -6,6 +6,10 @@ import { smtpSendMessage, type SmtpDialOptions } from '../clinic-settings/smtp-c
 import { mfaCodeEmail, type MfaCodeEmailVars } from './templates/mfa-code';
 import { newDeviceEmail, type NewDeviceEmailVars } from './templates/new-device';
 import { passwordResetEmail, type PasswordResetEmailVars } from './templates/password-reset';
+import {
+  platformAdminSetupEmail,
+  type PlatformAdminSetupEmailVars,
+} from './templates/platform-admin-setup';
 import { tenantSetupEmail, type TenantSetupEmailVars } from './templates/tenant-setup';
 import { userInviteEmail, type UserInviteEmailVars } from './templates/user-invite';
 
@@ -175,6 +179,14 @@ export class EmailService {
 
   async sendTenantSetup(toEmail: string, vars: TenantSetupEmailVars): Promise<void> {
     const t = tenantSetupEmail(vars);
+    await this.sender.send({ to: toEmail, ...t });
+  }
+
+  async sendPlatformAdminSetup(
+    toEmail: string,
+    vars: PlatformAdminSetupEmailVars,
+  ): Promise<void> {
+    const t = platformAdminSetupEmail(vars);
     await this.sender.send({ to: toEmail, ...t });
   }
 

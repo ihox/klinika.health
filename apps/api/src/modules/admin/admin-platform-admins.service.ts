@@ -79,10 +79,8 @@ export class AdminPlatformAdminsService {
     });
 
     try {
-      await this.email.sendTenantSetup(payload.email, {
+      await this.email.sendPlatformAdminSetup(payload.email, {
         firstName: payload.firstName,
-        clinicName: 'Klinika · Platform Admin',
-        subdomain: 'admin',
         loginUrl: ADMIN_LOGIN_URL,
         temporaryPassword,
       });
