@@ -260,6 +260,20 @@ describe.skipIf(!ENABLED)('Patients integration', () => {
       expect(res.status).toBe(403);
     });
 
+    it('POST with firstName only succeeds (lastName optional)', async () => {
+      const cookie = await loginAs(RECEPTIONIST_EMAIL, SEED_RECEPTIONIST_PASSWORD!);
+      const res = await req()
+        .post('/api/patients')
+        .set('host', TENANT_HOST)
+        .set('Cookie', cookie)
+        .send({ firstName: 'Bardhi' });
+      expect(res.status).toBe(201);
+      expect(Object.keys(res.body.patient).sort()).toEqual(RECEPTIONIST_PUBLIC_KEYS);
+      expect(res.body.patient.firstName).toBe('Bardhi');
+      expect(res.body.patient.lastName).toBe('');
+      expect(res.body.patient.dateOfBirth).toBeNull();
+    });
+
     it('POST with extra fields silently drops them (not stored)', async () => {
       const cookie = await loginAs(RECEPTIONIST_EMAIL, SEED_RECEPTIONIST_PASSWORD!);
       const res = await req()
@@ -371,7 +385,32 @@ describe.skipIf(!ENABLED)('Patients integration', () => {
         placeOfBirth: 'Pejë',
         birthWeightG: 3450,
         alergjiTjera: 'Pa alergji të njohura',
+        isComplete: true,
       });
+    });
+
+    it('GET /:id returns isComplete=false for a receptionist-created patient', async () => {
+      // Seed a minimal patient as the receptionist would — only
+      // firstName + lastName, no sex, sentinel DOB. Then read it as
+      // the doctor and verify isComplete=false.
+      const minimal = await prisma.patient.create({
+        data: {
+          clinicId,
+          firstName: 'Minimal',
+          lastName: '',
+          dateOfBirth: new Date('1900-01-01T00:00:00Z'),
+        },
+      });
+      const cookie = await loginAs(DOCTOR_EMAIL, SEED_DOCTOR_PASSWORD!);
+      const res = await req()
+        .get(`/api/patients/${minimal.id}`)
+        .set('host', TENANT_HOST)
+        .set('Cookie', cookie);
+      expect(res.status).toBe(200);
+      expect(res.body.patient.isComplete).toBe(false);
+      expect(res.body.patient.dateOfBirth).toBeNull();
+      expect(res.body.patient.lastName).toBe('');
+      expect(res.body.patient.sex).toBeNull();
     });
 
     it('PATCH updates and emits an audit log', async () => {
