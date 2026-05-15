@@ -2,7 +2,6 @@
 
 import type { ReactElement } from 'react';
 
-import { WalkInBand, groupWalkInsByDay } from '@/components/walk-in-band';
 import { cn } from '@/lib/utils';
 import {
   colorIndicatorForLastVisit,
@@ -56,6 +55,51 @@ const STATUS_LABEL: Record<VisitStatus, string> = {
   cancelled: 'Anuluar',
 };
 
+// Walk-ins have no durationMinutes; height is purely visual. The
+// `in_progress` variant needs the extra room for the "Në vizitë" badge.
+const WALKIN_HEIGHT_PX: Record<VisitStatus, number> = {
+  scheduled: 24,
+  arrived: 24,
+  in_progress: 36,
+  completed: 24,
+  no_show: 24,
+  cancelled: 24,
+};
+
+// Background-image layers for the day column body. Listed first → on top.
+// Mirrors receptionist.html §`.day-col.today.has-walkins`.
+const CENTER_DIVIDER_BG =
+  'linear-gradient(to right, transparent calc(50% - 0.5px), var(--border, #e7e5e4) calc(50% - 0.5px), var(--border, #e7e5e4) calc(50% + 0.5px), transparent calc(50% + 0.5px))';
+const OPEN_GRID_BG =
+  'repeating-linear-gradient(to bottom, transparent 0, transparent 19px, var(--border-soft, #f0efec) 19px, var(--border-soft, #f0efec) 20px), repeating-linear-gradient(to bottom, transparent 0, transparent 118px, var(--border-strong, #d6d3d1) 118px, var(--border-strong, #d6d3d1) 120px)';
+const CLOSED_HATCH_BG =
+  'repeating-linear-gradient(135deg, transparent 0, transparent 6px, rgba(0,0,0,0.025) 6px, rgba(0,0,0,0.025) 7px)';
+
+/**
+ * Bucket walk-ins by their local Belgrade date for per-column rendering.
+ * Inlined here — only used by the calendar grid now that the horizontal
+ * band is gone.
+ */
+function groupWalkInsByDay(entries: CalendarEntry[]): Map<string, CalendarEntry[]> {
+  const map = new Map<string, CalendarEntry[]>();
+  for (const e of entries) {
+    if (!e.isWalkIn) continue;
+    const day = e.arrivedAt
+      ? toLocalParts(new Date(e.arrivedAt)).date
+      : toLocalParts(new Date(e.createdAt)).date;
+    if (!map.has(day)) map.set(day, []);
+    map.get(day)!.push(e);
+  }
+  for (const [, arr] of map) {
+    arr.sort((a, b) => {
+      const aT = a.arrivedAt ?? a.createdAt;
+      const bT = b.arrivedAt ?? b.createdAt;
+      return new Date(aT).getTime() - new Date(bT).getTime();
+    });
+  }
+  return map;
+}
+
 export function CalendarGrid({
   todayIso,
   now,
@@ -66,10 +110,10 @@ export function CalendarGrid({
   onEntryClick,
   onEntryContextMenu,
 }: CalendarGridProps): ReactElement {
-  // Walk-ins ride the band; only scheduled rows hit the time grid.
+  // Scheduled rows feed the time grid; walk-ins feed the per-column
+  // right lane. Both still positioned absolutely by time math.
   const scheduledEntries = entries.filter((e) => !e.isWalkIn);
-  const walkInEntries = entries.filter((e) => e.isWalkIn);
-  const walkInsByDay = groupWalkInsByDay(walkInEntries);
+  const walkInsByDay = groupWalkInsByDay(entries);
 
   // The widest open band determines the grid height so columns line up
   // even when one day closes earlier than another. We always anchor at
@@ -144,15 +188,6 @@ export function CalendarGrid({
         );
       })}
 
-      {/* Walk-in band row */}
-      <WalkInBand
-        columns={columns}
-        todayIso={todayIso}
-        walkInsByDay={walkInsByDay}
-        onEntryClick={onEntryClick}
-        onEntryContextMenu={onEntryContextMenu}
-      />
-
       {/* Body row — time axis + per-day columns */}
       <div className="relative border-r border-line" style={{ height: gridHeightPx }}>
         {hourLabels.map((m, idx) => (
@@ -175,6 +210,7 @@ export function CalendarGrid({
 
       {columns.map((col) => {
         const dayEntries = byDay.get(col.date) ?? [];
+        const dayWalkIns = walkInsByDay.get(col.date) ?? [];
         const isToday = col.date === todayIso;
         const colStartMin = col.open ? timeToMinutes(col.startTime) : gridStartMin;
         const colEndMin = col.open ? timeToMinutes(col.endTime) : gridStartMin;
@@ -192,6 +228,7 @@ export function CalendarGrid({
             colStartOffsetPx={closedTopOffset}
             colEndOffsetPx={closedBandTop * PX_PER_MIN}
             entries={dayEntries}
+            walkIns={dayWalkIns}
             onSlotClick={onSlotClick}
             onEntryClick={onEntryClick}
             onEntryContextMenu={onEntryContextMenu}
@@ -212,6 +249,7 @@ interface DayColumnBodyProps {
   colStartOffsetPx: number;
   colEndOffsetPx: number;
   entries: CalendarEntry[];
+  walkIns: CalendarEntry[];
   onSlotClick: CalendarGridProps['onSlotClick'];
   onEntryClick: CalendarGridProps['onEntryClick'];
   onEntryContextMenu: CalendarGridProps['onEntryContextMenu'];
@@ -226,10 +264,16 @@ function DayColumnBody({
   colStartOffsetPx,
   colEndOffsetPx,
   entries,
+  walkIns,
   onSlotClick,
   onEntryClick,
   onEntryContextMenu,
 }: DayColumnBodyProps): ReactElement {
+  // A column is in two-lane mode whenever it carries ≥1 walk-in. The
+  // modifier alone gates the divider, the scheduled-card right-edge
+  // constraint, and (in STEP 2) the header lane-hint.
+  const hasWalkIns = walkIns.length > 0;
+
   const handleClick = (event: React.MouseEvent<HTMLDivElement>): void => {
     if (!col.open) return;
     if ((event.target as HTMLElement).closest('[data-appt]')) return;
@@ -253,6 +297,14 @@ function DayColumnBody({
     return { top, label: parts.time };
   })();
 
+  // Background-image stack. Divider is layered FIRST so it sits visually
+  // on top of the gridlines — matches the design's reading order.
+  const backgroundImage = !col.open
+    ? CLOSED_HATCH_BG
+    : hasWalkIns
+      ? `${CENTER_DIVIDER_BG}, ${OPEN_GRID_BG}`
+      : OPEN_GRID_BG;
+
   return (
     <div
       className={cn(
@@ -260,14 +312,10 @@ function DayColumnBody({
         !col.open && 'cursor-not-allowed bg-surface-subtle',
         isToday && col.open && 'bg-teal-100/20',
       )}
-      style={{
-        height: gridHeightPx,
-        backgroundImage: col.open
-          ? `repeating-linear-gradient(to bottom, transparent 0, transparent 19px, var(--border-soft, #f0efec) 19px, var(--border-soft, #f0efec) 20px), repeating-linear-gradient(to bottom, transparent 0, transparent 118px, var(--border-strong, #d6d3d1) 118px, var(--border-strong, #d6d3d1) 120px)`
-          : 'repeating-linear-gradient(135deg, transparent 0, transparent 6px, rgba(0,0,0,0.025) 6px, rgba(0,0,0,0.025) 7px)',
-      }}
+      style={{ height: gridHeightPx, backgroundImage }}
       onClick={handleClick}
       role="grid"
+      data-has-walkins={hasWalkIns || undefined}
       aria-label={col.open ? `Kolonë termin për ${col.date}` : `Klinika e mbyllur ${col.date}`}
     >
       {/* Closed pre-open band (if column opens later than the grid start) */}
@@ -299,12 +347,29 @@ function DayColumnBody({
           key={a.id}
           entry={a}
           gridStartMin={gridStartMin}
+          leftLaneOnly={hasWalkIns}
           onClick={(ev) =>
             onEntryClick(a, { x: ev.clientX, y: ev.clientY })
           }
           onContextMenu={
             onEntryContextMenu
               ? (ev) => onEntryContextMenu(a, { x: ev.clientX, y: ev.clientY })
+              : undefined
+          }
+        />
+      ))}
+
+      {walkIns.map((w) => (
+        <WalkInCard
+          key={w.id}
+          entry={w}
+          gridStartMin={gridStartMin}
+          onClick={(ev) =>
+            onEntryClick(w, { x: ev.clientX, y: ev.clientY })
+          }
+          onContextMenu={
+            onEntryContextMenu
+              ? (ev) => onEntryContextMenu(w, { x: ev.clientX, y: ev.clientY })
               : undefined
           }
         />
@@ -329,6 +394,9 @@ function DayColumnBody({
 interface ScheduledCardProps {
   entry: CalendarEntry;
   gridStartMin: number;
+  /** When the column also carries walk-ins, scheduled cards live in
+   * the LEFT lane — right edge clamps to the column midpoint. */
+  leftLaneOnly: boolean;
   onClick: (event: React.MouseEvent) => void;
   onContextMenu?: (event: React.MouseEvent) => void;
 }
@@ -336,6 +404,7 @@ interface ScheduledCardProps {
 function ScheduledCard({
   entry,
   gridStartMin,
+  leftLaneOnly,
   onClick,
   onContextMenu,
 }: ScheduledCardProps): ReactElement | null {
@@ -374,7 +443,8 @@ function ScheduledCard({
       }
       title={`${entry.patient.firstName} ${entry.patient.lastName} · ${formatDob(entry.patient.dateOfBirth)} · ${STATUS_LABEL[entry.status]}`}
       className={cn(
-        'absolute left-1.5 right-1.5 px-2 py-0.5 rounded text-left border bg-surface-elevated border-teal-200 border-l-[3px] border-l-primary shadow-xs transition hover:-translate-y-px hover:shadow-sm z-[3] flex items-center gap-1.5 overflow-hidden',
+        'absolute left-1.5 px-2 py-0.5 rounded text-left border bg-surface-elevated border-teal-200 border-l-[3px] border-l-primary shadow-xs transition hover:-translate-y-px hover:shadow-sm z-[3] flex items-center gap-1.5 overflow-hidden',
+        !leftLaneOnly && 'right-1.5',
         isArrived && 'bg-teal-50/60 border-teal-300',
         isInProgress && 'relative bg-teal-50 border-teal-300',
         isCompleted &&
@@ -384,7 +454,11 @@ function ScheduledCard({
         isNew && !isCompleted && !isNoShow && !isArrived && !isInProgress &&
           'border-l-accent-500 border-warning-soft',
       )}
-      style={{ top, height: Math.max(20, height) }}
+      style={{
+        top,
+        height: Math.max(20, height),
+        ...(leftLaneOnly ? { right: 'calc(50% + 2px)' } : {}),
+      }}
       aria-label={`${entry.patient.firstName} ${entry.patient.lastName}, ${localParts.time}, ${STATUS_LABEL[entry.status]}`}
     >
       <span className="flex-1 min-w-0 text-[11.5px] font-semibold text-ink-strong truncate leading-[1.15]">
@@ -437,6 +511,175 @@ function ScheduledCard({
         />
       ) : null}
     </button>
+  );
+}
+
+// ===========================================================================
+// Walk-in card — lives in the right lane of a has-walkins column,
+// positioned absolutely by arrived_at the same way scheduled cards
+// position by scheduled_for. Visual treatment mirrors
+// receptionist.html lines 1043-1090.
+// ===========================================================================
+
+interface WalkInCardProps {
+  entry: CalendarEntry;
+  gridStartMin: number;
+  onClick: (event: React.MouseEvent) => void;
+  onContextMenu?: (event: React.MouseEvent) => void;
+}
+
+function WalkInCard({
+  entry,
+  gridStartMin,
+  onClick,
+  onContextMenu,
+}: WalkInCardProps): ReactElement | null {
+  // arrivedAt is the canonical time signal for walk-ins. If it's
+  // missing (data-corruption edge), fall back to createdAt so the card
+  // still renders at a sensible position.
+  const anchorIso = entry.arrivedAt ?? entry.createdAt;
+  const anchor = new Date(anchorIso);
+  const parts = toLocalParts(anchor);
+  const startMin = timeToMinutes(parts.time);
+  const top = (startMin - gridStartMin) * PX_PER_MIN;
+  const height = WALKIN_HEIGHT_PX[entry.status] ?? 24;
+
+  const isInProgress = entry.status === 'in_progress';
+  const isCompleted = entry.status === 'completed';
+  const isNoShow = entry.status === 'no_show';
+  const isCancelled = entry.status === 'cancelled';
+
+  // Border + background per state. Borders are composed inline so the
+  // left edge can be dashed-accent while the other three sides stay
+  // solid-accent (Tailwind has no per-side border-style utility).
+  const borderStyle = isCompleted
+    ? {
+        borderTop: '1px solid var(--green-soft, #BBF7D0)',
+        borderRight: '1px solid var(--green-soft, #BBF7D0)',
+        borderBottom: '1px solid var(--green-soft, #BBF7D0)',
+        borderLeft: '3px solid var(--green, #15803D)',
+        background: 'var(--green-bg, #DCFCE7)',
+      }
+    : isInProgress
+      ? {
+          borderTop: '1px solid var(--accent-400, #FB923C)',
+          borderRight: '1px solid var(--accent-400, #FB923C)',
+          borderBottom: '1px solid var(--accent-400, #FB923C)',
+          borderLeft: '3px solid var(--accent-500, #F97316)',
+          background:
+            'linear-gradient(180deg, #FFF7ED 0%, var(--bg-elevated, #FFFFFF) 100%)',
+        }
+      : {
+          borderTop: '1px solid var(--accent-100, #FFEDD5)',
+          borderRight: '1px solid var(--accent-100, #FFEDD5)',
+          borderBottom: '1px solid var(--accent-100, #FFEDD5)',
+          borderLeft: '3px dashed var(--accent-500, #F97316)',
+          background: '#FFFBF5',
+        };
+
+  return (
+    <button
+      type="button"
+      data-appt={entry.id}
+      data-walkin={entry.id}
+      data-status={entry.status}
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick(e);
+      }}
+      onContextMenu={
+        onContextMenu
+          ? (e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onContextMenu(e);
+            }
+          : undefined
+      }
+      title={`${entry.patient.firstName} ${entry.patient.lastName} · pa termin · erdhi ${parts.time}`}
+      className={cn(
+        'absolute px-2 py-0.5 rounded text-left transition hover:-translate-y-px shadow-xs z-[3] flex items-center gap-1.5 overflow-hidden',
+        isCompleted && 'opacity-85',
+        isNoShow && 'opacity-60',
+        isCancelled && 'opacity-50',
+      )}
+      style={{
+        top,
+        height,
+        left: 'calc(50% + 2px)',
+        right: 6,
+        ...borderStyle,
+      }}
+      aria-label={`${entry.patient.firstName} ${entry.patient.lastName}, pa termin, erdhi ${parts.time}`}
+    >
+      <span className="flex-1 min-w-0 flex items-center gap-1 text-[11.5px] font-semibold leading-[1.15]">
+        <WalkInGlyph completed={isCompleted} />
+        <span
+          className={cn(
+            'truncate',
+            isCompleted ? 'text-success' : 'text-ink-strong',
+            isNoShow && 'line-through text-danger',
+            isCancelled && 'line-through text-ink-faint',
+          )}
+        >
+          {entry.patient.firstName} {entry.patient.lastName}
+        </span>
+        {isInProgress ? (
+          <span
+            className="ml-1 flex-none rounded bg-accent-500 px-1 text-[9.5px] font-bold uppercase tracking-[0.04em] text-white"
+            aria-hidden
+          >
+            Në vizitë
+          </span>
+        ) : null}
+      </span>
+      <span
+        className={cn(
+          'flex-none text-[10.5px] tabular-nums',
+          isCompleted ? 'text-success' : 'text-ink-muted',
+        )}
+      >
+        {parts.time}
+      </span>
+    </button>
+  );
+}
+
+function WalkInGlyph({ completed }: { completed: boolean }): ReactElement {
+  if (completed) {
+    return (
+      <svg
+        width="10"
+        height="10"
+        viewBox="0 0 16 16"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2.4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        className="flex-none text-success"
+        aria-hidden
+      >
+        <path d="M3 8.5l3 3 7-7" />
+      </svg>
+    );
+  }
+  return (
+    <svg
+      width="10"
+      height="10"
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="flex-none text-accent-600"
+      aria-hidden
+    >
+      <path d="M3 8a5 5 0 0 1 8.5-3.5L13 6" />
+      <path d="M13 2.5V6h-3.5" />
+    </svg>
   );
 }
 
