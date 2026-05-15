@@ -16,6 +16,7 @@ import {
   type DashboardVisitLogEntry,
   type DoctorDashboardResponse,
 } from './doctor-dashboard.dto';
+import { classifyAppointments } from './doctor-dashboard.classify';
 import { computeDayStats } from './doctor-dashboard.stats';
 
 const DASHBOARD_APPOINTMENT_STATUSES: readonly DashboardAppointmentStatus[] = [
@@ -178,7 +179,7 @@ export class DoctorDashboardService {
         anchor,
       }));
 
-    const dashboardAppointments = this.classifyAppointments(appointments, now);
+    const dashboardAppointments = classifyAppointments(appointments, now);
 
     const nextPatient = await this.buildNextPatientCard({
       clinicId,
@@ -228,98 +229,8 @@ export class DoctorDashboardService {
   // Helpers
   // -------------------------------------------------------------------------
 
-  private classifyAppointments(
-    appointments: Array<{
-      id: string;
-      patientId: string;
-      scheduledFor: Date | null;
-      arrivedAt: Date | null;
-      isWalkIn: boolean;
-      durationMinutes: number;
-      status: DashboardAppointmentStatus;
-      patient: {
-        firstName: string;
-        lastName: string;
-        dateOfBirth: Date | string | null;
-      };
-      anchor: Date;
-    }>,
-    now: Date,
-  ): DashboardAppointmentDto[] {
-    const nowMs = now.getTime();
-
-    // current = first in_progress; otherwise first scheduled booking
-    // whose own time window contains `now`.
-    let currentIndex = appointments.findIndex(
-      (a) => a.status === 'in_progress',
-    );
-    if (currentIndex === -1) {
-      currentIndex = appointments.findIndex((a) => {
-        if (a.status !== 'scheduled' || a.scheduledFor == null) return false;
-        const start = a.scheduledFor.getTime();
-        const end = start + a.durationMinutes * 60_000;
-        return start <= nowMs && nowMs < end;
-      });
-    }
-
-    // next = first pending row that isn't already 'current'. An arrived
-    // walk-in counts even when its anchor has passed (patient is in the
-    // room and waiting); a scheduled booking only counts if its anchor
-    // is in the future (not yet in its time window).
-    let nextIndex = -1;
-    appointments.forEach((a, idx) => {
-      if (idx === currentIndex || nextIndex !== -1) return;
-      if (a.status === 'arrived') {
-        nextIndex = idx;
-        return;
-      }
-      if (a.status === 'scheduled' && a.scheduledFor != null) {
-        if (a.scheduledFor.getTime() > nowMs) {
-          nextIndex = idx;
-        }
-      }
-    });
-
-    return appointments.map((a, idx) => {
-      let position: DashboardAppointmentDto['position'];
-      if (idx === currentIndex) {
-        position = 'current';
-      } else if (idx === nextIndex) {
-        position = 'next';
-      } else if (
-        a.status === 'completed' ||
-        a.status === 'cancelled' ||
-        a.status === 'no_show'
-      ) {
-        position = 'past';
-      } else if (
-        a.status === 'scheduled' &&
-        a.scheduledFor != null &&
-        a.scheduledFor.getTime() + a.durationMinutes * 60_000 < nowMs
-      ) {
-        // Scheduled but the booked time window has ended without a
-        // transition. Same "past" treatment as before.
-        position = 'past';
-      } else {
-        position = 'upcoming';
-      }
-      return {
-        id: a.id,
-        patientId: a.patientId,
-        patient: {
-          firstName: a.patient.firstName,
-          lastName: a.patient.lastName,
-          dateOfBirth: serializeDob(a.patient.dateOfBirth),
-        },
-        scheduledFor: a.scheduledFor ? a.scheduledFor.toISOString() : null,
-        arrivedAt: a.arrivedAt ? a.arrivedAt.toISOString() : null,
-        isWalkIn: a.isWalkIn,
-        durationMinutes: a.durationMinutes,
-        status: a.status,
-        position,
-      };
-    });
-  }
+  // Position classifier lives in `doctor-dashboard.classify.ts` as a
+  // pure function so it can be unit-tested without Prisma.
 
   /**
    * The next-patient card pulls in chart context the appointment row
