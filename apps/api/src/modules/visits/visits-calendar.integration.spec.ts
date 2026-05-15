@@ -346,16 +346,25 @@ describe.skipIf(!ENABLED)('Visits calendar integration', () => {
   });
 
   // -----------------------------------------------------------------------
-  // 6. Walk-in
+  // 6. Walk-in (with pairing rule — CLAUDE.md §13)
   // -----------------------------------------------------------------------
 
-  it('POST /walkin creates an arrived row with no scheduledFor / durationMinutes', async () => {
+  it('POST /walkin creates an arrived row paired to a scheduled visit', async () => {
     const cookie = await loginAs(RECEPTIONIST_EMAIL, SEED_RECEPTIONIST_PASSWORD!);
+    const date = nextOpenDate();
+    const scheduled = await req()
+      .post('/api/visits/scheduled')
+      .set('host', TENANT_HOST)
+      .set('Cookie', cookie)
+      .send({ patientId, date, time: '10:30', durationMinutes: 15 });
+    expect(scheduled.status).toBe(201);
+    const pairedWithVisitId = scheduled.body.entry.id;
+
     const res = await req()
       .post('/api/visits/walkin')
       .set('host', TENANT_HOST)
       .set('Cookie', cookie)
-      .send({ patientId });
+      .send({ patientId, pairedWithVisitId });
     expect(res.status).toBe(201);
     const entry = res.body.entry;
     expect(entry.isWalkIn).toBe(true);
@@ -369,6 +378,90 @@ describe.skipIf(!ENABLED)('Visits calendar integration', () => {
     });
     expect(audit).toBeDefined();
     expect(audit!.resourceType).toBe('visit');
+    const changes = audit!.changes as Array<{ field: string; old: unknown; new: unknown }>;
+    const pairing = changes.find((c) => c.field === 'pairedWithVisitId');
+    expect(pairing).toEqual({
+      field: 'pairedWithVisitId',
+      old: null,
+      new: pairedWithVisitId,
+    });
+
+    // DB row carries the FK.
+    const row = await prisma.visit.findUnique({ where: { id: entry.id } });
+    expect(row?.pairedWithVisitId).toBe(pairedWithVisitId);
+  });
+
+  it('POST /walkin rejects when no scheduled visit matches the pairing id', async () => {
+    const cookie = await loginAs(RECEPTIONIST_EMAIL, SEED_RECEPTIONIST_PASSWORD!);
+    const res = await req()
+      .post('/api/visits/walkin')
+      .set('host', TENANT_HOST)
+      .set('Cookie', cookie)
+      .send({
+        patientId,
+        pairedWithVisitId: '00000000-0000-0000-0000-000000000000',
+      });
+    expect(res.status).toBe(400);
+    expect(res.body.message).toBe(
+      'Termini nuk u gjet ose nuk është për pacient pa termin',
+    );
+    expect(res.body.reason).toBe('walkin_pairing_invalid');
+  });
+
+  it('POST /walkin rejects pairing to a completed visit (status finalized)', async () => {
+    const cookie = await loginAs(RECEPTIONIST_EMAIL, SEED_RECEPTIONIST_PASSWORD!);
+    const date = nextOpenDate();
+    const scheduled = await req()
+      .post('/api/visits/scheduled')
+      .set('host', TENANT_HOST)
+      .set('Cookie', cookie)
+      .send({ patientId, date, time: '11:30', durationMinutes: 15 });
+    expect(scheduled.status).toBe(201);
+    const id: string = scheduled.body.entry.id;
+
+    // March it to completed via the legal lifecycle path.
+    for (const status of ['arrived', 'in_progress', 'completed'] as const) {
+      await req()
+        .patch(`/api/visits/${id}/status`)
+        .set('host', TENANT_HOST)
+        .set('Cookie', cookie)
+        .send({ status })
+        .expect(200);
+    }
+
+    const res = await req()
+      .post('/api/visits/walkin')
+      .set('host', TENANT_HOST)
+      .set('Cookie', cookie)
+      .send({ patientId, pairedWithVisitId: id });
+    expect(res.status).toBe(400);
+    expect(res.body.reason).toBe('walkin_pairing_invalid');
+  });
+
+  it('POST /walkin rejects pairing to another walk-in (must be a booking)', async () => {
+    const cookie = await loginAs(RECEPTIONIST_EMAIL, SEED_RECEPTIONIST_PASSWORD!);
+    const date = nextOpenDate();
+    const scheduled = await req()
+      .post('/api/visits/scheduled')
+      .set('host', TENANT_HOST)
+      .set('Cookie', cookie)
+      .send({ patientId, date, time: '12:30', durationMinutes: 15 });
+    const pairedWithVisitId: string = scheduled.body.entry.id;
+    const firstWalkin = await req()
+      .post('/api/visits/walkin')
+      .set('host', TENANT_HOST)
+      .set('Cookie', cookie)
+      .send({ patientId, pairedWithVisitId });
+    expect(firstWalkin.status).toBe(201);
+
+    // Trying to pair a new walk-in to the existing walk-in must fail.
+    const res = await req()
+      .post('/api/visits/walkin')
+      .set('host', TENANT_HOST)
+      .set('Cookie', cookie)
+      .send({ patientId, pairedWithVisitId: firstWalkin.body.entry.id });
+    expect(res.status).toBe(400);
+    expect(res.body.reason).toBe('walkin_pairing_invalid');
   });
 
   // -----------------------------------------------------------------------
@@ -377,12 +470,20 @@ describe.skipIf(!ENABLED)('Visits calendar integration', () => {
 
   it('stats counts walk-ins and scheduled separately, and aggregates payments', async () => {
     const cookie = await loginAs(RECEPTIONIST_EMAIL, SEED_RECEPTIONIST_PASSWORD!);
-    // Create a walk-in for today.
+    // Walk-ins must pair to a scheduled visit (CLAUDE.md §13). Book
+    // one for today first, then create the walk-in paired against it.
+    const todayDate = nextOpenDate();
+    const scheduled = await req()
+      .post('/api/visits/scheduled')
+      .set('host', TENANT_HOST)
+      .set('Cookie', cookie)
+      .send({ patientId, date: todayDate, time: '15:00', durationMinutes: 15 });
+    expect(scheduled.status).toBe(201);
     const todayIso = await req()
       .post('/api/visits/walkin')
       .set('host', TENANT_HOST)
       .set('Cookie', cookie)
-      .send({ patientId });
+      .send({ patientId, pairedWithVisitId: scheduled.body.entry.id });
     expect(todayIso.status).toBe(201);
     const today = todayIso.body.entry.arrivedAt.slice(0, 10);
 

@@ -167,16 +167,28 @@ export const CreateScheduledVisitSchema = z
   .strict();
 export type CreateScheduledVisitInput = z.infer<typeof CreateScheduledVisitSchema>;
 
-// Walk-in: no time, no duration, just the patient.
+// Walk-in: no time, no duration, just the patient and a pairing.
 //
 // `initialStatus` defaults to 'arrived' (receptionist registers the
 // patient, doctor will see them shortly). The receptionist may also
 // open with 'in_progress' when the doctor takes the patient straight
 // in without a waiting-room stop. Those are the only two valid initial
 // states for a walk-in (CLAUDE.md status-lifecycle).
+//
+// `pairedWithVisitId` is REQUIRED — a walk-in always pairs with a
+// scheduled visit per the operational rule (CLAUDE.md §13, ADR-011).
+// The service validates that the paired visit is in the same clinic,
+// is not soft-deleted, has `scheduledFor !== null` (i.e. it's a
+// booking, not another walk-in), and is not finalized as completed.
+// The DB-level CHECK constraint locks down the "only walk-ins may
+// claim a pairing" half of the invariant.
+export const WALKIN_PAIRING_REFUSAL_MESSAGE =
+  "Termini nuk u gjet ose nuk është për pacient pa termin";
+
 export const CreateWalkinVisitSchema = z
   .object({
     patientId: z.string().uuid('Pacienti i pavlefshëm'),
+    pairedWithVisitId: z.string().uuid('Termini i çiftëzimit i pavlefshëm'),
     initialStatus: z.enum(['arrived', 'in_progress']).optional(),
   })
   .strict();

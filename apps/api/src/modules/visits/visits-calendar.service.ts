@@ -27,6 +27,7 @@ import {
   type UpdateVisitStatusInput,
   VISIT_STATUSES,
   type VisitStatus,
+  WALKIN_PAIRING_REFUSAL_MESSAGE,
 } from './visits-calendar.dto';
 import { computeAvailability, type OccupiedInterval } from './visits-calendar.availability';
 import { VisitsCalendarEventsService } from './visits-calendar.events';
@@ -341,6 +342,37 @@ export class VisitsCalendarService {
     });
     if (!patient) throw new NotFoundException('Pacienti nuk u gjet.');
 
+    // Pairing validation per CLAUDE.md §13 (walk-in pairing rule).
+    // A walk-in always pairs to a scheduled visit in the same clinic;
+    // the pairing is logical (shared visual row), not temporal, so we
+    // don't constrain by time. The paired visit must:
+    //   - exist in the same clinic
+    //   - not be soft-deleted
+    //   - have `scheduledFor !== null` (i.e. be a booking, not a
+    //     walk-in itself)
+    //   - not be in status='completed' (the visit is finished — there
+    //     is no longer a "patient currently being seen" to share a row
+    //     with)
+    // Any other failure mode returns the same single Albanian error to
+    // avoid leaking visit identity probing.
+    const pairedWith = await this.prisma.visit.findFirst({
+      where: {
+        id: payload.pairedWithVisitId,
+        clinicId,
+        deletedAt: null,
+        scheduledFor: { not: null },
+        isWalkIn: false,
+        status: { not: 'completed' },
+      },
+      select: { id: true },
+    });
+    if (!pairedWith) {
+      throw new BadRequestException({
+        message: WALKIN_PAIRING_REFUSAL_MESSAGE,
+        reason: 'walkin_pairing_invalid',
+      });
+    }
+
     const now = new Date();
     // Walk-ins skip 'scheduled'. Default initial state is 'arrived'
     // (receptionist registers, doctor sees them shortly); the
@@ -362,6 +394,7 @@ export class VisitsCalendarService {
         isWalkIn: true,
         arrivedAt: now,
         status: initialStatus,
+        pairedWithVisitId: pairedWith.id,
         createdBy: ctx.userId,
         updatedBy: ctx.userId,
       },
@@ -380,6 +413,7 @@ export class VisitsCalendarService {
         { field: 'isWalkIn', old: null, new: true },
         { field: 'arrivedAt', old: null, new: now.toISOString() },
         { field: 'status', old: null, new: created.status },
+        { field: 'pairedWithVisitId', old: null, new: pairedWith.id },
       ],
     });
 

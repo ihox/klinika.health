@@ -327,6 +327,13 @@ model Visit {
   isWalkIn            Boolean   @default(false) @map("is_walk_in")
   arrivedAt           DateTime? @map("arrived_at") @db.Timestamptz(6)
   status              String    @default("completed")
+  /// FK to the scheduled visit a walk-in is paired with. NULL on every
+  /// scheduled visit. The DB-level CHECK constraint locks down the
+  /// invariant ("paired_with_visit_id IS NULL OR is_walk_in = true");
+  /// the calendar service enforces the operational rules (paired visit
+  /// is in the same clinic, not soft-deleted, has scheduled_for set,
+  /// and is not in status='completed') before insert.
+  pairedWithVisitId   String?   @map("paired_with_visit_id") @db.Uuid
   complaint           String?   @db.Text
   feedingNotes        String?   @map("feeding_notes") @db.Text
   feedingBreast       Boolean   @default(false) @map("feeding_breast")
@@ -354,6 +361,8 @@ model Visit {
   patient       Patient          @relation(fields: [patientId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   createdByUser User             @relation("VisitCreatedBy", fields: [createdBy], references: [id], onDelete: NoAction, onUpdate: NoAction)
   updatedByUser User             @relation("VisitUpdatedBy", fields: [updatedBy], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  pairedWith    Visit?           @relation("VisitWalkinPairing", fields: [pairedWithVisitId], references: [id], onDelete: SetNull, onUpdate: NoAction)
+  pairedWalkIns Visit[]          @relation("VisitWalkinPairing")
   diagnoses     VisitDiagnosis[]
   vertetime     Vertetim[]
   dicomLinks    VisitDicomLink[]

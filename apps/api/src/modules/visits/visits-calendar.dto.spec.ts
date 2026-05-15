@@ -135,17 +135,34 @@ describe('CreateScheduledVisitSchema', () => {
 });
 
 describe('CreateWalkinVisitSchema', () => {
-  it('accepts just a patient', () => {
+  it('accepts a patient and a pairing', () => {
+    expect(
+      CreateWalkinVisitSchema.safeParse({
+        patientId: '00000000-0000-0000-0000-000000000001',
+        pairedWithVisitId: '00000000-0000-0000-0000-000000000002',
+      }).success,
+    ).toBe(true);
+  });
+  it('rejects a walk-in without a pairing (CLAUDE.md §13)', () => {
     expect(
       CreateWalkinVisitSchema.safeParse({
         patientId: '00000000-0000-0000-0000-000000000001',
       }).success,
-    ).toBe(true);
+    ).toBe(false);
+  });
+  it('rejects a non-UUID pairing id', () => {
+    expect(
+      CreateWalkinVisitSchema.safeParse({
+        patientId: '00000000-0000-0000-0000-000000000001',
+        pairedWithVisitId: 'not-a-uuid',
+      }).success,
+    ).toBe(false);
   });
   it('rejects extra fields (strict)', () => {
     expect(
       CreateWalkinVisitSchema.safeParse({
         patientId: '00000000-0000-0000-0000-000000000001',
+        pairedWithVisitId: '00000000-0000-0000-0000-000000000002',
         date: '2026-05-14',
       }).success,
     ).toBe(false);
