@@ -201,6 +201,16 @@ export interface PatientPublicDto {
  * The doctor's view: full master-data record. Sensitive fields like
  * `alergjiTjera` are present here but MUST never appear in the public
  * DTO regardless of role.
+ *
+ * `lastName` may be an empty string when the receptionist created the
+ * patient with only firstName (column is NOT NULL but stores ''). The
+ * doctor completes the record before the chart unlocks.
+ *
+ * `isComplete` is the single source of truth for "can the doctor open
+ * the chart?" — true when firstName, lastName, dateOfBirth, and sex
+ * are all populated. The frontend routes conditional navigation off
+ * this flag; the same predicate runs on the web side
+ * (`apps/web/lib/patient.ts`) for client-side display logic.
  */
 export interface PatientFullDto {
   id: string;
@@ -219,6 +229,7 @@ export interface PatientFullDto {
   lastVisitAt: string | null;
   createdAt: string;
   updatedAt: string;
+  isComplete: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -282,14 +293,18 @@ export interface PatientFullRowLike extends PatientRowLike {
 }
 
 export function toFullDto(row: PatientFullRowLike): PatientFullDto {
+  const firstName = row.firstName ?? '';
+  const lastName = row.lastName ?? '';
+  const dateOfBirth = dateToIso(row.dateOfBirth);
+  const sex = row.sex ?? null;
   return {
     id: row.id,
     clinicId: row.clinicId,
     legacyId: row.legacyId ?? null,
-    firstName: row.firstName,
-    lastName: row.lastName,
-    dateOfBirth: dateToIso(row.dateOfBirth),
-    sex: row.sex ?? null,
+    firstName,
+    lastName,
+    dateOfBirth,
+    sex,
     placeOfBirth: row.placeOfBirth ?? null,
     phone: row.phone ?? null,
     birthWeightG: row.birthWeightG ?? null,
@@ -299,7 +314,22 @@ export function toFullDto(row: PatientFullRowLike): PatientFullDto {
     lastVisitAt: lastVisitToIso(row.lastVisitAt ?? null),
     createdAt: timestampToIso(row.createdAt),
     updatedAt: timestampToIso(row.updatedAt),
+    isComplete: computeIsComplete({ firstName, lastName, dateOfBirth, sex }),
   };
+}
+
+/**
+ * Server-side mirror of the frontend `isPatientComplete` predicate
+ * (`apps/web/lib/patient.ts`). Required fields: firstName, lastName,
+ * dateOfBirth, sex. Empty strings count as missing.
+ */
+export function computeIsComplete(fields: {
+  firstName?: string | null;
+  lastName?: string | null;
+  dateOfBirth?: string | null;
+  sex?: string | null;
+}): boolean {
+  return Boolean(fields.firstName && fields.lastName && fields.dateOfBirth && fields.sex);
 }
 
 // Receptionist quick-add stores `UNKNOWN_DOB_SENTINEL` (1900-01-01)

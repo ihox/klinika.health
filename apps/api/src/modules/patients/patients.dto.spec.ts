@@ -9,6 +9,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  computeIsComplete,
   DoctorCreatePatientSchema,
   PatientSearchQuerySchema,
   ReceptionistCreatePatientSchema,
@@ -154,6 +155,73 @@ describe('PatientFullDto serialization', () => {
     expect(out.placeOfBirth).toBe('Prizren');
     expect(out.sex).toBe('f');
     expect(out.legacyId).toBe(4829);
+  });
+
+  it('marks a fully populated patient as complete', () => {
+    const out = toFullDto(fullRow);
+    expect(out.isComplete).toBe(true);
+  });
+
+  it('marks a patient missing sex as incomplete', () => {
+    const out = toFullDto({ ...fullRow, sex: null });
+    expect(out.isComplete).toBe(false);
+  });
+
+  it('marks a patient with the sentinel DOB as incomplete', () => {
+    // The receptionist quick-add path stores 1900-01-01 when no DOB
+    // is captured. The DTO maps it to null, and isComplete should
+    // reflect that.
+    const out = toFullDto({
+      ...fullRow,
+      dateOfBirth: new Date('1900-01-01T00:00:00Z'),
+    });
+    expect(out.dateOfBirth).toBeNull();
+    expect(out.isComplete).toBe(false);
+  });
+
+  it('marks a patient with an empty lastName as incomplete', () => {
+    const out = toFullDto({ ...fullRow, lastName: '' });
+    expect(out.isComplete).toBe(false);
+  });
+});
+
+describe('computeIsComplete', () => {
+  it('requires all four fields', () => {
+    expect(
+      computeIsComplete({
+        firstName: 'Era',
+        lastName: 'Krasniqi',
+        dateOfBirth: '2023-08-03',
+        sex: 'f',
+      }),
+    ).toBe(true);
+  });
+
+  it('returns false when any required field is empty/null', () => {
+    expect(
+      computeIsComplete({
+        firstName: '',
+        lastName: 'Krasniqi',
+        dateOfBirth: '2023-08-03',
+        sex: 'f',
+      }),
+    ).toBe(false);
+    expect(
+      computeIsComplete({
+        firstName: 'Era',
+        lastName: 'Krasniqi',
+        dateOfBirth: null,
+        sex: 'f',
+      }),
+    ).toBe(false);
+    expect(
+      computeIsComplete({
+        firstName: 'Era',
+        lastName: 'Krasniqi',
+        dateOfBirth: '2023-08-03',
+        sex: null,
+      }),
+    ).toBe(false);
   });
 });
 

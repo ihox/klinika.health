@@ -38,6 +38,14 @@ export interface PatientFullDto {
   lastVisitAt: string | null;
   createdAt: string;
   updatedAt: string;
+  /**
+   * True when firstName, lastName, dateOfBirth, and sex are all
+   * populated. Drives conditional navigation — doctor jumps straight
+   * to the chart when complete, or to the master-data form when not.
+   * Computed server-side; mirrored by `isPatientComplete` in
+   * `apps/web/lib/patient.ts` for client-side checks on form drafts.
+   */
+  isComplete: boolean;
 }
 
 export interface DoctorPatientInput {
