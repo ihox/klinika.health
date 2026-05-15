@@ -600,8 +600,29 @@ export function CalendarView(): ReactElement {
               {settings ? ` · ${settings.general.shortName}` : ''}
             </p>
           </div>
-          <Button variant="secondary" size="sm" onClick={openWalkinPicker}>
-            <span aria-hidden className="mr-1.5 text-[16px] leading-none">+</span>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={openWalkinPicker}
+            title="Shto pacient që erdhi pa termin"
+            className="gap-1.5 border border-dashed border-primary bg-teal-50 text-primary-dark shadow-none hover:border-solid hover:bg-primary-soft"
+          >
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 16 16"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.7"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden
+              className="text-primary"
+            >
+              <path d="M3 8a5 5 0 0 1 8.5-3.5L13 6" />
+              <path d="M13 2.5V6h-3.5" />
+              <circle cx="8" cy="11.5" r="0.8" fill="currentColor" />
+            </svg>
             Pacient pa termin
           </Button>
         </div>
