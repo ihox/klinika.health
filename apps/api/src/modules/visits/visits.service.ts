@@ -148,6 +148,32 @@ export class VisitsService {
     if (!patient) throw new NotFoundException('Pacienti nuk u gjet.');
 
     const today = localDateToday();
+
+    // Gate (Phase 2b patch): if THIS patient already has an active
+    // visit today, the doctor is charting them as a follow-up of
+    // their own existing row — not as a walk-in companion of someone
+    // else. Short-circuit to the regular-visit path so the new row
+    // is `is_walk_in=false`, `scheduled_for=null`, `status='completed'`,
+    // no pairing — identical to the legacy `POST /api/visits` shape.
+    //
+    // Active = the three pre-finish statuses (scheduled / arrived /
+    // in_progress). Completed / no_show / cancelled today do NOT
+    // count: a patient who finished this morning and walks back in
+    // this afternoon is correctly a walk-in again.
+    const activeVisitToday = await this.prisma.visit.findFirst({
+      where: {
+        clinicId,
+        patientId: patient.id,
+        deletedAt: null,
+        visitDate: utcMidnight(today),
+        status: { in: ['scheduled', 'arrived', 'in_progress'] },
+      },
+      select: { id: true },
+    });
+    if (activeVisitToday) {
+      return this.create(clinicId, payload, ctx);
+    }
+
     const pair = await this.calendar.findNextUnpairedScheduledVisit(clinicId, today);
 
     if (pair == null) {

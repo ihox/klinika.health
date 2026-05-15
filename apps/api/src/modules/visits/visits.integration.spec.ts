@@ -764,6 +764,162 @@ describe.skipIf(!ENABLED)('Visits integration', () => {
       expect(row!.pairedWithVisitId).toBeNull();
       expect(row!.status).toBe('completed');
     });
+
+    // Phase 2b patch — the patient-has-active-visit-today gate. When
+    // the doctor opens a chart for a patient who already has a row on
+    // today's active calendar (scheduled / arrived / in_progress) and
+    // clicks "+ Vizitë e re" while picking the SAME patient, the new
+    // visit must be a regular visit, not a walk-in paired to the
+    // patient's own scheduled row. The pair-or-fallback path only
+    // runs when this patient is genuinely fresh on the day.
+
+    describe('patient-active-visit-today gate', () => {
+      async function seedForSelf(
+        time: string,
+        status:
+          | 'scheduled'
+          | 'arrived'
+          | 'in_progress'
+          | 'completed'
+          | 'no_show'
+          | 'cancelled',
+      ): Promise<{ id: string }> {
+        const today = todayBelgradeIso();
+        const [hh, mm] = time.split(':');
+        const row = await prisma.visit.create({
+          data: {
+            clinicId,
+            patientId,
+            visitDate: new Date(`${today}T00:00:00Z`),
+            scheduledFor: new Date(`${today}T${hh}:${mm}:00Z`),
+            durationMinutes: 15,
+            isWalkIn: false,
+            status,
+            createdBy: doctorId,
+            updatedBy: doctorId,
+          },
+        });
+        return { id: row.id };
+      }
+
+      async function postDoctorNewForSelf(): Promise<request.Response> {
+        const cookie = await loginAs(DOCTOR_EMAIL, SEED_DOCTOR_PASSWORD!);
+        return req()
+          .post('/api/visits/doctor-new')
+          .set('host', TENANT_HOST)
+          .set('Cookie', cookie)
+          .send({ patientId });
+      }
+
+      async function expectRegularRow(visitId: string): Promise<void> {
+        const row = await prisma.visit.findUnique({ where: { id: visitId } });
+        expect(row).toBeTruthy();
+        expect(row!.isWalkIn).toBe(false);
+        expect(row!.scheduledFor).toBeNull();
+        expect(row!.arrivedAt).toBeNull();
+        expect(row!.pairedWithVisitId).toBeNull();
+        expect(row!.status).toBe('completed');
+        // Regular-visit path emits the legacy `visit.created` audit row.
+        const audits = await prisma.auditLog.findMany({
+          where: { clinicId, resourceId: visitId, action: 'visit.created' },
+        });
+        expect(audits.length).toBe(1);
+      }
+
+      it('returns a regular visit when the patient already has a SCHEDULED row today', async () => {
+        await seedForSelf('10:30', 'scheduled');
+        const res = await postDoctorNewForSelf();
+        expect(res.status).toBe(201);
+        await expectRegularRow(res.body.visit.id);
+      });
+
+      it('returns a regular visit when the patient already has an ARRIVED row today', async () => {
+        await seedForSelf('10:30', 'arrived');
+        const res = await postDoctorNewForSelf();
+        expect(res.status).toBe(201);
+        await expectRegularRow(res.body.visit.id);
+      });
+
+      it('returns a regular visit when the patient already has an IN_PROGRESS row today', async () => {
+        await seedForSelf('10:30', 'in_progress');
+        const res = await postDoctorNewForSelf();
+        expect(res.status).toBe(201);
+        await expectRegularRow(res.body.visit.id);
+      });
+
+      it("does not collapse 'completed' today into the gate — a follow-up visit is still a walk-in", async () => {
+        // Patient finished this morning. Doctor sees them back this
+        // afternoon and clicks "+ Vizitë e re". The completed row
+        // doesn't count as active, so the pair-or-fallback runs; with
+        // no other scheduled visit today the result is the standalone
+        // fallback (is_walk_in=false from the legacy POST shape).
+        await seedForSelf('09:00', 'completed');
+        const res = await postDoctorNewForSelf();
+        expect(res.status).toBe(201);
+        const row = await prisma.visit.findUnique({
+          where: { id: res.body.visit.id },
+        });
+        // No other scheduled row on the day → standalone fallback path.
+        expect(row!.isWalkIn).toBe(false);
+        expect(row!.pairedWithVisitId).toBeNull();
+        expect(row!.scheduledFor).toBeNull();
+      });
+
+      it("does not collapse 'no_show' today into the gate", async () => {
+        await seedForSelf('09:00', 'no_show');
+        const res = await postDoctorNewForSelf();
+        expect(res.status).toBe(201);
+        const row = await prisma.visit.findUnique({
+          where: { id: res.body.visit.id },
+        });
+        expect(row!.isWalkIn).toBe(false);
+        expect(row!.pairedWithVisitId).toBeNull();
+      });
+
+      it("does not collapse 'cancelled' today into the gate", async () => {
+        await seedForSelf('09:00', 'cancelled');
+        const res = await postDoctorNewForSelf();
+        expect(res.status).toBe(201);
+        const row = await prisma.visit.findUnique({
+          where: { id: res.body.visit.id },
+        });
+        expect(row!.isWalkIn).toBe(false);
+        expect(row!.pairedWithVisitId).toBeNull();
+      });
+
+      it("the gate is per-patient — another patient's scheduled row does not promote the regular path", async () => {
+        // Patient X has NO row today. Patient Y has a scheduled row.
+        // doctor-new for X must still pair to Y (existing behaviour)
+        // — the gate is keyed off the *new visit's* patient only.
+        const otherPatient = await prisma.patient.create({
+          data: {
+            clinicId,
+            firstName: 'Dion',
+            lastName: 'Krasniqi',
+            dateOfBirth: new Date('2021-04-02'),
+          },
+        });
+        const eraScheduled = await seedScheduledToday(
+          '10:30',
+          'in_progress',
+          patientId,
+        );
+
+        const cookie = await loginAs(DOCTOR_EMAIL, SEED_DOCTOR_PASSWORD!);
+        const res = await req()
+          .post('/api/visits/doctor-new')
+          .set('host', TENANT_HOST)
+          .set('Cookie', cookie)
+          .send({ patientId: otherPatient.id });
+        expect(res.status).toBe(201);
+
+        const row = await prisma.visit.findUnique({
+          where: { id: res.body.visit.id },
+        });
+        expect(row!.isWalkIn).toBe(true);
+        expect(row!.pairedWithVisitId).toBe(eraScheduled.id);
+      });
+    });
   });
 
   // -------------------------------------------------------------------------
