@@ -30,6 +30,7 @@ import { AppModule } from '../../app.module';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SESSION_COOKIE_NAME } from '../auth/session.service';
 import { CapturingEmailSender, EMAIL_SENDER, EmailService } from '../email/email.service';
+import { VisitsCalendarService } from './visits-calendar.service';
 
 const DATABASE_URL = process.env['DATABASE_URL'];
 const SEED_DOCTOR_PASSWORD = process.env['SEED_DOCTOR_PASSWORD'];
@@ -679,6 +680,23 @@ describe.skipIf(!ENABLED)('Visits calendar integration', () => {
     expect(res.status).toBe(200);
     const ids = (res.body.entries as Array<{ id: string }>).map((e) => e.id);
     expect(ids).not.toContain(visitB.id);
+  });
+
+  // -----------------------------------------------------------------------
+  // 11b. findNextUnpairedScheduledVisit (doctor-walkin pairing helper)
+  // -----------------------------------------------------------------------
+  //
+  // The helper is exercised end-to-end by the doctor-new endpoint in
+  // visits.integration.spec.ts, but these direct cases pin the empty/
+  // exhausted return shapes that the controller path never reaches.
+
+  it('findNextUnpairedScheduledVisit returns null when no scheduled visits exist today', async () => {
+    const todayIso = new Date().toLocaleDateString('sv-SE', {
+      timeZone: 'Europe/Belgrade',
+    });
+    const svc = module.get(VisitsCalendarService);
+    const result = await svc.findNextUnpairedScheduledVisit(clinicId, todayIso);
+    expect(result).toBeNull();
   });
 
   // -----------------------------------------------------------------------

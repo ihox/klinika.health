@@ -543,6 +543,230 @@ describe.skipIf(!ENABLED)('Visits integration', () => {
   });
 
   // -------------------------------------------------------------------------
+  // Doctor-new (auto-pairing "Vizitë e re")
+  // -------------------------------------------------------------------------
+
+  describe('doctor-new pairing', () => {
+    // The endpoint uses `localDateToday()` server-side. The tests
+    // compute today's Belgrade date the same way the helper does so
+    // scheduled rows we seed for "today" line up with what the server
+    // queries.
+    function todayBelgradeIso(): string {
+      return new Date().toLocaleDateString('sv-SE', {
+        timeZone: 'Europe/Belgrade',
+      });
+    }
+
+    /**
+     * Insert a scheduled booking for an arbitrary patient at a specific
+     * HH:mm on today's local date. We seed directly via Prisma so we
+     * don't have to pass the receptionist's working-hours validation
+     * (tests run at any wall-clock time).
+     */
+    async function seedScheduledToday(
+      time: string,
+      status: 'scheduled' | 'arrived' | 'in_progress',
+      forPatientId: string,
+    ): Promise<{ id: string }> {
+      const today = todayBelgradeIso();
+      const [hh, mm] = time.split(':');
+      const scheduledFor = new Date(`${today}T${hh}:${mm}:00Z`);
+      const row = await prisma.visit.create({
+        data: {
+          clinicId,
+          patientId: forPatientId,
+          visitDate: new Date(`${today}T00:00:00Z`),
+          scheduledFor,
+          durationMinutes: 15,
+          isWalkIn: false,
+          status,
+          createdBy: doctorId,
+          updatedBy: doctorId,
+        },
+      });
+      return { id: row.id };
+    }
+
+    it('receptionist gets 403 on POST /api/visits/doctor-new', async () => {
+      const cookie = await loginAs(RECEPTIONIST_EMAIL, SEED_RECEPTIONIST_PASSWORD!);
+      const res = await req()
+        .post('/api/visits/doctor-new')
+        .set('host', TENANT_HOST)
+        .set('Cookie', cookie)
+        .send({ patientId });
+      expect(res.status).toBe(403);
+    });
+
+    it('falls back to standalone (calendar-invisible) when no schedule today', async () => {
+      const cookie = await loginAs(DOCTOR_EMAIL, SEED_DOCTOR_PASSWORD!);
+      const res = await req()
+        .post('/api/visits/doctor-new')
+        .set('host', TENANT_HOST)
+        .set('Cookie', cookie)
+        .send({ patientId });
+      expect(res.status).toBe(201);
+
+      const row = await prisma.visit.findUnique({
+        where: { id: res.body.visit.id },
+      });
+      expect(row).toBeTruthy();
+      expect(row!.isWalkIn).toBe(false);
+      expect(row!.scheduledFor).toBeNull();
+      expect(row!.arrivedAt).toBeNull();
+      expect(row!.pairedWithVisitId).toBeNull();
+      expect(row!.status).toBe('completed');
+
+      const audits = await prisma.auditLog.findMany({
+        where: {
+          clinicId,
+          resourceId: res.body.visit.id,
+          action: 'visit.created',
+        },
+      });
+      expect(audits.length).toBe(1);
+    });
+
+    it('pairs to the in-progress booking when unpaired', async () => {
+      // Sibling scenario: Era is in_progress; doctor opens Dion's
+      // chart and clicks "Vizitë e re". Result: Dion's new visit is
+      // a walk-in paired to Era's row.
+      const sibling = await prisma.patient.create({
+        data: {
+          clinicId,
+          firstName: 'Dion',
+          lastName: 'Krasniqi',
+          dateOfBirth: new Date('2021-04-02'),
+        },
+      });
+      const era = await seedScheduledToday('10:30', 'in_progress', patientId);
+
+      const cookie = await loginAs(DOCTOR_EMAIL, SEED_DOCTOR_PASSWORD!);
+      const res = await req()
+        .post('/api/visits/doctor-new')
+        .set('host', TENANT_HOST)
+        .set('Cookie', cookie)
+        .send({ patientId: sibling.id });
+      expect(res.status).toBe(201);
+
+      const row = await prisma.visit.findUnique({
+        where: { id: res.body.visit.id },
+      });
+      expect(row!.isWalkIn).toBe(true);
+      expect(row!.status).toBe('in_progress');
+      expect(row!.arrivedAt).not.toBeNull();
+      expect(row!.scheduledFor).toBeNull();
+      expect(row!.pairedWithVisitId).toBe(era.id);
+
+      const audit = await prisma.auditLog.findFirst({
+        where: {
+          clinicId,
+          resourceId: res.body.visit.id,
+          action: 'visit.walkin.added',
+        },
+      });
+      expect(audit).toBeDefined();
+      const changes = audit!.changes as Array<{ field: string; new: unknown }>;
+      const pair = changes.find((c) => c.field === 'pairedWithVisitId');
+      expect(pair?.new).toBe(era.id);
+    });
+
+    it('pairs to the next scheduled visit when in-progress is already paired', async () => {
+      const sibling = await prisma.patient.create({
+        data: {
+          clinicId,
+          firstName: 'Dion',
+          lastName: 'Krasniqi',
+          dateOfBirth: new Date('2021-04-02'),
+        },
+      });
+      const third = await prisma.patient.create({
+        data: {
+          clinicId,
+          firstName: 'Lira',
+          lastName: 'Krasniqi',
+          dateOfBirth: new Date('2019-01-08'),
+        },
+      });
+      // Era is in_progress (already paired below); Bardhi is the next
+      // scheduled visit on the day.
+      const era = await seedScheduledToday('10:30', 'in_progress', patientId);
+      const bardhi = await seedScheduledToday('10:45', 'scheduled', third.id);
+      // Pair Dion's first walk-in to Era so Era is "taken".
+      await prisma.visit.create({
+        data: {
+          clinicId,
+          patientId: sibling.id,
+          visitDate: new Date(`${todayBelgradeIso()}T00:00:00Z`),
+          isWalkIn: true,
+          arrivedAt: new Date(),
+          status: 'in_progress',
+          pairedWithVisitId: era.id,
+          createdBy: doctorId,
+          updatedBy: doctorId,
+        },
+      });
+
+      // New doctor-initiated visit for Lira — should pair to Bardhi
+      // (next unpaired scheduled visit on the day), not Era.
+      const cookie = await loginAs(DOCTOR_EMAIL, SEED_DOCTOR_PASSWORD!);
+      const res = await req()
+        .post('/api/visits/doctor-new')
+        .set('host', TENANT_HOST)
+        .set('Cookie', cookie)
+        .send({ patientId: third.id });
+      expect(res.status).toBe(201);
+
+      const row = await prisma.visit.findUnique({
+        where: { id: res.body.visit.id },
+      });
+      expect(row!.isWalkIn).toBe(true);
+      expect(row!.pairedWithVisitId).toBe(bardhi.id);
+    });
+
+    it('falls back to standalone when every scheduled visit is already paired', async () => {
+      const sibling = await prisma.patient.create({
+        data: {
+          clinicId,
+          firstName: 'Dion',
+          lastName: 'Krasniqi',
+          dateOfBirth: new Date('2021-04-02'),
+        },
+      });
+      const era = await seedScheduledToday('10:30', 'in_progress', patientId);
+      await prisma.visit.create({
+        data: {
+          clinicId,
+          patientId: sibling.id,
+          visitDate: new Date(`${todayBelgradeIso()}T00:00:00Z`),
+          isWalkIn: true,
+          arrivedAt: new Date(),
+          status: 'in_progress',
+          pairedWithVisitId: era.id,
+          createdBy: doctorId,
+          updatedBy: doctorId,
+        },
+      });
+
+      // No further scheduled rows exist → endpoint must fall back to
+      // standalone shape rather than refusing.
+      const cookie = await loginAs(DOCTOR_EMAIL, SEED_DOCTOR_PASSWORD!);
+      const res = await req()
+        .post('/api/visits/doctor-new')
+        .set('host', TENANT_HOST)
+        .set('Cookie', cookie)
+        .send({ patientId: sibling.id });
+      expect(res.status).toBe(201);
+
+      const row = await prisma.visit.findUnique({
+        where: { id: res.body.visit.id },
+      });
+      expect(row!.isWalkIn).toBe(false);
+      expect(row!.pairedWithVisitId).toBeNull();
+      expect(row!.status).toBe('completed');
+    });
+  });
+
+  // -------------------------------------------------------------------------
   // Multi-tenant isolation
   // -------------------------------------------------------------------------
 
