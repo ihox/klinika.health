@@ -199,6 +199,13 @@ export interface VisitDto {
   clinicId: string;
   patientId: string;
   visitDate: string;
+  /**
+   * Lifecycle status — one of the values in `VISIT_STATUSES`
+   * ({@link ../visits-calendar.dto VISIT_STATUSES}). Surfaced on the
+   * doctor's chart-form payload (Phase 2c) so the UI can gate
+   * affordances like "Pastro vizitën" on `status === 'completed'`.
+   */
+  status: string;
   complaint: string | null;
   feedingNotes: string | null;
   feedingBreast: boolean;
@@ -269,6 +276,7 @@ export interface VisitRowLike {
   clinicId: string;
   patientId: string;
   visitDate: Date | string;
+  status: string;
   complaint: string | null;
   feedingNotes: string | null;
   feedingBreast: boolean;
@@ -312,6 +320,7 @@ export function toVisitDto(row: VisitRowLike): VisitDto {
     clinicId: row.clinicId,
     patientId: row.patientId,
     visitDate: dateToIso(row.visitDate),
+    status: row.status,
     complaint: row.complaint ?? null,
     feedingNotes: row.feedingNotes ?? null,
     feedingBreast: row.feedingBreast,

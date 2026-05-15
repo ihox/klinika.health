@@ -107,6 +107,7 @@ describe('toVisitDto', () => {
     clinicId: 'c-1',
     patientId: 'p-1',
     visitDate: new Date('2026-05-14T00:00:00Z'),
+    status: 'completed',
     complaint: 'Kollë',
     feedingNotes: null,
     feedingBreast: false,

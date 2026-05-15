@@ -49,6 +49,12 @@ interface Props {
   onIssueVertetim: () => void;
   /** Open the patient-history print dialog (toggles US appendix). */
   onPrintHistory: () => void;
+  /**
+   * Open the "Pastro vizitën" confirmation dialog (Phase 2c). Parent
+   * computes visibility (today + completed + clinical role); when
+   * undefined the button is hidden.
+   */
+  onClearRequest?: () => void;
 }
 
 /**
@@ -75,6 +81,7 @@ export function VisitForm({
   onPrintVisitReport,
   onIssueVertetim,
   onPrintHistory,
+  onClearRequest,
 }: Props): ReactElement {
   const values = useAutoSaveStore((s) => s.values);
   const setValues = useAutoSaveStore((s) => s.setValues);
@@ -365,6 +372,7 @@ export function VisitForm({
         onPrintVisitReport={onPrintVisitReport}
         onIssueVertetim={onIssueVertetim}
         onPrintHistory={onPrintHistory}
+        onClear={onClearRequest}
       />
     </section>
   );
@@ -463,6 +471,8 @@ interface VisitActionBarProps {
   onPrintVisitReport: () => void;
   onIssueVertetim: () => void;
   onPrintHistory: () => void;
+  /** Phase 2c — present only when the visit is today + completed and the user has clinical access. */
+  onClear?: () => void;
 }
 
 function VisitActionBar({
@@ -474,6 +484,7 @@ function VisitActionBar({
   onPrintVisitReport,
   onIssueVertetim,
   onPrintHistory,
+  onClear,
 }: VisitActionBarProps): ReactElement {
   return (
     <footer className="flex flex-col gap-3 border-t border-line bg-surface-subtle px-4 py-3 lg:flex-row lg:flex-wrap lg:items-center lg:justify-between">
@@ -509,6 +520,19 @@ function VisitActionBar({
         <Button variant="secondary" size="sm" onClick={onSaveNow}>
           Ruaj tani
         </Button>
+        {onClear ? (
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={onClear}
+            data-testid="clear-visit-trigger"
+            title="Pastro të dhënat klinike, ruaj terminin"
+            className="text-warning hover:!bg-warning-bg"
+          >
+            <EraserIcon />
+            Pastro vizitën
+          </Button>
+        ) : null}
         <Button
           variant="secondary"
           size="sm"
@@ -823,6 +847,33 @@ function FoodCheck({ label, checked, onChange, onBlur }: FoodCheckProps): ReactE
       />
       {label}
     </label>
+  );
+}
+
+/**
+ * Eraser icon — the "Pastro vizitën" affordance (Phase 2c). Mirrors
+ * design-reference/prototype/components/pastro-visiten-toast.html:
+ * pencil-shaped eraser on a horizontal base. Distinct from the trash
+ * icon used for "Fshij vizitën" so the two actions read as different
+ * intents.
+ */
+function EraserIcon(): ReactElement {
+  return (
+    <svg
+      width="13"
+      height="13"
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M9.5 2.5L13.5 6.5l-6.5 6.5H3.5l-1.5-1.5L9.5 2.5z" />
+      <path d="M6 6.5l3.5 3.5" />
+      <path d="M1.5 14h11" />
+    </svg>
   );
 }
 
