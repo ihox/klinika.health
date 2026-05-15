@@ -154,6 +154,10 @@ export function DiagnosisPicker({
       setQuery('');
       setDebouncedQuery('');
       setActiveIndex(0);
+      // Close the dropdown after a selection so the chip-only state is
+      // visible. The doctor re-focuses the input (or types) to add
+      // another diagnosis; the onFocus handler reopens it then.
+      setOpen(false);
     },
     [onChange, selectedCodes, value],
   );
