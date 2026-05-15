@@ -156,12 +156,15 @@ describe.skipIf(!ENABLED)('Doctor dashboard integration', () => {
       },
     });
     // A completed visit earlier today so todayVisits + stats are
-    // exercised.
+    // exercised. `status: 'completed'` is explicit because the doctor
+    // dashboard's day-log filters on it (migration 20260519120000
+    // flipped the schema default to 'in_progress').
     const visit = await prisma.visit.create({
       data: {
         clinicId,
         patientId: patient.id,
         visitDate: visitDateFor(today),
+        status: 'completed',
         paymentCode: 'A',
         createdBy: doctorUserId,
         updatedBy: doctorUserId,
@@ -237,6 +240,7 @@ describe.skipIf(!ENABLED)('Doctor dashboard integration', () => {
           clinicId,
           patientId: patient.id,
           visitDate,
+          status: 'completed',
           paymentCode: code,
           createdBy: doctorUserId,
           updatedBy: doctorUserId,
@@ -279,6 +283,7 @@ describe.skipIf(!ENABLED)('Doctor dashboard integration', () => {
         clinicId,
         patientId: patient.id,
         visitDate: visitDateFor(today),
+        status: 'completed',
         createdBy: doctorUserId,
         updatedBy: doctorUserId,
       },

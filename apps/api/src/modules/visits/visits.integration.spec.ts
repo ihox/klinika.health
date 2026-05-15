@@ -218,6 +218,13 @@ describe.skipIf(!ENABLED)('Visits integration', () => {
       // any iso-day to avoid TZ flake in CI.
       expect(res.body.visit.visitDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
 
+      // Doctor-driven creation is born 'in_progress' so the chart's
+      // "Përfundo vizitën" CTA is the reachable next action.
+      const row = await prisma.visit.findUnique({
+        where: { id: res.body.visit.id },
+      });
+      expect(row!.status).toBe('in_progress');
+
       const audits = await prisma.auditLog.findMany({
         where: { clinicId, resourceId: res.body.visit.id, action: 'visit.created' },
       });
@@ -614,7 +621,7 @@ describe.skipIf(!ENABLED)('Visits integration', () => {
       expect(row!.scheduledFor).toBeNull();
       expect(row!.arrivedAt).toBeNull();
       expect(row!.pairedWithVisitId).toBeNull();
-      expect(row!.status).toBe('completed');
+      expect(row!.status).toBe('in_progress');
 
       const audits = await prisma.auditLog.findMany({
         where: {
@@ -762,7 +769,7 @@ describe.skipIf(!ENABLED)('Visits integration', () => {
       });
       expect(row!.isWalkIn).toBe(false);
       expect(row!.pairedWithVisitId).toBeNull();
-      expect(row!.status).toBe('completed');
+      expect(row!.status).toBe('in_progress');
     });
 
     // Phase 2b patch — the patient-has-active-visit-today gate. When
@@ -818,7 +825,7 @@ describe.skipIf(!ENABLED)('Visits integration', () => {
         expect(row!.scheduledFor).toBeNull();
         expect(row!.arrivedAt).toBeNull();
         expect(row!.pairedWithVisitId).toBeNull();
-        expect(row!.status).toBe('completed');
+        expect(row!.status).toBe('in_progress');
         // Regular-visit path emits the legacy `visit.created` audit row.
         const audits = await prisma.auditLog.findMany({
           where: { clinicId, resourceId: visitId, action: 'visit.created' },

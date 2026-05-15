@@ -304,8 +304,9 @@ model Patient {
 ///   scheduled    receptionist booked, no patient interaction yet
 ///   arrived      patient checked in
 ///   in_progress  doctor is filling clinical fields
-///   completed    visit done (the v0 default — every legacy visit row
-///                migrates to this)
+///   completed    visit done. Every migrated legacy visit row lands
+///                here; doctor-driven new rows are born 'in_progress'
+///                and reach 'completed' via "Përfundo vizitën".
 ///   no_show      patient never arrived
 ///   cancelled    booking cancelled before patient arrived
 ///
@@ -333,7 +334,7 @@ model Visit {
   durationMinutes     Int?      @map("duration_minutes")
   isWalkIn            Boolean   @default(false) @map("is_walk_in")
   arrivedAt           DateTime? @map("arrived_at") @db.Timestamptz(6)
-  status              String    @default("completed")
+  status              String    @default("in_progress")
   /// FK to the scheduled visit a walk-in is paired with. NULL on every
   /// scheduled visit. The DB-level CHECK constraint locks down the
   /// invariant ("paired_with_visit_id IS NULL OR is_walk_in = true");

@@ -91,6 +91,12 @@ export class VisitsService {
         clinicId,
         patientId: payload.patientId,
         visitDate,
+        // Doctor-driven creation: the row is born 'in_progress' so
+        // "Përfundo vizitën" is the reachable next step. Without this
+        // explicit value the schema default ('in_progress' since the
+        // 20260519120000 migration) takes over — set it here so the
+        // intent is readable at the call site.
+        status: 'in_progress',
         createdBy: ctx.userId,
         updatedBy: ctx.userId,
       },
@@ -109,6 +115,7 @@ export class VisitsService {
           old: null,
           new: created.visitDate.toISOString().slice(0, 10),
         },
+        { field: 'status', old: null, new: created.status },
       ],
     });
 
@@ -153,7 +160,7 @@ export class VisitsService {
     // visit today, the doctor is charting them as a follow-up of
     // their own existing row — not as a walk-in companion of someone
     // else. Short-circuit to the regular-visit path so the new row
-    // is `is_walk_in=false`, `scheduled_for=null`, `status='completed'`,
+    // is `is_walk_in=false`, `scheduled_for=null`, `status='in_progress'`,
     // no pairing — identical to the legacy `POST /api/visits` shape.
     //
     // Active = the three pre-finish statuses (scheduled / arrived /

@@ -22,7 +22,6 @@ import { Button } from '@/components/ui/button';
 import { UndoToast } from '@/components/undo-toast';
 import { ApiError } from '@/lib/api';
 import { useMe } from '@/lib/use-me';
-import { calendarClient } from '@/lib/visits-calendar-client';
 import { ageInMonths } from '@/lib/growth-chart';
 import { masterDataPath } from '@/lib/patient';
 import {
@@ -39,6 +38,7 @@ import { openPrintFrame } from '@/lib/print-frame';
 import { useAutoSaveStore } from '@/lib/use-visit-autosave';
 import { printUrls, type VertetimDto } from '@/lib/vertetim-client';
 import { canCompleteVisit, canRevertStatus } from '@/lib/visit-actions';
+import { completeVisit, revertStatus } from '@/lib/visit-complete-action';
 import { type VisitDto, visitClient } from '@/lib/visit-client';
 import { cn } from '@/lib/utils';
 
@@ -365,6 +365,7 @@ export function ChartView({ patientId, initialVisitId }: Props): ReactElement {
                               setActiveVisit,
                               setStatusToast,
                               refresh,
+                              router,
                             )
                         : undefined
                     }
@@ -1193,74 +1194,9 @@ async function undoDelete(
   }
 }
 
-// =========================================================================
-// Status transitions — "Përfundo vizitën" / "Anulo statusin"
-// =========================================================================
-//
-// Both go through the shared calendar status endpoint
-// (`PATCH /api/visits/:id/status`). The server emits `visit.status_
-// changed` via SSE on success so the receptionist's calendar and the
-// doctor's home dashboard refresh in real time.
-//
-// We always re-fetch the visit after the PATCH so the auto-save store
-// re-seeds with the new status (the chart endpoint's full DTO is the
-// auth source for the form). The chart-shell refresh keeps the
-// history list + master strip in sync.
-
-async function completeVisit(
-  visit: VisitDto,
-  setActiveVisit: (v: VisitDto | null) => void,
-  setStatusToast: (t: { id: string; message: string } | null) => void,
-  refresh: () => Promise<void>,
-): Promise<void> {
-  // Flush in-flight auto-save first — the doctor's last keystrokes
-  // should be on record before the status flips.
-  await useAutoSaveStore.getState().save();
-  try {
-    await calendarClient.changeStatus(visit.id, 'completed');
-    const res = await visitClient.getOne(visit.id);
-    setActiveVisit(res.visit);
-    setStatusToast({
-      id: `complete:${visit.id}:${Date.now()}`,
-      message: 'Vizita u përfundua.',
-    });
-    await refresh();
-  } catch (err) {
-    setStatusToast({
-      id: `complete-err:${visit.id}:${Date.now()}`,
-      message:
-        err instanceof ApiError && err.body.message
-          ? err.body.message
-          : 'Përfundimi i vizitës dështoi. Provoni përsëri.',
-    });
-  }
-}
-
-async function revertStatus(
-  visit: VisitDto,
-  setActiveVisit: (v: VisitDto | null) => void,
-  setStatusToast: (t: { id: string; message: string } | null) => void,
-  refresh: () => Promise<void>,
-): Promise<void> {
-  try {
-    await calendarClient.changeStatus(visit.id, 'arrived');
-    const res = await visitClient.getOne(visit.id);
-    setActiveVisit(res.visit);
-    setStatusToast({
-      id: `revert:${visit.id}:${Date.now()}`,
-      message: 'Vizita u rihap. Mund të redaktosh të dhënat.',
-    });
-    await refresh();
-  } catch (err) {
-    setStatusToast({
-      id: `revert-err:${visit.id}:${Date.now()}`,
-      message:
-        err instanceof ApiError && err.body.message
-          ? err.body.message
-          : 'Rihapja e vizitës dështoi. Provoni përsëri.',
-    });
-  }
-}
+// Status transitions — "Përfundo vizitën" / "Anulo statusin" — live
+// in `lib/visit-complete-action.ts` so they're unit-testable. The chart
+// view just imports them above (`completeVisit`, `revertStatus`).
 
 // =========================================================================
 // Print + vërtetim helpers
