@@ -1,7 +1,19 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
+import {
+  DndContext,
+  PointerSensor,
+  useDraggable,
+  useDroppable,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+  type DragMoveEvent,
+  type Modifier,
+} from '@dnd-kit/core';
+import { CSS } from '@dnd-kit/utilities';
 
 import { cn } from '@/lib/utils';
 import {
@@ -56,6 +68,17 @@ export interface CalendarGridProps {
    * opens the patient picker and POSTs with `pairedWithVisitId` set.
    */
   onWalkinForVisit: (pairedVisit: CalendarEntry, anchor: { x: number; y: number }) => void;
+  /**
+   * Drag-and-drop reschedule (Fix #2). The grid surfaces a snapped
+   * (date, time) pair; the parent owns the PATCH + audit + toast.
+   * Only scheduled non-walk-in visits trigger this. The parent should
+   * resolve to `{ ok: true }` to keep the new position, `{ ok: false,
+   * message }` to revert with an error toast.
+   */
+  onReschedule?: (
+    entry: CalendarEntry,
+    next: { date: string; time: string },
+  ) => Promise<{ ok: true } | { ok: false; message: string }>;
 }
 
 
@@ -179,11 +202,23 @@ export function CalendarGrid({
   onEntryClick,
   onEntryContextMenu,
   onWalkinForVisit,
+  onReschedule,
 }: CalendarGridProps): ReactElement {
   // Scheduled rows feed the time grid; walk-ins feed the per-column
   // right lane. Both still positioned absolutely by time math.
   const scheduledEntries = entries.filter((e) => !e.isWalkIn);
   const walkInsByDay = groupWalkInsByDay(entries);
+
+  // Drag preview state: which target slot the dragged card is over,
+  // and whether it conflicts with another scheduled visit. Drives
+  // the not-allowed cursor and the red-tinted ghost preview. Cleared
+  // on drop/cancel.
+  const [dragPreview, setDragPreview] = useState<{
+    entryId: string;
+    date: string;
+    time: string;
+    conflict: boolean;
+  } | null>(null);
 
   // The widest open band determines the grid height so columns line up
   // even when one day closes earlier than another. We always anchor at
@@ -217,7 +252,124 @@ export function CalendarGrid({
     byDay.get(day)!.push(a);
   }
 
+  // 5-min snap is 2 px/min × 5 = 10px. Only Y is snapped; X follows
+  // the cursor so cross-day drag reads naturally.
+  const snapYTo5Min: Modifier = useMemo(
+    () => ({ transform }) => ({
+      ...transform,
+      y: Math.round(transform.y / 10) * 10,
+    }),
+    [],
+  );
+
+  // Activation distance 8px: a quick click without movement still
+  // bubbles to the card's onClick (which opens the status menu). Drag
+  // intent — any movement of 8+ px — activates the DnD pipeline.
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+  );
+
+  // Compute (date, time) for the dragged card given an over column and
+  // the active node's translated rect. Returns null when the cursor
+  // hasn't crossed into any column (rare — usually a column is under
+  // the cursor).
+  const computeProposed = useCallback(
+    (
+      overDate: string,
+      activeTop: number,
+      overTop: number,
+      entry: CalendarEntry,
+    ): { date: string; time: string; conflict: boolean } | null => {
+      const newTop = activeTop - overTop;
+      // Snap (defense in depth — the modifier already snapped delta).
+      const minutesFromGridStart = Math.round(newTop / PX_PER_MIN / 5) * 5;
+      const newStartMin = gridStartMin + minutesFromGridStart;
+      if (newStartMin < gridStartMin) return null;
+      const newTime = minutesToTime(newStartMin);
+      const dur = entry.durationMinutes ?? 0;
+      const newEndMin = newStartMin + dur;
+      // Conflict check against every other scheduled visit in the
+      // target day. Walk-ins ignore (they live in the right lane).
+      const dayEntries = byDay.get(overDate) ?? [];
+      const conflict = dayEntries.some((other) => {
+        if (other.id === entry.id) return false;
+        if (other.scheduledFor == null || other.durationMinutes == null) return false;
+        const oStart = timeToMinutes(toLocalParts(new Date(other.scheduledFor)).time);
+        const oEnd = oStart + other.durationMinutes;
+        return newStartMin < oEnd && newEndMin > oStart;
+      });
+      return { date: overDate, time: newTime, conflict };
+    },
+    [byDay, gridStartMin],
+  );
+
+  const handleDragMove = useCallback(
+    (event: DragMoveEvent) => {
+      if (!event.over) {
+        if (dragPreview) setDragPreview(null);
+        return;
+      }
+      const entry = event.active.data.current?.entry as
+        | CalendarEntry
+        | undefined;
+      const overDate = event.over.data.current?.date as string | undefined;
+      const overTop = event.over.rect.top;
+      const activeRect = event.active.rect.current.translated;
+      if (!entry || !overDate || !activeRect) return;
+      const proposed = computeProposed(overDate, activeRect.top, overTop, entry);
+      if (!proposed) {
+        if (dragPreview) setDragPreview(null);
+        return;
+      }
+      if (
+        dragPreview &&
+        dragPreview.entryId === entry.id &&
+        dragPreview.date === proposed.date &&
+        dragPreview.time === proposed.time &&
+        dragPreview.conflict === proposed.conflict
+      ) {
+        return;
+      }
+      setDragPreview({ entryId: entry.id, ...proposed });
+    },
+    [computeProposed, dragPreview],
+  );
+
+  const handleDragEnd = useCallback(
+    async (event: DragEndEvent) => {
+      const entry = event.active.data.current?.entry as
+        | CalendarEntry
+        | undefined;
+      const overDate = event.over?.data.current?.date as string | undefined;
+      const overTop = event.over?.rect.top;
+      const activeRect = event.active.rect.current.translated;
+      setDragPreview(null);
+      if (!entry || !overDate || overTop == null || !activeRect) return;
+      if (!onReschedule) return;
+      const proposed = computeProposed(overDate, activeRect.top, overTop, entry);
+      if (!proposed || proposed.conflict) return;
+      // Same-position drop: no-op
+      if (entry.scheduledFor) {
+        const cur = toLocalParts(new Date(entry.scheduledFor));
+        if (cur.date === proposed.date && cur.time === proposed.time) return;
+      }
+      await onReschedule(entry, { date: proposed.date, time: proposed.time });
+    },
+    [computeProposed, onReschedule],
+  );
+
+  const handleDragCancel = useCallback(() => {
+    setDragPreview(null);
+  }, []);
+
   return (
+    <DndContext
+      sensors={sensors}
+      modifiers={[snapYTo5Min]}
+      onDragMove={handleDragMove}
+      onDragEnd={handleDragEnd}
+      onDragCancel={handleDragCancel}
+    >
     <div
       className="grid border-t border-line"
       style={{
@@ -313,14 +465,19 @@ export function CalendarGrid({
             entries={dayEntries}
             walkIns={dayWalkIns}
             defaultDuration={hours.defaultDuration}
+            dragPreview={
+              dragPreview && dragPreview.date === col.date ? dragPreview : null
+            }
             onSlotClick={onSlotClick}
             onEntryClick={onEntryClick}
             onEntryContextMenu={onEntryContextMenu}
             onWalkinForVisit={onWalkinForVisit}
+            onReschedule={onReschedule}
           />
         );
       })}
     </div>
+    </DndContext>
   );
 }
 
@@ -340,10 +497,14 @@ interface DayColumnBodyProps {
    * height so the receptionist sees the actual default-duration
    * footprint a click would create. */
   defaultDuration: number;
+  /** Set when a drag is over this specific column. Drives the
+   *  drop-preview ghost + conflict tint. */
+  dragPreview: { entryId: string; date: string; time: string; conflict: boolean } | null;
   onSlotClick: CalendarGridProps['onSlotClick'];
   onEntryClick: CalendarGridProps['onEntryClick'];
   onEntryContextMenu: CalendarGridProps['onEntryContextMenu'];
   onWalkinForVisit: CalendarGridProps['onWalkinForVisit'];
+  onReschedule: CalendarGridProps['onReschedule'];
 }
 
 function DayColumnBody({
@@ -358,11 +519,22 @@ function DayColumnBody({
   entries,
   walkIns,
   defaultDuration,
+  dragPreview,
   onSlotClick,
   onEntryClick,
   onEntryContextMenu,
   onWalkinForVisit,
+  onReschedule,
 }: DayColumnBodyProps): ReactElement {
+  // Register this column body as a droppable for the DnD reschedule
+  // flow. The `data.date` is read by handleDragEnd to compute the
+  // target (date, time). Disabled when the column is closed —
+  // dropping into a Mbyllur day shouldn't be allowed.
+  const { setNodeRef: setDroppableRef } = useDroppable({
+    id: `col:${col.date}`,
+    data: { date: col.date },
+    disabled: !col.open,
+  });
   // A column is in two-lane mode whenever it carries ≥1 walk-in OR is
   // today (today's right lane is always reserved — when empty it shows
   // the "Asnjë pa termin sot" placeholder so the receptionist sees the
@@ -545,6 +717,7 @@ function DayColumnBody({
 
   return (
     <div
+      ref={setDroppableRef}
       className={cn(
         'relative border-r border-line last:border-r-0 cursor-pointer',
         !col.open && 'cursor-not-allowed bg-surface-subtle',
@@ -610,6 +783,7 @@ function DayColumnBody({
               ? (ev) => onEntryContextMenu(a, { x: ev.clientX, y: ev.clientY })
               : undefined
           }
+          onReschedule={onReschedule}
         />
       ))}
 
@@ -638,6 +812,33 @@ function DayColumnBody({
           }
         />
       ))}
+
+      {/* Drop preview — the snapped target slot during a drag. Teal
+          when valid, red when the position would conflict with another
+          scheduled visit. Mirrors `.drop-preview` in receptionist.html
+          but driven by `dragPreview` state from CalendarGrid's DnD
+          handlers. */}
+      {dragPreview ? (
+        <div
+          className={cn(
+            'absolute z-[4] pointer-events-none rounded-sm flex items-center gap-1.5 px-2 py-[3px] text-[11px] font-semibold leading-none tabular-nums shadow-[0_2px_8px_rgba(13,148,136,0.16)]',
+            dragPreview.conflict
+              ? 'bg-danger-bg/70 border border-danger text-danger'
+              : 'bg-teal-50 border border-primary text-primary-dark',
+          )}
+          style={{
+            top: (timeToMinutes(dragPreview.time) - gridStartMin) * PX_PER_MIN,
+            height: PINNED_HEIGHT_PX + 2,
+            left: 6,
+            ...(isTwoLane ? { right: 'calc(50% + 2px)' } : { right: 6 }),
+          }}
+          aria-hidden
+        >
+          {dragPreview.conflict
+            ? `Konflikt · ${dragPreview.time}`
+            : `Zhvendos te ${dragPreview.time}`}
+        </div>
+      ) : null}
 
       {/* Today's right-lane placeholder — only when the band is empty.
           Mirrors `.lane-empty` in receptionist.html: a soft dashed card
@@ -777,6 +978,10 @@ interface ScheduledCardProps {
   pinned: PinnedPosition | null;
   onClick: (event: React.MouseEvent) => void;
   onContextMenu?: (event: React.MouseEvent) => void;
+  /** Drag-drop reschedule callback (Fix #2) — also drives the
+   *  Shift+Arrow keyboard fallback. Absent when the parent doesn't
+   *  support reschedule. */
+  onReschedule?: CalendarGridProps['onReschedule'];
 }
 
 function ScheduledCard({
@@ -787,6 +992,7 @@ function ScheduledCard({
   pinned,
   onClick,
   onContextMenu,
+  onReschedule,
 }: ScheduledCardProps): ReactElement | null {
   if (entry.scheduledFor == null || entry.durationMinutes == null) return null;
   const start = new Date(entry.scheduledFor);
@@ -806,6 +1012,24 @@ function ScheduledCard({
     CARD_HOVER_DELAY_MS,
   );
 
+  // Drag-and-drop reschedule: only the `scheduled` status is movable.
+  // arrived/in-progress/completed/no-show/cancelled cards stay
+  // anchored (you don't reschedule a patient who's already arrived).
+  // Walk-ins live in the right lane and aren't reachable here.
+  // Pinned (out-of-range) cards: skip — the receptionist should
+  // re-open them via the status menu to fix the time, not slide them
+  // around an unfamiliar position.
+  const isDraggable = entry.status === 'scheduled' && pinned == null;
+  const { attributes, listeners, setNodeRef, transform, isDragging } =
+    useDraggable({
+      id: `card:${entry.id}`,
+      data: { entry, startMin, duration: entry.durationMinutes },
+      disabled: !isDraggable,
+    });
+  const dragTransform = transform
+    ? CSS.Translate.toString(transform)
+    : undefined;
+
   // Pinned cards use a fixed compact height and pin to top/bottom of
   // the column body instead of their scheduled-for-derived position.
   // The position-overriding style fragment lives separately from the
@@ -818,13 +1042,56 @@ function ScheduledCard({
   const pinPrefix =
     pinned == null ? null : pinned.kind === 'before' ? '← më herët' : 'më vonë →';
 
+  // Keyboard reschedule (Shift+Arrow). Up/Down moves by 5 minutes,
+  // Left/Right by one day. Lands on the same onReschedule contract
+  // as the pointer drag; the server enforces the 5-min boundary and
+  // conflict detection.
+  const onKeyDown = (e: React.KeyboardEvent<HTMLButtonElement>): void => {
+    if (!isDraggable || !onReschedule || entry.scheduledFor == null) return;
+    if (!e.shiftKey) return;
+    const key = e.key;
+    if (
+      key !== 'ArrowUp' &&
+      key !== 'ArrowDown' &&
+      key !== 'ArrowLeft' &&
+      key !== 'ArrowRight'
+    ) {
+      return;
+    }
+    e.preventDefault();
+    const current = new Date(entry.scheduledFor);
+    const parts = toLocalParts(current);
+    if (key === 'ArrowUp' || key === 'ArrowDown') {
+      const minDelta = key === 'ArrowUp' ? -5 : 5;
+      const sMin = timeToMinutes(parts.time) + minDelta;
+      if (sMin < 0 || sMin >= 24 * 60) return;
+      void onReschedule(entry, { date: parts.date, time: minutesToTime(sMin) });
+    } else {
+      const dayDelta = key === 'ArrowLeft' ? -1 : 1;
+      const [y, m, d] = parts.date.split('-').map(Number) as [number, number, number];
+      const next = new Date(Date.UTC(y, m - 1, d));
+      next.setUTCDate(next.getUTCDate() + dayDelta);
+      const nextDate = `${next.getUTCFullYear()}-${String(next.getUTCMonth() + 1).padStart(2, '0')}-${String(next.getUTCDate()).padStart(2, '0')}`;
+      void onReschedule(entry, { date: nextDate, time: parts.time });
+    }
+  };
+
   return (
     <button
+      ref={setNodeRef}
       type="button"
       data-appt={entry.id}
       data-status={entry.status}
       data-pinned={pinned?.kind ?? undefined}
+      data-dragging={isDragging || undefined}
+      {...(isDraggable ? attributes : {})}
+      {...(isDraggable ? listeners : {})}
+      onKeyDown={onKeyDown}
       onClick={(e) => {
+        // Drag activation eats the click via the activation constraint.
+        // A click without movement still reaches here and opens the
+        // status menu, which is the receptionist's primary affordance.
+        if (isDragging) return;
         e.stopPropagation();
         onClick(e);
       }}
@@ -852,6 +1119,8 @@ function ScheduledCard({
         isNew && !isCompleted && !isNoShow && !isArrived && !isInProgress &&
           'border-l-accent-500 border-warning-soft',
         pinned && 'border-dashed bg-stone-50/80',
+        isDraggable && !isDragging && 'cursor-grab',
+        isDragging && 'cursor-grabbing',
       )}
       style={{
         ...(pinnedStyle ?? { top: inlineTop, height: Math.max(20, inlineHeight) }),
@@ -859,8 +1128,9 @@ function ScheduledCard({
         // fit its content (full name + time). Z-index spikes so the
         // expanded card sits above sibling cards and the right-lane
         // walk-in band; max-width keeps it from running off the column
-        // group entirely.
-        ...(hovered
+        // group entirely. Suppress while dragging so the card itself
+        // doesn't fight the drag transform.
+        ...(hovered && !isDragging
           ? { right: 'auto', width: 'max-content', maxWidth: 260, zIndex: 20 }
           : leftLaneOnly
             ? { right: 'calc(50% + 2px)', zIndex: pinned ? 6 : 3 }
@@ -869,13 +1139,14 @@ function ScheduledCard({
         ...(isPast && !isCompleted && !isNoShow && !isCancelled && !pinned
           ? { opacity: 0.85, filter: 'saturate(0.78)' }
           : {}),
+        ...(isDragging ? { zIndex: 100, transform: dragTransform } : {}),
       }}
       aria-label={`${entry.patient.firstName} ${entry.patient.lastName}, ${localParts.time}, ${STATUS_LABEL[entry.status]}${pinned ? ', jashtë orarit' : ''}`}
     >
       <span
         className={cn(
           'flex-1 min-w-0 text-[11.5px] font-semibold text-ink-strong leading-[1.15]',
-          hovered ? 'whitespace-nowrap' : 'truncate',
+          hovered && !isDragging ? 'whitespace-nowrap' : 'truncate',
         )}
       >
         {pinPrefix ? (

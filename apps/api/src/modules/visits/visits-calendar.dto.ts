@@ -123,6 +123,18 @@ const TimeSchema = z
   .string()
   .regex(/^([01]\d|2[0-3]):([0-5]\d)$/, 'Ora duhet të jetë HH:MM');
 
+// Scheduling-specific time schema — same shape as TimeSchema plus a
+// 5-minute boundary refinement. Applied to Create/Update/Reschedule
+// only; availability queries keep the looser TimeSchema so they can
+// still accept finer-grained "starting from" times.
+const SchedulingTimeSchema = TimeSchema.refine(
+  (s) => {
+    const [, m] = s.split(':');
+    return Number(m) % 5 === 0;
+  },
+  { message: 'Ora duhet të jetë në hapa 5-minutësh' },
+);
+
 // `from` and `to` are inclusive calendar days in Europe/Belgrade.
 export const CalendarRangeQuerySchema = z
   .object({
@@ -161,7 +173,7 @@ export const CreateScheduledVisitSchema = z
   .object({
     patientId: z.string().uuid('Pacienti i pavlefshëm'),
     date: IsoDateSchema,
-    time: TimeSchema,
+    time: SchedulingTimeSchema,
     durationMinutes: z.number().int().min(5).max(180),
   })
   .strict();
@@ -199,7 +211,7 @@ export type CreateWalkinVisitInput = z.infer<typeof CreateWalkinVisitSchema>;
 export const UpdateScheduledVisitSchema = z
   .object({
     date: IsoDateSchema.optional(),
-    time: TimeSchema.optional(),
+    time: SchedulingTimeSchema.optional(),
     durationMinutes: z.number().int().min(5).max(180).optional(),
   })
   .strict()

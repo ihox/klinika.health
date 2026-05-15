@@ -396,6 +396,60 @@ export function CalendarView(): ReactElement {
     [refreshEntries, refreshStats],
   );
 
+  // ----- Drag-and-drop reschedule (Fix #2). The grid hands us the
+  // snapped (date, time); we PATCH /api/visits/:id/scheduling, refresh
+  // the calendar, and announce success/failure via aria-live. Server
+  // re-validates (5-min boundary, conflict) — UI prevention is best
+  // effort, server is authoritative.
+  const ariaLiveRef = useRef<HTMLDivElement | null>(null);
+  const announce = useCallback((msg: string) => {
+    if (ariaLiveRef.current) ariaLiveRef.current.textContent = msg;
+  }, []);
+  const onDragReschedule = useCallback(
+    async (
+      entry: CalendarEntry,
+      next: { date: string; time: string },
+    ): Promise<{ ok: true } | { ok: false; message: string }> => {
+      try {
+        await calendarClient.reschedule(entry.id, {
+          date: next.date,
+          time: next.time,
+        });
+        await refreshEntries();
+        await refreshStats();
+        const dayLabel = dayLabelLong(weekdayOf(next.date));
+        const msg = `Termini u zhvendos në ${dayLabel.toLowerCase()}, ora ${next.time}.`;
+        setToast(msg);
+        announce(msg);
+        return { ok: true };
+      } catch (err) {
+        const fallback = 'Nuk u zhvendos. Provo përsëri.';
+        let message = fallback;
+        if (err instanceof ApiError) {
+          if (err.body.reason === 'conflict') {
+            message = 'Ky orar mbivendoset me një termin tjetër.';
+          } else if (err.body.reason === 'after_close') {
+            message = 'Termini kalon orarin e mbylljes.';
+          } else if (err.body.reason === 'before_open') {
+            message = 'Ora është para hapjes së klinikës.';
+          } else if (err.body.reason === 'closed_day') {
+            message = 'Klinika është e mbyllur këtë ditë.';
+          }
+        }
+        setToast(message);
+        announce(message);
+        // Trigger a refresh so the card snaps back to the original
+        // position (the server still has the old scheduled_for).
+        void refreshEntries();
+        return { ok: false, message };
+      }
+      // We don't capture `entry` post-call because the server response
+      // is forwarded via setEntries on the next list refresh. The
+      // grid will reposition the card to its new top once that lands.
+    },
+    [announce, refreshEntries, refreshStats],
+  );
+
   // ----- Edit existing appointment (open booking dialog in edit mode)
   // Walk-ins can't be rescheduled — they have no slot. The action menu
   // hides the option, so this only fires on scheduled entries.
@@ -695,6 +749,15 @@ export function CalendarView(): ReactElement {
 
   return (
     <main className="min-h-screen bg-stone-50 pb-16">
+      {/* Polite aria-live region for drag-and-drop reschedule
+          announcements (Fix #2) — keyboard users + screen readers
+          hear the outcome of a Shift+Arrow move or a successful drop. */}
+      <div
+        ref={ariaLiveRef}
+        aria-live="polite"
+        aria-atomic="true"
+        className="sr-only"
+      />
       {/* Top bar — role-filtered (ADR-004). The global patient search
           moved inside the calendar card per receptionist.html so the
           top nav stays focused on navigation + identity. */}
@@ -840,6 +903,7 @@ export function CalendarView(): ReactElement {
               // the long-press gesture they expect.
               onEntryContextMenu={onEntryClick}
               onWalkinForVisit={openWalkinPickerForVisit}
+              onReschedule={onDragReschedule}
             />
           ) : (
             <CalendarSkeleton />
