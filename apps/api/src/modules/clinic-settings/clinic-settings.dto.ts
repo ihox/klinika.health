@@ -15,6 +15,15 @@ import { z } from 'zod';
 
 const phoneSchema = z.string().trim().min(3, 'Numri është shumë i shkurtër').max(40);
 
+export const WalkinDurationSchema = z
+  .number()
+  .int('Vlera duhet të jetë numër i plotë')
+  .min(5, 'Minimumi 5 minuta')
+  .max(60, 'Maksimumi 60 minuta')
+  .refine((v) => v % 5 === 0, {
+    message: 'Vlera duhet të jetë shumëfish i 5',
+  });
+
 export const ClinicGeneralUpdateSchema = z.object({
   name: z.string().trim().min(2, 'Emri duhet të ketë të paktën 2 karaktere').max(160),
   shortName: z.string().trim().min(2, 'Emri i shkurtuar duhet të ketë të paktën 2 karaktere').max(60),
@@ -22,6 +31,7 @@ export const ClinicGeneralUpdateSchema = z.object({
   city: z.string().trim().min(1, 'Qyteti mungon').max(80),
   phones: z.array(phoneSchema).min(1, 'Të paktën një telefon').max(8),
   email: z.string().trim().toLowerCase().email('Email-i është i pasaktë').max(254),
+  walkinDurationMinutes: WalkinDurationSchema,
 });
 export type ClinicGeneralUpdate = z.infer<typeof ClinicGeneralUpdateSchema>;
 
@@ -272,6 +282,8 @@ export interface ClinicSettingsResponse {
     city: string;
     phones: string[];
     email: string;
+    /** Default duration (minutes) for walk-ins. Range 5–60. */
+    walkinDurationMinutes: number;
   };
   branding: {
     hasLogo: boolean;

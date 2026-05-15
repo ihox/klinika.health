@@ -42,6 +42,8 @@ export interface ClinicSettings {
     city: string;
     phones: string[];
     email: string;
+    /** Walk-in default duration (minutes). Range 5–60, snapped to 5. */
+    walkinDurationMinutes: number;
   };
   branding: {
     hasLogo: boolean;

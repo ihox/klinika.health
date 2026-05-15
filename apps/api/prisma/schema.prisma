@@ -74,6 +74,11 @@ model Clinic {
   email        String
   hoursConfig  Json         @map("hours_config")
   paymentCodes Json         @map("payment_codes")
+  /// Default duration (minutes) applied to walk-ins by both the
+  /// receptionist `/api/visits/walkin` and the doctor's
+  /// `/api/visits/doctor-new` flow. DB CHECK constraint bounds 5..60.
+  /// Configurable per clinic via Cilësimet → Përgjithshme (clinic_admin only).
+  walkinDurationMinutes Int   @default(5) @map("walkin_duration_minutes")
   logoUrl      String       @map("logo_url")
   signatureUrl String       @map("signature_url")
   smtpConfig   Json?        @map("smtp_config")

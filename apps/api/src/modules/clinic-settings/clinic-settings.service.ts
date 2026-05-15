@@ -77,6 +77,7 @@ export class ClinicSettingsService {
         city: clinic.city,
         phones: clinic.phones,
         email: clinic.email,
+        walkinDurationMinutes: clinic.walkinDurationMinutes,
       },
       branding: {
         hasLogo: Boolean(logo),
@@ -118,6 +119,7 @@ export class ClinicSettingsService {
         city: payload.city,
         phones: payload.phones,
         email: payload.email,
+        walkinDurationMinutes: payload.walkinDurationMinutes,
       },
     });
 
@@ -127,6 +129,7 @@ export class ClinicSettingsService {
       'address',
       'city',
       'email',
+      'walkinDurationMinutes',
     ]);
     if (!arraysEqualStr(before.phones, after.phones)) {
       diffs.push({ field: 'phones', old: before.phones, new: after.phones });
