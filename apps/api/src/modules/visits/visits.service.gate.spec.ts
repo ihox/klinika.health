@@ -114,14 +114,18 @@ describe('VisitsService.createDoctorNew — patient-active-visit-today gate', ()
     expect(calendar.computeWalkInArrivedAt).not.toHaveBeenCalled();
 
     // visit.create is invoked with the regular shape: no isWalkIn,
-    // no pairing, no scheduledFor; defaults apply for status etc.
+    // no pairing, no scheduledFor. `status` is set explicitly to
+    // 'in_progress' by VisitsService.create() (migration
+    // 20260519120000 flipped the schema default to 'in_progress'; the
+    // service still passes it through so the call-site intent is
+    // readable).
     expect(visitCreate).toHaveBeenCalledTimes(1);
     const data = visitCreate.mock.calls[0]?.[0]?.data as Record<string, unknown>;
     expect(data['isWalkIn']).toBeUndefined();
     expect(data['scheduledFor']).toBeUndefined();
     expect(data['pairedWithVisitId']).toBeUndefined();
     expect(data['arrivedAt']).toBeUndefined();
-    expect(data['status']).toBeUndefined();
+    expect(data['status']).toBe('in_progress');
   });
 
   it('queries the gate scoped to this patient with the active-status whitelist', async () => {
