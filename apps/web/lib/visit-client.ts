@@ -94,12 +94,6 @@ export interface SoftDeleteResponse {
   restorableUntil: string;
 }
 
-/** Response from `POST /api/visits/:id/clear` — Pastro vizitën. */
-export interface ClearVisitResponse {
-  visit: VisitDto;
-  undoableUntil: string;
-}
-
 // ---------------------------------------------------------------------------
 // Client
 // ---------------------------------------------------------------------------
@@ -159,22 +153,6 @@ export const visitClient = {
 
   restore: (id: string) =>
     apiFetch<{ visit: VisitDto }>(`/api/visits/${id}/restore`, {
-      method: 'POST',
-    }),
-
-  /**
-   * "Pastro vizitën" (Phase 2c) — clear a today's completed visit's
-   * clinical fields and flip it back to `arrived`. Returns the updated
-   * visit + an ISO deadline after which the matching `/clear/undo`
-   * endpoint will reject.
-   */
-  clear: (id: string) =>
-    apiFetch<ClearVisitResponse>(`/api/visits/${id}/clear`, {
-      method: 'POST',
-    }),
-
-  clearUndo: (id: string) =>
-    apiFetch<{ visit: VisitDto }>(`/api/visits/${id}/clear/undo`, {
       method: 'POST',
     }),
 

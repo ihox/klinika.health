@@ -7,7 +7,6 @@ import { useCallback, useEffect, useMemo, useState, type ReactElement } from 're
 import { ClinicTopNav } from '@/components/clinic-top-nav';
 import { EmptyState } from '@/components/empty-state';
 import { ChangeHistoryModal } from '@/components/patient/change-history-modal';
-import { ClearVisitDialog } from '@/components/patient/clear-visit-dialog';
 import { GrowthPanel } from '@/components/patient/growth-panel';
 import { MasterDataStrip } from '@/components/patient/master-data-strip';
 import { PrintHistoryDialog } from '@/components/patient/print-history-dialog';
@@ -36,7 +35,6 @@ import {
 import { openPrintFrame } from '@/lib/print-frame';
 import { useAutoSaveStore } from '@/lib/use-visit-autosave';
 import { printUrls, type VertetimDto } from '@/lib/vertetim-client';
-import { canClearVisit } from '@/lib/visit-clear';
 import { type VisitDto, visitClient } from '@/lib/visit-client';
 import { cn } from '@/lib/utils';
 
@@ -76,12 +74,6 @@ export function ChartView({ patientId, initialVisitId }: Props): ReactElement {
     visit: VisitDto;
     restorableUntil: string;
   } | null>(null);
-  const [pendingClear, setPendingClear] = useState<{
-    visitId: string;
-    undoableUntil: string;
-  } | null>(null);
-  const [clearDialogOpen, setClearDialogOpen] = useState(false);
-  const [clearBusy, setClearBusy] = useState(false);
   const [showAllHistory, setShowAllHistory] = useState(false);
   const [setSexOpen, setSetSexOpen] = useState(false);
   const [vertetimDialogOpen, setVertetimDialogOpen] = useState(false);
@@ -285,41 +277,6 @@ export function ChartView({ patientId, initialVisitId }: Props): ReactElement {
         />
       ) : null}
 
-      {pendingClear ? (
-        <UndoToast
-          message="Vizita u pastrua. Mund ta redaktosh përsëri."
-          onUndo={() =>
-            void undoClear(
-              pendingClear.visitId,
-              setActiveVisit,
-              setPendingClear,
-              refresh,
-            )
-          }
-          onDismiss={() => setPendingClear(null)}
-          durationMs={15_000}
-        />
-      ) : null}
-
-      <ClearVisitDialog
-        open={clearDialogOpen}
-        busy={clearBusy}
-        onClose={() => {
-          if (!clearBusy) setClearDialogOpen(false);
-        }}
-        onConfirm={() => {
-          if (!activeVisit) return;
-          void confirmClear(
-            activeVisit.id,
-            setActiveVisit,
-            setPendingClear,
-            setClearDialogOpen,
-            setClearBusy,
-            refresh,
-          );
-        }}
-      />
-
       {data == null ? (
         <ChartSkeleton />
       ) : (
@@ -368,11 +325,6 @@ export function ChartView({ patientId, initialVisitId }: Props): ReactElement {
                     }
                     onIssueVertetim={() => setVertetimDialogOpen(true)}
                     onPrintHistory={() => setPrintHistoryOpen(true)}
-                    onClearRequest={
-                      canClearVisit(activeVisit, me?.roles ?? [])
-                        ? () => setClearDialogOpen(true)
-                        : undefined
-                    }
                   />
                 ) : (
                   <VisitFormLoading />
@@ -449,8 +401,7 @@ function ChartTopBar({
   // Role-filtered nav (ADR-004). The chart view lives under
   // /pacient/[id], which `ClinicTopNav` matches as part of the
   // "Pacientët" item via its `activePrefixes` list. `me` is hoisted to
-  // the parent so adjacent affordances (e.g. Pastro vizitën, which
-  // gates on clinical roles) can share the same fetch.
+  // the parent so adjacent role-gated affordances share the same fetch.
   return <ClinicTopNav me={me} />;
 }
 
@@ -1168,80 +1119,6 @@ async function undoDelete(
       window.alert('Rikthimi i vizitës dështoi.');
     }
   }
-}
-
-// =========================================================================
-// Pastro vizitën — clear + 15s undo (Phase 2c)
-// =========================================================================
-
-async function confirmClear(
-  visitId: string,
-  setActiveVisit: (v: VisitDto | null) => void,
-  setPendingClear: (
-    value: { visitId: string; undoableUntil: string } | null,
-  ) => void,
-  setClearDialogOpen: (open: boolean) => void,
-  setClearBusy: (busy: boolean) => void,
-  refresh: () => Promise<void>,
-): Promise<void> {
-  // Flush in-flight auto-save edits so the server clears the user's
-  // latest state, not a stale one.
-  await useAutoSaveStore.getState().save();
-  setClearBusy(true);
-  try {
-    const res = await visitClient.clear(visitId);
-    // Re-seed the visit form with the post-clear shape (blank fields,
-    // status='arrived'). The auto-save store re-seeds via the
-    // VisitForm's `useEffect(setVisit)`.
-    setActiveVisit(res.visit);
-    setPendingClear({ visitId, undoableUntil: res.undoableUntil });
-    setClearDialogOpen(false);
-    await refresh();
-  } catch (err) {
-    setClearDialogOpen(false);
-    if (typeof window !== 'undefined') {
-      // eslint-disable-next-line no-alert
-      window.alert(clearErrorMessage(err));
-    }
-  } finally {
-    setClearBusy(false);
-  }
-}
-
-async function undoClear(
-  visitId: string,
-  setActiveVisit: (v: VisitDto | null) => void,
-  setPendingClear: (
-    value: { visitId: string; undoableUntil: string } | null,
-  ) => void,
-  refresh: () => Promise<void>,
-): Promise<void> {
-  try {
-    const res = await visitClient.clearUndo(visitId);
-    setActiveVisit(res.visit);
-    setPendingClear(null);
-    await refresh();
-  } catch (err) {
-    setPendingClear(null);
-    if (typeof window !== 'undefined') {
-      // eslint-disable-next-line no-alert
-      window.alert(clearErrorMessage(err, 'Anulimi dështoi. Dritarja prej 15 sekondash ka skaduar.'));
-    }
-  }
-}
-
-/**
- * Render an ApiError as a user-facing Albanian sentence. Falls back
- * to the provided default when the server didn't send a message — that
- * keeps a network failure readable while still surfacing 400/403/404
- * server messages verbatim (those carry the actual reason).
- */
-function clearErrorMessage(err: unknown, fallback?: string): string {
-  if (err instanceof ApiError) {
-    if (err.body.message) return err.body.message;
-    return `${fallback ?? 'Pastrimi i vizitës dështoi.'} (HTTP ${err.status})`;
-  }
-  return fallback ?? 'Pastrimi i vizitës dështoi. Provoni përsëri.';
 }
 
 // =========================================================================

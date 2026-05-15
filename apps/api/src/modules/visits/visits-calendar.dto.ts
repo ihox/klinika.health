@@ -34,7 +34,7 @@ export const VisitStatusSchema = z.enum(VISIT_STATUSES);
  *   scheduled  → arrived | no_show | cancelled
  *   arrived    → in_progress | no_show
  *   in_progress → completed
- *   completed  → arrived           (Phase 2c "Pastro vizitën")
+ *   completed  → arrived           ("Anulo statusin" — reopen a finished visit for edits)
  *   no_show    → arrived           ("Rikthe te paraqitur" — patient did show up after all)
  *   cancelled  → arrived           ("Rikthe te paraqitur" — booking restored)
  *
@@ -69,8 +69,8 @@ export function isTransitionAllowed(from: VisitStatus, to: VisitStatus): boolean
 // followupNotes, otherNotes, legacyDiagnosis, feedingNotes, weightG,
 // heightCm, headCircumferenceCm, temperatureC, paymentCode, OR any
 // linked structured diagnoses. If clinical data exists, deletion is 403
-// with the message below and the doctor must use the chart-form "Pastro
-// vizitën" affordance (Phase 2c).
+// with an action-oriented refusal asking the receptionist to escalate
+// to the doctor — clinical content is the doctor's territory.
 
 export interface ClinicalDataSnapshot {
   complaint: string | null;
@@ -91,7 +91,7 @@ export interface ClinicalDataSnapshot {
 }
 
 export const CLINICAL_DATA_REFUSAL_MESSAGE =
-  'Vizita ka të dhëna klinike. Pastro përmes formularit të mjekut.';
+  'Vizita ka të dhëna klinike. Kërkoni mjekut ta fshijë.';
 
 export function hasClinicalData(v: ClinicalDataSnapshot): boolean {
   if (nonEmptyString(v.complaint)) return true;

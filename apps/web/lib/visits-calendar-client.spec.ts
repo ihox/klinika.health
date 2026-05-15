@@ -44,7 +44,7 @@ describe('ALLOWED_TRANSITIONS / isTransitionAllowed', () => {
     expect(ALLOWED_TRANSITIONS.arrived).toContain('no_show');
     // in_progress → completed
     expect(ALLOWED_TRANSITIONS.in_progress).toEqual(['completed']);
-    // completed → arrived only (Phase 2c "Pastro vizitën")
+    // completed → arrived only ("Anulo statusin" escape hatch)
     expect(ALLOWED_TRANSITIONS.completed).toEqual(['arrived']);
     // no_show / cancelled both reopen to arrived
     expect(ALLOWED_TRANSITIONS.no_show).toEqual(['arrived']);

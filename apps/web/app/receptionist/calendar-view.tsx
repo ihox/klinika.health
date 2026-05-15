@@ -416,9 +416,9 @@ export function CalendarView(): ReactElement {
       } catch (err) {
         // Surface the server's specific Albanian reason when it ships
         // one (the clinical-data guard returns
-        // "Vizita ka të dhëna klinike. Pastro përmes formularit të
-        // mjekut." with reason='has_clinical_data'); fall back to a
-        // generic message for opaque failures.
+        // "Vizita ka të dhëna klinike. Kërkoni mjekut ta fshijë." with
+        // reason='has_clinical_data'); fall back to a generic message
+        // for opaque failures.
         setToast(err instanceof ApiError ? err.message : 'Fshirja dështoi.');
       }
     },

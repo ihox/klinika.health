@@ -94,7 +94,6 @@ model Clinic {
   dicomStudies        DicomStudy[]
   prescriptionLines   PrescriptionLine[]
   diagnosisUsages     DoctorDiagnosisUsage[]
-  visitClearSnapshots VisitClearSnapshot[]
 
   @@map("clinics")
 }
@@ -372,7 +371,6 @@ model Visit {
   diagnoses     VisitDiagnosis[]
   vertetime     Vertetim[]
   dicomLinks    VisitDicomLink[]
-  clearSnapshot VisitClearSnapshot?
 
   @@unique([clinicId, legacyId], name: "visit_clinic_legacy_unique")
   @@index([clinicId])
@@ -396,40 +394,6 @@ model VisitDiagnosis {
   @@index([visitId])
   @@index([icd10Code])
   @@map("visit_diagnoses")
-}
-
-/// Short-lived snapshot of a visit's clinical fields, captured at the
-/// moment the doctor clicks "Pastro vizitën" (Phase 2c). The 15-second
-/// undo window is enforced by `expires_at`: the undo endpoint accepts
-/// only rows where `expires_at > now()`, then consumes the row (DELETE).
-/// After expiry the row is dead weight — a future sweeper may prune it,
-/// or the next clear of the same visit will (upsert keyed on `visit_id`).
-///
-/// `fields` carries the 17 clinical columns as a JSON object; numeric
-/// Decimal columns are stringified so precision survives the round-trip.
-/// `diagnoses` carries the ordered ICD-10 code list. `previous_status`
-/// records the status before the clear (always `completed` in v1, but
-/// stored explicitly so restore is self-describing).
-///
-/// PHI lives in `fields` and `diagnoses`. Tenant-scoped via RLS like
-/// every other clinical table.
-model VisitClearSnapshot {
-  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  clinicId       String   @map("clinic_id") @db.Uuid
-  visitId        String   @unique @map("visit_id") @db.Uuid
-  fields         Json
-  diagnoses      Json
-  previousStatus String   @map("previous_status")
-  clearedBy      String   @map("cleared_by") @db.Uuid
-  expiresAt      DateTime @map("expires_at") @db.Timestamptz(6)
-  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-
-  clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  visit  Visit  @relation(fields: [visitId], references: [id], onDelete: Cascade, onUpdate: NoAction)
-
-  @@index([clinicId])
-  @@index([expiresAt])
-  @@map("visit_clear_snapshots")
 }
 
 /// WHO ICD-10 catalogue. Pre-populated from
