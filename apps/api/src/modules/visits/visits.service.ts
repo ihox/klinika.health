@@ -202,14 +202,32 @@ export class VisitsService {
       ],
     });
 
+    const emittedAt = new Date().toISOString();
+    const localDate = utcToLocalParts(arrivedAt).date;
     this.calendarEvents.emit({
       type: 'visit.created',
       clinicId,
       visitId: created.id,
-      localDate: utcToLocalParts(arrivedAt).date,
+      localDate,
       isWalkIn: true,
       status: created.status,
-      emittedAt: new Date().toISOString(),
+      emittedAt,
+    });
+    // Phase 2b — sibling event carrying the patient name + actor id so
+    // the doctor's home can toast a walk-in arrival without a
+    // round-trip. The acting doctor's own browser self-suppresses via
+    // `actorUserId === currentUser.id`.
+    this.calendarEvents.emit({
+      type: 'visit.walkin.added',
+      clinicId,
+      visitId: created.id,
+      localDate,
+      isWalkIn: true,
+      status: created.status,
+      emittedAt,
+      actorUserId: ctx.userId,
+      patientName: `${patient.firstName} ${patient.lastName}`,
+      pairedWithVisitId: pair.id,
     });
 
     return toVisitDto(created);

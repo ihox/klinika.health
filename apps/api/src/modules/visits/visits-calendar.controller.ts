@@ -235,8 +235,13 @@ export class VisitsCalendarController {
   // -------------------------------------------------------------------------
   //
   // The doctor's home dashboard subscribes to this stream alongside the
-  // receptionist's calendar. Payloads carry IDs + local-day anchors only
-  // — never patient names (CLAUDE.md §1.3).
+  // receptionist's calendar. Most payloads carry IDs + local-day
+  // anchors only; the `visit.walkin.added` event additionally ships a
+  // patient name and actor id so the doctor's home can toast an
+  // arrival in real time without a follow-up fetch (Phase 2b). The
+  // stream is authenticated and tenant-scoped per CLAUDE.md §1.6;
+  // pino's redaction filter still scrubs PHI fields if any payload
+  // accidentally lands in operational logs.
 
   @Get('calendar/stream')
   stream(

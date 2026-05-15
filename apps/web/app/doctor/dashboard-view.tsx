@@ -11,6 +11,7 @@ import {
 } from 'react';
 
 import { ClinicTopNav } from '@/components/clinic-top-nav';
+import { NotificationToast } from '@/components/notification-toast';
 import { Skeleton } from '@/components/skeleton';
 import { Button } from '@/components/ui/button';
 import { ApiError } from '@/lib/api';
@@ -47,10 +48,23 @@ const REFRESH_INTERVAL_MS = 60_000;
  */
 export function DashboardView(): ReactElement {
   const router = useRouter();
+  const { me } = useMe();
   const [snapshot, setSnapshot] = useState<DoctorDashboardResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [now, setNow] = useState<Date>(() => new Date());
   const [lastRefreshAt, setLastRefreshAt] = useState<Date>(() => new Date());
+  // Phase 2b — walk-in arrival toast. Holds the most recent unsuppressed
+  // walk-in event; a new arrival replaces an older toast that hasn't
+  // been dismissed yet (rare but possible in a busy clinic).
+  const [walkInArrival, setWalkInArrival] = useState<
+    { visitId: string; patientName: string } | null
+  >(null);
+  // `me` is fetched async; keep a ref so the SSE callback always reads
+  // the current value without re-subscribing on identity load.
+  const meIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    meIdRef.current = me?.id ?? null;
+  }, [me?.id]);
 
   const load = useCallback(async (): Promise<void> => {
     try {
@@ -98,17 +112,49 @@ export function DashboardView(): ReactElement {
 
   // Real-time freshness: SSE from the visits-calendar module fires when
   // the receptionist changes a status (or another doctor's visit save
-  // flips a row to completed). We don't filter event types here —
-  // every event is cheap to reload from a single dashboard endpoint.
+  // flips a row to completed). We don't filter event types for the
+  // refresh path — every event is cheap to reload from a single
+  // dashboard endpoint.
+  //
+  // Phase 2b — `visit.walkin.added` is a *secondary* signal that also
+  // fires on walk-in creation. We use it to surface a bottom-right
+  // toast unless the actor is the doctor themselves (self-dedup, so
+  // a doctor adding a sibling via "+ Vizitë e re" doesn't see a
+  // notification for their own action). The list refresh still
+  // happens via the sibling `visit.created` event.
   useEffect(() => {
     const url = `/api/visits/calendar/stream`;
     const source = new EventSource(url, { withCredentials: true });
-    const onEvent = (): void => void load();
-    source.addEventListener('visit.created', onEvent);
-    source.addEventListener('visit.updated', onEvent);
-    source.addEventListener('visit.status_changed', onEvent);
-    source.addEventListener('visit.deleted', onEvent);
-    source.addEventListener('visit.restored', onEvent);
+    const onRefresh = (): void => void load();
+    source.addEventListener('visit.created', onRefresh);
+    source.addEventListener('visit.updated', onRefresh);
+    source.addEventListener('visit.status_changed', onRefresh);
+    source.addEventListener('visit.deleted', onRefresh);
+    source.addEventListener('visit.restored', onRefresh);
+    const onWalkInAdded = (ev: MessageEvent): void => {
+      let payload: {
+        visitId?: string;
+        patientName?: string;
+        actorUserId?: string;
+      };
+      try {
+        payload = JSON.parse(ev.data) as typeof payload;
+      } catch {
+        return;
+      }
+      if (!payload.visitId || !payload.patientName) return;
+      // Self-dedup: the actor already sees the new walk-in in their
+      // own UI through the POST response (calendar grid or doctor's
+      // home list refresh). Skip the toast for the originator.
+      if (meIdRef.current && payload.actorUserId === meIdRef.current) {
+        return;
+      }
+      setWalkInArrival({
+        visitId: payload.visitId,
+        patientName: payload.patientName,
+      });
+    };
+    source.addEventListener('visit.walkin.added', onWalkInAdded);
     source.onerror = () => {
       // Browser auto-reconnects; we keep polling as fallback.
     };
@@ -186,6 +232,14 @@ export function DashboardView(): ReactElement {
           </div>
         </div>
       </div>
+
+      {walkInArrival ? (
+        <NotificationToast
+          key={walkInArrival.visitId}
+          message={`Pacient i ri pa termin: ${walkInArrival.patientName}`}
+          onDismiss={() => setWalkInArrival(null)}
+        />
+      ) : null}
     </main>
   );
 }

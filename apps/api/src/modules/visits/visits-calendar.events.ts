@@ -10,6 +10,11 @@
 //   - visit.status_changed   — status transition (scheduled→arrived, etc.)
 //   - visit.deleted          — soft-delete
 //   - visit.restored         — soft-deleted row restored (30s undo)
+//   - visit.walkin.added     — Phase 2b — secondary signal for walk-in
+//                              creation, carrying the patient name and
+//                              actor id so the doctor's home can toast
+//                              an arrival without re-fetching first.
+//                              Fires *in addition to* visit.created.
 // The doctor's home dashboard subscribes to the same stream so a
 // receptionist-side change re-fetches the dashboard in real time.
 
@@ -21,7 +26,8 @@ export type VisitCalendarEventType =
   | 'visit.updated'
   | 'visit.status_changed'
   | 'visit.deleted'
-  | 'visit.restored';
+  | 'visit.restored'
+  | 'visit.walkin.added';
 
 export interface VisitCalendarEvent {
   type: VisitCalendarEventType;
@@ -39,6 +45,25 @@ export interface VisitCalendarEvent {
   /** For visit.status_changed only. */
   previousStatus?: string;
   emittedAt: string;
+
+  // ---- Set only on `visit.walkin.added` (Phase 2b) ----
+  /**
+   * User ID of the actor who created the walk-in. Subscribers compare
+   * against their own session user to skip self-notifications (the
+   * caller already sees the new row through the POST response).
+   */
+  actorUserId?: string;
+  /**
+   * Patient display name for the arrival toast. The clinic SSE stream
+   * is authenticated and tenant-scoped (CLAUDE.md §1.6); a transient
+   * patient name in the response body to an authorized clinical user
+   * is acceptable for the real-time notification. The pino redaction
+   * filter still scrubs the field if it ever lands in operational
+   * logs (defense in depth).
+   */
+  patientName?: string;
+  /** Booking the walk-in is paired to. */
+  pairedWithVisitId?: string | null;
 }
 
 @Injectable()

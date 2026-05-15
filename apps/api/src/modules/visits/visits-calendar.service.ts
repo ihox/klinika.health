@@ -430,6 +430,7 @@ export class VisitsCalendarService {
       ],
     });
 
+    const emittedAt = new Date().toISOString();
     this.events.emit({
       type: 'visit.created',
       clinicId,
@@ -437,7 +438,23 @@ export class VisitsCalendarService {
       localDate: localDateToday(),
       isWalkIn: true,
       status: created.status,
-      emittedAt: new Date().toISOString(),
+      emittedAt,
+    });
+    // Phase 2b — secondary "arrival" event for the doctor's home toast.
+    // Fires *alongside* visit.created so the calendar/dashboard refresh
+    // still happens once (driven by visit.created); the toast handler
+    // ignores its own session via `actorUserId`.
+    this.events.emit({
+      type: 'visit.walkin.added',
+      clinicId,
+      visitId: created.id,
+      localDate: localDateToday(),
+      isWalkIn: true,
+      status: created.status,
+      emittedAt,
+      actorUserId: ctx.userId,
+      patientName: `${patient.firstName} ${patient.lastName}`,
+      pairedWithVisitId: pairedWith.id,
     });
 
     const lastVisitMap = await this.fetchLastVisitMap(clinicId, [patient.id]);

@@ -26,6 +26,9 @@
 const PHI_FIELD_NAMES = [
   'firstName',
   'lastName',
+  // The Phase 2b walk-in SSE event ships a single concatenated
+  // patientName for the toast — redact it if it ever surfaces in logs.
+  'patientName',
   'dateOfBirth',
   'dob',
   'birthDate',
