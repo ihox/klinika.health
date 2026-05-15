@@ -81,6 +81,10 @@ export function BookingDialog({
   const [time, setTime] = useState<string>(initialTime);
   const [duration, setDuration] = useState<number | null>(initialDurationMinutes ?? null);
   const [availability, setAvailability] = useState<AvailabilityOption[]>([]);
+  const [availabilityError, setAvailabilityError] = useState(false);
+  // Bumped to force the availability effect to re-run on a Retry click.
+  // Date/time changes already trigger a re-run via their own deps.
+  const [availabilityRetryToken, setAvailabilityRetryToken] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
 
@@ -100,12 +104,20 @@ export function BookingDialog({
 
   // Pull availability whenever the (date, time) anchor changes. Skip
   // when time is empty (Path 2 before the receptionist picks an hour).
+  //
+  // On ApiError (5xx, network, stale schema), we do NOT silently mark
+  // every duration as blocked — that masquerades as a closed-day or a
+  // permissions problem. Instead, surface a dedicated error state and
+  // let the receptionist retry. Every fetch attempt clears the previous
+  // error first, so a successful retry (or a date/time change) wipes it.
   useEffect(() => {
     let cancelled = false;
     if (!time) {
       setAvailability([]);
+      setAvailabilityError(false);
       return;
     }
+    setAvailabilityError(false);
     (async () => {
       try {
         const res = await calendarClient.availability({
@@ -117,24 +129,19 @@ export function BookingDialog({
       } catch (err) {
         if (cancelled) return;
         if (err instanceof ApiError) {
-          setAvailability(
-            hours.durations
-              .slice()
-              .sort((a, b) => a - b)
-              .map((d) => ({
-                durationMinutes: d,
-                status: 'blocked' as const,
-                endsAt: null,
-                reason: 'closed_day' as const,
-              })),
-          );
+          setAvailability([]);
+          setAvailabilityError(true);
         }
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [appointmentId, date, hours.durations, mode, time]);
+  }, [appointmentId, availabilityRetryToken, date, mode, patient.id, time]);
+
+  const retryAvailability = useCallback(() => {
+    setAvailabilityRetryToken((n) => n + 1);
+  }, []);
 
   // When the receptionist changes time after picking a duration, drop
   // the selection — they must reaffirm. This is the same friction the
@@ -332,10 +339,36 @@ export function BookingDialog({
               <span className="font-mono text-[10.5px] uppercase tracking-[0.06em] text-ink-muted">
                 Kohëzgjatja
               </span>
-              {duration == null && time !== '' ? (
+              {duration == null && time !== '' && !availabilityError ? (
                 <span className="font-mono text-[10px] lowercase text-ink-faint">· zgjidhe</span>
               ) : null}
             </div>
+            {availabilityError ? (
+              <div
+                role="alert"
+                aria-live="polite"
+                className="flex items-start gap-2.5 rounded-md border border-amber-300 bg-amber-50 px-3.5 py-3 text-[12.5px] leading-[1.5] text-amber-900"
+              >
+                <WarnIcon className="mt-0.5 flex-none text-warning" />
+                <div className="flex-1">
+                  <div className="font-semibold">
+                    Nuk u ngarkuan kohëzgjatjet. Provo përsëri.
+                  </div>
+                  <div className="mt-0.5 text-[11.5px] text-amber-800/80">
+                    Lidhja me serverin dështoi. Kontrollo internetin dhe provo
+                    përsëri.
+                  </div>
+                </div>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={retryAvailability}
+                  className="flex-none border-amber-300 bg-white text-amber-900 hover:bg-amber-100"
+                >
+                  Provo përsëri
+                </Button>
+              </div>
+            ) : (
             <div className="grid grid-cols-2 gap-2.5">
               {(time === '' ? hoursToFallback(hours) : availability).map((opt) => {
                 const isSelected = duration === opt.durationMinutes;
@@ -403,6 +436,7 @@ export function BookingDialog({
                 );
               })}
             </div>
+            )}
 
             {/* Inline notices — extend (info) and blocked (warn) */}
             {time && selectedOption?.status === 'extends' ? (
