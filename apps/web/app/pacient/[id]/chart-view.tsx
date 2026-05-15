@@ -254,10 +254,10 @@ export function ChartView({ patientId, initialVisitId }: Props): ReactElement {
   }
 
   return (
-    // pb-12 (was pb-24): the action bar is inline within VisitForm now,
-    // not the prototype's fixed bottom bar, so we don't need the 96px
-    // clearance — pb-12 is plain page-bottom breathing room.
-    <main className="min-h-screen bg-surface pb-12">
+    // pb-24 clears the fixed action bar (chart.html § .action-bar) so
+    // the last form field (Pagesa) and the right column's bottom card
+    // aren't hidden behind the bar at full scroll.
+    <main className="min-h-screen bg-surface pb-24">
       <ChartTopBar me={me} />
 
       {historyOpenForVisit ? (

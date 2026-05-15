@@ -260,28 +260,7 @@ export function VisitForm({
         </div>
       </Section>
 
-      {/* 2. Pagesa — clinic-specific category */}
-      <Section title="Pagesa">
-        <FieldRow label="Kategoria">
-          <select
-            id="visit-payment-code"
-            value={values.paymentCode}
-            onChange={onChangeSelect('paymentCode')}
-            onBlur={onBlur}
-            className="h-9 max-w-[140px] rounded-md border border-line-strong bg-surface-elevated px-2.5 text-[13px] tabular-nums outline-none focus:border-primary focus:shadow-focus"
-            aria-label="Kodi i pagesës"
-          >
-            <option value="">—</option>
-            {PAYMENT_CODES.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
-        </FieldRow>
-      </Section>
-
-      {/* 3. Ekzaminimi — Ekzaminime + Ultrazeri */}
+      {/* 2. Ekzaminimi — Ekzaminime + Ultrazeri */}
       <Section title="Ekzaminimi">
         <FieldRow label="Ekzaminime">
           <Textarea
@@ -305,7 +284,7 @@ export function VisitForm({
         </FieldRow>
       </Section>
 
-      {/* 4. Diagnoza — ICD-10 multi-select */}
+      {/* 3. Diagnoza — ICD-10 multi-select */}
       <Section title="Diagnoza · ICD-10">
         <DiagnosisPicker
           value={values.diagnoses}
@@ -324,7 +303,7 @@ export function VisitForm({
         ) : null}
       </Section>
 
-      {/* 5. Terapia — plain-text textarea, auto-grows vertically */}
+      {/* 4. Terapia — plain-text textarea, auto-grows vertically */}
       <Section title="Terapia">
         <AutoGrowTextarea
           id="visit-prescription"
@@ -337,7 +316,7 @@ export function VisitForm({
         />
       </Section>
 
-      {/* 6. Plani — Analizat, Kontrolla, Tjera */}
+      {/* 5. Plani — Analizat, Kontrolla, Tjera */}
       <Section title="Plani">
         <FieldRow label="Analizat">
           <Textarea
@@ -368,6 +347,28 @@ export function VisitForm({
             rows={2}
             placeholder="Shënime të tjera ose informacione plotësuese"
           />
+        </FieldRow>
+      </Section>
+
+      {/* 6. Pagesa — clinic-specific category. End-of-visit concern,
+          so it sits last (after the clinical flow) per chart.html. */}
+      <Section title="Pagesa">
+        <FieldRow label="Kategoria">
+          <select
+            id="visit-payment-code"
+            value={values.paymentCode}
+            onChange={onChangeSelect('paymentCode')}
+            onBlur={onBlur}
+            className="h-9 max-w-[140px] rounded-md border border-line-strong bg-surface-elevated px-2.5 text-[13px] tabular-nums outline-none focus:border-primary focus:shadow-focus"
+            aria-label="Kodi i pagesës"
+          >
+            <option value="">—</option>
+            {PAYMENT_CODES.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
         </FieldRow>
       </Section>
 
@@ -513,7 +514,13 @@ function VisitActionBar({
 }: VisitActionBarProps): ReactElement {
   const showCompletedBadge = !onCompleteVisit && visitStatus === 'completed';
   return (
-    <footer className="flex flex-col gap-3 border-t border-line bg-surface-subtle px-4 py-3 lg:flex-row lg:flex-wrap lg:items-center lg:justify-between">
+    // Fixed to viewport bottom (chart.html § .action-bar) so the doctor
+    // can complete / delete / print from any scroll position. Spans the
+    // whole viewport width; chart-view.tsx adds pb-24 on <main> so the
+    // last form field (Pagesa) isn't hidden behind the bar. z-30 matches
+    // the prototype; sits under modals (z-50+) and above the master
+    // strip's z-20.
+    <footer className="fixed bottom-0 left-0 right-0 z-30 flex flex-col gap-3 border-t border-line bg-surface-elevated px-page-x py-3 shadow-[0_-2px_8px_rgba(28,25,23,0.04)] lg:flex-row lg:flex-wrap lg:items-center lg:justify-between">
       <div className="flex flex-wrap items-center gap-2">
         <Button
           variant="secondary"
