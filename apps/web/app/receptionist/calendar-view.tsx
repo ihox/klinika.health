@@ -643,7 +643,7 @@ export function CalendarView(): ReactElement {
                 size="sm"
                 onClick={goThisWeek}
                 disabled={isCurrentWeek}
-                className="ml-1"
+                className="ml-2"
                 aria-label="Java aktuale"
               >
                 Sot

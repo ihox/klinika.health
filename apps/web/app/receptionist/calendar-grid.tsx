@@ -258,7 +258,7 @@ function DayColumnBody({
       className={cn(
         'relative border-r border-line last:border-r-0 cursor-pointer',
         !col.open && 'cursor-not-allowed bg-surface-subtle',
-        isToday && col.open && 'bg-teal-50/30',
+        isToday && col.open && 'bg-teal-100/20',
       )}
       style={{
         height: gridHeightPx,
