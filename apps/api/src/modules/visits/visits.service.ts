@@ -491,6 +491,25 @@ export class VisitsService {
       changes: [{ field: 'deletedAt', old: null, new: now.toISOString() }],
     });
 
+    // Same SSE shape as the receptionist's calendar-scoped softDelete
+    // (visits-calendar.service.ts). A chart-only standalone visit has
+    // no scheduledFor and no arrivedAt — fall back to visitDate (the
+    // local day the row anchors to), so the event is still well-formed
+    // even for rows that never appeared on the calendar feed.
+    const anchor = before.scheduledFor ?? before.arrivedAt;
+    const localDate = anchor
+      ? utcToLocalParts(anchor).date
+      : before.visitDate.toISOString().slice(0, 10);
+    this.calendarEvents.emit({
+      type: 'visit.deleted',
+      clinicId,
+      visitId: id,
+      localDate,
+      isWalkIn: before.isWalkIn,
+      status: before.status,
+      emittedAt: new Date().toISOString(),
+    });
+
     return {
       status: 'ok',
       restorableUntil: new Date(now.getTime() + 30_000).toISOString(),
