@@ -599,9 +599,9 @@ function WalkInCard({
             }
           : undefined
       }
-      title={`${entry.patient.firstName} ${entry.patient.lastName} · pa termin · erdhi ${parts.time}`}
+      title={`${entry.patient.firstName} ${entry.patient.lastName} · pa termin · erdhi ${parts.time} · ${STATUS_LABEL[entry.status]}`}
       className={cn(
-        'absolute px-2 py-0.5 rounded text-left transition hover:-translate-y-px shadow-xs z-[3] flex items-center gap-1.5 overflow-hidden',
+        'absolute px-2 py-0.5 rounded text-left transition hover:-translate-y-px hover:shadow-sm shadow-xs z-[3] flex items-center gap-1.5 overflow-hidden',
         isCompleted && 'opacity-85',
         isNoShow && 'opacity-60',
         isCancelled && 'opacity-50',
@@ -613,7 +613,7 @@ function WalkInCard({
         right: 6,
         ...borderStyle,
       }}
-      aria-label={`${entry.patient.firstName} ${entry.patient.lastName}, pa termin, erdhi ${parts.time}`}
+      aria-label={`${entry.patient.firstName} ${entry.patient.lastName}, pa termin, erdhi ${parts.time}, ${STATUS_LABEL[entry.status]}`}
     >
       <span className="flex-1 min-w-0 flex items-center gap-1 text-[11.5px] font-semibold leading-[1.15]">
         <WalkInGlyph completed={isCompleted} />
