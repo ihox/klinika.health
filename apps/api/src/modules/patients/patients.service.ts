@@ -370,7 +370,10 @@ export class PatientsService {
         clinicId,
         firstName: payload.firstName,
         lastName: payload.lastName,
-        dateOfBirth: payload.dateOfBirth,
+        // Prisma 5 rejects bare date strings for `@db.Date` columns
+        // ("Expected ISO-8601 DateTime"); wrap to a UTC-midnight Date
+        // — same construction the `update` method below uses.
+        dateOfBirth: new Date(payload.dateOfBirth),
         sex: payload.sex,
         placeOfBirth: payload.placeOfBirth ?? null,
         phone: payload.phone ?? null,
