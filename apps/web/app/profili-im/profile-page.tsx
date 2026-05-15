@@ -8,7 +8,6 @@ import { TrustedDevicesCard } from './trusted-devices-card';
 import { SessionsCard } from './sessions-card';
 import { ClinicTopNav } from '@/components/clinic-top-nav';
 import { RoleChip } from '@/components/role-chip';
-import { Button } from '@/components/ui/button';
 import { ApiError } from '@/lib/api';
 import { authClient, type MeResponse, type SessionRow, type TrustedDeviceRow } from '@/lib/auth-client';
 import { formatDateBelgrade, formatDateTimeBelgrade } from '@/lib/format-date';
@@ -182,18 +181,6 @@ export function ProfilePage() {
             <strong className="text-stone-800">nënshkrimin</strong> tuaj, kontaktoni
             administratorin e klinikës.
           </div>
-        </div>
-
-        <div className="mt-8 flex justify-end">
-          <Button
-            variant="ghost"
-            onClick={async () => {
-              await authClient.logout().catch(() => undefined);
-              router.replace('/login');
-            }}
-          >
-            Dil
-          </Button>
         </div>
       </div>
     </main>
