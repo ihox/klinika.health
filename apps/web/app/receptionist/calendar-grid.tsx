@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
 
 import { cn } from '@/lib/utils';
@@ -645,6 +645,44 @@ function DayColumnBody({
   );
 }
 
+// Hover-with-delay: cards stay name-only until the cursor sits for
+// ~200ms, then they expand right to reveal the full name + time.
+// Matching the prototype's "meta visible on hover" rule plus a small
+// guard against flicker when the receptionist sweeps across cards.
+const CARD_HOVER_DELAY_MS = 200;
+
+function useDelayedHover(delayMs: number): {
+  hovered: boolean;
+  onMouseEnter: () => void;
+  onMouseLeave: () => void;
+} {
+  const [hovered, setHovered] = useState(false);
+  const timerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (timerRef.current != null) window.clearTimeout(timerRef.current);
+    };
+  }, []);
+
+  const onMouseEnter = (): void => {
+    if (timerRef.current != null) window.clearTimeout(timerRef.current);
+    timerRef.current = window.setTimeout(() => {
+      setHovered(true);
+      timerRef.current = null;
+    }, delayMs);
+  };
+  const onMouseLeave = (): void => {
+    if (timerRef.current != null) {
+      window.clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+    setHovered(false);
+  };
+
+  return { hovered, onMouseEnter, onMouseLeave };
+}
+
 interface ScheduledCardProps {
   entry: CalendarEntry;
   gridStartMin: number;
@@ -681,6 +719,9 @@ function ScheduledCard({
   const isNoShow = entry.status === 'no_show';
   const isCancelled = entry.status === 'cancelled';
   const isNew = entry.isNewPatient;
+  const { hovered, onMouseEnter, onMouseLeave } = useDelayedHover(
+    CARD_HOVER_DELAY_MS,
+  );
 
   return (
     <button
@@ -700,10 +741,12 @@ function ScheduledCard({
             }
           : undefined
       }
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
       title={`${entry.patient.firstName} ${entry.patient.lastName} · ${formatDob(entry.patient.dateOfBirth)} · ${STATUS_LABEL[entry.status]}`}
       className={cn(
-        'absolute left-1.5 px-2 py-0.5 rounded text-left border bg-surface-elevated border-teal-200 border-l-[3px] border-l-primary shadow-xs transition hover:-translate-y-px hover:shadow-sm z-[3] flex items-center gap-1.5 overflow-hidden',
-        !leftLaneOnly && 'right-1.5',
+        'absolute left-1.5 px-2 py-0.5 rounded text-left border bg-surface-elevated border-teal-200 border-l-[3px] border-l-primary shadow-xs transition hover:-translate-y-px hover:shadow-sm flex items-center gap-1.5 overflow-hidden',
+        !leftLaneOnly && !hovered && 'right-1.5',
         isArrived && 'bg-teal-50/60 border-teal-300',
         isInProgress && 'relative bg-teal-50 border-teal-300',
         isCompleted &&
@@ -716,14 +759,28 @@ function ScheduledCard({
       style={{
         top,
         height: Math.max(20, height),
-        ...(leftLaneOnly ? { right: 'calc(50% + 2px)' } : {}),
+        // Hover expansion: lift the right clamp so the card grows to
+        // fit its content (full name + time). Z-index spikes so the
+        // expanded card sits above sibling cards and the right-lane
+        // walk-in band; max-width keeps it from running off the column
+        // group entirely.
+        ...(hovered
+          ? { right: 'auto', width: 'max-content', maxWidth: 260, zIndex: 20 }
+          : leftLaneOnly
+            ? { right: 'calc(50% + 2px)', zIndex: 3 }
+            : { zIndex: 3 }),
         ...(isPast && !isCompleted && !isNoShow && !isCancelled
           ? { opacity: 0.85, filter: 'saturate(0.78)' }
           : {}),
       }}
       aria-label={`${entry.patient.firstName} ${entry.patient.lastName}, ${localParts.time}, ${STATUS_LABEL[entry.status]}`}
     >
-      <span className="flex-1 min-w-0 text-[11.5px] font-semibold text-ink-strong truncate leading-[1.15]">
+      <span
+        className={cn(
+          'flex-1 min-w-0 text-[11.5px] font-semibold text-ink-strong leading-[1.15]',
+          hovered ? 'whitespace-nowrap' : 'truncate',
+        )}
+      >
         <span
           className={cn(
             isCompleted && 'text-success',
@@ -764,7 +821,7 @@ function ScheduledCard({
           </span>
         ) : null}
         <ColorChip color={color} />
-        <span className="hidden sm:inline">{localParts.time}</span>
+        {hovered ? <span>{localParts.time}</span> : null}
       </span>
       {isInProgress ? (
         <span
@@ -814,6 +871,9 @@ function WalkInCard({
   const isCompleted = entry.status === 'completed';
   const isNoShow = entry.status === 'no_show';
   const isCancelled = entry.status === 'cancelled';
+  const { hovered, onMouseEnter, onMouseLeave } = useDelayedHover(
+    CARD_HOVER_DELAY_MS,
+  );
 
   // Border + background per state. Borders are composed inline so the
   // left edge can be dashed-accent while the other three sides stay
@@ -862,9 +922,11 @@ function WalkInCard({
             }
           : undefined
       }
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
       title={`${entry.patient.firstName} ${entry.patient.lastName} · pa termin · erdhi ${parts.time} · ${STATUS_LABEL[entry.status]}`}
       className={cn(
-        'absolute px-2 py-0.5 rounded text-left transition hover:-translate-y-px hover:shadow-sm shadow-xs z-[3] flex items-center gap-1.5 overflow-hidden',
+        'absolute px-2 py-0.5 rounded text-left transition hover:-translate-y-px hover:shadow-sm shadow-xs flex items-center gap-1.5 overflow-hidden',
         isCompleted && 'opacity-85',
         isNoShow && 'opacity-60',
         isCancelled && 'opacity-50',
@@ -873,7 +935,11 @@ function WalkInCard({
         top,
         height,
         left: 'calc(50% + 2px)',
-        right: 6,
+        // Hover expansion: drop the right clamp so the walk-in card
+        // grows past the right lane to show full name + arrival time.
+        ...(hovered
+          ? { right: 'auto', width: 'max-content', maxWidth: 260, zIndex: 20 }
+          : { right: 6, zIndex: 3 }),
         ...borderStyle,
         ...(isPast && !isCompleted ? { opacity: 0.9, filter: 'saturate(0.82)' } : {}),
       }}
@@ -883,7 +949,7 @@ function WalkInCard({
         <WalkInGlyph completed={isCompleted} />
         <span
           className={cn(
-            'truncate',
+            hovered ? 'whitespace-nowrap' : 'truncate',
             isCompleted ? 'text-success' : 'text-ink-strong',
             isNoShow && 'line-through text-danger',
             isCancelled && 'line-through text-ink-faint',
@@ -900,14 +966,16 @@ function WalkInCard({
           </span>
         ) : null}
       </span>
-      <span
-        className={cn(
-          'flex-none text-[10.5px] tabular-nums',
-          isCompleted ? 'text-success' : 'text-ink-muted',
-        )}
-      >
-        {parts.time}
-      </span>
+      {hovered ? (
+        <span
+          className={cn(
+            'flex-none text-[10.5px] tabular-nums',
+            isCompleted ? 'text-success' : 'text-ink-muted',
+          )}
+        >
+          {parts.time}
+        </span>
+      ) : null}
     </button>
   );
 }
