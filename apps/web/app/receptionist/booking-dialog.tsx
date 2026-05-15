@@ -20,7 +20,11 @@ import type { DayKey, HoursConfig } from '@/lib/clinic-client';
 import type { PatientPublicDto } from '@/lib/patient-client';
 import { patientInitials } from '@/lib/patient-client';
 
-const TIME_STEP_MIN = 10;
+// System-wide rule: every appointment time sits on a 5-minute mark.
+// The dropdown enumerates every 5-min option inside the day's open
+// hours, so a slot-click time like 10:35 (snapped by the calendar
+// grid) always has a matching <option>. See apps/web/lib/datetime.ts.
+const TIME_STEP_MIN = 5;
 const DAY_ORDER: DayKey[] = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
 
 export interface BookingDialogResult {
