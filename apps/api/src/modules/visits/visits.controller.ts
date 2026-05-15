@@ -21,6 +21,7 @@ import { ClinicScopeGuard } from '../../common/guards/clinic-scope.guard';
 import type { RequestContext } from '../../common/request-context/request-context';
 import {
   CreateVisitSchema,
+  DeleteVisitBodySchema,
   UpdateVisitSchema,
   VisitHistoryQuerySchema,
   type VisitDto,
@@ -129,9 +130,21 @@ export class VisitsController {
   @HttpCode(HttpStatus.OK)
   async softDelete(
     @Param('id', new ParseUUIDPipe()) id: string,
+    @Body() body: unknown,
     @Ctx() ctx: RequestContext,
   ): Promise<{ status: 'ok'; restorableUntil: string }> {
-    return this.visits.softDelete(ctx.clinicId!, id, ctx);
+    // Body is optional; a no-body DELETE (Express delivers `{}`) is
+    // valid. When the doctor filled in the "Pse?" field the dialog
+    // sends { reason }; otherwise the schema returns undefined.
+    const parsed = DeleteVisitBodySchema.safeParse(body);
+    if (!parsed.success) {
+      throw new BadRequestException({
+        message: 'Të dhëna të pavlefshme.',
+        issues: parsed.error.flatten(),
+      });
+    }
+    const reason = parsed.data?.reason ?? null;
+    return this.visits.softDelete(ctx.clinicId!, id, ctx, reason);
   }
 
   @Post(':id/restore')

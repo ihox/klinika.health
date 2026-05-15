@@ -183,6 +183,29 @@ export const VisitHistoryQuerySchema = z
 export type VisitHistoryQuery = z.infer<typeof VisitHistoryQuerySchema>;
 
 // ---------------------------------------------------------------------------
+// Soft-delete body — optional "Pse?" reason captured for the audit log
+// ---------------------------------------------------------------------------
+//
+// The doctor's "Fshij vizitën" confirmation dialog ships an optional
+// free-text reason (≤150 chars). Filled values are appended to the
+// `visit.deleted` audit row as `{ field: 'deleteReason' }`. Empty /
+// missing strings are silently dropped — the dialog is opt-in, not
+// blocking, so we don't reject the request just because the doctor
+// skipped the field.
+
+export const DeleteVisitBodySchema = z
+  .object({
+    reason: z
+      .string()
+      .max(150, 'Arsyeja është shumë e gjatë (max 150)')
+      .optional(),
+  })
+  .strict()
+  .optional();
+
+export type DeleteVisitBody = z.infer<typeof DeleteVisitBodySchema>;
+
+// ---------------------------------------------------------------------------
 // Response shapes
 // ---------------------------------------------------------------------------
 

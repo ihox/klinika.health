@@ -8,6 +8,7 @@ import { ClinicTopNav } from '@/components/clinic-top-nav';
 import { EmptyState } from '@/components/empty-state';
 import { NotificationToast } from '@/components/notification-toast';
 import { ChangeHistoryModal } from '@/components/patient/change-history-modal';
+import { DeleteVisitDialog } from '@/components/patient/delete-visit-dialog';
 import { GrowthPanel } from '@/components/patient/growth-panel';
 import { MasterDataStrip } from '@/components/patient/master-data-strip';
 import { PrintHistoryDialog } from '@/components/patient/print-history-dialog';
@@ -77,6 +78,8 @@ export function ChartView({ patientId, initialVisitId }: Props): ReactElement {
     visit: VisitDto;
     restorableUntil: string;
   } | null>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleteBusy, setDeleteBusy] = useState(false);
   const [showAllHistory, setShowAllHistory] = useState(false);
   const [setSexOpen, setSetSexOpen] = useState(false);
   const [vertetimDialogOpen, setVertetimDialogOpen] = useState(false);
@@ -289,6 +292,25 @@ export function ChartView({ patientId, initialVisitId }: Props): ReactElement {
         />
       ) : null}
 
+      <DeleteVisitDialog
+        open={deleteDialogOpen}
+        busy={deleteBusy}
+        onClose={() => {
+          if (!deleteBusy) setDeleteDialogOpen(false);
+        }}
+        onConfirm={(reason) => {
+          if (!activeVisit) return;
+          void confirmDelete(
+            activeVisit,
+            reason,
+            setPendingDelete,
+            setDeleteDialogOpen,
+            setDeleteBusy,
+            refresh,
+          );
+        }}
+      />
+
       {data == null ? (
         <ChartSkeleton />
       ) : (
@@ -326,9 +348,7 @@ export function ChartView({ patientId, initialVisitId }: Props): ReactElement {
                     totalVisits={data.visits.length}
                     daysSincePrevious={daysSincePreviousFor(data.visits, activeIndex)}
                     onOpenHistory={() => setHistoryOpenForVisit(activeVisit)}
-                    onDeleteRequest={() =>
-                      void requestDelete(activeVisit, setPendingDelete, refresh)
-                    }
+                    onDeleteRequest={() => setDeleteDialogOpen(true)}
                     onNewVisitRequest={() =>
                       void createNewVisit(patientId, navigateVisit, refresh)
                     }
@@ -1119,24 +1139,42 @@ async function createNewVisit(
   }
 }
 
-async function requestDelete(
+/**
+ * Soft-delete the active visit after the doctor confirms in the
+ * Fshij vizitën dialog. The dialog supplies an optional "Pse?" reason
+ * which rides into the audit log via the request body.
+ *
+ * Flushes the auto-save first so any in-flight edits land on the row
+ * before the delete (they're still recoverable via the 30s undo, but
+ * the audit history reads cleaner this way).
+ */
+async function confirmDelete(
   visit: VisitDto,
+  reason: string,
   setPendingDelete: (value: { visit: VisitDto; restorableUntil: string } | null) => void,
+  setDeleteDialogOpen: (open: boolean) => void,
+  setDeleteBusy: (busy: boolean) => void,
   refresh: () => Promise<void>,
 ): Promise<void> {
-  // Flush in-flight edits first so they aren't orphaned on the
-  // soft-deleted row (they'd still be recoverable via restore, but
-  // the user expects the delete to capture the latest state).
   await useAutoSaveStore.getState().save();
+  setDeleteBusy(true);
   try {
-    const res = await visitClient.softDelete(visit.id);
+    const res = await visitClient.softDelete(visit.id, { reason });
     setPendingDelete({ visit, restorableUntil: res.restorableUntil });
+    setDeleteDialogOpen(false);
     await refresh();
-  } catch {
+  } catch (err) {
+    setDeleteDialogOpen(false);
     if (typeof window !== 'undefined') {
+      const message =
+        err instanceof ApiError && err.body.message
+          ? err.body.message
+          : 'Vizita nuk u fshi. Provoni përsëri.';
       // eslint-disable-next-line no-alert
-      window.alert('Vizita nuk u fshi. Provoni përsëri.');
+      window.alert(message);
     }
+  } finally {
+    setDeleteBusy(false);
   }
 }
 

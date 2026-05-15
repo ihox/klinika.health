@@ -470,6 +470,7 @@ export class VisitsService {
     clinicId: string,
     id: string,
     ctx: RequestContext,
+    reason: string | null = null,
   ): Promise<{ status: 'ok'; restorableUntil: string }> {
     this.requireDoctorOrAdmin(ctx);
     const before = await this.prisma.visit.findFirst({
@@ -483,12 +484,24 @@ export class VisitsService {
       data: { deletedAt: now },
     });
 
+    // Reason is optional, captured as an extra audit-log field when
+    // the doctor fills it in. The append-only audit trail makes this
+    // visible in the change-history modal without needing a dedicated
+    // `delete_reason` column on `visits` (the column would only live
+    // until the row is hard-purged, where the audit log persists).
+    const changes: { field: string; old: null; new: string }[] = [
+      { field: 'deletedAt', old: null, new: now.toISOString() },
+    ];
+    const trimmedReason = reason?.trim() ?? '';
+    if (trimmedReason.length > 0) {
+      changes.push({ field: 'deleteReason', old: null, new: trimmedReason });
+    }
     await this.audit.record({
       ctx,
       action: 'visit.deleted',
       resourceType: 'visit',
       resourceId: id,
-      changes: [{ field: 'deletedAt', old: null, new: now.toISOString() }],
+      changes,
     });
 
     // Same SSE shape as the receptionist's calendar-scoped softDelete
@@ -539,6 +552,29 @@ export class VisitsService {
       resourceType: 'visit',
       resourceId: id,
       changes: [{ field: 'deletedAt', old: row.deletedAt?.toISOString() ?? null, new: null }],
+    });
+
+    // Mirror the receptionist's calendar-scoped restore: emit
+    // visit.restored so any open calendar / dashboard subscriber
+    // re-fetches and re-surfaces the row. Without this the 30s undo
+    // toast restored the chart but left the receptionist's calendar
+    // showing the row as gone until they manually refreshed.
+    // `actorUserId` is included for future self-suppression hooks
+    // (the calendar subscriber doesn't filter on it yet, but the
+    // payload shape stays aligned with `visit.walkin.added`).
+    const anchor = restored.scheduledFor ?? restored.arrivedAt;
+    const localDate = anchor
+      ? utcToLocalParts(anchor).date
+      : restored.visitDate.toISOString().slice(0, 10);
+    this.calendarEvents.emit({
+      type: 'visit.restored',
+      clinicId,
+      visitId: id,
+      localDate,
+      isWalkIn: restored.isWalkIn,
+      status: restored.status,
+      actorUserId: ctx.userId ?? undefined,
+      emittedAt: new Date().toISOString(),
     });
 
     return toVisitDto(restored);

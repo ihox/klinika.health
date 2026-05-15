@@ -148,8 +148,20 @@ export const visitClient = {
     }
   },
 
-  softDelete: (id: string) =>
-    apiFetch<SoftDeleteResponse>(`/api/visits/${id}`, { method: 'DELETE' }),
+  /**
+   * Soft-delete a visit. The optional `reason` rides into the
+   * `visit.deleted` audit row as `{ field: 'deleteReason' }` — it's
+   * the "Pse?" field from the confirmation dialog. Empty / whitespace
+   * strings are dropped server-side, so the caller doesn't need to
+   * pre-filter.
+   */
+  softDelete: (id: string, opts?: { reason?: string }) => {
+    const reason = opts?.reason?.trim();
+    return apiFetch<SoftDeleteResponse>(`/api/visits/${id}`, {
+      method: 'DELETE',
+      json: reason && reason.length > 0 ? { reason } : undefined,
+    });
+  },
 
   restore: (id: string) =>
     apiFetch<{ visit: VisitDto }>(`/api/visits/${id}/restore`, {
