@@ -990,7 +990,24 @@
     background: var(--bg-elevated);
   }
 
-  /* ====== Sticky action bar ====== */
+  /* ====== Sticky action bar ======
+     Visit lifecycle actions:
+      - Përfundo vizitën: marks the visit complete. Status arrived |
+        in_progress → completed. Receptionist's calendar shows green
+        badge. Primary CTA.
+      - Anulo statusin: reverts completed → arrived so the doctor can
+        continue editing. No data cleared (corrections happen via
+        edit-in-place; audit log captures changes).
+      - Fshij vizitën: soft-deletes the visit entirely. Removed from
+        chart AND from calendar. 30s undo toast. Destructive.
+
+      Pastro vizitën was removed: clearing clinical data was the wrong
+      abstraction. Healthcare records are append-only; corrections are
+      tracked via audit log, not destructive field clearing.
+
+     Layout: left cluster = chart-level utilities (low visual weight).
+     Right cluster = visit-level actions, ordered so the doctor's eye
+     lands on the primary completion CTA at the far right. */
   .action-bar {
     position: fixed;
     bottom: 0;
@@ -1005,17 +1022,85 @@
     box-shadow: 0 -2px 8px rgba(28,25,23,0.04);
     z-index: 30;
   }
-  .action-bar .left-tools { display: flex; gap: 8px; }
+  .action-bar .left-tools { display: flex; gap: 8px; align-items: center; }
   .action-bar .right-tools { display: flex; gap: 8px; align-items: center; }
-  .action-bar .dirty-indicator {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 12px;
-    color: var(--text-muted);
-    margin-right: 12px;
+  .action-bar .right-tools .sep {
+    width: 1px;
+    height: 22px;
+    background: var(--border);
+    margin: 0 2px;
   }
-  .action-bar .dirty-indicator .dot { width: 8px; height: 8px; background: var(--accent-500); border-radius: 999px; }
+
+  /* Conditional visibility driven by data-visit-status on the bar
+     (or on any container with .visit-actions). active = arrived | in_progress. */
+  .visit-actions[data-visit-status="active"]    [data-status-show="completed"],
+  .visit-actions[data-visit-status="completed"] [data-status-show="active"] {
+    display: none;
+  }
+
+  /* "Anulo statusin" — escape hatch back into editing. Muted, neutral.
+     Not destructive, not primary. Lives between Fshij and the completion CTA. */
+  .btn-revert-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-muted);
+    background: var(--bg-subtle);
+    border: 1px solid var(--border);
+    padding: 5px 12px;
+    border-radius: var(--r-md);
+    cursor: pointer;
+    transition: all 120ms ease;
+    font-family: inherit;
+  }
+  .btn-revert-status:hover {
+    background: var(--bg-muted);
+    border-color: var(--border-strong);
+    color: var(--text);
+  }
+  .btn-revert-status svg { color: var(--text-muted); }
+  .btn-revert-status:hover svg { color: var(--text); }
+
+  /* "Përfundo vizitën" — primary completion CTA. Bold teal so the
+     doctor's eye terminates here when finishing a visit. */
+  .btn-complete-visit {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: white;
+    background: var(--primary);
+    border: 1px solid var(--primary);
+    padding: 6px 14px;
+    border-radius: var(--r-md);
+    cursor: pointer;
+    transition: all 120ms ease;
+    font-family: inherit;
+    box-shadow: 0 1px 0 rgba(0,0,0,0.05), inset 0 1px 0 rgba(255,255,255,0.15);
+  }
+  .btn-complete-visit:hover { background: var(--primary-dark); border-color: var(--primary-dark); }
+  .btn-complete-visit svg { stroke: white; }
+
+  /* Confirmation state — replaces the CTA once the visit is completed.
+     Reads as "done, not clickable" without using a danger color. */
+  .btn-completed-state {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12.5px;
+    font-weight: 500;
+    color: var(--green, #166534);
+    background: var(--green-bg, #ecfdf5);
+    border: 1px solid var(--green-soft, #bbf7d0);
+    padding: 6px 14px;
+    border-radius: var(--r-md);
+    cursor: default;
+    font-family: inherit;
+  }
+  .btn-completed-state svg { stroke: var(--green, #166534); }
 
   /* Patient indicator chip in master strip */
   .indicator-chip {
@@ -1577,7 +1662,7 @@
     <div class="user-menu" role="menu">
       <div class="um-head">
         <div class="name">Dr. Taulant Shala</div>
-        <div class="email">taulant@donetamed.com</div>
+        <div class="email"><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="deaabfabb2bfb0aa9ebab1b0bbaabfb3bbbaf0bdb1b3">[email&#160;protected]</a></div>
         <div class="roles">
           <span class="chip-role doctor">Mjeku</span>
           <span class="chip-role admin">Administrator i klinikës</span>
@@ -1600,6 +1685,178 @@
     </div>
   </div>
 </header>
+
+<!-- ============ Design demo · Action bar lifecycle states ============
+     Static side-by-side comparison so designers can compare the
+     in-edit and completed treatments without toggling. Lives above
+     the chart content; the LIVE sticky action bar at the bottom of
+     the page is still interactive (toggle via the Demo widget). -->
+<section class="actionbar-demo" aria-label="Demo · variantet e action bar">
+  <header class="abd-head">
+    <span class="abd-eyebrow">Design demo</span>
+    <h2>Variantet e action bar</h2>
+    <span class="abd-sub">Live sticky bar fundore (klik “Statusi i vizitës” në panelin Demo për ta ndërruar).</span>
+  </header>
+
+  <div class="abd-row">
+    <div class="abd-lab">
+      <span class="abd-dot abd-dot-active"></span>
+      Vizita në redaktim
+      <span class="abd-tag">status = arrived | in_progress</span>
+    </div>
+    <div class="abd-frame visit-actions" data-visit-status="active">
+      <div class="abd-left">
+        <button class="btn btn-secondary btn-sm" type="button">Printo raportin</button>
+        <button class="btn btn-secondary btn-sm" type="button">Vërtetim</button>
+        <button class="btn btn-secondary btn-sm" type="button">Printo historinë</button>
+        <button class="btn btn-secondary btn-sm" type="button">+ Vizitë e re</button>
+      </div>
+      <div class="abd-right">
+        <button class="manual-save" type="button">Ruaj tani <span class="kbd-hint">⌘S</span></button>
+        <span class="abd-sep" aria-hidden="true"></span>
+        <button class="btn btn-danger btn-sm" type="button">
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px;">
+            <path d="M2.5 4h11"/><path d="M5.5 4V2.5h5V4"/><path d="M4 4l.6 9a1 1 0 0 0 1 .9h4.8a1 1 0 0 0 1-.9L12 4"/><path d="M6.5 6.5v5M9.5 6.5v5"/>
+          </svg>
+          Fshij vizitën
+        </button>
+        <button class="btn-complete-visit" type="button" data-status-show="active">
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8.5l3 3 7-7"/></svg>
+          Përfundo vizitën
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div class="abd-row">
+    <div class="abd-lab">
+      <span class="abd-dot abd-dot-done"></span>
+      Vizita e përfunduar
+      <span class="abd-tag">status = completed</span>
+    </div>
+    <div class="abd-frame visit-actions" data-visit-status="completed">
+      <div class="abd-left">
+        <button class="btn btn-secondary btn-sm" type="button">Printo raportin</button>
+        <button class="btn btn-secondary btn-sm" type="button">Vërtetim</button>
+        <button class="btn btn-secondary btn-sm" type="button">Printo historinë</button>
+        <button class="btn btn-secondary btn-sm" type="button">+ Vizitë e re</button>
+      </div>
+      <div class="abd-right">
+        <button class="manual-save" type="button">Ruaj tani <span class="kbd-hint">⌘S</span></button>
+        <span class="abd-sep" aria-hidden="true"></span>
+        <button class="btn btn-danger btn-sm" type="button">
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px;">
+            <path d="M2.5 4h11"/><path d="M5.5 4V2.5h5V4"/><path d="M4 4l.6 9a1 1 0 0 0 1 .9h4.8a1 1 0 0 0 1-.9L12 4"/><path d="M6.5 6.5v5M9.5 6.5v5"/>
+          </svg>
+          Fshij vizitën
+        </button>
+        <button class="btn-revert-status" type="button" data-status-show="completed" title="Rikthe vizitën në redaktim">
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 8.5a5 5 0 0 1 9.2-2.7"/><path d="M12.5 3v3h-3"/>
+          </svg>
+          Anulo statusin
+        </button>
+        <span class="btn-completed-state" data-status-show="completed" aria-disabled="true">
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8.5l3 3 7-7"/></svg>
+          E përfunduar
+        </span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<style>
+  .actionbar-demo {
+    margin: 18px 32px 4px;
+    padding: 18px 22px 22px;
+    background: var(--bg-subtle);
+    border: 1px dashed var(--border-strong);
+    border-radius: var(--r-lg);
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .actionbar-demo .abd-head {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .actionbar-demo .abd-eyebrow {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-faint);
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    padding: 2px 8px;
+    border-radius: 999px;
+  }
+  .actionbar-demo h2 {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text);
+    margin: 0;
+  }
+  .actionbar-demo .abd-sub {
+    font-size: 12px;
+    color: var(--text-muted);
+    line-height: 1.4;
+  }
+  .actionbar-demo .abd-row {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .actionbar-demo .abd-lab {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11.5px;
+    color: var(--text-muted);
+    font-weight: 500;
+  }
+  .actionbar-demo .abd-lab .abd-dot {
+    width: 8px; height: 8px;
+    border-radius: 999px;
+    background: var(--text-faint);
+  }
+  .actionbar-demo .abd-lab .abd-dot-active { background: var(--primary); }
+  .actionbar-demo .abd-lab .abd-dot-done   { background: var(--green, #16a34a); }
+  .actionbar-demo .abd-lab .abd-tag {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text-faint);
+    letter-spacing: 0.04em;
+    margin-left: 4px;
+  }
+  .actionbar-demo .abd-frame {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    padding: 12px 18px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    box-shadow: 0 1px 0 rgba(28,25,23,0.03);
+  }
+  .actionbar-demo .abd-left,
+  .actionbar-demo .abd-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .actionbar-demo .abd-sep {
+    width: 1px;
+    height: 22px;
+    background: var(--border);
+    margin: 0 2px;
+  }
+</style>
 
 <!-- Master data strip -->
 <div class="master">
@@ -2128,22 +2385,16 @@ Pi shumë lëngje. Pushim.
 </div>
 
 <!-- Sticky action bar -->
-<div class="action-bar">
+<div class="action-bar visit-actions" data-visit-status="active">
   <div class="left-tools">
-    <button class="btn btn-warning btn-sm" onclick="openClearVisitDialog()" title="Pastron të dhënat klinike, por ruan terminin">
-      <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px;">
-        <path d="M9.5 2.5L13.5 6.5l-6.5 6.5H3.5l-1.5-1.5L9.5 2.5z"/>
-        <path d="M6 6.5l3.5 3.5"/>
-        <path d="M1.5 14h11"/>
-      </svg>
-      Pastro vizitën
-    </button>
+    <a href="print-visit.html?print=1" class="btn btn-secondary btn-sm">Printo raportin</a>
+    <button class="btn btn-secondary btn-sm" onclick="openCertModal()">Vërtetim</button>
+    <a href="print-history.html" class="btn btn-secondary btn-sm">Printo historinë</a>
     <button class="btn btn-secondary btn-sm" onclick="saveAndNew()" data-os-shortcut="new-visit" data-title-prefix="Ruaj dhe vizitë e re">
       + Vizitë e re <span class="kbd-hint" style="font-family: var(--font-ui); font-size: 10.5px; color: var(--text-faint); border: 1px solid var(--border); background: var(--bg-elevated); padding: 0 4px; border-radius: 3px; margin-left: 6px;">⌘↩</span>
     </button>
-    <button type="button" class="manual-save" onclick="save()" data-os-shortcut="save" data-title-prefix="Ruaj vizitën">
-      Ruaj <span class="kbd-hint">⌘S</span>
-    </button>
+  </div>
+  <div class="right-tools">
     <!-- Auto-save state indicator (5 states). JS toggles data-state. -->
     <div class="autosave" id="autosave" data-state="idle" aria-live="polite">
       <span class="for-idle">
@@ -2174,23 +2425,62 @@ Pi shumë lëngje. Pushim.
         <button type="button" class="as-retry" onclick="asRetry()">Ruaj tani</button>
       </span>
     </div>
-  </div>
-  <div class="right-tools">
-    <a href="print-visit.html" class="btn btn-secondary btn-sm">Shiko raportin</a>
-    <a href="print-visit.html?print=1" class="btn btn-secondary btn-sm">Printo raportin</a>
-    <button class="btn btn-secondary btn-sm" onclick="openCertModal()">Vërtetim</button>
-    <a href="print-history.html" class="btn btn-secondary btn-sm">Histori e plotë</a>
+
+    <button type="button" class="manual-save" onclick="save()" data-os-shortcut="save" data-title-prefix="Ruaj tani">
+      Ruaj tani <span class="kbd-hint">⌘S</span>
+    </button>
+
+    <span class="sep" aria-hidden="true"></span>
+
+    <button type="button" class="btn btn-danger btn-sm" onclick="deleteVisit()" title="Fshij vizitën nga karta dhe nga kalendari">
+      <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px;">
+        <path d="M2.5 4h11"/>
+        <path d="M5.5 4V2.5h5V4"/>
+        <path d="M4 4l.6 9a1 1 0 0 0 1 .9h4.8a1 1 0 0 0 1-.9L12 4"/>
+        <path d="M6.5 6.5v5M9.5 6.5v5"/>
+      </svg>
+      Fshij vizitën
+    </button>
+
+    <!-- Anulo statusin — visible only when status='completed'. Reverts to 'arrived'
+         so the doctor can keep editing. No data is cleared. -->
+    <button type="button" class="btn-revert-status" data-status-show="completed" onclick="revertVisitStatus()" title="Rikthe vizitën në redaktim">
+      <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M3 8.5a5 5 0 0 1 9.2-2.7"/>
+        <path d="M12.5 3v3h-3"/>
+      </svg>
+      Anulo statusin
+    </button>
+
+    <!-- Përfundo vizitën — primary CTA, visible when status='active'.
+         Marks the visit complete (arrived | in_progress → completed). -->
+    <button type="button" class="btn-complete-visit" data-status-show="active" onclick="completeVisit()">
+      <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M3 8.5l3 3 7-7"/>
+      </svg>
+      Përfundo vizitën
+    </button>
+
+    <!-- Confirmation state — visible only when status='completed'. Disabled. -->
+    <span class="btn-completed-state" data-status-show="completed" aria-disabled="true">
+      <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M3 8.5l3 3 7-7"/>
+      </svg>
+      E përfunduar
+    </span>
   </div>
 </div>
 
 <div class="toast" id="toast"><div class="check">✓</div><span>Vizita u ruajt.</span></div>
 
-<!-- ============ Demo: auto-save state cycler ============
-     Floating dev affordance so the 5 states can be inspected without
-     waiting on debouncers. Hidden in real builds. -->
+<!-- ============ Demo: auto-save state cycler + visit-status toggle ============
+     Floating dev affordance so the 5 autosave states can be inspected
+     without waiting on debouncers, and so the visit-lifecycle states
+     (active vs completed) can be flipped on the live action bar.
+     Hidden in real builds. -->
 <div id="demoStates" style="position: fixed; bottom: 72px; right: 24px; z-index: 40; display: flex; flex-direction: column; gap: 6px; background: var(--bg-elevated); border: 1px solid var(--border); border-radius: var(--r-md); box-shadow: var(--shadow-md); padding: 10px 12px; font-size: 11px;">
-  <div style="font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-faint); font-weight: 600;">Demo · gjendjet</div>
-  <div style="display: flex; gap: 4px; flex-wrap: wrap; max-width: 220px;">
+  <div style="font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-faint); font-weight: 600;">Demo · gjendjet (autosave)</div>
+  <div style="display: flex; gap: 4px; flex-wrap: wrap; max-width: 240px;">
     <button class="btn btn-ghost btn-sm" style="padding: 3px 8px; font-size: 11px;" onclick="demoState('idle')">Idle</button>
     <button class="btn btn-ghost btn-sm" style="padding: 3px 8px; font-size: 11px;" onclick="demoState('dirty')">Dirty</button>
     <button class="btn btn-ghost btn-sm" style="padding: 3px 8px; font-size: 11px;" onclick="demoState('saving')">Saving</button>
@@ -2198,7 +2488,24 @@ Pi shumë lëngje. Pushim.
     <button class="btn btn-ghost btn-sm" style="padding: 3px 8px; font-size: 11px; color: var(--amber);" onclick="demoState('error')">Error</button>
   </div>
   <button class="btn btn-secondary btn-sm" style="padding: 4px 8px; font-size: 11px; margin-top: 2px;" onclick="__demoShowDialog()">Hap dialogun e dështimit</button>
+
+  <div style="height: 1px; background: var(--border); margin: 6px -4px 4px;"></div>
+
+  <div style="font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-faint); font-weight: 600;">Demo · statusi i vizitës</div>
+  <div style="display: flex; gap: 4px; flex-wrap: wrap; max-width: 240px;">
+    <button class="btn btn-ghost btn-sm" style="padding: 3px 8px; font-size: 11px;" onclick="setLiveStatus('active')">Në redaktim</button>
+    <button class="btn btn-ghost btn-sm" style="padding: 3px 8px; font-size: 11px;" onclick="setLiveStatus('completed')">E përfunduar</button>
+  </div>
 </div>
+<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
+  // Toggle the live sticky action bar between the in-progress and completed
+  // states without firing the real lifecycle handlers (which trigger toasts).
+  window.setLiveStatus = function (s) {
+    document.querySelectorAll('.action-bar.visit-actions').forEach(el => {
+      el.setAttribute('data-visit-status', s);
+    });
+  };
+</script>
 
 <!-- ============ Save-failure dialog ============
      Surfaces ONLY when the doctor tries to leave the visit while in error
@@ -3352,128 +3659,36 @@ Pi shumë lëngje. Pushim.
 
 <script src="shortcuts.js"></script>
 
-<!-- ============ Pastro vizitën · clear-toast =============
-     30-second undo countdown for the "clear clinical data" action.
-     Less aggressive than a row-delete: the visit (and its calendar
-     slot) is preserved; only clinical fields are wiped. -->
-<style>
-  .clear-toast {
-    position: fixed;
-    left: 50%;
-    bottom: 84px;
-    transform: translate(-50%, 140px);
-    z-index: 110;
-    background: rgba(12,10,9,0.94);
-    color: white;
-    padding: 13px 16px 0;
-    border-radius: var(--r-lg);
-    box-shadow: 0 14px 36px rgba(0,0,0,0.28);
-    font-size: 13px;
-    min-width: 420px;
-    max-width: 520px;
-    overflow: hidden;
-    opacity: 0;
-    transition: transform 280ms cubic-bezier(.2,.7,.3,1), opacity 200ms ease;
-    pointer-events: none;
-  }
-  .clear-toast.show { transform: translate(-50%, 0); opacity: 1; pointer-events: auto; }
-  .clear-toast .ct-row { display: flex; align-items: center; gap: 14px; padding-bottom: 12px; }
-  .clear-toast .ic {
-    width: 30px; height: 30px;
-    border-radius: 999px;
-    background: rgba(251,191,36,0.16);
-    color: #FCD34D;
-    display: grid; place-items: center;
-    flex-shrink: 0;
-  }
-  .clear-toast .msg { flex: 1; line-height: 1.4; min-width: 0; }
-  .clear-toast .msg .strong { font-weight: 600; }
-  .clear-toast .msg .dim {
-    color: rgba(255,255,255,0.6);
-    font-size: 11.5px;
-    display: block;
-    margin-top: 2px;
-  }
-  .clear-toast .undo {
-    color: white;
-    font-weight: 600;
-    font-size: 13px;
-    padding: 5px 12px;
-    border: 1px solid rgba(255,255,255,0.22);
-    border-radius: var(--r-sm);
-    background: transparent;
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    font-variant-numeric: tabular-nums;
-    cursor: pointer;
-    transition: all 120ms ease;
-  }
-  .clear-toast .undo:hover { background: rgba(255,255,255,0.1); }
-  .clear-toast .undo .countdown {
-    color: rgba(255,255,255,0.55);
-    font-size: 11px;
-    font-weight: 500;
-  }
-  .clear-toast .ct-bar {
-    height: 2px;
-    background: #FCD34D;
-    transform-origin: left center;
-    transform: scaleX(1);
-  }
-  .clear-toast.show .ct-bar { animation: ct-drain 30s linear forwards; }
-  @keyframes ct-drain { from { transform: scaleX(1); } to { transform: scaleX(0); } }
-</style>
-
-<div class="clear-toast" id="clearToast" role="status" aria-live="polite">
-  <div class="ct-row">
-    <div class="ic">
-      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M9.5 2.5L13.5 6.5l-6.5 6.5H3.5l-1.5-1.5L9.5 2.5z"/>
-        <path d="M6 6.5l3.5 3.5"/>
-        <path d="M1.5 14h11"/>
-      </svg>
-    </div>
-    <div class="msg">
-      <span class="strong">Të dhënat klinike u pastruan.</span>
-      <span class="dim">Termini ruhet · 14.05.2026 · Era Krasniqi · 14:20</span>
-    </div>
-    <button class="undo" onclick="cancelClearVisit()">
-      Anulo
-      <span class="countdown" id="ctCountdown">30s</span>
-    </button>
-  </div>
-  <div class="ct-bar"></div>
-</div>
-
+<!-- ============ Visit lifecycle actions =============
+     - completeVisit(): arrived | in_progress → completed. Re-render the
+       live action bar so the "Anulo statusin" + "✓ E përfunduar"
+       affordances replace the primary "Përfundo vizitën" CTA.
+     - revertVisitStatus(): completed → arrived. The escape hatch from
+       the confirmation state. No data cleared; corrections happen via
+       edit-in-place (audit log handles the trail).
+     - deleteVisit(): soft-delete the whole visit (chart + calendar).
+       Wired to the existing toast helper for now; a 30s undo flow
+       lives in the receptionist-facing flow. -->
 <script>
   (function () {
-    const toast = document.getElementById('clearToast');
-    const cd = document.getElementById('ctCountdown');
-    let timer = null, tick = null, remaining = 30;
+    function setStatus(s) {
+      document.querySelectorAll('.visit-actions').forEach(el => {
+        el.setAttribute('data-visit-status', s);
+      });
+    }
 
-    window.openClearVisitDialog = function () {
-      remaining = 30;
-      cd.textContent = '30s';
-      toast.classList.remove('show');
-      void toast.offsetWidth;
-      toast.classList.add('show');
-      clearInterval(tick);
-      clearTimeout(timer);
-      tick = setInterval(() => {
-        remaining--;
-        if (remaining <= 0) { cd.textContent = ''; clearInterval(tick); }
-        else cd.textContent = remaining + 's';
-      }, 1000);
-      timer = setTimeout(() => { toast.classList.remove('show'); }, 30000);
+    window.completeVisit = function () {
+      setStatus('completed');
+      if (typeof showToast === 'function') showToast('Vizita u përfundua.');
     };
 
-    window.cancelClearVisit = function () {
-      toast.classList.remove('show');
-      clearInterval(tick);
-      clearTimeout(timer);
-      // Re-use the normal toast for the restore confirmation
-      if (typeof showToast === 'function') showToast('Të dhënat u rikthyen.');
+    window.revertVisitStatus = function () {
+      setStatus('active');
+      if (typeof showToast === 'function') showToast('Vizita u rikthye në redaktim.');
+    };
+
+    window.deleteVisit = function () {
+      if (typeof showToast === 'function') showToast('Vizita u fshi.');
     };
   })();
 </script>
