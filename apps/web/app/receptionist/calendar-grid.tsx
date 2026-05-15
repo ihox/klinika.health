@@ -79,6 +79,62 @@ export const WALKIN_HEIGHT_PX: Record<VisitStatus, number> = {
   cancelled: 24,
 };
 
+// Out-of-range visits (scheduled_for or arrived_at outside the grid's
+// open band) used to render with negative `top` and overlap the column
+// header. They now pin to the top ("← më herët") or bottom ("më vonë")
+// of the column body in a compact stack so the receptionist still sees
+// them — the actual time stays accessible via the Fix #3 hover.
+const PINNED_HEIGHT_PX = 22;
+const PINNED_GAP_PX = 2;
+const PINNED_STEP_PX = PINNED_HEIGHT_PX + PINNED_GAP_PX;
+
+export type PinnedPosition =
+  | { kind: 'before'; offsetPx: number }
+  | { kind: 'after'; offsetPx: number };
+
+interface ClassifiedEntry {
+  entry: CalendarEntry;
+  pinned: PinnedPosition | null;
+}
+
+/**
+ * Bucket a day's entries into in-range vs pinned-before vs pinned-after
+ * relative to the grid's open band, and pre-compute the stacking
+ * offsets so each card knows where it lives. Sorted chronologically:
+ *   - before: earliest at the top of the top stack
+ *   - after:  latest at the very bottom of the bottom stack
+ *
+ * Exported for unit testing.
+ */
+export function classifyEntriesByGrid(
+  entries: ReadonlyArray<CalendarEntry>,
+  accessor: (e: CalendarEntry) => number | null,
+  gridStartMin: number,
+  gridEndMin: number,
+): ClassifiedEntry[] {
+  const inRange: ClassifiedEntry[] = [];
+  const beforeRaw: Array<{ entry: CalendarEntry; sMin: number }> = [];
+  const afterRaw: Array<{ entry: CalendarEntry; sMin: number }> = [];
+  for (const e of entries) {
+    const sMin = accessor(e);
+    if (sMin == null) continue;
+    if (sMin < gridStartMin) beforeRaw.push({ entry: e, sMin });
+    else if (sMin >= gridEndMin) afterRaw.push({ entry: e, sMin });
+    else inRange.push({ entry: e, pinned: null });
+  }
+  beforeRaw.sort((a, b) => a.sMin - b.sMin);
+  afterRaw.sort((a, b) => a.sMin - b.sMin);
+  const before: ClassifiedEntry[] = beforeRaw.map((x, i) => ({
+    entry: x.entry,
+    pinned: { kind: 'before', offsetPx: i * PINNED_STEP_PX },
+  }));
+  const after: ClassifiedEntry[] = afterRaw.map((x, i, arr) => ({
+    entry: x.entry,
+    pinned: { kind: 'after', offsetPx: (arr.length - 1 - i) * PINNED_STEP_PX },
+  }));
+  return [...before, ...inRange, ...after];
+}
+
 // Background-image layers for the day column body. Listed first → on top.
 // Mirrors receptionist.html §`.day-col.today.has-walkins`.
 const CENTER_DIVIDER_BG =
@@ -314,6 +370,10 @@ function DayColumnBody({
   // scheduled-card right-edge clamp, and the header lane-hint.
   const hasWalkIns = walkIns.length > 0;
   const isTwoLane = isToday || hasWalkIns;
+  // Grid bounds in minutes — derived from the height + start so the
+  // out-of-range classifier (Fix #4) doesn't need a new prop. End is
+  // exclusive: a visit at exactly `gridEndMin` is treated as "after".
+  const gridEndMin = gridStartMin + Math.round(gridHeightPx / PX_PER_MIN);
 
   // Snap the mouse Y to the nearest 5-minute slot inside the open
   // window. Returns null when the cursor is outside hours; busy-overlap
@@ -526,13 +586,22 @@ function DayColumnBody({
         </div>
       ) : null}
 
-      {entries.map((a) => (
+      {classifyEntriesByGrid(
+        entries,
+        (e) =>
+          e.scheduledFor != null
+            ? timeToMinutes(toLocalParts(new Date(e.scheduledFor)).time)
+            : null,
+        gridStartMin,
+        gridEndMin,
+      ).map(({ entry: a, pinned }) => (
         <ScheduledCard
           key={a.id}
           entry={a}
           gridStartMin={gridStartMin}
           leftLaneOnly={effectivelyTwoLane}
           isPast={isPast}
+          pinned={pinned}
           onClick={(ev) =>
             onEntryClick(a, { x: ev.clientX, y: ev.clientY })
           }
@@ -544,12 +613,21 @@ function DayColumnBody({
         />
       ))}
 
-      {walkIns.map((w) => (
+      {classifyEntriesByGrid(
+        walkIns,
+        (e) => {
+          const iso = e.arrivedAt ?? e.createdAt;
+          return iso ? timeToMinutes(toLocalParts(new Date(iso)).time) : null;
+        },
+        gridStartMin,
+        gridEndMin,
+      ).map(({ entry: w, pinned }) => (
         <WalkInCard
           key={w.id}
           entry={w}
           gridStartMin={gridStartMin}
           isPast={isPast}
+          pinned={pinned}
           onClick={(ev) =>
             onEntryClick(w, { x: ev.clientX, y: ev.clientY })
           }
@@ -693,6 +771,10 @@ interface ScheduledCardProps {
    *  (opacity 0.85, saturate 0.78); completed/no-show/cancelled keep
    *  their explicit treatment. */
   isPast: boolean;
+  /** Set when the visit's scheduled_for lies before/after the grid's
+   *  open band — Fix #4. The card pins to top/bottom with a "← më
+   *  herët"/"më vonë →" prefix instead of using time-derived top. */
+  pinned: PinnedPosition | null;
   onClick: (event: React.MouseEvent) => void;
   onContextMenu?: (event: React.MouseEvent) => void;
 }
@@ -702,6 +784,7 @@ function ScheduledCard({
   gridStartMin,
   leftLaneOnly,
   isPast,
+  pinned,
   onClick,
   onContextMenu,
 }: ScheduledCardProps): ReactElement | null {
@@ -709,8 +792,8 @@ function ScheduledCard({
   const start = new Date(entry.scheduledFor);
   const localParts = toLocalParts(start);
   const startMin = timeToMinutes(localParts.time);
-  const top = (startMin - gridStartMin) * PX_PER_MIN;
-  const height = entry.durationMinutes * PX_PER_MIN;
+  const inlineTop = (startMin - gridStartMin) * PX_PER_MIN;
+  const inlineHeight = entry.durationMinutes * PX_PER_MIN;
   const color = colorIndicatorForLastVisit(entry.lastVisitAt);
 
   const isArrived = entry.status === 'arrived';
@@ -723,11 +806,24 @@ function ScheduledCard({
     CARD_HOVER_DELAY_MS,
   );
 
+  // Pinned cards use a fixed compact height and pin to top/bottom of
+  // the column body instead of their scheduled-for-derived position.
+  // The position-overriding style fragment lives separately from the
+  // normal time-derived block.
+  const pinnedStyle = pinned
+    ? pinned.kind === 'before'
+      ? { top: pinned.offsetPx, height: PINNED_HEIGHT_PX }
+      : { bottom: pinned.offsetPx, height: PINNED_HEIGHT_PX, top: 'auto' as const }
+    : null;
+  const pinPrefix =
+    pinned == null ? null : pinned.kind === 'before' ? '← më herët' : 'më vonë →';
+
   return (
     <button
       type="button"
       data-appt={entry.id}
       data-status={entry.status}
+      data-pinned={pinned?.kind ?? undefined}
       onClick={(e) => {
         e.stopPropagation();
         onClick(e);
@@ -743,7 +839,7 @@ function ScheduledCard({
       }
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
-      title={`${entry.patient.firstName} ${entry.patient.lastName} · ${formatDob(entry.patient.dateOfBirth)} · ${STATUS_LABEL[entry.status]}`}
+      title={`${entry.patient.firstName} ${entry.patient.lastName} · ${formatDob(entry.patient.dateOfBirth)} · ${STATUS_LABEL[entry.status]}${pinned ? ` · jashtë orarit (${localParts.time})` : ''}`}
       className={cn(
         'absolute left-1.5 px-2 py-0.5 rounded text-left border bg-surface-elevated border-teal-200 border-l-[3px] border-l-primary shadow-xs transition hover:-translate-y-px hover:shadow-sm flex items-center gap-1.5 overflow-hidden',
         !leftLaneOnly && !hovered && 'right-1.5',
@@ -755,10 +851,10 @@ function ScheduledCard({
         isCancelled && 'opacity-50',
         isNew && !isCompleted && !isNoShow && !isArrived && !isInProgress &&
           'border-l-accent-500 border-warning-soft',
+        pinned && 'border-dashed bg-stone-50/80',
       )}
       style={{
-        top,
-        height: Math.max(20, height),
+        ...(pinnedStyle ?? { top: inlineTop, height: Math.max(20, inlineHeight) }),
         // Hover expansion: lift the right clamp so the card grows to
         // fit its content (full name + time). Z-index spikes so the
         // expanded card sits above sibling cards and the right-lane
@@ -767,13 +863,14 @@ function ScheduledCard({
         ...(hovered
           ? { right: 'auto', width: 'max-content', maxWidth: 260, zIndex: 20 }
           : leftLaneOnly
-            ? { right: 'calc(50% + 2px)', zIndex: 3 }
-            : { zIndex: 3 }),
-        ...(isPast && !isCompleted && !isNoShow && !isCancelled
+            ? { right: 'calc(50% + 2px)', zIndex: pinned ? 6 : 3 }
+            : { zIndex: pinned ? 6 : 3 }),
+        ...(pinned ? { opacity: 0.88 } : {}),
+        ...(isPast && !isCompleted && !isNoShow && !isCancelled && !pinned
           ? { opacity: 0.85, filter: 'saturate(0.78)' }
           : {}),
       }}
-      aria-label={`${entry.patient.firstName} ${entry.patient.lastName}, ${localParts.time}, ${STATUS_LABEL[entry.status]}`}
+      aria-label={`${entry.patient.firstName} ${entry.patient.lastName}, ${localParts.time}, ${STATUS_LABEL[entry.status]}${pinned ? ', jashtë orarit' : ''}`}
     >
       <span
         className={cn(
@@ -781,6 +878,14 @@ function ScheduledCard({
           hovered ? 'whitespace-nowrap' : 'truncate',
         )}
       >
+        {pinPrefix ? (
+          <span
+            className="mr-1 font-mono text-[9.5px] font-semibold uppercase tracking-[0.04em] text-ink-faint"
+            aria-hidden
+          >
+            {pinPrefix}
+          </span>
+        ) : null}
         <span
           className={cn(
             isCompleted && 'text-success',
@@ -846,6 +951,10 @@ interface WalkInCardProps {
   /** Past-day fade per design: active walk-ins soften (opacity 0.9,
    *  saturate 0.82); completed walk-ins keep their finished treatment. */
   isPast: boolean;
+  /** Walk-in arrived_at outside the grid band — Fix #4. Pinned to
+   *  top/bottom of the right lane with a "← më herët"/"më vonë →"
+   *  prefix. */
+  pinned: PinnedPosition | null;
   onClick: (event: React.MouseEvent) => void;
   onContextMenu?: (event: React.MouseEvent) => void;
 }
@@ -854,6 +963,7 @@ function WalkInCard({
   entry,
   gridStartMin,
   isPast,
+  pinned,
   onClick,
   onContextMenu,
 }: WalkInCardProps): ReactElement | null {
@@ -864,7 +974,7 @@ function WalkInCard({
   const anchor = new Date(anchorIso);
   const parts = toLocalParts(anchor);
   const startMin = timeToMinutes(parts.time);
-  const top = (startMin - gridStartMin) * PX_PER_MIN;
+  const inlineTop = (startMin - gridStartMin) * PX_PER_MIN;
   const height = WALKIN_HEIGHT_PX[entry.status] ?? 24;
 
   const isInProgress = entry.status === 'in_progress';
@@ -874,6 +984,14 @@ function WalkInCard({
   const { hovered, onMouseEnter, onMouseLeave } = useDelayedHover(
     CARD_HOVER_DELAY_MS,
   );
+
+  const pinnedStyle = pinned
+    ? pinned.kind === 'before'
+      ? { top: pinned.offsetPx, height: PINNED_HEIGHT_PX }
+      : { bottom: pinned.offsetPx, height: PINNED_HEIGHT_PX, top: 'auto' as const }
+    : null;
+  const pinPrefix =
+    pinned == null ? null : pinned.kind === 'before' ? '← më herët' : 'më vonë →';
 
   // Border + background per state. Borders are composed inline so the
   // left edge can be dashed-accent while the other three sides stay
@@ -909,6 +1027,7 @@ function WalkInCard({
       data-appt={entry.id}
       data-walkin={entry.id}
       data-status={entry.status}
+      data-pinned={pinned?.kind ?? undefined}
       onClick={(e) => {
         e.stopPropagation();
         onClick(e);
@@ -924,7 +1043,7 @@ function WalkInCard({
       }
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
-      title={`${entry.patient.firstName} ${entry.patient.lastName} · pa termin · erdhi ${parts.time} · ${STATUS_LABEL[entry.status]}`}
+      title={`${entry.patient.firstName} ${entry.patient.lastName} · pa termin · erdhi ${parts.time} · ${STATUS_LABEL[entry.status]}${pinned ? ' · jashtë orarit' : ''}`}
       className={cn(
         'absolute px-2 py-0.5 rounded text-left transition hover:-translate-y-px hover:shadow-sm shadow-xs flex items-center gap-1.5 overflow-hidden',
         isCompleted && 'opacity-85',
@@ -932,21 +1051,29 @@ function WalkInCard({
         isCancelled && 'opacity-50',
       )}
       style={{
-        top,
-        height,
+        ...(pinnedStyle ?? { top: inlineTop, height }),
         left: 'calc(50% + 2px)',
         // Hover expansion: drop the right clamp so the walk-in card
         // grows past the right lane to show full name + arrival time.
         ...(hovered
           ? { right: 'auto', width: 'max-content', maxWidth: 260, zIndex: 20 }
-          : { right: 6, zIndex: 3 }),
+          : { right: 6, zIndex: pinned ? 6 : 3 }),
         ...borderStyle,
-        ...(isPast && !isCompleted ? { opacity: 0.9, filter: 'saturate(0.82)' } : {}),
+        ...(pinned ? { opacity: 0.88 } : {}),
+        ...(isPast && !isCompleted && !pinned ? { opacity: 0.9, filter: 'saturate(0.82)' } : {}),
       }}
-      aria-label={`${entry.patient.firstName} ${entry.patient.lastName}, pa termin, erdhi ${parts.time}, ${STATUS_LABEL[entry.status]}`}
+      aria-label={`${entry.patient.firstName} ${entry.patient.lastName}, pa termin, erdhi ${parts.time}, ${STATUS_LABEL[entry.status]}${pinned ? ', jashtë orarit' : ''}`}
     >
       <span className="flex-1 min-w-0 flex items-center gap-1 text-[11.5px] font-semibold leading-[1.15]">
         <WalkInGlyph completed={isCompleted} />
+        {pinPrefix ? (
+          <span
+            className="font-mono text-[9.5px] font-semibold uppercase tracking-[0.04em] text-ink-faint"
+            aria-hidden
+          >
+            {pinPrefix}
+          </span>
+        ) : null}
         <span
           className={cn(
             hovered ? 'whitespace-nowrap' : 'truncate',

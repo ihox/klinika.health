@@ -8,7 +8,12 @@ import { describe, expect, it } from 'vitest';
 
 import type { CalendarEntry, VisitStatus } from '@/lib/visits-calendar-client';
 import { VISIT_STATUSES } from '@/lib/visits-calendar-client';
-import { WALKIN_HEIGHT_PX, groupWalkInsByDay } from './calendar-grid';
+import {
+  WALKIN_HEIGHT_PX,
+  classifyEntriesByGrid,
+  groupWalkInsByDay,
+} from './calendar-grid';
+import { timeToMinutes, toLocalParts } from '@/lib/appointment-client';
 
 function walkin(
   id: string,
@@ -92,6 +97,81 @@ describe('groupWalkInsByDay', () => {
     const w = walkin('w1', '2026-05-14T10:00:00.000Z');
     const map = groupWalkInsByDay([s, w]);
     expect([...map.values()].flat().map((e) => e.id)).toEqual(['w1']);
+  });
+});
+
+describe('classifyEntriesByGrid', () => {
+  // Grid open 10:00–18:00 == 600..1080 minutes
+  const gridStart = 600;
+  const gridEnd = 1080;
+  const localMin = (iso: string): number =>
+    timeToMinutes(toLocalParts(new Date(iso)).time);
+
+  it('marks in-band entries with pinned=null', () => {
+    const e = scheduled('s1', '2026-05-15T08:30:00.000Z'); // 10:30 local CEST
+    const out = classifyEntriesByGrid(
+      [e],
+      (x) => (x.scheduledFor ? localMin(x.scheduledFor) : null),
+      gridStart,
+      gridEnd,
+    );
+    expect(out).toHaveLength(1);
+    expect(out[0]!.pinned).toBeNull();
+  });
+
+  it('pins an early walk-in to the top of the column', () => {
+    // 09:02 local CEST → 07:02 UTC
+    const w = walkin('w1', '2026-05-15T07:02:00.000Z');
+    const out = classifyEntriesByGrid(
+      [w],
+      (x) => {
+        const iso = x.arrivedAt ?? x.createdAt;
+        return iso ? localMin(iso) : null;
+      },
+      gridStart,
+      gridEnd,
+    );
+    expect(out).toHaveLength(1);
+    expect(out[0]!.pinned).toEqual({ kind: 'before', offsetPx: 0 });
+  });
+
+  it('stacks multiple early visits chronologically at the top', () => {
+    // 08:30 local → 06:30 UTC, 09:15 local → 07:15 UTC
+    const early = walkin('a', '2026-05-15T06:30:00.000Z');
+    const earlier = walkin('b', '2026-05-15T07:15:00.000Z');
+    const out = classifyEntriesByGrid(
+      [earlier, early],
+      (x) => {
+        const iso = x.arrivedAt ?? x.createdAt;
+        return iso ? localMin(iso) : null;
+      },
+      gridStart,
+      gridEnd,
+    );
+    // After sort: a (08:30) at offset 0, b (09:15) at offset 24
+    expect(out.map((c) => c.entry.id)).toEqual(['a', 'b']);
+    expect(out[0]!.pinned).toEqual({ kind: 'before', offsetPx: 0 });
+    expect(out[1]!.pinned).toEqual({ kind: 'before', offsetPx: 24 });
+  });
+
+  it('pins late visits to the bottom with latest at offset 0', () => {
+    // 18:30 local → 16:30 UTC, 19:30 local → 17:30 UTC
+    const lateA = walkin('a', '2026-05-15T16:30:00.000Z');
+    const lateB = walkin('b', '2026-05-15T17:30:00.000Z');
+    const out = classifyEntriesByGrid(
+      [lateA, lateB],
+      (x) => {
+        const iso = x.arrivedAt ?? x.createdAt;
+        return iso ? localMin(iso) : null;
+      },
+      gridStart,
+      gridEnd,
+    );
+    expect(out.map((c) => c.entry.id)).toEqual(['a', 'b']);
+    // a (earlier of the two late ones) at the top of the bottom stack;
+    // b (latest) at the very bottom.
+    expect(out[0]!.pinned).toEqual({ kind: 'after', offsetPx: 24 });
+    expect(out[1]!.pinned).toEqual({ kind: 'after', offsetPx: 0 });
   });
 });
 
