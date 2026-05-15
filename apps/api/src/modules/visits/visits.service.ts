@@ -159,11 +159,17 @@ export class VisitsService {
     // Paired walk-in. Matches receptionist-initiated walk-in semantics
     // but skips the pair-validation guard (we just resolved it) and
     // forces `status='in_progress'` — the doctor is about to start
-    // charting, so the row goes straight to in-progress.
+    // charting, so the row goes straight to in-progress. The
+    // arrived_at policy (snap-to-5-min + stack-on-collision) is shared
+    // with the receptionist's `/api/visits/walkin` path via the same
+    // helper — Phase 2b §2.
     const visitDate = payload.visitDate
       ? utcMidnight(payload.visitDate)
       : utcMidnight(today);
-    const now = new Date();
+    const arrivedAt = await this.calendar.computeWalkInArrivedAt(
+      clinicId,
+      new Date(),
+    );
 
     const created = await this.prisma.visit.create({
       data: {
@@ -173,7 +179,7 @@ export class VisitsService {
         scheduledFor: null,
         durationMinutes: null,
         isWalkIn: true,
-        arrivedAt: now,
+        arrivedAt,
         status: 'in_progress',
         pairedWithVisitId: pair.id,
         createdBy: ctx.userId,
@@ -190,7 +196,7 @@ export class VisitsService {
       changes: [
         { field: 'patientId', old: null, new: created.patientId },
         { field: 'isWalkIn', old: null, new: true },
-        { field: 'arrivedAt', old: null, new: now.toISOString() },
+        { field: 'arrivedAt', old: null, new: arrivedAt.toISOString() },
         { field: 'status', old: null, new: created.status },
         { field: 'pairedWithVisitId', old: null, new: pair.id },
       ],
@@ -200,7 +206,7 @@ export class VisitsService {
       type: 'visit.created',
       clinicId,
       visitId: created.id,
-      localDate: utcToLocalParts(now).date,
+      localDate: utcToLocalParts(arrivedAt).date,
       isWalkIn: true,
       status: created.status,
       emittedAt: new Date().toISOString(),

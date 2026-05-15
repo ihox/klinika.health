@@ -6,6 +6,16 @@ import {
 } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 
+/**
+ * Either the root PrismaService or a transaction-scoped client. The
+ * walk-in helper accepts both so callers wrapping the creation in a
+ * `$transaction` can compute arrived_at against the in-flight tx
+ * (avoiding races with other walk-ins committed mid-flight).
+ */
+type WalkInPrismaClient =
+  | Prisma.TransactionClient
+  | Pick<import('../../prisma/prisma.service').PrismaService, 'visit'>;
+
 import { AuditLogService, type AuditFieldDiff } from '../../common/audit/audit-log.service';
 import { localDateToday, utcMidnight } from '../../common/datetime';
 import { isReceptionistOnly } from '../../common/request-context/role-helpers';
@@ -373,13 +383,13 @@ export class VisitsCalendarService {
       });
     }
 
-    const now = new Date();
     // Walk-ins skip 'scheduled'. Default initial state is 'arrived'
     // (receptionist registers, doctor sees them shortly); the
     // receptionist may also open in 'in_progress' when the doctor takes
     // the patient straight in. No other initial states are allowed —
     // the DTO Zod schema enforces it.
     const initialStatus: 'arrived' | 'in_progress' = payload.initialStatus ?? 'arrived';
+    const arrivedAt = await this.computeWalkInArrivedAt(clinicId, new Date());
 
     const created = await this.prisma.visit.create({
       data: {
@@ -392,7 +402,7 @@ export class VisitsCalendarService {
         scheduledFor: null,
         durationMinutes: null,
         isWalkIn: true,
-        arrivedAt: now,
+        arrivedAt,
         status: initialStatus,
         pairedWithVisitId: pairedWith.id,
         createdBy: ctx.userId,
@@ -411,7 +421,7 @@ export class VisitsCalendarService {
       changes: [
         { field: 'patientId', old: null, new: payload.patientId },
         { field: 'isWalkIn', old: null, new: true },
-        { field: 'arrivedAt', old: null, new: now.toISOString() },
+        { field: 'arrivedAt', old: null, new: arrivedAt.toISOString() },
         { field: 'status', old: null, new: created.status },
         { field: 'pairedWithVisitId', old: null, new: pairedWith.id },
       ],
@@ -763,6 +773,91 @@ export class VisitsCalendarService {
   }
 
   // -------------------------------------------------------------------------
+  // Walk-in arrived_at policy: snap-to-5-min, stack-on-collision
+  // -------------------------------------------------------------------------
+
+  /**
+   * Compute the `arrived_at` instant for a new walk-in.
+   *
+   * The receptionist creates walk-ins through `/api/visits/walkin`; the
+   * doctor creates them through `/api/visits/doctor-new` (the
+   * walk-in branch). Both paths flow through this helper so the time-
+   * slot policy stays in one place:
+   *
+   *  1. Snap `intendedTime` to the nearest 5-minute UTC boundary.
+   *  2. Compare against today's walk-in intervals
+   *     `[arrived_at, arrived_at + duration_minutes)`; if the candidate
+   *     falls inside any of them, advance by 5 minutes and try again.
+   *  3. Stop when a free slot is found, or after 50 iterations (~4h of
+   *     clock advance) as a safety against unexpected data.
+   *
+   * Lookups are scoped to the *snapped* instant's local day and pad
+   * ±24h on the UTC query so DST drift never excludes a row anchored
+   * near midnight. The JS filter then narrows to exactly the local day.
+   *
+   * Pass `prismaTx` to compute against an in-flight transaction.
+   * Concurrent walk-ins outside a transaction may still race; that's
+   * accepted for v1 (the worst case is two walk-ins sharing the same
+   * arrived_at — extremely rare given the snap granularity).
+   */
+  async computeWalkInArrivedAt(
+    clinicId: string,
+    intendedTime: Date,
+    prismaTx?: WalkInPrismaClient,
+  ): Promise<Date> {
+    const client = prismaTx ?? this.prisma;
+    const snapped = snapToFiveMinutesUtc(intendedTime);
+    const localDay = utcToLocalParts(snapped).date;
+    const dayQueryStart = new Date(
+      localClockToUtc(localDay, '00:00').getTime() - 86_400_000,
+    );
+    const dayQueryEnd = new Date(
+      localClockToUtc(localDay, '23:59').getTime() + 86_400_000,
+    );
+
+    const existing = await client.visit.findMany({
+      where: {
+        clinicId,
+        deletedAt: null,
+        isWalkIn: true,
+        arrivedAt: { gte: dayQueryStart, lte: dayQueryEnd, not: null },
+      },
+      select: { arrivedAt: true, durationMinutes: true },
+    });
+
+    const intervals = existing
+      .filter(
+        (r): r is { arrivedAt: Date; durationMinutes: number | null } =>
+          r.arrivedAt != null &&
+          utcToLocalParts(r.arrivedAt).date === localDay,
+      )
+      .map((r) => {
+        // A walk-in with a missing duration (legacy data) still occupies
+        // at least its own 5-min cell so the stacker doesn't land on it.
+        const duration = Math.max(5, r.durationMinutes ?? 5);
+        return {
+          startMs: r.arrivedAt.getTime(),
+          endMs: r.arrivedAt.getTime() + duration * 60_000,
+        };
+      });
+
+    const STEP_MS = 5 * 60_000;
+    const MAX_ITER = 50;
+    let candidateMs = snapped.getTime();
+    for (let i = 0; i < MAX_ITER; i += 1) {
+      const cMs = candidateMs;
+      const occupied = intervals.some(
+        (iv) => cMs >= iv.startMs && cMs < iv.endMs,
+      );
+      if (!occupied) return new Date(cMs);
+      candidateMs = cMs + STEP_MS;
+    }
+    // Safety: cap reached. Return the last candidate so the caller still
+    // gets a usable instant and the row creation can proceed.
+    return new Date(candidateMs);
+  }
+
+  // -------------------------------------------------------------------------
   // Pairing helper for doctor-initiated walk-ins
   // -------------------------------------------------------------------------
 
@@ -1002,6 +1097,21 @@ export class VisitsCalendarService {
 // ---------------------------------------------------------------------------
 // Pure helpers
 // ---------------------------------------------------------------------------
+
+/**
+ * Snap a UTC instant to the nearest 5-minute boundary, zeroing seconds
+ * and milliseconds. Equivalent to a local-time snap for any whole-hour
+ * timezone offset (Europe/Belgrade is +1/+2 — both whole hours).
+ *
+ *   10:03:00 → 10:05:00   (3 min from :00, 2 from :05 — :05 wins)
+ *   10:02:00 → 10:00:00   (2 min from :00, 3 from :05 — :00 wins)
+ *   10:02:30 → 10:05:00   (half-up via Math.round on UTC ms)
+ *   11:50:00 → 11:50:00   (already on boundary)
+ */
+export function snapToFiveMinutesUtc(d: Date): Date {
+  const fiveMinMs = 5 * 60_000;
+  return new Date(Math.round(d.getTime() / fiveMinMs) * fiveMinMs);
+}
 
 function narrowToVisitStatus(value: string): VisitStatus {
   if ((VISIT_STATUSES as readonly string[]).includes(value)) {
