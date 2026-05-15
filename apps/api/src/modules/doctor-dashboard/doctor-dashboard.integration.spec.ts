@@ -302,8 +302,121 @@ describe.skipIf(!ENABLED)('Doctor dashboard integration', () => {
   });
 
   // ------------------------------------------------------------------
+  // 5. "Vizita të hapura" — `in_progress` visits from prior days
+  // ------------------------------------------------------------------
+
+  it('surfaces in_progress visits from prior days in openVisits, oldest first', async () => {
+    const today = todayBelgrade();
+    const patient = await prisma.patient.create({
+      data: {
+        clinicId,
+        firstName: 'Era',
+        lastName: 'Krasniqi',
+        dateOfBirth: new Date('2023-08-03'),
+      },
+    });
+    // Three days ago — abandoned in_progress visit.
+    const threeDaysAgo = isoDateDaysAgo(today, 3);
+    const olderOpen = await prisma.visit.create({
+      data: {
+        clinicId,
+        patientId: patient.id,
+        visitDate: visitDateFor(threeDaysAgo),
+        status: 'in_progress',
+        createdBy: doctorUserId,
+        updatedBy: doctorUserId,
+      },
+    });
+    // Yesterday — another abandoned in_progress visit (more recent).
+    const yesterday = isoDateDaysAgo(today, 1);
+    const recentOpen = await prisma.visit.create({
+      data: {
+        clinicId,
+        patientId: patient.id,
+        visitDate: visitDateFor(yesterday),
+        status: 'in_progress',
+        createdBy: doctorUserId,
+        updatedBy: doctorUserId,
+      },
+    });
+    // Yesterday — completed (should NOT appear; the doctor finished it).
+    await prisma.visit.create({
+      data: {
+        clinicId,
+        patientId: patient.id,
+        visitDate: visitDateFor(yesterday),
+        status: 'completed',
+        createdBy: doctorUserId,
+        updatedBy: doctorUserId,
+      },
+    });
+    // Today — in_progress (today's queue already surfaces this; the
+    // backlog list is strictly prior-day).
+    await prisma.visit.create({
+      data: {
+        clinicId,
+        patientId: patient.id,
+        visitDate: visitDateFor(today),
+        status: 'in_progress',
+        createdBy: doctorUserId,
+        updatedBy: doctorUserId,
+      },
+    });
+    // Yesterday — in_progress but soft-deleted (must not surface).
+    await prisma.visit.create({
+      data: {
+        clinicId,
+        patientId: patient.id,
+        visitDate: visitDateFor(yesterday),
+        status: 'in_progress',
+        deletedAt: new Date(),
+        createdBy: doctorUserId,
+        updatedBy: doctorUserId,
+      },
+    });
+
+    const cookie = await loginAs(DOCTOR_EMAIL, SEED_DOCTOR_PASSWORD!);
+    const res = await req()
+      .get('/api/doctor/dashboard')
+      .set('host', TENANT_HOST)
+      .set('Cookie', cookie);
+    expect(res.status).toBe(200);
+    const open = res.body.openVisits as Array<{
+      id: string;
+      visitDate: string;
+      daysAgo: number;
+    }>;
+    expect(open.map((v) => v.id)).toEqual([olderOpen.id, recentOpen.id]);
+    expect(open[0]!.visitDate).toBe(threeDaysAgo);
+    expect(open[0]!.daysAgo).toBe(3);
+    expect(open[1]!.visitDate).toBe(yesterday);
+    expect(open[1]!.daysAgo).toBe(1);
+  });
+
+  it('returns an empty openVisits array when no prior in_progress backlog exists', async () => {
+    const cookie = await loginAs(DOCTOR_EMAIL, SEED_DOCTOR_PASSWORD!);
+    const res = await req()
+      .get('/api/doctor/dashboard')
+      .set('host', TENANT_HOST)
+      .set('Cookie', cookie);
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body.openVisits)).toBe(true);
+    expect(res.body.openVisits.length).toBe(0);
+  });
+
+  // ------------------------------------------------------------------
   // Helpers (mirror the auth flow from other integration specs)
   // ------------------------------------------------------------------
+
+  function isoDateDaysAgo(today: string, days: number): string {
+    const [y, m, d] = today.split('-').map(Number) as [number, number, number];
+    const t = Date.UTC(y, m - 1, d) - days * 86_400_000;
+    const dt = new Date(t);
+    const yy = dt.getUTCFullYear();
+    const mm = String(dt.getUTCMonth() + 1).padStart(2, '0');
+    const dd = String(dt.getUTCDate()).padStart(2, '0');
+    return `${yy}-${mm}-${dd}`;
+  }
 
   function req(): request.Agent {
     return request(app.getHttpServer());

@@ -153,6 +153,30 @@ export interface DashboardNextPatientCard {
   hasAllergyNote: boolean;
 }
 
+/**
+ * "Vizita të hapura" — `in_progress` visits the doctor started on a
+ * previous local day but never finished. Surfaced at the top of the
+ * dashboard so abandoned charts can be completed (or deleted) before
+ * the day's appointments start.
+ *
+ * The dashboard's existing `appointments` list already covers today's
+ * `in_progress` rows; this list is strictly the prior-day backlog
+ * (`visit_date < today` in Europe/Belgrade).
+ */
+export interface DashboardOpenVisitEntry {
+  id: string;
+  patientId: string;
+  patient: {
+    firstName: string;
+    lastName: string;
+    dateOfBirth: string | null;
+  };
+  /** ISO `YYYY-MM-DD` of the visit's local-day anchor. */
+  visitDate: string;
+  /** Whole days between `visitDate` and today (always ≥ 1). */
+  daysAgo: number;
+}
+
 export interface DashboardStats {
   /** Visits actually entered by the doctor for the day. */
   visitsCompleted: number;
@@ -177,6 +201,12 @@ export interface DoctorDashboardResponse {
   serverTime: string;
   appointments: DashboardAppointmentDto[];
   todayVisits: DashboardVisitLogEntry[];
+  /**
+   * `in_progress` visits from days prior to `date`. Empty array when
+   * none — the frontend hides the section rather than rendering an
+   * empty card.
+   */
+  openVisits: DashboardOpenVisitEntry[];
   nextPatient: DashboardNextPatientCard | null;
   stats: DashboardStats;
 }

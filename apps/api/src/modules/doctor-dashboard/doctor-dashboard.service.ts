@@ -13,6 +13,7 @@ import {
   type DashboardAppointmentDto,
   type DashboardAppointmentStatus,
   type DashboardNextPatientCard,
+  type DashboardOpenVisitEntry,
   type DashboardVisitLogEntry,
   type DoctorDashboardResponse,
 } from './doctor-dashboard.dto';
@@ -79,7 +80,7 @@ export class DoctorDashboardService {
     const dayQueryStart = new Date(dayStartUtc.getTime() - 86_400_000);
     const dayQueryEnd = new Date(dayEndUtc.getTime() + 86_400_000);
 
-    const [clinic, rawAppointments, visits] = await Promise.all([
+    const [clinic, rawAppointments, visits, openVisitRows] = await Promise.all([
       this.prisma.clinic.findUnique({
         where: { id: clinicId },
         select: { paymentCodes: true },
@@ -143,6 +144,31 @@ export class DoctorDashboardService {
               },
             },
             take: 1,
+          },
+        },
+      }),
+      // "Vizita të hapura" — `in_progress` visits anchored to a local
+      // day prior to today. These are abandoned charts that the doctor
+      // started but never marked completed; surfacing them lets the
+      // doctor finish (or delete) the backlog before today's queue
+      // begins. `visit_date` is `@db.Date`, so the operand is a
+      // UTC-midnight Date per ADR-006.
+      this.prisma.visit.findMany({
+        where: {
+          clinicId,
+          deletedAt: null,
+          status: 'in_progress',
+          visitDate: { lt: utcMidnight(today) },
+        },
+        orderBy: { visitDate: 'asc' },
+        include: {
+          patient: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              dateOfBirth: true,
+            },
           },
         },
       }),
@@ -215,11 +241,27 @@ export class DoctorDashboardService {
       paymentAmount,
     });
 
+    const openVisits: DashboardOpenVisitEntry[] = openVisitRows.map((v) => {
+      const visitDateIso = toIsoDate(v.visitDate) ?? today;
+      return {
+        id: v.id,
+        patientId: v.patientId,
+        patient: {
+          firstName: v.patient.firstName,
+          lastName: v.patient.lastName,
+          dateOfBirth: serializeDob(v.patient.dateOfBirth),
+        },
+        visitDate: visitDateIso,
+        daysAgo: Math.max(1, daysBetween(visitDateIso, today)),
+      };
+    });
+
     return {
       date: today,
       serverTime: now.toISOString(),
       appointments: dashboardAppointments,
       todayVisits,
+      openVisits,
       nextPatient,
       stats,
     };
