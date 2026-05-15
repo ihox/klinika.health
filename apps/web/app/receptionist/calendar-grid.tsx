@@ -161,10 +161,15 @@ export function CalendarGrid({
         const isToday = col.date === todayIso;
         const isPast = col.date < todayIso;
         const hasWalkIns = (walkInsByDay.get(col.date)?.length ?? 0) > 0;
+        // Two-lane split: today ALWAYS, plus any other day carrying
+        // ≥1 walk-in so the band has somewhere to live. Drives the
+        // header lane-hint AND the day-col background divider.
+        const isTwoLane = isToday || hasWalkIns;
         return (
           <div
             key={`head-${col.date}`}
             data-has-walkins={hasWalkIns || undefined}
+            data-two-lane={isTwoLane || undefined}
             data-past={isPast || undefined}
             data-today={isToday || undefined}
             className={cn(
@@ -190,7 +195,7 @@ export function CalendarGrid({
                 sot
               </span>
             ) : null}
-            {hasWalkIns ? <LaneHint /> : null}
+            {isTwoLane ? <LaneHint /> : null}
           </div>
         );
       })}
@@ -286,10 +291,13 @@ function DayColumnBody({
   onEntryClick,
   onEntryContextMenu,
 }: DayColumnBodyProps): ReactElement {
-  // A column is in two-lane mode whenever it carries ≥1 walk-in. The
-  // modifier alone gates the divider, the scheduled-card right-edge
-  // constraint, and (in STEP 2) the header lane-hint.
+  // A column is in two-lane mode whenever it carries ≥1 walk-in OR is
+  // today (today's right lane is always reserved — when empty it shows
+  // the "Asnjë pa termin sot" placeholder so the receptionist sees the
+  // band is intentionally there). The flag drives the divider, the
+  // scheduled-card right-edge clamp, and the header lane-hint.
   const hasWalkIns = walkIns.length > 0;
+  const isTwoLane = isToday || hasWalkIns;
 
   // Snap the mouse Y to the nearest 10-minute slot inside the open
   // window. Returns null when the cursor is outside hours or over a
@@ -367,7 +375,7 @@ function DayColumnBody({
   // on top of the gridlines — matches the design's reading order.
   const backgroundImage = !col.open
     ? CLOSED_HATCH_BG
-    : hasWalkIns
+    : isTwoLane
       ? `${CENTER_DIVIDER_BG}, ${OPEN_GRID_BG}`
       : OPEN_GRID_BG;
 
@@ -385,6 +393,7 @@ function DayColumnBody({
       onMouseLeave={handleMouseLeave}
       role="grid"
       data-has-walkins={hasWalkIns || undefined}
+      data-two-lane={isTwoLane || undefined}
       data-past={isPast || undefined}
       data-today={isToday || undefined}
       aria-label={col.open ? `Kolonë termin për ${col.date}` : `Klinika e mbyllur ${col.date}`}
@@ -418,7 +427,7 @@ function DayColumnBody({
           key={a.id}
           entry={a}
           gridStartMin={gridStartMin}
-          leftLaneOnly={hasWalkIns}
+          leftLaneOnly={isTwoLane}
           isPast={isPast}
           onClick={(ev) =>
             onEntryClick(a, { x: ev.clientX, y: ev.clientY })
@@ -448,11 +457,28 @@ function DayColumnBody({
         />
       ))}
 
+      {/* Today's right-lane placeholder — only when the band is empty.
+          Mirrors `.lane-empty` in receptionist.html: a soft dashed card
+          parked at the top of the right lane so the reserved column
+          reads as intentional, not a layout bug. */}
+      {isToday && !hasWalkIns && col.open ? (
+        <div
+          className="absolute z-0 pointer-events-none rounded-sm border border-dashed border-accent-100 bg-gradient-to-b from-[#FFFBF5] to-transparent px-2.5 pb-3 pt-2.5 text-center text-[11px] leading-[1.35] text-ink-muted"
+          style={{ left: 'calc(50% + 8px)', right: 8, top: 14 }}
+          aria-hidden
+        >
+          <span className="mb-1 block font-mono text-[9.5px] font-semibold uppercase tracking-[0.08em] text-accent-500">
+            Pa termin
+          </span>
+          Asnjë pa termin sot
+        </div>
+      ) : null}
+
       {/* Hover slot ghost — `.ghost-slot` in receptionist.html. Height
           tracks the clinic's default duration so the receptionist sees
           the footprint a click would actually create. Lives in the
-          LEFT lane when the column carries walk-ins so it lines up
-          with where the scheduled card will land. */}
+          LEFT lane when the column is two-lane (today or has-walkins)
+          so it lines up with where the scheduled card will land. */}
       {hoverSlot ? (
         <div
           className="absolute z-[2] pointer-events-none flex items-center gap-1.5 rounded-sm border border-dashed border-teal-400 bg-teal-100/55 px-1.5 py-[3px] text-[11px] font-medium leading-none text-primary-dark shadow-xs tabular-nums"
@@ -460,7 +486,7 @@ function DayColumnBody({
             top: hoverSlot.top,
             height: defaultDuration * PX_PER_MIN,
             left: 6,
-            ...(hasWalkIns ? { right: 'calc(50% + 2px)' } : { right: 6 }),
+            ...(isTwoLane ? { right: 'calc(50% + 2px)' } : { right: 6 }),
           }}
           aria-hidden
         >
