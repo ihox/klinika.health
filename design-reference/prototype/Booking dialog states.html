@@ -304,6 +304,247 @@
     font-size: 12.5px; color: var(--text-muted); line-height: 1.7;
   }
   .design-note ul li strong { color: var(--text); font-weight: 600; }
+
+  /* ====== Lifecycle states section ====== */
+  .lifecycle-section {
+    margin-top: 56px;
+    border-top: 1px solid var(--border-soft);
+    padding-top: 36px;
+  }
+  .lifecycle-section .sec-head {
+    margin-bottom: 22px;
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 24px;
+  }
+  .lifecycle-section .sec-head h2 {
+    font-family: var(--font-display);
+    font-size: 22px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    color: var(--text-strong);
+    margin: 0 0 6px;
+  }
+  .lifecycle-section .sec-head p {
+    font-size: 13px;
+    color: var(--text-muted);
+    max-width: 620px;
+    line-height: 1.55;
+    margin: 0;
+  }
+  .lifecycle-section .sec-head .meta {
+    font-family: var(--font-mono); font-size: 11px;
+    color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.08em;
+    white-space: nowrap;
+  }
+
+  /* Lifecycle diagram */
+  .lifecycle-flow {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 18px 22px;
+    background: var(--bg-subtle);
+    border: 1px dashed var(--border-strong);
+    border-radius: var(--r-lg);
+    margin-bottom: 26px;
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    color: var(--text-muted);
+    flex-wrap: wrap;
+  }
+  .lifecycle-flow .step {
+    padding: 6px 12px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    color: var(--text);
+    font-weight: 600;
+    letter-spacing: 0.03em;
+  }
+  .lifecycle-flow .step.alt { background: var(--bg-subtle); color: var(--text-faint); border-style: dashed; }
+  .lifecycle-flow .arrow { color: var(--text-faint); font-size: 14px; }
+  .lifecycle-flow .branch { margin-left: 12px; color: var(--text-faint); }
+
+  /* Card states grid */
+  .states6 {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 18px;
+  }
+  .lc-card {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-soft);
+    border-radius: 12px;
+    overflow: hidden;
+    display: grid;
+    grid-template-rows: auto 1fr auto;
+  }
+  .lc-card .lc-head {
+    padding: 12px 16px 10px;
+    border-bottom: 1px solid var(--border-soft);
+    background: var(--bg-subtle);
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+  }
+  .lc-card .num {
+    font-family: var(--font-mono); font-size: 10px;
+    color: var(--text-faint); letter-spacing: 0.08em;
+  }
+  .lc-card h3 {
+    font-family: var(--font-display); font-size: 14px; font-weight: 600;
+    color: var(--text-strong); letter-spacing: -0.005em; margin-top: 2px;
+  }
+  .lc-card .tag {
+    font-family: var(--font-mono); font-size: 9.5px;
+    padding: 3px 7px; border-radius: 999px;
+    letter-spacing: 0.06em; white-space: nowrap;
+    font-weight: 600;
+  }
+  .lc-card .tag.t-teal   { color: var(--teal-800); background: var(--teal-50); border: 1px solid var(--teal-200); }
+  .lc-card .tag.t-green  { color: var(--green); background: var(--green-bg); border: 1px solid var(--green-soft); }
+  .lc-card .tag.t-red    { color: var(--red); background: var(--red-bg); border: 1px solid var(--red-soft); }
+  .lc-card .tag.t-muted  { color: var(--text-muted); background: var(--bg-elevated); border: 1px solid var(--border); }
+
+  .lc-stage {
+    padding: 32px 24px 28px;
+    background:
+      radial-gradient(500px 200px at 50% 100%, rgba(13,148,136,0.04), transparent 60%),
+      linear-gradient(180deg, #fafaf7 0%, #f4f3ed 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 130px;
+  }
+
+  /* Static replica of the calendar appt card */
+  .demo-appt {
+    width: 220px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--teal-200);
+    border-left: 3px solid var(--primary);
+    border-radius: var(--r-sm);
+    padding: 6px 10px;
+    box-shadow: var(--shadow-xs);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    position: relative;
+  }
+  .demo-appt .name {
+    flex: 1; min-width: 0;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-strong);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.2;
+  }
+  .demo-appt .meta {
+    font-size: 11px;
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+    line-height: 1.2;
+    flex-shrink: 0;
+  }
+  .demo-appt .badge {
+    display: inline-block;
+    margin-left: 6px;
+    font-size: 9px;
+    padding: 0 6px;
+    border-radius: 999px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    vertical-align: 1px;
+    border: 1px solid transparent;
+  }
+  .demo-appt .badge.arrived { background: var(--primary-soft); color: var(--teal-800); border-color: var(--teal-200); }
+  .demo-appt .badge.in-progress { background: var(--primary); color: white; }
+
+  /* state variants */
+  .demo-appt.arrived { background: var(--teal-50); border-color: var(--teal-300); }
+  .demo-appt.in-progress {
+    background: var(--teal-50);
+    border-color: var(--teal-400);
+    animation: lc-pulse 2s ease-in-out infinite;
+  }
+  @keyframes lc-pulse {
+    0%, 100% { box-shadow: var(--shadow-xs), 0 0 0 0 rgba(13,148,136,0.22); }
+    50%      { box-shadow: var(--shadow-xs), 0 0 0 5px rgba(13,148,136,0); }
+  }
+  .demo-appt.completed {
+    background: var(--green-bg);
+    border-color: var(--green-soft);
+    border-left-color: var(--green);
+    opacity: 0.9;
+  }
+  .demo-appt.completed .name { color: var(--green); }
+  .demo-appt.completed .meta { color: var(--green); opacity: 0.8; }
+  .demo-appt.completed .check {
+    width: 14px; height: 14px;
+    color: var(--green);
+    flex-shrink: 0;
+  }
+  .demo-appt.noshow {
+    background: var(--bg-elevated);
+    border: 1px dashed var(--red-soft);
+    border-left: 3px solid var(--red);
+    opacity: 0.75;
+  }
+  .demo-appt.noshow .name { color: var(--red); text-decoration: line-through; text-decoration-thickness: 1px; }
+  .demo-appt.noshow .pre {
+    font-size: 9px;
+    background: var(--red-bg);
+    color: var(--red);
+    border-radius: 3px;
+    padding: 1px 5px;
+    font-weight: 700;
+    margin-right: 4px;
+    flex-shrink: 0;
+  }
+  .demo-appt.cancelled {
+    background: var(--bg-subtle);
+    border-color: var(--border);
+    border-left: 3px solid var(--border-strong);
+    opacity: 0.55;
+  }
+  .demo-appt.cancelled .name {
+    color: var(--text-faint);
+    text-decoration: line-through;
+    text-decoration-thickness: 1px;
+  }
+  .demo-appt.cancelled .meta { color: var(--text-faint); }
+  .demo-appt.cancelled .pre {
+    font-size: 9px;
+    background: var(--bg-muted);
+    color: var(--text-muted);
+    border-radius: 3px;
+    padding: 1px 5px;
+    font-weight: 700;
+    margin-right: 4px;
+    flex-shrink: 0;
+  }
+
+  .lc-card .lc-foot {
+    padding: 11px 16px 13px;
+    border-top: 1px solid var(--border-soft);
+    font-size: 11.5px;
+    color: var(--text-muted);
+    line-height: 1.55;
+  }
+  .lc-card .lc-foot code {
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    background: var(--bg-subtle);
+    padding: 1px 6px;
+    border-radius: 4px;
+    border: 1px solid var(--border-soft);
+    color: var(--text);
+  }
 </style>
 </head>
 <body>
@@ -542,6 +783,160 @@
   <p style="margin-top: 28px; font-size: 12.5px; color: var(--text-muted); line-height: 1.6;">
     Versioni interaktiv: hapni <a href="receptionist.html" style="color: var(--primary); font-weight: 500;">receptionist.html</a> dhe klikoni një nga tre slotat e shenjuar "+ Termin i lirë" në kalendar (Mar 14:30 → clean, Mër 11:00 → extend, Enj 12:30 → blocked), ose përdorni kërkimin për të caktuar pacientin.
   </p>
+
+  <!-- ============================================================
+       LIFECYCLE CARD STATES — calendar appointment card across the
+       visit lifecycle (one entity replaces the old appointments +
+       visits split).
+       ============================================================ -->
+  <section class="lifecycle-section">
+    <div class="sec-head">
+      <div>
+        <h2>Termini në kalendar · 6 gjendje</h2>
+        <p>Çdo termin tani është një <em>vizitë</em> me një cikël jetësor të vetëm. Kartela në kalendar tregon ku është pacienti pa pasur nevojë të hapet kartela klinike.</p>
+      </div>
+      <div class="meta">data model · v2 · unified</div>
+    </div>
+
+    <!-- Lifecycle flow diagram -->
+    <div class="lifecycle-flow">
+      <span class="step">scheduled</span>
+      <span class="arrow">→</span>
+      <span class="step">arrived</span>
+      <span class="arrow">→</span>
+      <span class="step">in_progress</span>
+      <span class="arrow">→</span>
+      <span class="step">completed</span>
+      <span class="branch">·  alternatives from scheduled:</span>
+      <span class="step alt">cancelled</span>
+      <span class="step alt">no_show</span>
+    </div>
+
+    <div class="states6">
+
+      <!-- 01 scheduled -->
+      <div class="lc-card">
+        <div class="lc-head">
+          <div>
+            <div class="num">01</div>
+            <h3>Scheduled · planifikuar</h3>
+          </div>
+          <span class="tag t-teal">DEFAULT</span>
+        </div>
+        <div class="lc-stage">
+          <div class="demo-appt">
+            <span class="name">Era Krasniqi</span>
+            <span class="meta">14:20 · 15 min</span>
+          </div>
+        </div>
+        <div class="lc-foot">
+          Gjendja fillestare. Teal solid, pa shenjë statusi — pritet pacienti. <code>border-left: var(--primary)</code>
+        </div>
+      </div>
+
+      <!-- 02 arrived -->
+      <div class="lc-card">
+        <div class="lc-head">
+          <div>
+            <div class="num">02</div>
+            <h3>Arrived · arriti</h3>
+          </div>
+          <span class="tag t-teal">CHECK-IN</span>
+        </div>
+        <div class="lc-stage">
+          <div class="demo-appt arrived">
+            <span class="name">Era Krasniqi<span class="badge arrived">✓ Arriti</span></span>
+          </div>
+        </div>
+        <div class="lc-foot">
+          Recepsionisti e shënon kur pacienti hyn. Sfond pak më i theksuar teal + chip <code>✓ Arriti</code>. Mjeku sheh menjëherë në listën e ditës.
+        </div>
+      </div>
+
+      <!-- 03 in_progress -->
+      <div class="lc-card">
+        <div class="lc-head">
+          <div>
+            <div class="num">03</div>
+            <h3>In progress · në vizitë</h3>
+          </div>
+          <span class="tag t-teal">LIVE</span>
+        </div>
+        <div class="lc-stage">
+          <div class="demo-appt in-progress">
+            <span class="name">Era Krasniqi<span class="badge in-progress">Në vizitë</span></span>
+          </div>
+        </div>
+        <div class="lc-foot">
+          Vendoset automatikisht kur mjeku hap kartelën — ose manualisht nga menyja. Pulsim i butë teal. Chip i mbushur tregon dallimin nga "arritur".
+        </div>
+      </div>
+
+      <!-- 04 completed -->
+      <div class="lc-card">
+        <div class="lc-head">
+          <div>
+            <div class="num">04</div>
+            <h3>Completed · kryer</h3>
+          </div>
+          <span class="tag t-green">DONE</span>
+        </div>
+        <div class="lc-stage">
+          <div class="demo-appt completed">
+            <svg class="check" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 8.5l3 3 8-8"/></svg>
+            <span class="name">Era Krasniqi</span>
+            <span class="meta">14:20</span>
+          </div>
+        </div>
+        <div class="lc-foot">
+          Vizita ka të dhëna klinike të ruajtura. Jeshil i butë, opacity 0.9, check majtas. Nuk është më e ndryshueshme pa transicion eksplicit.
+        </div>
+      </div>
+
+      <!-- 05 no_show -->
+      <div class="lc-card">
+        <div class="lc-head">
+          <div>
+            <div class="num">05</div>
+            <h3>No show · mungoi</h3>
+          </div>
+          <span class="tag t-red">ALT</span>
+        </div>
+        <div class="lc-stage">
+          <div class="demo-appt noshow">
+            <span class="pre">MS</span>
+            <span class="name">Era Krasniqi</span>
+            <span class="meta">14:20</span>
+          </div>
+        </div>
+        <div class="lc-foot">
+          Pacienti nuk u paraqit. Kornizë e ndërprerë e kuqe, emri me vijë mbi të. Slot-i mbetet i parashënuar për histori.
+        </div>
+      </div>
+
+      <!-- 06 cancelled -->
+      <div class="lc-card">
+        <div class="lc-head">
+          <div>
+            <div class="num">06</div>
+            <h3>Cancelled · anuluar</h3>
+          </div>
+          <span class="tag t-muted">ALT</span>
+        </div>
+        <div class="lc-stage">
+          <div class="demo-appt cancelled">
+            <span class="pre">AN</span>
+            <span class="name">Era Krasniqi</span>
+            <span class="meta">14:20</span>
+          </div>
+        </div>
+        <div class="lc-foot">
+          Termini u anulua para mbërritjes. Shumë i venitur (opacity 0.55), gri, me vijë mbi emër. Slot-i bëhet i lirë për të tjerët.
+        </div>
+      </div>
+
+    </div>
+  </section>
 </div>
 
 </body>

@@ -79,38 +79,154 @@
 
   .otp-row {
     display: grid;
-    grid-template-columns: repeat(6, 1fr);
+    grid-template-columns: repeat(6, minmax(0, 1fr));
     gap: 8px;
   }
   .otp-row input {
+    min-width: 0;
     text-align: center;
     font-family: var(--font-mono);
-    font-size: 20px;
+    font-size: 22px;
     font-weight: 600;
-    padding: 12px 0;
+    padding: 14px 0;
     border: 1px solid var(--border-strong);
     border-radius: var(--r-md);
     background: var(--bg-elevated);
     color: var(--text-strong);
     outline: none;
     transition: border-color 150ms ease, box-shadow 150ms ease;
+    line-height: 1;
   }
   .otp-row input:focus { border-color: var(--primary); box-shadow: var(--focus-ring); }
 
-  .mfa-help {
+  /* Source hint — authenticator app */
+  .mfa-source {
     display: flex;
     align-items: center;
     gap: 8px;
-    font-size: 12px;
+    font-size: 12.5px;
     color: var(--text-muted);
     padding: 10px 12px;
     background: var(--bg-subtle);
+    border: 1px solid var(--border);
     border-radius: var(--r-md);
   }
-  .mfa-help .icon {
-    width: 16px; height: 16px;
+  .mfa-source .icon {
+    width: 14px; height: 14px;
     color: var(--text-faint);
     flex-shrink: 0;
+  }
+  .mfa-source .rotates {
+    margin-left: auto;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-faint);
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .mfa-source .rotates .dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--primary);
+    animation: pulse 1.5s ease-in-out infinite;
+  }
+  @keyframes pulse { 0%, 100% { opacity: 0.4; } 50% { opacity: 1; } }
+
+  /* Wrong-code error line */
+  .err-line {
+    display: none;
+    align-items: center;
+    gap: 6px;
+    font-size: 12.5px;
+    color: var(--amber);
+    margin-top: 6px;
+  }
+
+  /* Remember device checkbox */
+  .checkbox-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--text);
+    cursor: pointer;
+    user-select: none;
+  }
+  .checkbox-row input { accent-color: var(--primary); width: 14px; height: 14px; }
+  .checkbox-row .hint {
+    color: var(--text-faint);
+    font-size: 11.5px;
+    margin-left: auto;
+  }
+
+  /* Locked-out amber banner */
+  .lockout {
+    display: none;
+    gap: 10px;
+    align-items: flex-start;
+    padding: 12px 14px;
+    background: var(--amber-bg);
+    border: 1px solid var(--amber-soft);
+    border-radius: var(--r-md);
+  }
+  .lockout svg { color: var(--amber); flex-shrink: 0; margin-top: 1px; }
+  .lockout div {
+    font-size: 12.5px;
+    color: #78350F;
+    line-height: 1.5;
+  }
+  .lockout strong { color: var(--amber); font-weight: 600; }
+
+  /* MFA visual states */
+  body[data-mfa="wrong"] .err-line { display: flex; }
+  body[data-mfa="wrong"] .otp-row input {
+    border-color: var(--amber);
+    background: #FFFBEB;
+    color: var(--amber);
+  }
+  body[data-mfa="locked"] .lockout { display: flex; }
+  body[data-mfa="locked"] .otp-row,
+  body[data-mfa="locked"] .mfa-source,
+  body[data-mfa="locked"] .checkbox-row,
+  body[data-mfa="locked"] button[type="submit"],
+  body[data-mfa="locked"] .field-label,
+  body[data-mfa="locked"] .err-line,
+  body[data-mfa="locked"] #toLoginLink { display: none; }
+
+  /* Variant switcher — only when MFA step is active */
+  .variant-switcher {
+    position: fixed;
+    top: 16px; right: 16px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    padding: 3px;
+    display: none;
+    gap: 2px;
+    box-shadow: var(--shadow-sm);
+    z-index: 50;
+  }
+  body[data-step="mfa"] .variant-switcher { display: flex; }
+  .variant-switcher button {
+    padding: 6px 10px;
+    font-size: 11px;
+    color: var(--text-muted);
+    border-radius: var(--r-sm);
+    transition: all 120ms ease;
+    font-family: var(--font-mono);
+  }
+  .variant-switcher button.active {
+    background: var(--bg-subtle);
+    color: var(--text-strong);
+    font-weight: 600;
+  }
+  .variant-switcher .lab {
+    font-size: 10px;
+    color: var(--text-faint);
+    padding: 6px 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
   }
 
   .login-footer {
@@ -152,7 +268,14 @@
   .step-progress .seg.done { background: var(--teal-300); }
 </style>
 </head>
-<body>
+<body data-step="login" data-mfa="default">
+
+<div class="variant-switcher" aria-label="MFA state">
+  <span class="lab">MFA</span>
+  <button class="active" onclick="setMfaState('default')">Default</button>
+  <button onclick="setMfaState('wrong')">Gabim</button>
+  <button onclick="setMfaState('locked')">Bllokuar</button>
+</div>
 
 <div class="admin-card">
   <div class="brand-row">
@@ -188,30 +311,55 @@
   </form>
 
   <!-- Step 2: MFA -->
-  <form class="mfa-step" id="step2" onsubmit="event.preventDefault(); finish();">
-    <div class="field">
-      <label class="field-label">Kodi nga aplikacioni i autentifikimit</label>
-      <div class="otp-row">
-        <input maxlength="1" value="4">
-        <input maxlength="1" value="8">
-        <input maxlength="1" value="2">
-        <input maxlength="1" value="1">
-        <input maxlength="1" value="0">
-        <input maxlength="1" value="6">
+  <form class="mfa-step" id="step2" onsubmit="event.preventDefault(); submitMfa();">
+
+    <div class="lockout">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M8 2.5l6 10.5H2z"/><path d="M8 6.5v3M8 11.5v.01"/>
+      </svg>
+      <div>
+        <strong>Tepër përpjekje.</strong> Për sigurinë e platformës, hyrja u bllokua. Filloni prej fillimit me email + fjalëkalim, ose kontaktoni një admin tjetër.
+        <div style="margin-top: 8px;"><a href="#" onclick="event.preventDefault(); resetAll();" style="color: var(--amber); font-weight: 600;">← Kthehu te hyrja</a></div>
       </div>
     </div>
 
-    <div class="mfa-help">
+    <div class="field">
+      <label class="field-label">Kodi 6-shifror</label>
+      <div class="otp-row">
+        <input maxlength="1" inputmode="numeric" aria-label="Shifra 1">
+        <input maxlength="1" inputmode="numeric" aria-label="Shifra 2">
+        <input maxlength="1" inputmode="numeric" aria-label="Shifra 3">
+        <input maxlength="1" inputmode="numeric" aria-label="Shifra 4">
+        <input maxlength="1" inputmode="numeric" aria-label="Shifra 5">
+        <input maxlength="1" inputmode="numeric" aria-label="Shifra 6">
+      </div>
+      <div class="err-line">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="7" cy="7" r="5.5"/><path d="M7 4v3.5M7 9.6v.01"/>
+        </svg>
+        Kod i pasaktë. Provoni përsëri.
+        <span style="color: var(--text-faint); margin-left: 6px;">(<span id="attemptsLeft">2</span> përpjekje të mbetura)</span>
+      </div>
+    </div>
+
+    <div class="mfa-source">
       <svg class="icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
         <rect x="3" y="6" width="10" height="8" rx="1.5"/>
         <path d="M5 6V4a3 3 0 016 0v2"/>
       </svg>
-      Hyni kodin 6-shifror nga Google Authenticator ose 1Password.
+      Nga Google Authenticator · 1Password
+      <span class="rotates"><span class="dot"></span>rifreskohet 30s</span>
     </div>
 
-    <button class="btn btn-primary btn-lg" type="submit">Hyr në panel</button>
+    <label class="checkbox-row">
+      <input type="checkbox">
+      Beso këtë pajisje për 30 ditë
+      <span class="hint">vetëm pajisjet e administratorit</span>
+    </label>
 
-    <a href="#" onclick="event.preventDefault(); toLogin();" style="font-size: 12px; color: var(--text-muted); text-align: center;">← Kthehu te email + fjalëkalimi</a>
+    <button class="btn btn-primary btn-lg" type="submit" style="margin-top: 4px;">Hyr në panel</button>
+
+    <a href="#" id="toLoginLink" onclick="event.preventDefault(); toLogin();" style="font-size: 12px; color: var(--text-muted); text-align: center;">← Kthehu te email + fjalëkalimi</a>
   </form>
 
   <div class="login-footer">
@@ -230,9 +378,13 @@
     document.getElementById('step1').classList.add('hidden');
     document.getElementById('step2').classList.add('active');
     document.getElementById('title').textContent = 'Verifikim me dy hapa';
-    document.getElementById('subt').textContent = 'Hyni kodin nga aplikacioni juaj i autentifikimit.';
+    document.getElementById('subt').innerHTML = 'Hyni kodin nga aplikacioni juaj i autentifikimit për <span style="color: var(--text); font-weight: 500;">' + (document.getElementById('email').value || 'admini') + '</span>.';
     document.getElementById('seg1').classList.replace('active', 'done');
     document.getElementById('seg2').classList.add('active');
+    document.body.dataset.step = 'mfa';
+    // Prefill sample OTP
+    const sample = ['4', '8', '2', '1', '0', '6'];
+    otps.forEach((o, i) => o.value = sample[i] || '');
   }
   function toLogin() {
     document.getElementById('step1').classList.remove('hidden');
@@ -241,15 +393,42 @@
     document.getElementById('subt').textContent = 'Akses i kufizuar për administratorët e platformës.';
     document.getElementById('seg2').classList.remove('active');
     document.getElementById('seg1').classList.replace('done', 'active');
+    document.body.dataset.step = 'login';
+    setMfaState('default');
+    attempts = 0;
   }
+  function resetAll() { toLogin(); }
   function finish() {
     window.location.href = 'admin.html';
+  }
+
+  // MFA state demo
+  let attempts = 0;
+  function submitMfa() {
+    const sample = '482106';
+    const code = [...otps].map(o => o.value).join('');
+    if (code === sample) { finish(); return; }
+    attempts += 1;
+    const remaining = Math.max(0, 3 - attempts);
+    document.getElementById('attemptsLeft').textContent = remaining;
+    if (remaining === 0) setMfaState('locked');
+    else setMfaState('wrong');
+  }
+  function setMfaState(s) {
+    document.body.dataset.mfa = s;
+    document.querySelectorAll('.variant-switcher button').forEach(b => b.classList.remove('active'));
+    [...document.querySelectorAll('.variant-switcher button')]
+      .find(b => b.getAttribute('onclick').includes(`'${s}'`))
+      ?.classList.add('active');
   }
 
   // OTP auto-advance
   const otps = document.querySelectorAll('.otp-row input');
   otps.forEach((o, i) => {
     o.addEventListener('input', () => {
+      o.value = o.value.replace(/[^\d]/g, '').slice(0, 1);
+      // Recover from wrong state on edit
+      if (document.body.dataset.mfa === 'wrong') setMfaState('default');
       if (o.value && i < otps.length - 1) otps[i + 1].focus();
     });
     o.addEventListener('keydown', (e) => {

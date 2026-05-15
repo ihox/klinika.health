@@ -313,6 +313,67 @@
   .appt.noshow .name { color: var(--red); text-decoration: line-through; text-decoration-thickness: 1px; }
   .appt.noshow .meta::before { content: 'MS'; background: var(--red-bg); color: var(--red); font-size: 9px; padding: 1px 4px; border-radius: 3px; font-weight: 700; margin-right: 4px; }
 
+  /* arrived — checked in; still teal but with a badge */
+  .appt.arrived {
+    background: var(--teal-50);
+    border-color: var(--teal-300);
+    border-left-color: var(--primary);
+  }
+  .appt.arrived .name::after {
+    content: '✓ Arriti';
+    display: inline-block;
+    margin-left: 6px;
+    font-size: 9px;
+    background: var(--primary-soft);
+    color: var(--teal-800);
+    border: 1px solid var(--teal-200);
+    padding: 0 5px;
+    border-radius: 999px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    vertical-align: 1px;
+  }
+
+  /* in-progress — doctor seeing patient; subtle pulse on the border accent */
+  .appt.in-progress {
+    background: var(--teal-50);
+    border-color: var(--teal-400);
+    border-left: 3px solid var(--primary);
+    animation: appt-inprogress-pulse 2s ease-in-out infinite;
+  }
+  .appt.in-progress .name::after {
+    content: 'Në vizitë';
+    display: inline-block;
+    margin-left: 6px;
+    font-size: 9px;
+    background: var(--primary);
+    color: white;
+    padding: 0 5px;
+    border-radius: 999px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    vertical-align: 1px;
+  }
+  @keyframes appt-inprogress-pulse {
+    0%, 100% { box-shadow: var(--shadow-xs), 0 0 0 0 rgba(13,148,136,0.22); }
+    50%      { box-shadow: var(--shadow-xs), 0 0 0 4px rgba(13,148,136,0); }
+  }
+
+  /* cancelled — very muted, strikethrough */
+  .appt.cancelled {
+    background: var(--bg-subtle);
+    border-color: var(--border);
+    border-left: 3px solid var(--border-strong);
+    opacity: 0.55;
+  }
+  .appt.cancelled .name {
+    color: var(--text-faint);
+    text-decoration: line-through;
+    text-decoration-thickness: 1px;
+  }
+  .appt.cancelled .meta { color: var(--text-faint); }
+  .appt.cancelled .meta::before { content: 'AN'; background: var(--bg-muted); color: var(--text-muted); font-size: 9px; padding: 1px 4px; border-radius: 3px; font-weight: 700; margin-right: 4px; }
+
   .appt.scheduled-warm {
     border-left-color: var(--accent-500);
     border-color: #FED7AA;
@@ -930,6 +991,144 @@
   }
   .aa-divider { height: 1px; background: var(--border-soft); }
 
+  .aa-section-label {
+    padding: 8px 14px 4px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text-faint);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    font-weight: 600;
+  }
+
+  /* ===========================================================
+     Walk-in cards live INSIDE the today column, in a right-side
+     lane next to booked appointments. Same size/scale as `.appt`
+     so the eye reads them as siblings — dashed left accent and a
+     ↻ glyph mark them as no-appointment visits.
+     =========================================================== */
+
+  /* Today column gets a two-lane vertical layout when walk-ins exist.
+     Booked appointments → left half. Walk-ins → right half. Soft
+     vertical divider at center makes the split readable without a
+     header. */
+  .day-col.today.has-walkins {
+    background-image:
+      /* center divider */
+      linear-gradient(to right,
+        transparent calc(50% - 0.5px),
+        var(--border) calc(50% - 0.5px),
+        var(--border) calc(50% + 0.5px),
+        transparent calc(50% + 0.5px)),
+      /* 10-min faint divisions */
+      repeating-linear-gradient(
+        to bottom,
+        transparent 0,
+        transparent 19px,
+        var(--border-soft) 19px,
+        var(--border-soft) 20px
+      ),
+      /* hour line — bolder */
+      repeating-linear-gradient(
+        to bottom,
+        transparent 0,
+        transparent 118px,
+        var(--border-strong) 118px,
+        var(--border-strong) 120px
+      );
+  }
+  .day-col.today.has-walkins .appt:not(.walkin) {
+    right: calc(50% + 2px);
+  }
+  .appt.walkin {
+    left: calc(50% + 2px);
+    right: 6px;
+    border: 1px solid var(--accent-100);
+    border-left: 3px dashed var(--accent-500);
+    background: #FFFBF5;
+  }
+  .appt.walkin .name {
+    color: var(--text-strong);
+  }
+  .appt.walkin .name::before {
+    content: '';
+    display: inline-block;
+    width: 9px;
+    height: 9px;
+    margin-right: 5px;
+    vertical-align: -1px;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23EA580C' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M3 8a5 5 0 0 1 8.5-3.5L13 6'/><path d='M13 2.5V6h-3.5'/></svg>");
+    background-repeat: no-repeat;
+    background-size: contain;
+  }
+  .appt.walkin .meta .dot { background: var(--accent-500); }
+  .appt.walkin:hover { border-color: var(--accent-400); }
+
+  /* Walk-in status variants — re-skin the base appt states */
+  .appt.walkin.in-progress {
+    background: linear-gradient(180deg, #FFF7ED 0%, var(--bg-elevated) 100%);
+    border-color: var(--accent-400);
+    border-left: 3px solid var(--accent-500);
+  }
+  .appt.walkin.in-progress .name::after {
+    content: 'Në vizitë';
+    background: var(--accent-500);
+    color: white;
+    border: none;
+  }
+  .appt.walkin.completed {
+    background: var(--green-bg);
+    border-color: var(--green-soft);
+    border-left: 3px solid var(--green);
+    opacity: 0.85;
+  }
+  .appt.walkin.completed .name { color: var(--green); }
+  .appt.walkin.completed .name::before {
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%2315803D' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'><path d='M3 8.5l3 3 7-7'/></svg>");
+  }
+  .appt.walkin.completed .meta::before { content: ''; margin: 0; padding: 0; }
+
+  /* Tiny lane indicator in today's column header — only when walk-ins exist.
+     Two-color dots subtly hint at the split. */
+  .cal-head .col-head.today .lane-hint {
+    display: none;
+    align-items: center;
+    gap: 4px;
+    margin-top: 4px;
+    font-size: 9px;
+    color: var(--text-faint);
+    font-family: var(--font-mono);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  .cal-head .col-head.today.has-walkins .lane-hint { display: inline-flex; }
+  .lane-hint .lh {
+    display: inline-flex; align-items: center; gap: 3px;
+  }
+  .lane-hint .lh .sw {
+    width: 8px; height: 4px; border-radius: 1px;
+  }
+  .lane-hint .lh-booked .sw { background: var(--primary); }
+  .lane-hint .lh-walkin .sw { background: var(--accent-500); }
+  .lane-hint .sep { color: var(--border-strong); }
+
+  /* "+ Pa termin" button (CTA in toolbar) */
+  .btn-walkin {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    padding: 7px 12px;
+    border-radius: var(--r-md);
+    border: 1px dashed var(--primary);
+    background: var(--teal-50);
+    color: var(--primary-dark);
+    transition: all 120ms ease;
+  }
+  .btn-walkin:hover { background: var(--primary-soft); border-style: solid; }
+  .btn-walkin .ic { color: var(--primary); }
+
   .bottom-pad { height: 16px; }
 </style>
 </head>
@@ -947,8 +1146,6 @@
 
   <nav class="topbar-nav">
     <a href="receptionist.html" class="nav-link active">Kalendari</a>
-    <a href="#" class="nav-link">Pacientët</a>
-    <a href="clinic-settings.html" class="nav-link">Cilësimet</a>
   </nav>
 
   <div class="topbar-spacer"></div>
@@ -961,22 +1158,58 @@
     <kbd>⌘K</kbd>
   </div>
 
-  <button class="topbar-user">
-    <div class="avatar">AR</div>
-    <span class="name">Anila R.</span>
-    <span class="chev">▾</span>
-  </button>
+  <div class="user-wrap" id="userWrap">
+    <button class="topbar-user" onclick="toggleUserMenu(event)">
+      <div class="avatar" style="background: #5B21B6;">EK</div>
+      <span class="name">Erëblirë K.</span>
+      <span class="chev">▾</span>
+    </button>
+    <div class="user-menu" role="menu">
+      <div class="um-head">
+        <div class="name">Erëblirë Krasniqi</div>
+        <div class="email">ereblire@donetamed.com</div>
+        <div class="roles">
+          <span class="chip-role reception">Recepsioniste</span>
+        </div>
+      </div>
+      <a href="profili.html" class="um-item" role="menuitem">
+        <svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="8" cy="5.5" r="2.8"/>
+          <path d="M2.5 14c0-3 2.5-4.5 5.5-4.5s5.5 1.5 5.5 4.5"/>
+        </svg>
+        Profili im
+      </a>
+      <div class="um-divider"></div>
+      <a href="clinic-login.html" class="um-item logout" role="menuitem">
+        <svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M10 4V2.5a1 1 0 0 0-1-1H3a1 1 0 0 0-1 1v11a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V12"/>
+          <path d="M6.5 8h8M11.5 5l3 3-3 3"/>
+        </svg>
+        Dilni
+      </a>
+    </div>
+  </div>
 </header>
 
 <main class="page">
   <!-- Greeting -->
   <div class="page-header">
     <div>
-      <div class="greeting">Mirëdita, Anila.</div>
+      <div class="greeting">Mirëdita, Erëblirë.</div>
       <div class="subtitle">E martë, 14 maj 2026 · DonetaMED, Prizren</div>
     </div>
     <div class="row" style="gap: 8px;">
       <button class="btn btn-secondary btn-sm">Eksporto ditën</button>
+      <button class="btn-walkin" onclick="openWalkinPicker(event)" title="Shto pacient që erdhi pa termin">
+        <span class="ic">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 8a5 5 0 0 1 8.5-3.5L13 6"/>
+            <path d="M13 2.5V6h-3.5"/>
+            <circle cx="8" cy="11.5" r="0.8" fill="currentColor"/>
+          </svg>
+        </span>
+        Pacient pa termin
+      </button>
       <button class="btn btn-primary btn-sm">+ Termin i ri</button>
     </div>
   </div>
@@ -1075,7 +1308,7 @@
     <!-- Grid — today + next 5 open days. Sunday skipped per clinic settings. -->
     <div class="cal-grid">
       <div class="cal-head time-col-head"></div>
-      <div class="cal-head col-head today"><div class="dow">Mar · sot</div><div class="date">14</div></div>
+      <div class="cal-head col-head today"><div class="dow">Mar · sot</div><div class="date">14</div><div class="lane-hint"><span class="lh lh-booked"><span class="sw"></span>Termine</span><span class="sep">·</span><span class="lh lh-walkin"><span class="sw"></span>Pa termin</span></div></div>
       <div class="cal-head col-head"><div class="dow">Mër</div><div class="date">15</div></div>
       <div class="cal-head col-head"><div class="dow">Enj</div><div class="date">16</div></div>
       <div class="cal-head col-head"><div class="dow">Pre</div><div class="date">17</div></div>
@@ -1099,7 +1332,22 @@
            See "Mon 20" column below, which appears after Sat in the grid. -->
 
       <!-- Tue 14 (today) -->
-      <div class="day-col today" data-iso="2026-05-14" data-day="14.05.2026" data-dow="E martë, 14 maj">
+      <div class="day-col today has-walkins" data-iso="2026-05-14" data-day="14.05.2026" data-dow="E martë, 14 maj">
+
+        <!-- WALK-INS (right lane) -->
+        <div class="appt walkin completed" style="top: 24px; height: 24px;" onclick="openWalkinActions(event, this)" data-name="Liam Berisha" data-arr="10:12" data-status="completed">
+          <div class="name">Liam Berisha</div>
+          <div class="meta">10:12</div>
+        </div>
+        <div class="appt walkin in-progress" style="top: 214px; height: 36px;" onclick="openWalkinActions(event, this)" data-name="Ema Krasniqi" data-arr="11:47" data-status="in_progress">
+          <div class="name">Ema Krasniqi</div>
+          <div class="meta">11:47</div>
+        </div>
+        <div class="appt walkin" style="top: 470px; height: 24px;" onclick="openWalkinActions(event, this)" data-name="Dorian Hoxha" data-arr="13:55" data-status="arrived">
+          <div class="name">Dorian Hoxha</div>
+          <div class="meta">13:55</div>
+        </div>
+
         <div class="appt completed" style="top: 0px; height: 30px;">
           <div class="name">Era Berisha</div>
           <div class="meta">10:00 · 15 min</div>
@@ -1385,12 +1633,14 @@
 <!-- Toast -->
 <div class="toast" id="toast"><div class="check">✓</div><span>U ruajt.</span></div>
 
-<!-- Appointment action popover -->
+<!-- Appointment action popover (right-click / tap-and-hold on appt card) -->
 <div class="appt-actions" id="apptActions" role="menu" aria-label="Veprime për terminin">
   <div class="aa-head">
     <div class="when" id="aaWhen">—</div>
     <div class="who" id="aaWho">—</div>
   </div>
+
+  <div class="aa-section-label">Lëviz në</div>
   <button type="button" class="aa-action" id="aaReschedule" onclick="apptReschedule()">
     <svg class="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
       <rect x="2" y="3" width="12" height="11" rx="1.5"/>
@@ -1399,19 +1649,56 @@
     </svg>
     Riprogramo terminin
   </button>
-  <button type="button" class="aa-action danger" id="aaNoshow" onclick="apptMarkNoshow()">
+
+  <div class="aa-divider"></div>
+  <div class="aa-section-label">Gjendja e vizitës</div>
+
+  <button type="button" class="aa-action" onclick="apptSetStatus('arrived')">
+    <svg class="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="8" cy="8" r="6"/>
+      <path d="M5.5 8.2l1.7 1.7L11 6"/>
+    </svg>
+    Shëno si arritur
+  </button>
+
+  <button type="button" class="aa-action" onclick="apptSetStatus('in_progress')">
+    <svg class="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="8" cy="8" r="6"/>
+      <path d="M8 4.5V8l2.5 1.5"/>
+    </svg>
+    Filloi vizita
+  </button>
+
+  <button type="button" class="aa-action" onclick="apptSetStatus('completed')">
+    <svg class="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="color: var(--green);">
+      <path d="M2 8.5l3.5 3.5L14 4"/>
+    </svg>
+    Shëno si kryer
+  </button>
+
+  <button type="button" class="aa-action danger" onclick="apptSetStatus('no_show')">
     <svg class="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
       <circle cx="8" cy="8" r="6"/>
       <path d="M5 5l6 6M11 5l-6 6"/>
     </svg>
-    Shëno si mungesë
+    Mungoi
   </button>
-  <div class="aa-divider"></div>
-  <button type="button" class="aa-action" onclick="closeApptActions()">
+
+  <button type="button" class="aa-action" onclick="apptSetStatus('cancelled')" style="color: var(--text-muted);">
     <svg class="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M4 4l8 8M12 4l-8 8"/>
+      <circle cx="8" cy="8" r="6"/>
+      <path d="M4.5 4.5l7 7"/>
     </svg>
-    Mbyll
+    Anulo
+  </button>
+
+  <div class="aa-divider"></div>
+
+  <button type="button" class="aa-action danger" onclick="apptDelete()">
+    <svg class="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M3 4h10M6 4V2.5a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1V4M4.5 4l.5 9a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1l.5-9"/>
+    </svg>
+    Fshij terminin
   </button>
 </div>
 
@@ -1899,34 +2186,13 @@
     const day  = col?.dataset.day || '';
     const dow  = col?.dataset.dow || '';
     const isCompleted = apptEl.classList.contains('completed');
-    const isNoshow    = apptEl.classList.contains('noshow');
 
     document.getElementById('aaWho').textContent = name;
     document.getElementById('aaWhen').textContent = (dow ? dow + ' · ' : '') + (meta || day);
 
-    // Past visits can't be rescheduled / re-marked; the noshow can be undone
+    // Past visits can't be rescheduled
     const rescheduleBtn = document.getElementById('aaReschedule');
-    const noshowBtn = document.getElementById('aaNoshow');
     rescheduleBtn.style.display = isCompleted ? 'none' : 'flex';
-    if (isNoshow) {
-      noshowBtn.innerHTML = `
-        <svg class="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M2 8l4 4 8-8"/>
-        </svg>
-        Hiq mungesën`;
-      noshowBtn.classList.remove('danger');
-    } else if (isCompleted) {
-      noshowBtn.style.display = 'none';
-    } else {
-      noshowBtn.style.display = 'flex';
-      noshowBtn.classList.add('danger');
-      noshowBtn.innerHTML = `
-        <svg class="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="8" cy="8" r="6"/>
-          <path d="M5 5l6 6M11 5l-6 6"/>
-        </svg>
-        Shëno si mungesë`;
-    }
 
     // Position the popover next to the appointment (prefer right side)
     const pop = document.getElementById('apptActions');
@@ -1974,15 +2240,91 @@
     }
     showToast(`Po riprogramohet termini i ${name}`);
   }
-  function apptMarkNoshow() {
+  function apptMarkNoshow() { apptSetStatus('no_show'); }
+
+  // New unified status setter — supports the full lifecycle:
+  //   scheduled → arrived → in_progress → completed
+  //   plus alternates: cancelled, no_show
+  function apptSetStatus(status) {
     if (!activeApptEl) return;
     const name = activeApptEl.querySelector('.name')?.textContent.trim() || '';
-    const wasNoshow = activeApptEl.classList.contains('noshow');
-    activeApptEl.classList.toggle('noshow');
-    activeApptEl.classList.remove('completed', 'scheduled-warm');
+    const el = activeApptEl;
+    // Strip all status modifier classes; re-apply target.
+    el.classList.remove('completed', 'noshow', 'cancelled', 'arrived', 'in-progress', 'scheduled-warm');
+    let msg = '';
+    switch (status) {
+      case 'arrived':
+        el.classList.add('arrived');
+        msg = `${name} u shënua si arritur`;
+        break;
+      case 'in_progress':
+        el.classList.add('in-progress');
+        msg = `Vizita e ${name} filloi`;
+        break;
+      case 'completed':
+        el.classList.add('completed');
+        msg = `${name} u shënua si kryer`;
+        break;
+      case 'no_show':
+        el.classList.add('noshow');
+        msg = `${name} u shënua si mungesë`;
+        break;
+      case 'cancelled':
+        el.classList.add('cancelled');
+        msg = `Termini i ${name} u anulua`;
+        break;
+    }
     closeApptActions();
-    showToast(wasNoshow ? `Mungesa u hoq për ${name}` : `${name} u shënua si mungesë`);
+    showToast(msg);
   }
+
+  function apptDelete() {
+    if (!activeApptEl) return;
+    const name = activeApptEl.querySelector('.name')?.textContent.trim() || '';
+    activeApptEl.style.opacity = '0';
+    activeApptEl.style.transform = 'scale(0.96)';
+    const el = activeApptEl;
+    setTimeout(() => el.remove(), 180);
+    closeApptActions();
+    showToast(`Termini i ${name} u fshi. (Anulo)`);
+  }
+
+  // ============================================================
+  // Walk-in band: + Pa termin button and chip actions
+  // ============================================================
+  function openWalkinPicker(e) {
+    if (e) e.stopPropagation();
+    // Re-uses the existing patient picker but anchored mid-screen and
+    // without a slot/time context (walk-ins skip time selection).
+    const pop = document.getElementById('pickerPopover');
+    document.getElementById('pickerCtx').textContent = 'Pacient pa termin · ' + new Date().toLocaleTimeString('sq-AL', {hour:'2-digit', minute:'2-digit'});
+    document.getElementById('pickerSearch').value = '';
+    onPickerSearch('');
+    pop.classList.add('open');
+    pop.dataset.mode = 'walkin';
+    // Center horizontally near top (after display:flex applied)
+    requestAnimationFrame(() => {
+      const w = pop.offsetWidth;
+      pop.style.left = Math.max(16, (window.innerWidth - w) / 2) + 'px';
+      pop.style.top = '160px';
+      document.getElementById('pickerSearch').focus();
+    });
+  }
+
+  function openWalkinActions(e, chip) {
+    e.stopPropagation();
+    const pop = document.getElementById('apptActions');
+    // Stub: re-use the same menu (walk-ins share the lifecycle, just no "Riprogramo")
+    activeApptEl = chip;
+    document.getElementById('aaWhen').textContent = 'Pa termin · erdhi ' + (chip.dataset.arr || '—');
+    document.getElementById('aaWho').textContent = chip.dataset.name || '—';
+    document.getElementById('aaReschedule').style.display = 'none';
+    pop.classList.add('open');
+    const r = chip.getBoundingClientRect();
+    pop.style.left = Math.min(window.innerWidth - 260, r.left) + 'px';
+    pop.style.top  = (r.bottom + 6) + 'px';
+  }
+
   // Close popover on outside click / Esc
   document.addEventListener('click', (e) => {
     const pop = document.getElementById('apptActions');

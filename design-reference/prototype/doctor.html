@@ -42,7 +42,24 @@
   .appt-row .name { font-size: 13px; font-weight: 500; color: var(--text); }
   .appt-row.done .name { color: var(--text-muted); }
   .appt-row .name .age { color: var(--text-faint); font-weight: 400; margin-left: 6px; font-size: 12px; }
+  .appt-row .name .wn-mark {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px; height: 16px;
+    color: var(--primary-dark);
+    background: var(--primary-soft);
+    border: 1px solid var(--teal-200);
+    border-radius: 4px;
+    margin-right: 6px;
+    vertical-align: -3px;
+  }
+  .appt-row.done .name .wn-mark { background: var(--bg-subtle); color: var(--text-faint); border-color: var(--border); }
   .appt-row .reason { font-size: 11px; color: var(--text-muted); }
+  .appt-row .reason .wn-tag {
+    color: var(--primary-dark);
+    font-weight: 500;
+  }
   .appt-row.next {
     background: linear-gradient(90deg, var(--primary-soft) 0%, transparent 100%);
     border-left: 2px solid var(--primary);
@@ -265,9 +282,8 @@
   </a>
 
   <nav class="topbar-nav">
-    <a href="doctor.html" class="nav-link active">Kalendari</a>
-    <a href="#" class="nav-link">Pacientët</a>
-    <a href="#" class="nav-link">Raportet</a>
+    <a href="doctor.html" class="nav-link active">Pamja e ditës</a>
+    <a href="chart.html" class="nav-link">Pacientët</a>
     <a href="clinic-settings.html" class="nav-link">Cilësimet</a>
   </nav>
 
@@ -281,11 +297,37 @@
     <kbd>⌘K</kbd>
   </div>
 
-  <button class="topbar-user">
-    <div class="avatar">TS</div>
-    <span class="name">Dr. Taulant Shala</span>
-    <span class="chev">▾</span>
-  </button>
+  <div class="user-wrap">
+    <button class="topbar-user" onclick="toggleUserMenu(event)">
+      <div class="avatar">TS</div>
+      <span class="name">Dr. Taulant Shala</span>
+      <span class="chev">▾</span>
+    </button>
+    <div class="user-menu" role="menu">
+      <div class="um-head">
+        <div class="name">Dr. Taulant Shala</div>
+        <div class="email">taulant@donetamed.com</div>
+        <div class="roles">
+          <span class="chip-role doctor">Mjeku</span>
+          <span class="chip-role admin">Administrator i klinikës</span>
+        </div>
+      </div>
+      <a href="profili.html" class="um-item" role="menuitem">
+        <svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="8" cy="5.5" r="2.8"/><path d="M2.5 14c0-3 2.5-4.5 5.5-4.5s5.5 1.5 5.5 4.5"/>
+        </svg>
+        Profili im
+      </a>
+      <div class="um-divider"></div>
+      <a href="clinic-login.html" class="um-item logout" role="menuitem">
+        <svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M10 4V2.5a1 1 0 0 0-1-1H3a1 1 0 0 0-1 1v11a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V12"/>
+          <path d="M6.5 8h8M11.5 5l3 3-3 3"/>
+        </svg>
+        Dilni
+      </a>
+    </div>
+  </div>
 </header>
 
 <main class="page">
@@ -293,6 +335,14 @@
     <div>
       <div class="gr">Mirëdita, <span class="accent">Dr. Taulant Shala</span>.</div>
       <div class="sub">E martë, 14 maj 2026 · 5 vizita të kryera · 9 të mbetura</div>
+      <div class="sub" style="margin-top: 2px; font-size: 12px; color: var(--text-faint);">
+        <span style="color: var(--text-muted);"><strong style="color: var(--text); font-weight: 600;">9</strong> me termin</span>
+        <span style="opacity: 0.5; margin: 0 6px;">·</span>
+        <span style="color: var(--primary-dark);">
+          <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -1px; margin-right: 2px;"><path d="M3 8a5 5 0 0 1 8.5-3.5L13 6"/><path d="M13 2.5V6h-3.5"/></svg>
+          <strong style="color: var(--text); font-weight: 600;">3</strong> pa termin
+        </span>
+      </div>
     </div>
     <div class="refresh-pill">
       <span class="dot"></span>
@@ -307,7 +357,7 @@
       <section class="panel">
         <div class="panel-head">
           <h3>Terminet e sotit</h3>
-          <span class="meta">14 gjithsej · 5 të kryera</span>
+          <span class="meta">17 vizita · 5 të kryera · 3 pa termin</span>
         </div>
         <div class="quick-search-mini">
           <span class="icon">
@@ -323,6 +373,14 @@
             <div><div class="name">Era Berisha <span class="age">4v 2m</span></div><div class="reason">Tonsillopharyngitis acuta</div></div>
             <span class="chip">A · 15€</span>
           </div>
+          <div class="appt-row done" title="Pacient pa termin">
+            <div class="time">10:12</div><div class="status-dot"></div>
+            <div>
+              <div class="name"><span class="wn-mark" title="Pa termin"><svg width="9" height="9" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8a5 5 0 0 1 8.5-3.5L13 6"/><path d="M13 2.5V6h-3.5"/></svg></span>Liam Berisha <span class="age">6m</span></div>
+              <div class="reason"><span class="wn-tag">Pa termin</span> · ethe, përgjumje</div>
+            </div>
+            <span class="chip">A · 15€</span>
+          </div>
           <div class="appt-row done">
             <div class="time">10:30</div><div class="status-dot"></div>
             <div><div class="name">Dion Hoxha <span class="age">7m</span></div><div class="reason">Kontroll i rregullt</div></div>
@@ -331,6 +389,14 @@
           <div class="appt-row done">
             <div class="time">11:10</div><div class="status-dot"></div>
             <div><div class="name">Aria Kelmendi <span class="age">1v 3m</span></div><div class="reason">Kontroll i rregullt</div></div>
+            <span class="chip">A · 15€</span>
+          </div>
+          <div class="appt-row done" title="Pacient pa termin">
+            <div class="time">11:47</div><div class="status-dot"></div>
+            <div>
+              <div class="name"><span class="wn-mark" title="Pa termin"><svg width="9" height="9" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8a5 5 0 0 1 8.5-3.5L13 6"/><path d="M13 2.5V6h-3.5"/></svg></span>Ema Krasniqi <span class="age">2v 10m</span></div>
+              <div class="reason"><span class="wn-tag">Pa termin</span> · plagë e vogël në gju</div>
+            </div>
             <span class="chip">A · 15€</span>
           </div>
           <div class="appt-row done" style="opacity: 0.6;">
@@ -342,6 +408,14 @@
             <div class="time">12:50</div><div class="status-dot"></div>
             <div><div class="name">Lena Hoti <span class="age">5v 8m</span></div><div class="reason">Bronkit akut · kontroll</div></div>
             <span class="chip">A · 15€</span>
+          </div>
+          <div class="appt-row" title="Pacient pa termin">
+            <div class="time">13:55</div><div class="status-dot" style="background: var(--primary); box-shadow: 0 0 0 3px var(--primary-soft);"></div>
+            <div>
+              <div class="name"><span class="wn-mark" title="Pa termin"><svg width="9" height="9" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8a5 5 0 0 1 8.5-3.5L13 6"/><path d="M13 2.5V6h-3.5"/></svg></span>Dorian Hoxha <span class="age">4v 2m</span></div>
+              <div class="reason"><span class="wn-tag">Pa termin</span> · kollitje, temperaturë 38.2</div>
+            </div>
+            <span class="chip chip-teal"><span class="dot"></span>Arriti</span>
           </div>
           <div class="appt-row next">
             <div class="time">14:20</div><div class="status-dot"></div>

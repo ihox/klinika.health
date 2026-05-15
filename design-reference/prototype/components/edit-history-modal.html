@@ -173,6 +173,10 @@
   .val.then code { color: var(--text-muted); }
   .val.now-code code { background: var(--primary-soft); color: var(--teal-800); }
 
+  /* Chip-aware diff cells — don't apply line-through to chips themselves */
+  .val.role-val { text-decoration: none !important; }
+  .diff-row.then .val.role-val .chip-role { opacity: 0.55; }
+
   /* Truncate */
   .val.truncate {
     display: -webkit-box;
@@ -280,12 +284,43 @@
   <header>
     <div>
       <h3 id="histTitle">Historia e ndryshimeve <span class="vt">· Vizita e 14.05.2026</span></h3>
-      <div class="sub">Era Krasniqi · <span id="evCount">2</span> ngjarje</div>
+      <div class="sub">Era Krasniqi · <span id="evCount">3</span> ngjarje</div>
     </div>
     <button class="x" aria-label="Mbyll" onclick="window.close()">×</button>
   </header>
 
   <div class="hist-body">
+
+    <!-- Role array diff (always shown) -->
+    <div class="hist-event">
+      <div class="rail"><span class="dot"></span><span class="line"></span></div>
+      <div class="body">
+        <div>
+          <span class="who">Dr. Taulant Shala</span>
+          <span class="when">14.05.2026 · 16:22</span>
+          <span class="ip">94.140.•.•</span>
+        </div>
+
+        <div class="field-diff">
+          <div class="fld-head">Rolet · Erëblirë Krasniqi</div>
+          <div class="diff-row then">
+            <div class="key">më parë</div>
+            <div class="val role-val">
+              <span class="chip-role reception sm">Recepsioniste</span>
+            </div>
+          </div>
+          <div class="diff-row now">
+            <div class="key">tani</div>
+            <div class="val role-val">
+              <span class="role-chip-list">
+                <span class="chip-role reception sm">Recepsioniste</span>
+                <span class="chip-role admin sm">Administrator</span>
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
 
     <!-- Short: 2 events -->
     <div data-only="short" class="hist-event">
@@ -383,7 +418,7 @@
     [...document.querySelectorAll('.variant-switcher button')]
       .find(b => b.getAttribute('onclick').includes(`'${v}'`))
       ?.classList.add('active');
-    document.getElementById('evCount').textContent = v === 'long' ? '2' : '2';
+    document.getElementById('evCount').textContent = v === 'long' ? '3' : '3';
   }
   function toggleExpand(btn) {
     const v = btn.previousElementSibling;

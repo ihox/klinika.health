@@ -518,14 +518,50 @@
     <kbd>⌘K</kbd>
   </div>
 
-  <button class="topbar-user">
-    <div class="avatar" style="background: var(--text-strong);">AD</div>
-    <div style="display: flex; flex-direction: column; align-items: flex-start; line-height: 1.2;">
-      <span class="name">Andi Dushi</span>
-      <span class="role-tag">Platform Admin</span>
+  <div class="user-wrap">
+    <button class="topbar-user" onclick="toggleUserMenu(event)">
+      <div class="avatar" style="background: var(--text-strong);">AD</div>
+      <div style="display: flex; flex-direction: column; align-items: flex-start; line-height: 1.2;">
+        <span class="name">Andi Dushi</span>
+        <span class="role-tag">Platform Admin</span>
+      </div>
+      <span class="chev">▾</span>
+    </button>
+    <div class="user-menu" role="menu">
+      <div class="um-head">
+        <div class="name">Andi Dushi</div>
+        <div class="role">Platform admin · Klinika.health</div>
+      </div>
+      <a href="#" class="um-item" role="menuitem">
+        <svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="8" cy="5.5" r="2.8"/><path d="M2.5 14c0-3 2.5-4.5 5.5-4.5s5.5 1.5 5.5 4.5"/>
+        </svg>
+        Profili im
+      </a>
+      <a href="#" class="um-item" role="menuitem">
+        <svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="2" y="4" width="12" height="8" rx="1.5"/>
+          <path d="M4.5 7h.01M6.5 7h.01M8.5 7h.01M10.5 7h.01M4.5 9.5h7"/>
+        </svg>
+        Shkurtoret e tastierës
+      </a>
+      <a href="#" class="um-item" role="menuitem">
+        <svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="8" cy="8" r="6"/>
+          <path d="M6 6a2 2 0 1 1 2.5 1.9c-.4.1-.5.4-.5.7v.4M8 11.5v.01"/>
+        </svg>
+        Ndihmë &amp; mbështetje
+      </a>
+      <div class="um-divider"></div>
+      <a href="admin-login.html" class="um-item logout" role="menuitem">
+        <svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M10 4V2.5a1 1 0 0 0-1-1H3a1 1 0 0 0-1 1v11a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V12"/>
+          <path d="M6.5 8h8M11.5 5l3 3-3 3"/>
+        </svg>
+        Dilni
+      </a>
     </div>
-    <span class="chev">▾</span>
-  </button>
+  </div>
 </header>
 
 <main class="page">
@@ -579,7 +615,7 @@
           <td class="mono">donetamed.klinika.health</td>
           <td><span class="chip chip-green"><span class="dot"></span>Aktive</span></td>
           <td class="right num">11,163</td>
-          <td class="right num">2</td>
+          <td class="right num">3</td>
           <td class="num">14.02.2024</td>
           <td class="right"><span class="row-arrow">→</span></td>
         </tr>
@@ -654,7 +690,7 @@
           <div class="row"><span class="k">Pacientë</span><span class="v num" style="font-size: 16px;">11,163</span></div>
           <div class="row"><span class="k">Vizita gjithsej</span><span class="v num" style="font-size: 16px;">220,465</span></div>
           <div class="row"><span class="k">Vizita këtë muaj</span><span class="v num">412</span></div>
-          <div class="row"><span class="k">Përdorues aktivë</span><span class="v num">2 / 2</span></div>
+          <div class="row"><span class="k">Përdorues aktivë</span><span class="v num">3 / 3</span></div>
           <div class="row"><span class="k">Hapësirë e përdorur</span><span class="v num">~1.2 GB</span></div>
           <div class="row"><span class="k">Backup i fundit</span><span class="v">~6 orë më parë</span></div>
           <div class="row"><span class="k">Plan</span><span class="v">Pediatri Solo · €49 / muaj</span></div>
@@ -666,27 +702,48 @@
     <!-- Users -->
     <div class="card" style="margin-bottom: 20px;">
       <div class="card-header">
-        <h3>Përdoruesit (2)</h3>
+        <h3>Përdoruesit (3)</h3>
         <span class="meta">Menaxhohen nga vetë klinika · vetëm shfaqje këtu</span>
       </div>
       <table class="mini-table">
         <thead>
-          <tr><th>Emri</th><th>Roli</th><th>Email</th><th>Statusi</th><th>Hyrja e fundit</th></tr>
+          <tr><th>Emri</th><th>Rolet</th><th>Email</th><th>Statusi</th><th>Hyrja e fundit</th></tr>
         </thead>
         <tbody>
           <tr>
             <td class="nm">Dr. Taulant Shala</td>
-            <td class="role">Mjek · Admin</td>
+            <td>
+              <span class="role-chip-list">
+                <span class="chip-role doctor sm">Mjeku</span>
+                <span class="chip-role admin sm">Administrator</span>
+              </span>
+            </td>
             <td class="mono" style="font-size: 12px; color: var(--text-muted);">taulant@donetamed.com</td>
             <td><span class="chip chip-green"><span class="dot"></span>Aktiv</span></td>
             <td class="num" style="color: var(--text-muted);">2 orë më parë</td>
           </tr>
           <tr>
             <td class="nm">Erëblirë Krasniqi</td>
-            <td class="role">Infermierja</td>
+            <td>
+              <span class="role-chip-list">
+                <span class="chip-role reception sm">Recepsioniste</span>
+              </span>
+            </td>
             <td class="mono" style="font-size: 12px; color: var(--text-muted);">ereblire@donetamed.com</td>
             <td><span class="chip chip-green"><span class="dot"></span>Aktiv</span></td>
             <td class="num" style="color: var(--text-muted);">30 min më parë</td>
+          </tr>
+          <tr>
+            <td class="nm">Blerta Gashi</td>
+            <td>
+              <span class="role-chip-list">
+                <span class="chip-role reception sm">Recepsioniste</span>
+                <span class="chip-role admin sm">Administrator</span>
+              </span>
+            </td>
+            <td class="mono" style="font-size: 12px; color: var(--text-muted);">blerta@donetamed.com</td>
+            <td><span class="chip chip-green"><span class="dot"></span>Aktiv</span></td>
+            <td class="num" style="color: var(--text-muted);">2 orë më parë</td>
           </tr>
         </tbody>
       </table>
@@ -1028,6 +1085,8 @@
     toastTimer = setTimeout(() => $('toast').classList.remove('show'), 3000);
   }
 </script>
+
+<script src="shortcuts.js"></script>
 
 </body>
 </html>

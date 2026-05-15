@@ -53,12 +53,27 @@ module.exports = {
         success: { DEFAULT: '#15803D', bg: '#DCFCE7', soft: '#BBF7D0' },
         warning: { DEFAULT: '#B45309', bg: '#FEF3C7', soft: '#FDE68A' },
         danger:  { DEFAULT: '#B91C1C', bg: '#FEE2E2', soft: '#FECACA' },
-        // Sex-specific WHO growth-chart accents. Standard pediatric
-        // convention: blue for boys, pink for girls. `soft` tints back
-        // the "Djalë" / "Vajzë" chip; `strong` is the patient line
-        // and the dot fill at the current measurement.
-        'chart-male':   { DEFAULT: '#4A90D9', soft: '#DCEAF7', strong: '#2F6FB8' },
-        'chart-female': { DEFAULT: '#E8728E', soft: '#FBE0E6', strong: '#B84966' },
+
+        // Role-chip family (canonical) — distinct from status & brand chips
+        // so a user's authority is unambiguous at a glance.
+        role: {
+          doctor:    { DEFAULT: '#3730A3', bg: '#EEF2FF', border: '#C7D2FE' },
+          reception: { DEFAULT: '#5B21B6', bg: '#F5F3FF', border: '#DDD6FE' },
+          admin:     { DEFAULT: '#334155', bg: '#F1F5F9', border: '#CBD5E1' },
+        },
+
+        // Pediatric WHO growth chart — patient-line color driven by sex.
+        // Blue = boy (Djalë), pink = girl (Vajzë). Percentile bands and
+        // axes stay neutral; the chip label always accompanies the color
+        // as a non-color accessibility backup.
+        chart: {
+          male:        'var(--chart-male)',
+          'male-bg':   'var(--chart-male-bg)',
+          'male-border': 'var(--chart-male-border)',
+          female:        'var(--chart-female)',
+          'female-bg':   'var(--chart-female-bg)',
+          'female-border': 'var(--chart-female-border)',
+        },
       },
 
       spacing: {

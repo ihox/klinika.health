@@ -556,6 +556,72 @@
   .status-radio-row .t { font-size: 13px; font-weight: 500; color: var(--text-strong); }
   .status-radio-row .s { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
 
+  /* Role picker — checkbox group used in add-user + edit-user modals */
+  .role-picker { display: flex; flex-direction: column; gap: 8px; }
+  .role-picker .role-opt {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--r-md);
+    cursor: pointer;
+    background: var(--bg-elevated);
+    transition: all 120ms ease;
+  }
+  .role-picker .role-opt:hover { background: var(--bg-subtle); }
+  .role-picker .role-opt input[type="checkbox"] {
+    accent-color: var(--primary);
+    width: 16px; height: 16px;
+    flex-shrink: 0;
+    cursor: pointer;
+  }
+  .role-picker .role-opt:has(input:checked),
+  .role-picker .role-opt.is-checked {
+    border-color: var(--primary);
+    background: var(--primary-tint);
+  }
+  .role-picker .role-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 1;
+    min-width: 0;
+  }
+  .role-picker .role-desc {
+    font-size: 12px;
+    color: var(--text-muted);
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* Signature upload (doctors only) */
+  .sig-upload {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    border: 1px dashed var(--border-strong);
+    border-radius: var(--r-md);
+    background: var(--bg-subtle);
+  }
+  .sig-preview {
+    width: 160px;
+    height: 48px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: var(--r-sm);
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+  }
+  .sig-meta { flex: 1; min-width: 0; }
+  .sig-name { font-size: 12.5px; color: var(--text); font-family: var(--font-mono); }
+  .sig-sub { font-size: 11px; color: var(--text-faint); margin-top: 2px; }
+
   .danger-action {
     margin-top: 4px;
     padding: 14px;
@@ -886,9 +952,8 @@
   </a>
 
   <nav class="topbar-nav">
-    <a href="doctor.html" class="nav-link">Kalendari</a>
-    <a href="#" class="nav-link">Pacientët</a>
-    <a href="#" class="nav-link">Raportet</a>
+    <a href="doctor.html" class="nav-link">Pamja e ditës</a>
+    <a href="chart.html" class="nav-link">Pacientët</a>
     <a href="clinic-settings.html" class="nav-link active">Cilësimet</a>
   </nav>
 
@@ -902,14 +967,37 @@
     <kbd>⌘K</kbd>
   </div>
 
-  <button class="topbar-user">
-    <div class="avatar">TS</div>
-    <div style="display: flex; flex-direction: column; align-items: flex-start; line-height: 1.2;">
+  <div class="user-wrap">
+    <button class="topbar-user" onclick="toggleUserMenu(event)">
+      <div class="avatar">TS</div>
       <span class="name">Dr. Taulant Shala</span>
-      <span style="font-size: 11px; color: var(--text-muted);">Mjek · Admin</span>
+      <span class="chev">▾</span>
+    </button>
+    <div class="user-menu" role="menu">
+      <div class="um-head">
+        <div class="name">Dr. Taulant Shala</div>
+        <div class="email">taulant@donetamed.com</div>
+        <div class="roles">
+          <span class="chip-role doctor">Mjeku</span>
+          <span class="chip-role admin">Administrator i klinikës</span>
+        </div>
+      </div>
+      <a href="profili.html" class="um-item" role="menuitem">
+        <svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="8" cy="5.5" r="2.8"/><path d="M2.5 14c0-3 2.5-4.5 5.5-4.5s5.5 1.5 5.5 4.5"/>
+        </svg>
+        Profili im
+      </a>
+      <div class="um-divider"></div>
+      <a href="clinic-login.html" class="um-item logout" role="menuitem">
+        <svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M10 4V2.5a1 1 0 0 0-1-1H3a1 1 0 0 0-1 1v11a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V12"/>
+          <path d="M6.5 8h8M11.5 5l3 3-3 3"/>
+        </svg>
+        Dilni
+      </a>
     </div>
-    <span class="chev">▾</span>
-  </button>
+  </div>
 </header>
 
 <main class="settings-page">
@@ -930,7 +1018,7 @@
     <div class="group-label">Klinika</div>
     <a href="#general" data-view="general">Përgjithshme</a>
     <a href="#hours" data-view="hours">Orari dhe terminet</a>
-    <a href="#users" data-view="users">Përdoruesit <span class="count" id="user-count">3</span></a>
+    <a href="#users" data-view="users">Përdoruesit <span class="count" id="user-count">4</span></a>
     <a href="#payments" data-view="payments">Pagesa</a>
 
     <div class="group-label">Sistemi</div>
@@ -1264,7 +1352,7 @@
     <!-- ========= USERS ========= -->
     <section class="pane" data-view="users">
       <h2>Përdoruesit</h2>
-      <div class="pane-sub">Stafi i klinikës që hyn në Klinika. Shtoni mjekë, infermiere ose admin shtesë.</div>
+      <div class="pane-sub">Stafi i klinikës që hyn në Klinika. Një përdorues mund të ketë një ose më shumë role.</div>
 
       <div class="users-toolbar">
         <div class="search">
@@ -1276,14 +1364,14 @@
           <input placeholder="Kërko sipas emrit ose email-it...">
         </div>
         <select class="filter-select" style="background: var(--bg-elevated); border: 1px solid var(--border-strong); border-radius: var(--r-md); padding: 8px 32px 8px 12px; font-size: 13px;">
-          <option>Të gjithë rolet</option>
-          <option>Mjek</option>
-          <option>Infermierja</option>
-          <option>Admin</option>
+          <option>Të gjitha rolet</option>
+          <option>Mjeku</option>
+          <option>Recepsioniste</option>
+          <option>Administrator i klinikës</option>
         </select>
         <div style="flex: 1;"></div>
         <button class="btn btn-primary" onclick="openAddUser()">
-          <span style="font-size: 14px; line-height: 1;">+</span> Shto staf
+          <span style="font-size: 14px; line-height: 1;">+</span> Shto përdorues
         </button>
       </div>
 
@@ -1291,14 +1379,14 @@
         <thead>
           <tr>
             <th>Emri</th>
-            <th>Roli</th>
+            <th>Rolet</th>
             <th>Statusi</th>
             <th>Hyrja e fundit</th>
             <th></th>
           </tr>
         </thead>
         <tbody>
-          <tr onclick="openEditUser('ereblire')">
+          <tr onclick="openEditUser('taulant')">
             <td>
               <div class="user-cell">
                 <div class="av">TS</div>
@@ -1308,7 +1396,12 @@
                 </div>
               </div>
             </td>
-            <td><span class="chip chip-teal"><span class="dot"></span>Mjek · Admin</span></td>
+            <td>
+              <span class="role-chip-list">
+                <span class="chip-role doctor sm">Mjeku</span>
+                <span class="chip-role admin sm">Administrator</span>
+              </span>
+            </td>
             <td><span class="chip chip-green"><span class="dot"></span>Aktiv</span></td>
             <td class="num" style="color: var(--text-muted); font-variant-numeric: tabular-nums;">Tani</td>
             <td class="row-actions"><button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();">···</button></td>
@@ -1316,19 +1409,43 @@
           <tr onclick="openEditUser('ereblire')">
             <td>
               <div class="user-cell">
-                <div class="av gray">EK</div>
+                <div class="av" style="background: #5B21B6;">EK</div>
                 <div>
                   <div class="nm">Erëblirë Krasniqi</div>
                   <div class="em">ereblire@donetamed.com</div>
                 </div>
               </div>
             </td>
-            <td><span class="chip"><span class="dot"></span>Infermierja</span></td>
+            <td>
+              <span class="role-chip-list">
+                <span class="chip-role reception sm">Recepsioniste</span>
+              </span>
+            </td>
             <td><span class="chip chip-green"><span class="dot"></span>Aktiv</span></td>
             <td class="num" style="color: var(--text-muted); font-variant-numeric: tabular-nums;">30 min më parë</td>
             <td class="row-actions"><button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();">···</button></td>
           </tr>
-          <tr class="inactive">
+          <tr onclick="openEditUser('blerta')">
+            <td>
+              <div class="user-cell">
+                <div class="av" style="background: #334155;">BG</div>
+                <div>
+                  <div class="nm">Blerta Gashi</div>
+                  <div class="em">blerta@donetamed.com</div>
+                </div>
+              </div>
+            </td>
+            <td>
+              <span class="role-chip-list">
+                <span class="chip-role reception sm">Recepsioniste</span>
+                <span class="chip-role admin sm">Administrator</span>
+              </span>
+            </td>
+            <td><span class="chip chip-green"><span class="dot"></span>Aktiv</span></td>
+            <td class="num" style="color: var(--text-muted); font-variant-numeric: tabular-nums;">2 orë më parë</td>
+            <td class="row-actions"><button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();">···</button></td>
+          </tr>
+          <tr class="inactive" onclick="openEditUser('ardita')">
             <td>
               <div class="user-cell">
                 <div class="av inactive">AH</div>
@@ -1338,7 +1455,11 @@
                 </div>
               </div>
             </td>
-            <td><span class="chip"><span class="dot"></span>Infermierja</span></td>
+            <td>
+              <span class="role-chip-list">
+                <span class="chip-role reception sm">Recepsioniste</span>
+              </span>
+            </td>
             <td><span class="chip chip-amber"><span class="dot"></span>E çaktivizuar</span></td>
             <td class="num" style="color: var(--text-muted); font-variant-numeric: tabular-nums;">3 javë më parë</td>
             <td class="row-actions"><button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();">···</button></td>
@@ -1538,13 +1659,34 @@
 
       <div class="audit-toolbar">
         <select class="filter-select"><option>Të gjithë veprimet</option><option>Krijim</option><option>Modifikim</option><option>Fshirje</option><option>Hyrje</option></select>
-        <select class="filter-select"><option>Të gjithë përdoruesit</option><option>Dr. Taulant Shala</option><option>Erëblirë Krasniqi</option></select>
+        <select class="filter-select"><option>Të gjithë përdoruesit</option><option>Dr. Taulant Shala</option><option>Erëblirë Krasniqi</option><option>Blerta Gashi</option></select>
         <select class="filter-select"><option>7 ditët e fundit</option><option>30 ditët e fundit</option><option>Sot</option><option>Periudhë e personalizuar</option></select>
         <div class="spacer"></div>
         <button class="btn btn-secondary btn-sm">Eksporto CSV</button>
       </div>
 
       <div class="audit-list">
+        <div class="audit-row" onclick="toggleAudit(this)">
+          <div class="when">14.05 · 16:22</div>
+          <div class="who">Dr. Taulant Shala</div>
+          <div class="what">Përditësoi rolet · <span class="target">Erëblirë Krasniqi</span></div>
+          <div class="chev">›</div>
+        </div>
+        <div class="audit-detail">
+          <div class="diff">
+            <span class="k">Rolet</span>
+            <span class="old">
+              <span class="chip-role reception sm" style="text-decoration: line-through; opacity: 0.6;">Recepsioniste</span>
+            </span>
+            <span class="new">
+              <span class="role-chip-list">
+                <span class="chip-role reception sm">Recepsioniste</span>
+                <span class="chip-role admin sm">Administrator</span>
+              </span>
+            </span>
+          </div>
+        </div>
+
         <div class="audit-row" onclick="toggleAudit(this)">
           <div class="when">14.05 · 14:23</div>
           <div class="who">Dr. Taulant Shala</div>
@@ -1626,8 +1768,8 @@
 <div class="modal-overlay" id="add-user-modal" style="display: none;">
   <div class="modal" role="dialog" aria-modal="true">
     <div class="modal-header">
-      <h2>Shto staf</h2>
-      <div class="sub">Personi do të marrë një email me link për të caktuar fjalëkalimin. Linku skadon në 24 orë.</div>
+      <h2>Shto përdorues të ri</h2>
+      <div class="sub">Përdoruesi do të marrë një email për të vendosur fjalëkalimin.</div>
     </div>
     <div class="modal-body">
       <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
@@ -1644,26 +1786,39 @@
       <div class="field">
         <label class="field-label">Email</label>
         <input class="input" type="email" placeholder="adea@donetamed.com">
-        <span class="field-help">Adresa në të cilën do të dërgohet linku.</span>
       </div>
 
       <div class="field">
-        <label class="field-label">Roli</label>
-        <select class="select">
-          <option>Mjek</option>
-          <option selected>Infermierja</option>
-          <option>Admin · administrator i klinikës</option>
-        </select>
-      </div>
-
-      <div class="info-tip">
-        <span class="i">i</span>
-        <div>Mjeku ka qasje në karta pacientësh dhe vizita. Infermierja menaxhon vetëm terminet. Admini menaxhon stafin dhe cilësimet — pa qasje në karta klinike, përveç nëse është gjithashtu mjek.</div>
+        <label class="field-label">Rolet <span style="color: var(--text-faint); font-weight: 400;">— së paku një</span></label>
+        <div class="role-picker">
+          <label class="role-opt">
+            <input type="checkbox" name="add-role" value="doctor">
+            <span class="role-row">
+              <span class="chip-role doctor">Mjeku</span>
+              <span class="role-desc">Karta, vizita, recetë</span>
+            </span>
+          </label>
+          <label class="role-opt">
+            <input type="checkbox" name="add-role" value="reception">
+            <span class="role-row">
+              <span class="chip-role reception">Recepsioniste</span>
+              <span class="role-desc">Kalendari, terminet</span>
+            </span>
+          </label>
+          <label class="role-opt">
+            <input type="checkbox" name="add-role" value="admin">
+            <span class="role-row">
+              <span class="chip-role admin">Administrator i klinikës</span>
+              <span class="role-desc">Stafi, cilësimet, audit</span>
+            </span>
+          </label>
+        </div>
+        <span class="field-help">Përdoruesi do të marrë një email për të vendosur fjalëkalimin.</span>
       </div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeAddUser()">Anulo</button>
-      <button class="btn btn-primary" onclick="submitAddUser()">Shto dhe dërgo email</button>
+      <button class="btn btn-primary" onclick="submitAddUser()">Shto përdoruesin</button>
     </div>
   </div>
 </div>
@@ -1674,7 +1829,7 @@
   <div class="panel">
     <div class="panel-head">
       <div>
-        <h2>Erëblirë Krasniqi</h2>
+        <h2>Përdorues: <span id="edit-user-name">Erëblirë Krasniqi</span></h2>
         <div style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">Krijuar 14.02.2024 · Hyrja e fundit 30 min më parë</div>
       </div>
       <button class="x" onclick="closeEditUser()" aria-label="Mbyll">×</button>
@@ -1683,24 +1838,61 @@
       <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
         <div class="field">
           <label class="field-label">Emri</label>
-          <input class="input" value="Erëblirë">
+          <input class="input" id="edit-firstname" value="Erëblirë">
         </div>
         <div class="field">
           <label class="field-label">Mbiemri</label>
-          <input class="input" value="Krasniqi">
+          <input class="input" id="edit-lastname" value="Krasniqi">
         </div>
       </div>
       <div class="field">
         <label class="field-label">Email</label>
-        <input class="input" type="email" value="ereblire@donetamed.com">
+        <input class="input" id="edit-email" type="email" value="ereblire@donetamed.com">
       </div>
+
       <div class="field">
-        <label class="field-label">Roli</label>
-        <select class="select">
-          <option>Mjek</option>
-          <option selected>Infermierja</option>
-          <option>Admin</option>
-        </select>
+        <label class="field-label">Rolet <span style="color: var(--text-faint); font-weight: 400;">— së paku një</span></label>
+        <div class="role-picker" id="edit-roles" onchange="onEditRolesChange()">
+          <label class="role-opt">
+            <input type="checkbox" name="edit-role" value="doctor">
+            <span class="role-row">
+              <span class="chip-role doctor">Mjeku</span>
+              <span class="role-desc">Karta, vizita, recetë</span>
+            </span>
+          </label>
+          <label class="role-opt is-checked">
+            <input type="checkbox" name="edit-role" value="reception" checked>
+            <span class="role-row">
+              <span class="chip-role reception">Recepsioniste</span>
+              <span class="role-desc">Kalendari, terminet</span>
+            </span>
+          </label>
+          <label class="role-opt">
+            <input type="checkbox" name="edit-role" value="admin">
+            <span class="role-row">
+              <span class="chip-role admin">Administrator i klinikës</span>
+              <span class="role-desc">Stafi, cilësimet, audit</span>
+            </span>
+          </label>
+        </div>
+      </div>
+
+      <!-- Signature — shown only when "Mjeku" is checked -->
+      <div class="field" id="edit-signature-field" style="display: none;">
+        <label class="field-label">Nënshkrimi <span style="color: var(--text-faint); font-weight: 400;">— për receta dhe vërtetime</span></label>
+        <div class="sig-upload">
+          <div class="sig-preview">
+            <svg width="160" height="48" viewBox="0 0 160 48" fill="none">
+              <path d="M6 32 Q 18 8, 30 28 T 58 30 Q 70 14, 84 30 T 112 32 Q 124 22, 138 32 L 154 28"
+                    stroke="var(--text-strong)" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round" opacity="0.65"/>
+            </svg>
+          </div>
+          <div class="sig-meta">
+            <div class="sig-name">nenshkrim-shala.png</div>
+            <div class="sig-sub">Ngarkuar 14.02.2024 · 320 × 96</div>
+          </div>
+          <button class="btn btn-secondary btn-sm" type="button">Zëvendëso</button>
+        </div>
       </div>
 
       <div class="field">
@@ -1709,7 +1901,7 @@
           <label class="selected" onclick="pickStatus(this)">
             <input type="radio" name="status" checked>
             <div>
-              <div class="t">Aktive</div>
+              <div class="t">Aktiv</div>
               <div class="s">Mund të identifikohet dhe të punojë në Klinika.</div>
             </div>
           </label>
@@ -1731,7 +1923,7 @@
     </div>
     <div class="panel-foot">
       <button class="btn btn-ghost" onclick="closeEditUser()">Anulo</button>
-      <button class="btn btn-primary" onclick="saveEditUser()">Ruaj</button>
+      <button class="btn btn-primary" onclick="saveEditUser()">Ruaj ndryshimet</button>
     </div>
   </div>
 </div>
@@ -1766,11 +1958,54 @@
     showToast('Stafi u shtua · email me link u dërgua');
   }
 
-  function openEditUser(id) { $('edit-user-drawer').classList.add('open'); }
+  function openEditUser(id) {
+    const users = {
+      taulant: {
+        name: 'Dr. Taulant Shala', first: 'Taulant', last: 'Shala',
+        email: 'taulant@donetamed.com',
+        roles: ['doctor', 'admin']
+      },
+      ereblire: {
+        name: 'Erëblirë Krasniqi', first: 'Erëblirë', last: 'Krasniqi',
+        email: 'ereblire@donetamed.com',
+        roles: ['reception']
+      },
+      blerta: {
+        name: 'Blerta Gashi', first: 'Blerta', last: 'Gashi',
+        email: 'blerta@donetamed.com',
+        roles: ['reception', 'admin']
+      },
+      ardita: {
+        name: 'Ardita Hoxha', first: 'Ardita', last: 'Hoxha',
+        email: 'ardita@donetamed.com',
+        roles: ['reception']
+      },
+    };
+    const u = users[id] || users.ereblire;
+    $('edit-user-name').textContent = u.name;
+    $('edit-firstname').value = u.first;
+    $('edit-lastname').value = u.last;
+    $('edit-email').value = u.email;
+    document.querySelectorAll('#edit-roles input[type="checkbox"]').forEach(cb => {
+      cb.checked = u.roles.includes(cb.value);
+      cb.closest('.role-opt').classList.toggle('is-checked', cb.checked);
+    });
+    onEditRolesChange();
+    $('edit-user-drawer').classList.add('open');
+  }
   function closeEditUser() { $('edit-user-drawer').classList.remove('open'); }
   function saveEditUser() {
     closeEditUser();
     showToast('Ndryshimet u ruajtën');
+  }
+  function onEditRolesChange() {
+    document.querySelectorAll('#edit-roles .role-opt').forEach(opt => {
+      const cb = opt.querySelector('input');
+      opt.classList.toggle('is-checked', cb && cb.checked);
+    });
+    const mjeku = document.querySelector('#edit-roles input[value="doctor"]');
+    const sig = $('edit-signature-field');
+    if (sig) sig.style.display = (mjeku && mjeku.checked) ? '' : 'none';
   }
   function pickStatus(label) {
     document.querySelectorAll('.status-radio-row label').forEach(l => l.classList.remove('selected'));

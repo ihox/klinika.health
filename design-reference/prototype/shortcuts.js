@@ -87,3 +87,41 @@
 
   window.KlinikaOS = { isMac, SHORTCUT_TEXT };
 })();
+
+/* =========================================================================
+   User menu — toggle the .user-wrap dropdown on click; close on outside.
+   Shared across all role pages.
+   ========================================================================= */
+(function () {
+  function setup() {
+    const wraps = document.querySelectorAll('.user-wrap');
+    if (!wraps.length) return;
+
+    window.toggleUserMenu = function (e) {
+      if (e) { e.stopPropagation(); e.preventDefault(); }
+      const wrap = e ? e.currentTarget.closest('.user-wrap') : wraps[0];
+      if (!wrap) return;
+      const wasOpen = wrap.classList.contains('open');
+      // Close all
+      wraps.forEach(w => w.classList.remove('open'));
+      if (!wasOpen) wrap.classList.add('open');
+    };
+
+    document.addEventListener('click', (e) => {
+      if (e.target.closest('.user-wrap')) return;
+      wraps.forEach(w => w.classList.remove('open'));
+    });
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        wraps.forEach(w => w.classList.remove('open'));
+      }
+    });
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', setup);
+  } else {
+    setup();
+  }
+})();

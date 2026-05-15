@@ -4,8 +4,8 @@
     "name": "Klinika",
     "domain": "klinika.health",
     "source": "prototype/styles.css",
-    "version": "1.0.0",
-    "notes": "Warm-neutral clinical UI. Teal primary, amber accent (used sparingly), warm near-black text on warm off-white surfaces."
+    "version": "1.1.0",
+    "notes": "Warm-neutral clinical UI. Teal primary, amber accent (used sparingly), warm near-black text on warm off-white surfaces. v1.1 adds role-chip tokens (doctor/reception/admin) for the multi-role user model."
   },
 
   "color": {
@@ -69,6 +69,44 @@
       "red":        "#B91C1C",
       "red-bg":     "#FEE2E2",
       "red-soft":   "#FECACA"
+    },
+
+    "role": {
+      "notes": "Canonical role-chip family. Indigo / violet / slate — distinct from status and brand chips so a user's authority is unambiguous at a glance. Used in user menu, Përdoruesit table, Profili im, audit log.",
+      "doctor": {
+        "label":  "Mjeku",
+        "fg":     "#3730A3",
+        "bg":     "#EEF2FF",
+        "border": "#C7D2FE"
+      },
+      "reception": {
+        "label":  "Recepsioniste",
+        "fg":     "#5B21B6",
+        "bg":     "#F5F3FF",
+        "border": "#DDD6FE"
+      },
+      "admin": {
+        "label":  "Administrator i klinikës",
+        "fg":     "#334155",
+        "bg":     "#F1F5F9",
+        "border": "#CBD5E1"
+      }
+    },
+
+    "chart": {
+      "notes": "Pediatric WHO growth chart — patient-line/dot color is driven by sex. Blue = boy (Djalë), pink = girl (Vajzë). Percentile bands, axes, and grid stay neutral regardless of sex. Chip labels always accompany the colored series as a non-color accessibility backup.",
+      "male": {
+        "label":  "Djalë",
+        "fg":     "#4A90D9",
+        "bg":     "#E8F1FB",
+        "border": "#BFD9F2"
+      },
+      "female": {
+        "label":  "Vajzë",
+        "fg":     "#E8728E",
+        "bg":     "#FCE9EE",
+        "border": "#F4C1CD"
+      }
     },
 
     "selection": {

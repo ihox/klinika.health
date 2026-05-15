@@ -53,9 +53,20 @@
   --amber-bg:   #FEF3C7;
   --amber-soft: #FDE68A;
 
-  --red:        #B91C1C;
-  --red-bg:     #FEE2E2;
-  --red-soft:   #FECACA;
+  /* --- Growth chart — sex-based patient line/dot color ----------------
+     Pediatric convention: blue = boy (Djalë), pink = girl (Vajzë).
+     Patient series only (line, dots, header chip). Percentile bands,
+     axes and grid stay neutral regardless of sex; the chip label is
+     always present alongside the color as a non-color accessibility
+     backup. */
+  --chart-male:          #4A90D9;
+  --chart-male-bg:       #E8F1FB;
+  --chart-male-border:   #BFD9F2;
+  --chart-female:        #E8728E;
+  --chart-female-bg:     #FCE9EE;
+  --chart-female-border: #F4C1CD;
+
+
 
   /* --- Spacing / radii / shadows -------------------------------------- */
   --r-xs: 4px;
@@ -159,6 +170,26 @@ p { margin: 0; }
   align-items: center;
 }
 
+/* Mobile/tablet: top nav scrolls horizontally rather than wrapping or
+   collapsing. The full role-filtered list is reachable via swipe. The
+   search field collapses to a single icon button. */
+@media (max-width: 760px) {
+  .topbar { gap: 12px; padding: 0 12px; }
+  .topbar-search { display: none; }
+  .topbar-nav {
+    overflow-x: auto;
+    flex: 1;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .topbar-nav::-webkit-scrollbar { display: none; }
+  .topbar-nav .nav-link {
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .topbar-user .name { display: none; }
+}
+
 .nav-link {
   padding: 8px 12px;
   font-size: 13px;
@@ -229,6 +260,89 @@ p { margin: 0; }
 .topbar-user .chev { color: var(--text-faint); font-size: 10px; }
 
 /* =========================================================================
+   User menu dropdown (shared across all roles)
+   ========================================================================= */
+.user-wrap { position: relative; }
+.user-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 232px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  box-shadow: 0 16px 40px rgba(28,25,23,0.16), 0 2px 6px rgba(28,25,23,0.08);
+  z-index: 80;
+  overflow: hidden;
+  display: none;
+  flex-direction: column;
+  animation: um-in 130ms ease-out;
+}
+.user-wrap.open .user-menu { display: flex; }
+@keyframes um-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.user-menu .um-head {
+  padding: 12px 14px 12px;
+  border-bottom: 1px solid var(--border-soft);
+  background: var(--bg-subtle);
+}
+.user-menu .um-head .name {
+  font-family: var(--font-display);
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-strong);
+  letter-spacing: -0.005em;
+  line-height: 1.2;
+}
+.user-menu .um-head .email {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 3px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.user-menu .um-head .role {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--text-muted);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin-top: 4px;
+}
+.user-menu .um-head .roles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 8px;
+}
+.user-menu .um-item {
+  appearance: none;
+  background: transparent;
+  border: none;
+  text-align: left;
+  width: 100%;
+  padding: 9px 14px;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  transition: background 100ms ease;
+  text-decoration: none;
+}
+.user-menu .um-item:hover { background: var(--bg-subtle); }
+.user-menu .um-item .ic { width: 16px; height: 16px; color: var(--text-muted); flex-shrink: 0; }
+.user-menu .um-item.logout { color: var(--red); }
+.user-menu .um-item.logout:hover { background: var(--red-bg); }
+.user-menu .um-item.logout .ic { color: var(--red); }
+.user-menu .um-divider { height: 1px; background: var(--border-soft); }
+
+/* =========================================================================
    Buttons
    ========================================================================= */
 
@@ -276,6 +390,13 @@ p { margin: 0; }
   border-color: var(--border-strong);
 }
 .btn-danger:hover { background: var(--red-bg); border-color: var(--red-soft); }
+
+.btn-warning {
+  background: var(--bg-elevated);
+  color: var(--amber);
+  border-color: var(--border-strong);
+}
+.btn-warning:hover { background: var(--amber-bg); border-color: var(--amber-soft); }
 
 .btn-sm { font-size: 12px; padding: 5px 10px; }
 .btn-lg { font-size: 14px; padding: 11px 18px; border-radius: var(--r-md); }
@@ -375,6 +496,52 @@ p { margin: 0; }
 .chip-red .dot   { background: var(--red); }
 .chip-teal  { background: var(--primary-soft); color: var(--teal-800); border-color: var(--teal-200); }
 .chip-teal .dot  { background: var(--primary); }
+
+/* --- Role chips (canonical — used in user menu, users table, profile, audit) ---
+   Distinct color family from status (green/amber/red) and diagnosis (teal) chips
+   so a role is unambiguous at a glance. Indigo / violet / slate family. */
+.chip-role {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+  border: 1px solid;
+  font-family: var(--font-ui);
+  letter-spacing: 0;
+}
+.chip-role::before {
+  content: '';
+  width: 5px; height: 5px;
+  border-radius: 999px;
+  background: currentColor;
+  opacity: 0.55;
+  flex-shrink: 0;
+}
+/* Mjeku — indigo */
+.chip-role.doctor    { background: var(--role-doctor-bg);    color: var(--role-doctor-fg);    border-color: var(--role-doctor-border); }
+/* Recepsioniste — violet */
+.chip-role.reception { background: var(--role-reception-bg); color: var(--role-reception-fg); border-color: var(--role-reception-border); }
+/* Administrator i klinikës — warm slate (cooler than teal, neutral authority) */
+.chip-role.admin     { background: var(--role-admin-bg);     color: var(--role-admin-fg);     border-color: var(--role-admin-border); }
+
+/* Smaller inline variant for dense table cells */
+.chip-role.sm {
+  font-size: 10.5px;
+  padding: 1px 7px;
+  gap: 4px;
+}
+.chip-role.sm::before { width: 4px; height: 4px; }
+
+.role-chip-list {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+}
 
 /* =========================================================================
    Page layout

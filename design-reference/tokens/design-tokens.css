@@ -59,17 +59,33 @@
   --red-bg:     #FEE2E2;
   --red-soft:   #FECACA;
 
-  /* ---------- WHO growth charts: sex-specific patient line / dot ----- */
-  /* Standard pediatric convention: blue for boys, pink for girls. The
-     "soft" tints back the "Djalë" / "Vajzë" chip in the modal header so
-     color is the primary signal and the text label is the backup for
-     accessibility (some doctors are color-blind). */
-  --chart-male:        #4A90D9;
-  --chart-male-soft:   #DCEAF7;
-  --chart-male-strong: #2F6FB8;
-  --chart-female:        #E8728E;
-  --chart-female-soft:   #FBE0E6;
-  --chart-female-strong: #B84966;
+  /* ---------- Role chips ------------------------------------------------
+     Canonical role-chip family used in user menu, Përdoruesit table,
+     Profili im, audit log. Indigo / violet / slate so role is distinct
+     from status (green/amber/red) and brand (teal) chips at a glance. */
+  --role-doctor-fg:        #3730A3;
+  --role-doctor-bg:        #EEF2FF;
+  --role-doctor-border:    #C7D2FE;
+
+  --role-reception-fg:     #5B21B6;
+  --role-reception-bg:     #F5F3FF;
+  --role-reception-border: #DDD6FE;
+
+  --role-admin-fg:         #334155;
+  --role-admin-bg:         #F1F5F9;
+  --role-admin-border:     #CBD5E1;
+
+  /* ---------- Growth chart — sex-based patient line/dot color ---------
+     Pediatric convention: BLUE = boy (Djalë), PINK = girl (Vajzë).
+     Used for the patient series only (line, dots, header chip).
+     Percentile bands, axes, and grid stay neutral regardless of sex. */
+  --chart-male:        #4A90D9;   /* boy — patient line/dots */
+  --chart-male-bg:     #E8F1FB;   /* boy — chip background, soft */
+  --chart-male-border: #BFD9F2;   /* boy — chip border */
+
+  --chart-female:        #E8728E; /* girl — patient line/dots */
+  --chart-female-bg:     #FCE9EE; /* girl — chip background, soft */
+  --chart-female-border: #F4C1CD; /* girl — chip border */
 
   /* ---------- Overlays / selection ------------------------------------- */
   --selection-bg: #99F6E4;
