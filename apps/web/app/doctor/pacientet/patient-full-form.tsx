@@ -478,12 +478,19 @@ function buildInitial(patient: PatientFullDto | undefined): FormState {
   };
 }
 
-function snapshotToPayload(form: FormState): DoctorPatientInput {
-  const payload: DoctorPatientInput = {
-    firstName: form.firstName.trim(),
-    lastName: form.lastName.trim(),
-    dateOfBirth: form.dateOfBirth,
-  };
+function snapshotToPayload(form: FormState): Partial<DoctorPatientInput> {
+  // Skip the four REQUIRED fields when empty so a piecemeal PATCH on a
+  // receptionist-created patient (lastName='', no DOB, no sex) doesn't
+  // 400 on Zod's non-empty / date-regex validators while the doctor is
+  // still filling fields in. handleCreate gates submission on
+  // completeness via `formIsComplete`, so create-mode never sends an
+  // incomplete required set.
+  const payload: Partial<DoctorPatientInput> = {};
+  const firstName = form.firstName.trim();
+  if (firstName) payload.firstName = firstName;
+  const lastName = form.lastName.trim();
+  if (lastName) payload.lastName = lastName;
+  if (form.dateOfBirth) payload.dateOfBirth = form.dateOfBirth;
   if (form.sex === 'm' || form.sex === 'f') payload.sex = form.sex;
   if (form.placeOfBirth.trim()) payload.placeOfBirth = form.placeOfBirth.trim();
   if (form.phone.trim()) payload.phone = form.phone.trim();
