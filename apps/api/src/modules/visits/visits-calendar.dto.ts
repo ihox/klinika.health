@@ -42,7 +42,12 @@ export const VisitStatusSchema = z.enum(VISIT_STATUSES);
  */
 export const ALLOWED_TRANSITIONS: Record<VisitStatus, readonly VisitStatus[]> = {
   scheduled: ['arrived', 'no_show', 'cancelled'],
-  arrived: ['in_progress', 'no_show'],
+  // arrived → completed (Phase 2b): the doctor's home "Shëno si kryer"
+  // quick-action closes a visit straight from `arrived` when the
+  // doctor confirms the patient was seen without going through an
+  // explicit `in_progress` flip on the receptionist side. The chart
+  // form still owns the canonical arrived→in_progress→completed flow.
+  arrived: ['in_progress', 'completed', 'no_show'],
   in_progress: ['completed'],
   completed: ['arrived'],
   no_show: ['arrived'],

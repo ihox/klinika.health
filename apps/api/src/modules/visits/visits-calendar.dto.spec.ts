@@ -221,7 +221,6 @@ describe('isTransitionAllowed (and ALLOWED_TRANSITIONS)', () => {
   it('rejects illegal jumps', () => {
     expect(isTransitionAllowed('scheduled', 'in_progress')).toBe(false);
     expect(isTransitionAllowed('scheduled', 'completed')).toBe(false);
-    expect(isTransitionAllowed('arrived', 'completed')).toBe(false);
     expect(isTransitionAllowed('arrived', 'cancelled')).toBe(false);
     expect(isTransitionAllowed('in_progress', 'no_show')).toBe(false);
     expect(isTransitionAllowed('in_progress', 'cancelled')).toBe(false);
@@ -230,9 +229,17 @@ describe('isTransitionAllowed (and ALLOWED_TRANSITIONS)', () => {
     expect(isTransitionAllowed('cancelled', 'completed')).toBe(false);
   });
 
+  it('accepts the Phase 2b doctor-quick-complete shortcut: arrived → completed', () => {
+    expect(isTransitionAllowed('arrived', 'completed')).toBe(true);
+  });
+
   it('matrix mirrors the user-facing spec (ADR-011 / Phase 2a)', () => {
     expect(ALLOWED_TRANSITIONS.scheduled).toEqual(['arrived', 'no_show', 'cancelled']);
-    expect(ALLOWED_TRANSITIONS.arrived).toEqual(['in_progress', 'no_show']);
+    expect(ALLOWED_TRANSITIONS.arrived).toEqual([
+      'in_progress',
+      'completed',
+      'no_show',
+    ]);
     expect(ALLOWED_TRANSITIONS.in_progress).toEqual(['completed']);
     expect(ALLOWED_TRANSITIONS.completed).toEqual(['arrived']);
     expect(ALLOWED_TRANSITIONS.no_show).toEqual(['arrived']);

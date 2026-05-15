@@ -33,6 +33,7 @@ import {
 import { safeNavigateToPatient } from '@/lib/patient';
 import { ageLabel, type PatientPublicDto } from '@/lib/patient-client';
 import { cn } from '@/lib/utils';
+import { calendarClient } from '@/lib/visits-calendar-client';
 
 const REFRESH_INTERVAL_MS = 60_000;
 
@@ -53,12 +54,15 @@ export function DashboardView(): ReactElement {
   const [error, setError] = useState<string | null>(null);
   const [now, setNow] = useState<Date>(() => new Date());
   const [lastRefreshAt, setLastRefreshAt] = useState<Date>(() => new Date());
-  // Phase 2b — walk-in arrival toast. Holds the most recent unsuppressed
-  // walk-in event; a new arrival replaces an older toast that hasn't
-  // been dismissed yet (rare but possible in a busy clinic).
-  const [walkInArrival, setWalkInArrival] = useState<
-    { visitId: string; patientName: string } | null
-  >(null);
+  // Phase 2b — bottom-right notification state shared between:
+  //   - walk-in arrival toasts (driven by SSE, 8s auto-dismiss)
+  //   - "Shëno si kryer" success confirmations (driven by user action)
+  // Unifying into one slot avoids stacked overlapping toasts in the
+  // same screen corner; the most recent event wins (key change resets
+  // the auto-dismiss timer).
+  const [toast, setToast] = useState<{ id: string; message: string } | null>(
+    null,
+  );
   // `me` is fetched async; keep a ref so the SSE callback always reads
   // the current value without re-subscribing on identity load.
   const meIdRef = useRef<string | null>(null);
@@ -149,9 +153,9 @@ export function DashboardView(): ReactElement {
       if (meIdRef.current && payload.actorUserId === meIdRef.current) {
         return;
       }
-      setWalkInArrival({
-        visitId: payload.visitId,
-        patientName: payload.patientName,
+      setToast({
+        id: `walkin:${payload.visitId}`,
+        message: `Pacient i ri pa termin: ${payload.patientName}`,
       });
     };
     source.addEventListener('visit.walkin.added', onWalkInAdded);
@@ -179,6 +183,38 @@ export function DashboardView(): ReactElement {
       void safeNavigateToPatient(router, entry.patientId);
     },
     [router],
+  );
+
+  // Phase 2b — "Shëno si kryer" quick-complete from the doctor's home
+  // list. Refreshes immediately so the row reflects its new state even
+  // before the SSE event lands. On failure the dashboard re-fetches
+  // (the row reverts) and an error toast surfaces. The transition
+  // arrived → completed is allowed by ALLOWED_TRANSITIONS as of
+  // Phase 2b (single PATCH, no two-step chain).
+  const quickComplete = useCallback(
+    async (appointmentId: string) => {
+      try {
+        await calendarClient.changeStatus(appointmentId, 'completed');
+        setToast({
+          id: `complete:${appointmentId}:${Date.now()}`,
+          message: 'Vizita u shënua si e kryer.',
+        });
+      } catch (err) {
+        const message =
+          err instanceof ApiError
+            ? err.message
+            : 'Veprimi nuk u krye.';
+        setToast({
+          id: `complete-err:${appointmentId}:${Date.now()}`,
+          message,
+        });
+      } finally {
+        // Always refresh — on success the row shows completed; on
+        // failure any optimistic state is reset to the server truth.
+        void load();
+      }
+    },
+    [load],
   );
 
   return (
@@ -215,6 +251,7 @@ export function DashboardView(): ReactElement {
               snapshot={snapshot}
               now={now}
               onAppointmentClick={(a) => openPatientChart(a.patientId)}
+              onQuickComplete={(a) => void quickComplete(a.id)}
             />
           </div>
 
@@ -233,11 +270,11 @@ export function DashboardView(): ReactElement {
         </div>
       </div>
 
-      {walkInArrival ? (
+      {toast ? (
         <NotificationToast
-          key={walkInArrival.visitId}
-          message={`Pacient i ri pa termin: ${walkInArrival.patientName}`}
-          onDismiss={() => setWalkInArrival(null)}
+          key={toast.id}
+          message={toast.message}
+          onDismiss={() => setToast(null)}
         />
       ) : null}
     </main>
@@ -318,16 +355,22 @@ function formatSecondsAgo(seconds: number): string {
 // Appointments panel + quick search + stats
 // =========================================================================
 
+interface QuickCompleteCallback {
+  (a: DashboardAppointment): void;
+}
+
 interface AppointmentsPanelProps {
   snapshot: DoctorDashboardResponse | null;
   now: Date;
   onAppointmentClick: (a: DashboardAppointment) => void;
+  onQuickComplete: QuickCompleteCallback;
 }
 
 function AppointmentsPanel({
   snapshot,
   now,
   onAppointmentClick,
+  onQuickComplete,
 }: AppointmentsPanelProps): ReactElement {
   const [filter, setFilter] = useState('');
   const filterInputRef = useRef<HTMLInputElement | null>(null);
@@ -402,6 +445,7 @@ function AppointmentsPanel({
               appointment={a}
               now={now}
               onClick={() => onAppointmentClick(a)}
+              onQuickComplete={() => onQuickComplete(a)}
             />
           ))
         )}
@@ -437,12 +481,14 @@ interface AppointmentRowProps {
   appointment: DashboardAppointment;
   now: Date;
   onClick: () => void;
+  onQuickComplete: () => void;
 }
 
 function AppointmentRow({
   appointment: a,
   now,
   onClick,
+  onQuickComplete,
 }: AppointmentRowProps): ReactElement {
   const isCurrent = a.position === 'current';
   const isNext = a.position === 'next';
@@ -458,13 +504,30 @@ function AppointmentRow({
   const minutesUntil = Math.round(
     (new Date(anchorIso).getTime() - now.getTime()) / 60_000,
   );
+  // Phase 2b — "Shëno si kryer" is available once the patient is in
+  // the room: status `arrived` (waiting) or `in_progress` (being seen).
+  // A scheduled booking has to flip through `arrived` first (the
+  // receptionist owns that), so the action button stays hidden there.
+  const canQuickComplete = a.status === 'arrived' || a.status === 'in_progress';
+  // The row needs to open the chart on click AND host a nested action
+  // button — nested <button> is invalid HTML, so the outer element is
+  // a div with full button semantics (role + tabIndex + key handler).
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>): void => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      onClick();
+    }
+  };
   return (
-    <button
-      type="button"
+    <div
+      role="button"
+      tabIndex={0}
       onClick={onClick}
+      onKeyDown={handleKeyDown}
       aria-current={isCurrent || isNext ? 'true' : undefined}
       className={cn(
-        'grid w-full grid-cols-[58px_12px_1fr_auto] items-center gap-2.5 border-b border-line-soft px-4 py-2.5 text-left transition last:border-b-0 hover:bg-surface-subtle',
+        'grid w-full cursor-pointer grid-cols-[58px_12px_1fr_auto] items-center gap-2.5 border-b border-line-soft px-4 py-2.5 text-left transition last:border-b-0 hover:bg-surface-subtle',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35',
         (isCurrent || isNext) &&
           'border-l-2 border-l-primary bg-gradient-to-r from-primary-tint to-transparent pl-[14px]',
       )}
@@ -520,16 +583,35 @@ function AppointmentRow({
                 : statusToReason(a.status, a.durationMinutes)}
         </div>
       </div>
-      <span
-        className={cn(
-          'rounded-md border border-line bg-surface-subtle px-2 py-0.5 text-[11px] font-mono text-ink-muted',
-          isCurrent && 'border-primary/40 bg-primary-soft text-primary-dark',
-          isMissed && 'border-danger/30 bg-danger/10 text-danger',
-        )}
-      >
-        {isCurrent ? 'Tani' : isMissed ? 'MS' : `${a.durationMinutes} min`}
-      </span>
-    </button>
+      {canQuickComplete ? (
+        <button
+          type="button"
+          onClick={(e) => {
+            // Don't bubble: the row's own click opens the chart, and
+            // the quick-complete is a distinct action.
+            e.stopPropagation();
+            onQuickComplete();
+          }}
+          className={cn(
+            'rounded-md border border-primary/40 bg-primary-soft px-2 py-0.5 text-[11px] font-medium text-primary-dark transition',
+            'hover:border-primary hover:bg-primary/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35',
+          )}
+          data-testid="doctor-quick-complete"
+        >
+          Shëno si kryer
+        </button>
+      ) : (
+        <span
+          className={cn(
+            'rounded-md border border-line bg-surface-subtle px-2 py-0.5 text-[11px] font-mono text-ink-muted',
+            isCurrent && 'border-primary/40 bg-primary-soft text-primary-dark',
+            isMissed && 'border-danger/30 bg-danger/10 text-danger',
+          )}
+        >
+          {isCurrent ? 'Tani' : isMissed ? 'MS' : `${a.durationMinutes} min`}
+        </span>
+      )}
+    </div>
   );
 }
 
