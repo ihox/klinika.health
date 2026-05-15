@@ -1,5 +1,6 @@
 'use client';
 
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
 
@@ -122,25 +123,49 @@ export function CalendarView(): ReactElement {
 
   const todayIso = useMemo(() => todayIsoLocal(now), [now]);
 
-  // ----- Displayed week: Monday-anchored. Defaults to the Monday of the
-  // week containing today. The prev/next buttons in the toolbar step the
-  // anchor by ±7 days; the existing `refreshEntries` effect re-fetches
-  // whenever the range bounds change.
-  const [weekStart, setWeekStart] = useState<string>(() =>
-    mondayOfWeekIso(todayIsoLocal(now)),
+  // ----- Displayed week: Monday-anchored, persisted to the URL.
+  //
+  // `?from=YYYY-MM-DD` carries the week's Monday anchor; the current
+  // week is encoded by the param being absent (cleaner URL when the
+  // receptionist hasn't navigated away from today). Navigation updates
+  // the URL via `router.replace` so back/forward + reload preserve the
+  // viewed week, and pasted links open the same view. Without a (valid)
+  // `from`, we render the Monday of today's local week.
+  const router = useRouter();
+  const pathname = usePathname() ?? '/receptionist';
+  const searchParams = useSearchParams();
+  const fromParam = searchParams.get('from');
+  const todayWeekStart = useMemo(() => mondayOfWeekIso(todayIso), [todayIso]);
+  const weekStart = useMemo(() => {
+    if (fromParam && /^\d{4}-\d{2}-\d{2}$/.test(fromParam)) {
+      return mondayOfWeekIso(fromParam);
+    }
+    return todayWeekStart;
+  }, [fromParam, todayWeekStart]);
+  const navigateWeek = useCallback(
+    (next: string) => {
+      const sp = new URLSearchParams(searchParams.toString());
+      if (next === todayWeekStart) {
+        sp.delete('from');
+      } else {
+        sp.set('from', next);
+      }
+      const qs = sp.toString();
+      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+    },
+    [pathname, router, searchParams, todayWeekStart],
   );
   const goPrevWeek = useCallback(
-    () => setWeekStart((w) => addLocalDays(w, -7)),
-    [],
+    () => navigateWeek(addLocalDays(weekStart, -7)),
+    [navigateWeek, weekStart],
   );
   const goNextWeek = useCallback(
-    () => setWeekStart((w) => addLocalDays(w, 7)),
-    [],
+    () => navigateWeek(addLocalDays(weekStart, 7)),
+    [navigateWeek, weekStart],
   );
-  const todayWeekStart = useMemo(() => mondayOfWeekIso(todayIso), [todayIso]);
   const goThisWeek = useCallback(
-    () => setWeekStart(todayWeekStart),
-    [todayWeekStart],
+    () => navigateWeek(todayWeekStart),
+    [navigateWeek, todayWeekStart],
   );
   const isCurrentWeek = weekStart === todayWeekStart;
 
@@ -577,16 +602,10 @@ export function CalendarView(): ReactElement {
 
   return (
     <main className="min-h-screen bg-stone-50 pb-16">
-      {/* Top bar — role-filtered (ADR-004). The receptionist's global
-          patient search lives in the brand-adjacent slot. */}
-      <CalendarTopNav
-        searchSlot={
-          <GlobalPatientSearch
-            onPick={openGlobalPickerForPatient}
-            onAddNew={openGlobalQuickAdd}
-          />
-        }
-      />
+      {/* Top bar — role-filtered (ADR-004). The global patient search
+          moved inside the calendar card per receptionist.html so the
+          top nav stays focused on navigation + identity. */}
+      <CalendarTopNav />
 
       <div className="mx-auto max-w-page px-page-x pt-6">
         {/* Greeting + [+ Pacient pa termin] */}
@@ -684,6 +703,17 @@ export function CalendarView(): ReactElement {
                 Mungesë
               </span>
             </div>
+          </div>
+
+          {/* Global patient search — relocated from the topbar per
+              design-reference/prototype/receptionist.html. Lives above
+              the grid so the `/` shortcut still works without crowding
+              the role-aware top nav. */}
+          <div className="border-b border-line px-5 py-3">
+            <GlobalPatientSearch
+              onPick={openGlobalPickerForPatient}
+              onAddNew={openGlobalQuickAdd}
+            />
           </div>
 
           {settings && columns.length > 0 ? (
@@ -795,9 +825,9 @@ export function CalendarView(): ReactElement {
 // global search next to the brand.
 // =========================================================================
 
-function CalendarTopNav({ searchSlot }: { searchSlot: ReactElement }): ReactElement {
+function CalendarTopNav(): ReactElement {
   const { me } = useMe();
-  return <ClinicTopNav me={me} brandAdjacent={searchSlot} />;
+  return <ClinicTopNav me={me} />;
 }
 
 // =========================================================================

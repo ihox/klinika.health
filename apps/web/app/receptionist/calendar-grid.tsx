@@ -6,7 +6,7 @@ import type { ReactElement } from 'react';
 import { cn } from '@/lib/utils';
 import {
   colorIndicatorForLastVisit,
-  dayLabelShort,
+  formatDayHeader,
   formatDob,
   type LastVisitColor,
   minutesToTime,
@@ -159,34 +159,37 @@ export function CalendarGrid({
       <div className="bg-surface-subtle border-r border-line" />
       {columns.map((col) => {
         const isToday = col.date === todayIso;
+        const isPast = col.date < todayIso;
         const hasWalkIns = (walkInsByDay.get(col.date)?.length ?? 0) > 0;
-        const [, m, d] = col.date.split('-');
         return (
           <div
             key={`head-${col.date}`}
             data-has-walkins={hasWalkIns || undefined}
+            data-past={isPast || undefined}
+            data-today={isToday || undefined}
             className={cn(
-              'bg-surface-subtle border-r border-line last:border-r-0 px-3 py-2.5',
+              'border-r border-line last:border-r-0 px-3.5 py-2.5 min-h-[44px]',
+              'flex items-baseline flex-wrap gap-x-2 gap-y-1',
+              isToday ? 'bg-teal-100/35' : 'bg-surface-subtle',
             )}
           >
-            <div
+            <span
               className={cn(
-                'text-[11px] uppercase tracking-[0.08em] font-medium',
-                isToday ? 'text-primary-dark' : 'text-ink-muted',
+                'font-display text-[12.5px] font-semibold tracking-[-0.005em] leading-[1.1] whitespace-nowrap',
+                isToday
+                  ? 'text-primary-dark'
+                  : isPast
+                    ? 'text-ink-muted font-medium'
+                    : 'text-ink',
               )}
             >
-              {dayLabelShort(col.weekday)}
-              {isToday ? ' · sot' : ''}
-            </div>
-            <div
-              className={cn(
-                'font-display text-[18px] font-semibold mt-0.5 tabular-nums',
-                isToday ? 'text-primary-dark' : 'text-ink',
-              )}
-            >
-              {Number(d)}
-              {Number(d) === 1 ? <span className="text-[10px] text-ink-faint font-normal ml-1">{m}</span> : null}
-            </div>
+              {formatDayHeader(col.weekday, col.date)}
+            </span>
+            {isToday ? (
+              <span className="inline-flex items-center rounded-full bg-primary px-1.5 py-px text-[10px] font-semibold uppercase tracking-[0.06em] leading-[1.4] text-white">
+                sot
+              </span>
+            ) : null}
             {hasWalkIns ? <LaneHint /> : null}
           </div>
         );
@@ -216,6 +219,7 @@ export function CalendarGrid({
         const dayEntries = byDay.get(col.date) ?? [];
         const dayWalkIns = walkInsByDay.get(col.date) ?? [];
         const isToday = col.date === todayIso;
+        const isPast = col.date < todayIso;
         const colStartMin = col.open ? timeToMinutes(col.startTime) : gridStartMin;
         const colEndMin = col.open ? timeToMinutes(col.endTime) : gridStartMin;
         const closedTopOffset = (colStartMin - gridStartMin) * PX_PER_MIN;
@@ -226,6 +230,7 @@ export function CalendarGrid({
             col={col}
             todayIso={todayIso}
             isToday={isToday}
+            isPast={isPast}
             now={now}
             gridStartMin={gridStartMin}
             gridHeightPx={gridHeightPx}
@@ -248,6 +253,7 @@ interface DayColumnBodyProps {
   col: DayColumn;
   todayIso: string;
   isToday: boolean;
+  isPast: boolean;
   now: Date;
   gridStartMin: number;
   gridHeightPx: number;
@@ -267,6 +273,7 @@ interface DayColumnBodyProps {
 function DayColumnBody({
   col,
   isToday,
+  isPast,
   now,
   gridStartMin,
   gridHeightPx,
@@ -370,6 +377,7 @@ function DayColumnBody({
         'relative border-r border-line last:border-r-0 cursor-pointer',
         !col.open && 'cursor-not-allowed bg-surface-subtle',
         isToday && col.open && 'bg-teal-100/20',
+        isPast && col.open && 'bg-stone-900/[0.025]',
       )}
       style={{ height: gridHeightPx, backgroundImage }}
       onClick={handleClick}
@@ -377,6 +385,8 @@ function DayColumnBody({
       onMouseLeave={handleMouseLeave}
       role="grid"
       data-has-walkins={hasWalkIns || undefined}
+      data-past={isPast || undefined}
+      data-today={isToday || undefined}
       aria-label={col.open ? `Kolonë termin për ${col.date}` : `Klinika e mbyllur ${col.date}`}
     >
       {/* Closed pre-open band (if column opens later than the grid start) */}
@@ -409,6 +419,7 @@ function DayColumnBody({
           entry={a}
           gridStartMin={gridStartMin}
           leftLaneOnly={hasWalkIns}
+          isPast={isPast}
           onClick={(ev) =>
             onEntryClick(a, { x: ev.clientX, y: ev.clientY })
           }
@@ -425,6 +436,7 @@ function DayColumnBody({
           key={w.id}
           entry={w}
           gridStartMin={gridStartMin}
+          isPast={isPast}
           onClick={(ev) =>
             onEntryClick(w, { x: ev.clientX, y: ev.clientY })
           }
@@ -483,6 +495,10 @@ interface ScheduledCardProps {
   /** When the column also carries walk-ins, scheduled cards live in
    * the LEFT lane — right edge clamps to the column midpoint. */
   leftLaneOnly: boolean;
+  /** Past-day fade per design: active-state appointments soften
+   *  (opacity 0.85, saturate 0.78); completed/no-show/cancelled keep
+   *  their explicit treatment. */
+  isPast: boolean;
   onClick: (event: React.MouseEvent) => void;
   onContextMenu?: (event: React.MouseEvent) => void;
 }
@@ -491,6 +507,7 @@ function ScheduledCard({
   entry,
   gridStartMin,
   leftLaneOnly,
+  isPast,
   onClick,
   onContextMenu,
 }: ScheduledCardProps): ReactElement | null {
@@ -544,6 +561,9 @@ function ScheduledCard({
         top,
         height: Math.max(20, height),
         ...(leftLaneOnly ? { right: 'calc(50% + 2px)' } : {}),
+        ...(isPast && !isCompleted && !isNoShow && !isCancelled
+          ? { opacity: 0.85, filter: 'saturate(0.78)' }
+          : {}),
       }}
       aria-label={`${entry.patient.firstName} ${entry.patient.lastName}, ${localParts.time}, ${STATUS_LABEL[entry.status]}`}
     >
@@ -610,6 +630,9 @@ function ScheduledCard({
 interface WalkInCardProps {
   entry: CalendarEntry;
   gridStartMin: number;
+  /** Past-day fade per design: active walk-ins soften (opacity 0.9,
+   *  saturate 0.82); completed walk-ins keep their finished treatment. */
+  isPast: boolean;
   onClick: (event: React.MouseEvent) => void;
   onContextMenu?: (event: React.MouseEvent) => void;
 }
@@ -617,6 +640,7 @@ interface WalkInCardProps {
 function WalkInCard({
   entry,
   gridStartMin,
+  isPast,
   onClick,
   onContextMenu,
 }: WalkInCardProps): ReactElement | null {
@@ -695,6 +719,7 @@ function WalkInCard({
         left: 'calc(50% + 2px)',
         right: 6,
         ...borderStyle,
+        ...(isPast && !isCompleted ? { opacity: 0.9, filter: 'saturate(0.82)' } : {}),
       }}
       aria-label={`${entry.patient.firstName} ${entry.patient.lastName}, pa termin, erdhi ${parts.time}, ${STATUS_LABEL[entry.status]}`}
     >

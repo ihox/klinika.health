@@ -6,7 +6,12 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { addLocalDays, mondayOfWeekIso, weekdayOf } from './appointment-client';
+import {
+  addLocalDays,
+  formatDayHeader,
+  mondayOfWeekIso,
+  weekdayOf,
+} from './appointment-client';
 
 describe('mondayOfWeekIso', () => {
   it('returns the same date when given a Monday', () => {
@@ -46,5 +51,20 @@ describe('mondayOfWeekIso', () => {
       const offset = { mon: 0, tue: 1, wed: 2, thu: 3, fri: 4, sat: 5, sun: 6 }[dow];
       expect(mondayOfWeekIso(d)).toBe(addLocalDays(d, -offset));
     }
+  });
+});
+
+describe('formatDayHeader', () => {
+  // Matches design-reference/prototype/receptionist.html ("E hënë · 12 maj").
+  it('produces "<long weekday> · <day> <long month>"', () => {
+    expect(formatDayHeader('mon', '2026-05-11')).toBe('E hënë · 11 maj');
+    expect(formatDayHeader('tue', '2026-05-12')).toBe('E martë · 12 maj');
+    expect(formatDayHeader('wed', '2026-05-13')).toBe('E mërkurë · 13 maj');
+    expect(formatDayHeader('sat', '2026-05-16')).toBe('E shtunë · 16 maj');
+  });
+
+  it('handles different months', () => {
+    expect(formatDayHeader('mon', '2026-01-05')).toBe('E hënë · 5 janar');
+    expect(formatDayHeader('fri', '2026-12-25')).toBe('E premte · 25 dhjetor');
   });
 });

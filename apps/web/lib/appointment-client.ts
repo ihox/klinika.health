@@ -284,6 +284,18 @@ export function formatRangeAlbanian(fromIso: string, toIso: string): string {
   return `${df} ${MONTHS_LONG[mf - 1]} — ${dt} ${MONTHS_LONG[mt - 1]} ${yt}`;
 }
 
+// Day-column header per design-reference/prototype/receptionist.html
+// (e.g., "E hënë · 12 maj"). Single line; the "sot" pill is added by the
+// header renderer as a separate badge.
+export function formatDayHeader(
+  weekday: LocalParts['weekday'],
+  dateIso: string,
+): string {
+  const [, m, d] = dateIso.split('-').map(Number) as [number, number, number];
+  const month = MONTHS_LONG[m - 1] ?? '';
+  return `${DAY_LABELS_LONG[weekday]} · ${d} ${month}`;
+}
+
 export function todayIsoLocal(now: Date = new Date()): string {
   return toLocalParts(now).date;
 }
