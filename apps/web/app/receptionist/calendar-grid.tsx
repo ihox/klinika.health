@@ -158,10 +158,12 @@ export function CalendarGrid({
       <div className="bg-surface-subtle border-r border-line" />
       {columns.map((col) => {
         const isToday = col.date === todayIso;
+        const hasWalkIns = (walkInsByDay.get(col.date)?.length ?? 0) > 0;
         const [, m, d] = col.date.split('-');
         return (
           <div
             key={`head-${col.date}`}
+            data-has-walkins={hasWalkIns || undefined}
             className={cn(
               'bg-surface-subtle border-r border-line last:border-r-0 px-3 py-2.5',
             )}
@@ -184,6 +186,7 @@ export function CalendarGrid({
               {Number(d)}
               {Number(d) === 1 ? <span className="text-[10px] text-ink-faint font-normal ml-1">{m}</span> : null}
             </div>
+            {hasWalkIns ? <LaneHint /> : null}
           </div>
         );
       })}
@@ -642,6 +645,28 @@ function WalkInCard({
         {parts.time}
       </span>
     </button>
+  );
+}
+
+// ===========================================================================
+// Column header lane-hint — "Termine · Pa termin" with two color swatches.
+// Renders only when the column carries ≥1 walk-in (gated upstream).
+// Mirrors receptionist.html lines 1091-1114.
+// ===========================================================================
+
+function LaneHint(): ReactElement {
+  return (
+    <div className="mt-1 inline-flex items-center gap-1 font-mono text-[9px] uppercase tracking-[0.06em] text-ink-faint">
+      <span className="inline-flex items-center gap-[3px]">
+        <span aria-hidden className="inline-block w-2 h-1 rounded-[1px] bg-primary" />
+        Termine
+      </span>
+      <span aria-hidden className="text-line-strong">·</span>
+      <span className="inline-flex items-center gap-[3px]">
+        <span aria-hidden className="inline-block w-2 h-1 rounded-[1px] bg-accent-500" />
+        Pa termin
+      </span>
+    </div>
   );
 }
 
