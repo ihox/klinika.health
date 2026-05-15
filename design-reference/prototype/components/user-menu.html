@@ -11,7 +11,7 @@
     background: var(--bg);
     padding: 40px 32px;
   }
-  .wrap { max-width: 980px; margin: 0 auto; }
+  .wrap { max-width: 1100px; margin: 0 auto; }
   .crumb {
     font-size: 11px;
     text-transform: uppercase;
@@ -29,10 +29,30 @@
     margin-bottom: 36px;
   }
 
+  /* Section spec — matches role-chips.html / status-menu.html visual language */
+  .panel {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: var(--r-lg);
+    padding: 24px;
+    margin-bottom: 18px;
+    box-shadow: var(--shadow-xs);
+  }
+  .panel h2 {
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 4px;
+  }
+  .panel .desc {
+    font-size: 12.5px;
+    color: var(--text-muted);
+    margin-bottom: 18px;
+  }
+
   .menu-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-    gap: 24px;
+    gap: 20px;
   }
   .menu-cell {
     display: flex;
@@ -47,43 +67,83 @@
     text-transform: uppercase;
     font-weight: 600;
   }
+  .menu-cell .cell-sub {
+    font-size: 11.5px;
+    color: var(--text-muted);
+    margin-top: -8px;
+    line-height: 1.45;
+  }
 
-  /* Static, always-open user-menu — same DOM as the live component but with .open-static */
-  .menu-mount {
+  /* Faux topbar — shows the trigger + the menu in its open position,
+     identical chrome to the live header */
+  .stage {
     position: relative;
-    background: var(--bg-elevated);
+    background: var(--bg);
     border: 1px solid var(--border);
     border-radius: var(--r-md);
-    padding: 12px;
+    padding: 10px 12px;
+    min-height: 320px;
   }
-  .menu-mount .topbar-mock {
-    background: var(--bg-subtle);
-    border-radius: var(--r-sm);
-    height: 36px;
+  .stage .topbar-fake {
     display: flex;
     justify-content: flex-end;
     align-items: center;
-    padding: 0 8px;
-    margin-bottom: 6px;
+    height: 40px;
+    padding: 0 4px;
+    border-bottom: 1px dashed var(--border-soft);
+    margin-bottom: 8px;
   }
-  .menu-mount .avatar-mock {
-    width: 24px; height: 24px;
+  .topbar-user {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: var(--r-sm);
+    padding: 4px 8px 4px 4px;
+    cursor: default;
+  }
+  .topbar-user .avatar {
+    width: 26px; height: 26px;
     border-radius: 999px;
     background: var(--teal-700);
     color: white;
-    font-size: 10px;
+    font-size: 10.5px;
     font-weight: 600;
     display: grid;
     place-items: center;
+    letter-spacing: 0.02em;
   }
-  .menu-static {
-    width: 232px;
-    background: var(--bg-elevated);
-    border: 1px solid var(--border);
-    border-radius: var(--r-md);
-    box-shadow: 0 16px 40px rgba(28,25,23,0.16), 0 2px 6px rgba(28,25,23,0.08);
-    margin-left: auto;
-    overflow: hidden;
+  .topbar-user .name {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text);
+  }
+  .topbar-user .role-tag {
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    color: var(--text-faint);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    margin-top: 1px;
+  }
+  .topbar-user .chev {
+    color: var(--text-faint);
+    font-size: 10px;
+  }
+
+  /* Static-open variant — same DOM as live .user-menu but always visible */
+  .user-wrap-static {
+    position: relative;
+    display: flex;
+    justify-content: flex-end;
+  }
+  .user-wrap-static .user-menu {
+    display: flex;
+    position: relative;
+    top: 0;
+    right: 0;
+    animation: none;
   }
 </style>
 </head>
@@ -93,95 +153,326 @@
   <div class="crumb">Components</div>
   <h1>User menu</h1>
   <div class="lede">
-    Menyja e avatarit lart-djathtas. Tregon emrin, email-in dhe role chips —
-    pastaj <em>Profili im</em> dhe <em>Dilni</em>. Disa role janë të dukshme në
-    mënyrë të paqartë.
+    Menyja e avatarit në krye-djathtas. Tregon emrin, email-in, role chips
+    për përdoruesit e klinikës (ose <em>role text</em> për platform admin),
+    pastaj <em>Profili im</em>, lidhje ndihmëse, dhe <em>Dilni</em>.
+    Të gjitha variantet ndajnë të njëjtin DOM (<code>.user-menu</code>) dhe
+    klasat e stilit (<code>.um-head</code>, <code>.um-item</code>,
+    <code>.um-divider</code>) e përcaktuara në <code>styles.css</code>.
   </div>
 
-  <div class="menu-grid">
-
-    <!-- Receptionist only -->
-    <div class="menu-cell">
-      <div class="cell-label">Recepsioniste</div>
-      <div class="menu-mount">
-        <div class="topbar-mock"><div class="avatar-mock" style="background: #5B21B6;">EK</div></div>
-        <div class="menu-static">
-          <div class="um-head" style="padding: 12px 14px; border-bottom: 1px solid var(--border-soft); background: var(--bg-subtle);">
-            <div style="font-family: var(--font-display); font-size: 13.5px; font-weight: 600; color: var(--text-strong); line-height: 1.2;">Erëblirë Krasniqi</div>
-            <div style="font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); margin-top: 3px;">ereblire@donetamed.com</div>
-            <div style="display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px;">
-              <span class="chip-role reception">Recepsioniste</span>
-            </div>
-          </div>
-          <a href="#" class="um-item" style="padding: 9px 14px; font-size: 13px; display: flex; align-items: center; gap: 10px; color: var(--text); text-decoration: none;">
-            <svg style="width: 16px; height: 16px; color: var(--text-muted);" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="5.5" r="2.8"/><path d="M2.5 14c0-3 2.5-4.5 5.5-4.5s5.5 1.5 5.5 4.5"/></svg>
-            Profili im
-          </a>
-          <div style="height: 1px; background: var(--border-soft);"></div>
-          <a href="#" style="padding: 9px 14px; font-size: 13px; display: flex; align-items: center; gap: 10px; color: var(--red); text-decoration: none;">
-            <svg style="width: 16px; height: 16px;" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10 4V2.5a1 1 0 0 0-1-1H3a1 1 0 0 0-1 1v11a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V12"/><path d="M6.5 8h8M11.5 5l3 3-3 3"/></svg>
-            Dilni
-          </a>
-        </div>
-      </div>
+  <!-- ============================================================
+       CLINIC USERS — doctor, receptionist, doctor+admin, recept+admin
+       ============================================================ -->
+  <div class="panel">
+    <h2>Përdoruesit e klinikës</h2>
+    <div class="desc">
+      Header me <strong>name + email + role chips</strong>. Një link drejt
+      profilit dhe një link logout. Role chips përdorin paletën standarde
+      (mjeku = indigo, recepsioniste = violet, administrator = slate).
     </div>
 
-    <!-- Doctor + admin (Dr. Taulant) -->
-    <div class="menu-cell">
-      <div class="cell-label">Mjeku + Administrator i klinikës</div>
-      <div class="menu-mount">
-        <div class="topbar-mock"><div class="avatar-mock">TS</div></div>
-        <div class="menu-static">
-          <div class="um-head" style="padding: 12px 14px; border-bottom: 1px solid var(--border-soft); background: var(--bg-subtle);">
-            <div style="font-family: var(--font-display); font-size: 13.5px; font-weight: 600; color: var(--text-strong); line-height: 1.2;">Dr. Taulant Shala</div>
-            <div style="font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); margin-top: 3px;">taulant@donetamed.com</div>
-            <div style="display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px;">
-              <span class="chip-role doctor">Mjeku</span>
-              <span class="chip-role admin">Administrator i klinikës</span>
+    <div class="menu-grid">
+
+      <!-- Receptionist only -->
+      <div class="menu-cell">
+        <div class="cell-label">Recepsioniste</div>
+        <div class="cell-sub">Roli i vetëm. Pa privilegje administrative.</div>
+        <div class="stage">
+          <div class="topbar-fake">
+            <div class="topbar-user">
+              <div class="avatar" style="background: #5B21B6;">EK</div>
+              <span class="name">Erëblirë K.</span>
+              <span class="chev">▾</span>
             </div>
           </div>
-          <a href="#" style="padding: 9px 14px; font-size: 13px; display: flex; align-items: center; gap: 10px; color: var(--text); text-decoration: none;">
-            <svg style="width: 16px; height: 16px; color: var(--text-muted);" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="5.5" r="2.8"/><path d="M2.5 14c0-3 2.5-4.5 5.5-4.5s5.5 1.5 5.5 4.5"/></svg>
-            Profili im
-          </a>
-          <div style="height: 1px; background: var(--border-soft);"></div>
-          <a href="#" style="padding: 9px 14px; font-size: 13px; display: flex; align-items: center; gap: 10px; color: var(--red); text-decoration: none;">
-            <svg style="width: 16px; height: 16px;" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10 4V2.5a1 1 0 0 0-1-1H3a1 1 0 0 0-1 1v11a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V12"/><path d="M6.5 8h8M11.5 5l3 3-3 3"/></svg>
-            Dilni
-          </a>
-        </div>
-      </div>
-    </div>
-
-    <!-- Receptionist + admin -->
-    <div class="menu-cell">
-      <div class="cell-label">Recepsioniste + Administrator</div>
-      <div class="menu-mount">
-        <div class="topbar-mock"><div class="avatar-mock" style="background: #334155;">BG</div></div>
-        <div class="menu-static">
-          <div class="um-head" style="padding: 12px 14px; border-bottom: 1px solid var(--border-soft); background: var(--bg-subtle);">
-            <div style="font-family: var(--font-display); font-size: 13.5px; font-weight: 600; color: var(--text-strong); line-height: 1.2;">Blerta Gashi</div>
-            <div style="font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); margin-top: 3px;">blerta@donetamed.com</div>
-            <div style="display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px;">
-              <span class="chip-role reception">Recepsioniste</span>
-              <span class="chip-role admin">Administrator i klinikës</span>
+          <div class="user-wrap-static">
+            <div class="user-menu" role="menu">
+              <div class="um-head">
+                <div class="name">Erëblirë Krasniqi</div>
+                <div class="email"><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="06637463646a6f7463466269686372676b63622865696b">[email&#160;protected]</a></div>
+                <div class="roles">
+                  <span class="chip-role reception">Recepsioniste</span>
+                </div>
+              </div>
+              <a href="#" class="um-item" role="menuitem">
+                <svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="8" cy="5.5" r="2.8"/><path d="M2.5 14c0-3 2.5-4.5 5.5-4.5s5.5 1.5 5.5 4.5"/>
+                </svg>
+                Profili im
+              </a>
+              <div class="um-divider"></div>
+              <a href="#" class="um-item logout" role="menuitem">
+                <svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M10 4V2.5a1 1 0 0 0-1-1H3a1 1 0 0 0-1 1v11a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V12"/>
+                  <path d="M6.5 8h8M11.5 5l3 3-3 3"/>
+                </svg>
+                Dilni
+              </a>
             </div>
           </div>
-          <a href="#" style="padding: 9px 14px; font-size: 13px; display: flex; align-items: center; gap: 10px; color: var(--text); text-decoration: none;">
-            <svg style="width: 16px; height: 16px; color: var(--text-muted);" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="5.5" r="2.8"/><path d="M2.5 14c0-3 2.5-4.5 5.5-4.5s5.5 1.5 5.5 4.5"/></svg>
-            Profili im
-          </a>
-          <div style="height: 1px; background: var(--border-soft);"></div>
-          <a href="#" style="padding: 9px 14px; font-size: 13px; display: flex; align-items: center; gap: 10px; color: var(--red); text-decoration: none;">
-            <svg style="width: 16px; height: 16px;" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10 4V2.5a1 1 0 0 0-1-1H3a1 1 0 0 0-1 1v11a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V12"/><path d="M6.5 8h8M11.5 5l3 3-3 3"/></svg>
-            Dilni
-          </a>
         </div>
       </div>
-    </div>
 
+      <!-- Doctor only -->
+      <div class="menu-cell">
+        <div class="cell-label">Mjeku</div>
+        <div class="cell-sub">Roli i vetëm. Pa privilegje administrative.</div>
+        <div class="stage">
+          <div class="topbar-fake">
+            <div class="topbar-user">
+              <div class="avatar">AB</div>
+              <span class="name">Dr. Arta Berisha</span>
+              <span class="chev">▾</span>
+            </div>
+          </div>
+          <div class="user-wrap-static">
+            <div class="user-menu" role="menu">
+              <div class="um-head">
+                <div class="name">Dr. Arta Berisha</div>
+                <div class="email"><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="3657444257765259585342575b53521855595b">[email&#160;protected]</a></div>
+                <div class="roles">
+                  <span class="chip-role doctor">Mjeku</span>
+                </div>
+              </div>
+              <a href="#" class="um-item" role="menuitem">
+                <svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="8" cy="5.5" r="2.8"/><path d="M2.5 14c0-3 2.5-4.5 5.5-4.5s5.5 1.5 5.5 4.5"/>
+                </svg>
+                Profili im
+              </a>
+              <div class="um-divider"></div>
+              <a href="#" class="um-item logout" role="menuitem">
+                <svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M10 4V2.5a1 1 0 0 0-1-1H3a1 1 0 0 0-1 1v11a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V12"/>
+                  <path d="M6.5 8h8M11.5 5l3 3-3 3"/>
+                </svg>
+                Dilni
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Doctor + clinic admin -->
+      <div class="menu-cell">
+        <div class="cell-label">Mjeku + Administrator i klinikës</div>
+        <div class="cell-sub">Dy role. Shumica e pronarëve të klinikës.</div>
+        <div class="stage">
+          <div class="topbar-fake">
+            <div class="topbar-user">
+              <div class="avatar">TS</div>
+              <span class="name">Dr. Taulant Shala</span>
+              <span class="chev">▾</span>
+            </div>
+          </div>
+          <div class="user-wrap-static">
+            <div class="user-menu" role="menu">
+              <div class="um-head">
+                <div class="name">Dr. Taulant Shala</div>
+                <div class="email"><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="433722362f222d3703272c2d2637222e26276d202c2e">[email&#160;protected]</a></div>
+                <div class="roles">
+                  <span class="chip-role doctor">Mjeku</span>
+                  <span class="chip-role admin">Administrator i klinikës</span>
+                </div>
+              </div>
+              <a href="#" class="um-item" role="menuitem">
+                <svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="8" cy="5.5" r="2.8"/><path d="M2.5 14c0-3 2.5-4.5 5.5-4.5s5.5 1.5 5.5 4.5"/>
+                </svg>
+                Profili im
+              </a>
+              <div class="um-divider"></div>
+              <a href="#" class="um-item logout" role="menuitem">
+                <svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M10 4V2.5a1 1 0 0 0-1-1H3a1 1 0 0 0-1 1v11a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V12"/>
+                  <path d="M6.5 8h8M11.5 5l3 3-3 3"/>
+                </svg>
+                Dilni
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Receptionist + clinic admin -->
+      <div class="menu-cell">
+        <div class="cell-label">Recepsioniste + Administrator</div>
+        <div class="cell-sub">I rrallë por i mundshëm — p.sh. menaxher i klinikës që mban edhe recepsionin.</div>
+        <div class="stage">
+          <div class="topbar-fake">
+            <div class="topbar-user">
+              <div class="avatar" style="background: #334155;">BG</div>
+              <span class="name">Blerta Gashi</span>
+              <span class="chev">▾</span>
+            </div>
+          </div>
+          <div class="user-wrap-static">
+            <div class="user-menu" role="menu">
+              <div class="um-head">
+                <div class="name">Blerta Gashi</div>
+                <div class="email"><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="fc9e90998e889dbc98939299889d919998d29f9391">[email&#160;protected]</a></div>
+                <div class="roles">
+                  <span class="chip-role reception">Recepsioniste</span>
+                  <span class="chip-role admin">Administrator i klinikës</span>
+                </div>
+              </div>
+              <a href="#" class="um-item" role="menuitem">
+                <svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="8" cy="5.5" r="2.8"/><path d="M2.5 14c0-3 2.5-4.5 5.5-4.5s5.5 1.5 5.5 4.5"/>
+                </svg>
+                Profili im
+              </a>
+              <div class="um-divider"></div>
+              <a href="#" class="um-item logout" role="menuitem">
+                <svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M10 4V2.5a1 1 0 0 0-1-1H3a1 1 0 0 0-1 1v11a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V12"/>
+                  <path d="M6.5 8h8M11.5 5l3 3-3 3"/>
+                </svg>
+                Dilni
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
   </div>
+
+  <!-- ============================================================
+       PLATFORM ADMIN — different header style, extra menu items
+       ============================================================ -->
+  <div class="panel">
+    <h2>Administrator i platformës</h2>
+    <div class="desc">
+      Vetëm për stafin e <strong>klinika.health</strong>. Header përdor
+      <code>.role</code> në vend të role chips (s'ka shumë role për t'u
+      treguar). Menyja ka dy zëra shtesë: shkurtoret e tastierës dhe
+      ndihmë &amp; mbështetje.
+    </div>
+
+    <div class="menu-grid" style="grid-template-columns: minmax(280px, 380px);">
+      <div class="menu-cell">
+        <div class="cell-label">Platform admin</div>
+        <div class="cell-sub">Avatar slate për t'u dalluar nga teal-i i klinikës.</div>
+        <div class="stage">
+          <div class="topbar-fake">
+            <div class="topbar-user">
+              <div class="avatar" style="background: var(--text-strong);">AD</div>
+              <div style="display: flex; flex-direction: column; align-items: flex-start; line-height: 1.2;">
+                <span class="name">Andi Dushi</span>
+                <span class="role-tag">Platform Admin</span>
+              </div>
+              <span class="chev">▾</span>
+            </div>
+          </div>
+          <div class="user-wrap-static">
+            <div class="user-menu" role="menu">
+              <div class="um-head">
+                <div class="name">Andi Dushi</div>
+                <div class="role">Platform admin · Klinika.health</div>
+              </div>
+              <a href="#" class="um-item" role="menuitem">
+                <svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="8" cy="5.5" r="2.8"/><path d="M2.5 14c0-3 2.5-4.5 5.5-4.5s5.5 1.5 5.5 4.5"/>
+                </svg>
+                Profili im
+              </a>
+              <a href="#" class="um-item" role="menuitem">
+                <svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="2" y="4" width="12" height="8" rx="1.5"/>
+                  <path d="M4.5 7h.01M6.5 7h.01M8.5 7h.01M10.5 7h.01M4.5 9.5h7"/>
+                </svg>
+                Shkurtoret e tastierës
+              </a>
+              <a href="#" class="um-item" role="menuitem">
+                <svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="8" cy="8" r="6"/>
+                  <path d="M6 6a2 2 0 1 1 2.5 1.9c-.4.1-.5.4-.5.7v.4M8 11.5v.01"/>
+                </svg>
+                Ndihmë &amp; mbështetje
+              </a>
+              <div class="um-divider"></div>
+              <a href="#" class="um-item logout" role="menuitem">
+                <svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M10 4V2.5a1 1 0 0 0-1-1H3a1 1 0 0 0-1 1v11a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V12"/>
+                  <path d="M6.5 8h8M11.5 5l3 3-3 3"/>
+                </svg>
+                Dilni
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       ANATOMY — labeled callouts on a single menu
+       ============================================================ -->
+  <div class="panel">
+    <h2>Anatomia</h2>
+    <div class="desc">
+      Komponenti përdor klasat e ndara nga <code>styles.css</code> që janë
+      aktive në çdo header të aplikacionit.
+    </div>
+
+    <div style="display: grid; grid-template-columns: 280px 1fr; gap: 32px; align-items: start;">
+      <div class="stage" style="min-height: 0;">
+        <div class="user-wrap-static">
+          <div class="user-menu" role="menu">
+            <div class="um-head">
+              <div class="name">Dr. Taulant Shala</div>
+              <div class="email"><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="a3d7c2d6cfc2cdd7e3c7cccdc6d7c2cec6c78dc0ccce">[email&#160;protected]</a></div>
+              <div class="roles">
+                <span class="chip-role doctor">Mjeku</span>
+                <span class="chip-role admin">Administrator i klinikës</span>
+              </div>
+            </div>
+            <a href="#" class="um-item" role="menuitem">
+              <svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="8" cy="5.5" r="2.8"/><path d="M2.5 14c0-3 2.5-4.5 5.5-4.5s5.5 1.5 5.5 4.5"/>
+              </svg>
+              Profili im
+            </a>
+            <div class="um-divider"></div>
+            <a href="#" class="um-item logout" role="menuitem">
+              <svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M10 4V2.5a1 1 0 0 0-1-1H3a1 1 0 0 0-1 1v11a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V12"/>
+                <path d="M6.5 8h8M11.5 5l3 3-3 3"/>
+              </svg>
+              Dilni
+            </a>
+          </div>
+        </div>
+      </div>
+
+      <ul style="list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 10px; font-size: 13px; line-height: 1.5;">
+        <li>
+          <code style="font-family: var(--font-mono); font-size: 11.5px; color: var(--text-strong); background: var(--bg-subtle); padding: 1px 6px; border-radius: 3px;">.user-menu</code>
+          <span style="color: var(--text-muted);"> — container, 232px min-width, elevated shadow, dropdown nën avatar.</span>
+        </li>
+        <li>
+          <code style="font-family: var(--font-mono); font-size: 11.5px; color: var(--text-strong); background: var(--bg-subtle); padding: 1px 6px; border-radius: 3px;">.um-head</code>
+          <span style="color: var(--text-muted);"> — bllok identiteti me bg-subtle dhe border-bottom. Përmban <code>.name</code>, pastaj ose <code>.email</code> + <code>.roles</code> (klinikë) ose <code>.role</code> (platform admin).</span>
+        </li>
+        <li>
+          <code style="font-family: var(--font-mono); font-size: 11.5px; color: var(--text-strong); background: var(--bg-subtle); padding: 1px 6px; border-radius: 3px;">.um-item</code>
+          <span style="color: var(--text-muted);"> — rresht meny me <code>.ic</code> (16px) majtas + label. Hover = bg-subtle.</span>
+        </li>
+        <li>
+          <code style="font-family: var(--font-mono); font-size: 11.5px; color: var(--text-strong); background: var(--bg-subtle); padding: 1px 6px; border-radius: 3px;">.um-item.logout</code>
+          <span style="color: var(--text-muted);"> — variant i kuq për logout. Hover = red-bg.</span>
+        </li>
+        <li>
+          <code style="font-family: var(--font-mono); font-size: 11.5px; color: var(--text-strong); background: var(--bg-subtle); padding: 1px 6px; border-radius: 3px;">.um-divider</code>
+          <span style="color: var(--text-muted);"> — vijë e hollë midis grupeve të zërave (gjithmonë para logout).</span>
+        </li>
+      </ul>
+    </div>
+  </div>
+
 </div>
 
-</body>
+<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script></body>
 </html>
