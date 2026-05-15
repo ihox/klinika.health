@@ -97,8 +97,16 @@ export interface SoftDeleteResponse {
 // ---------------------------------------------------------------------------
 
 export const visitClient = {
+  /**
+   * Doctor's "Vizitë e re" — POSTs to /api/visits/doctor-new, which
+   * auto-pairs the new row to today's in-progress booking when one
+   * is available (sibling / companion arrives without a booking) and
+   * otherwise falls through to a calendar-invisible chart entry. The
+   * caller doesn't need to know which path the server took; the
+   * returned VisitDto is the same shape either way.
+   */
   create: (patientId: string, visitDate?: string) =>
-    apiFetch<{ visit: VisitDto }>('/api/visits', {
+    apiFetch<{ visit: VisitDto }>('/api/visits/doctor-new', {
       method: 'POST',
       json: visitDate ? { patientId, visitDate } : { patientId },
     }),

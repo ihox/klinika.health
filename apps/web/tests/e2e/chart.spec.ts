@@ -317,7 +317,7 @@ async function mockVisits(
     });
   });
 
-  await page.route('**/api/visits', async (route: Route) => {
+  await page.route('**/api/visits/doctor-new', async (route: Route) => {
     if (route.request().method() === 'POST') {
       visit = { ...visit, id: visit.id, createdAt: new Date().toISOString() };
       await route.fulfill({
@@ -571,12 +571,15 @@ test.describe('Patient chart shell', () => {
     await restorePromise;
   });
 
-  test('Vizitë e re button POSTs to /api/visits and navigates', async ({ page }) => {
+  test('Vizitë e re button POSTs to /api/visits/doctor-new and navigates', async ({
+    page,
+  }) => {
     await mockChart(page);
     await mockVisits(page);
 
     const createPromise = page.waitForRequest(
-      (req) => req.url().endsWith('/api/visits') && req.method() === 'POST',
+      (req) =>
+        req.url().endsWith('/api/visits/doctor-new') && req.method() === 'POST',
     );
     await page.goto(`/pacient/${PATIENT_ID}`);
     await page.getByRole('button', { name: '+ Vizitë e re' }).first().click();
