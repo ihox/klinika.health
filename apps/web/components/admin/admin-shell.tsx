@@ -7,6 +7,7 @@ import { useEffect, useState } from 'react';
 import { ApiError } from '@/lib/api';
 import { adminClient, type AdminProfile } from '@/lib/admin-client';
 import { BrandLogo } from '@/components/brand-logo';
+import { PlatformAdminUserMenu } from '@/components/admin/platform-admin-user-menu';
 
 interface AdminShellProps {
   children: React.ReactNode;
@@ -121,21 +122,7 @@ export function AdminShell({ children }: AdminShellProps) {
           </nav>
           <div className="flex-1" />
           {admin ? (
-            <div className="flex items-center gap-3">
-              <div className="flex flex-col items-end leading-tight">
-                <span className="text-[13px] font-medium text-stone-900">
-                  {admin.firstName} {admin.lastName}
-                </span>
-                <span className="text-[11px] text-stone-500">Platform Admin</span>
-              </div>
-              <button
-                onClick={handleLogout}
-                className="text-[13px] text-stone-500 hover:text-teal-700 hover:underline"
-                type="button"
-              >
-                Dil
-              </button>
-            </div>
+            <PlatformAdminUserMenu admin={admin} onLogout={handleLogout} />
           ) : null}
         </div>
       </header>
