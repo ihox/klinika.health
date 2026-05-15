@@ -15,6 +15,7 @@ import {
   dayLabelLong,
   formatLongAlbanianDate,
   formatRangeAlbanian,
+  mondayOfWeekIso,
   todayIsoLocal,
   toLocalParts,
   weekdayOf,
@@ -35,7 +36,17 @@ import { GlobalPatientSearch } from './global-patient-search';
 import { QuickAddPatientModal } from './pacientet/quick-add-patient-modal';
 import { PatientPicker } from './patient-picker';
 
-const DAYS_TO_SHOW = 6;
+// The receptionist calendar shows a fixed Monday-Saturday week. Sunday is
+// hidden — clinics are closed by default, and the design reference reserves
+// the 6-column grid for Mon..Sat.
+const VISIBLE_WEEKDAYS: Array<'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat'> = [
+  'mon',
+  'tue',
+  'wed',
+  'thu',
+  'fri',
+  'sat',
+];
 const STATS_POLL_MS = 30_000;
 
 interface UndoState {
@@ -111,38 +122,30 @@ export function CalendarView(): ReactElement {
 
   const todayIso = useMemo(() => todayIsoLocal(now), [now]);
 
-  // ----- Columns: today + next 5 OPEN days (skipping clinic-closed days)
+  // ----- Displayed week: Monday of the week containing today. STEP 2 will
+  // turn this into stateful navigation (prev/next/Sot); for now the
+  // calendar always renders the current week.
+  const weekStart = useMemo(() => mondayOfWeekIso(todayIso), [todayIso]);
+
+  // ----- Columns: fixed Mon..Sat of the displayed week. Sunday is hidden
+  // (clinics are closed; the grid is 6 columns). Each column carries the
+  // clinic's open/close state for that weekday — closed days render the
+  // "Mbyllur" hatched overlay inside the grid.
   const columns: DayColumn[] = useMemo(() => {
     if (!settings) return [];
     const hours = settings.hours;
-    const out: DayColumn[] = [];
-    let cursor = todayIso;
-    while (out.length < DAYS_TO_SHOW) {
-      const dow = weekdayOf(cursor);
+    return VISIBLE_WEEKDAYS.map((dow, idx) => {
+      const date = addLocalDays(weekStart, idx);
       const day = hours.days[dow];
-      if (day.open) {
-        out.push({
-          date: cursor,
-          weekday: dow,
-          open: true,
-          startTime: day.start,
-          endTime: day.end,
-        });
-      } else if (cursor === todayIso) {
-        out.push({
-          date: cursor,
-          weekday: dow,
-          open: false,
-          startTime: '10:00',
-          endTime: '18:00',
-        });
-      }
-      cursor = addLocalDays(cursor, 1);
-      if (out.length === 0 && cursor > addLocalDays(todayIso, 14)) break;
-      if (cursor > addLocalDays(todayIso, 60)) break;
-    }
-    return out;
-  }, [settings, todayIso]);
+      return {
+        date,
+        weekday: dow,
+        open: day.open,
+        startTime: day.open ? day.start : '10:00',
+        endTime: day.open ? day.end : '18:00',
+      };
+    });
+  }, [settings, weekStart]);
 
   const rangeFrom = columns[0]?.date ?? todayIso;
   const rangeTo = columns[columns.length - 1]?.date ?? todayIso;

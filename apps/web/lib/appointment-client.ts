@@ -305,6 +305,16 @@ export function weekdayOf(dateIso: string): LocalParts['weekday'] {
   return order[utc.getUTCDay()] ?? 'mon';
 }
 
+// Returns the ISO date (YYYY-MM-DD) of the Monday of the week containing
+// `dateIso`. Weeks start on Monday — Sundays count as the previous week's
+// final (closed) day, so `mondayOfWeekIso('2026-05-17' /* Sun */)` returns
+// the prior Monday `'2026-05-11'`.
+export function mondayOfWeekIso(dateIso: string): string {
+  const dow = weekdayOf(dateIso);
+  const offset = { mon: 0, tue: 1, wed: 2, thu: 3, fri: 4, sat: 5, sun: 6 }[dow];
+  return addLocalDays(dateIso, -offset);
+}
+
 export function timeToMinutes(time: string): number {
   const [h, m] = time.split(':').map(Number) as [number, number];
   return h * 60 + m;
