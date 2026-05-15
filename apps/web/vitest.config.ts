@@ -10,7 +10,11 @@ export default defineConfig({
   test: {
     globals: false,
     environment: 'node',
-    include: ['lib/**/*.{spec,test}.ts', 'components/**/*.{spec,test}.ts'],
+    include: [
+      'lib/**/*.{spec,test}.ts',
+      'components/**/*.{spec,test}.ts',
+      'app/**/*.{spec,test}.ts',
+    ],
     // E2E specs live under tests/e2e/ and are run by Playwright. Keep
     // them out of the unit-test scan.
     exclude: ['node_modules/**', 'tests/**', '.next/**'],

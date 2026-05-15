@@ -57,7 +57,7 @@ const STATUS_LABEL: Record<VisitStatus, string> = {
 
 // Walk-ins have no durationMinutes; height is purely visual. The
 // `in_progress` variant needs the extra room for the "Në vizitë" badge.
-const WALKIN_HEIGHT_PX: Record<VisitStatus, number> = {
+export const WALKIN_HEIGHT_PX: Record<VisitStatus, number> = {
   scheduled: 24,
   arrived: 24,
   in_progress: 36,
@@ -78,9 +78,9 @@ const CLOSED_HATCH_BG =
 /**
  * Bucket walk-ins by their local Belgrade date for per-column rendering.
  * Inlined here — only used by the calendar grid now that the horizontal
- * band is gone.
+ * band is gone. Exported for unit testing.
  */
-function groupWalkInsByDay(entries: CalendarEntry[]): Map<string, CalendarEntry[]> {
+export function groupWalkInsByDay(entries: CalendarEntry[]): Map<string, CalendarEntry[]> {
   const map = new Map<string, CalendarEntry[]>();
   for (const e of entries) {
     if (!e.isWalkIn) continue;
