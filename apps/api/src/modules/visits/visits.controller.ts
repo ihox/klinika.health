@@ -31,15 +31,17 @@ import { VisitsService } from './visits.service';
 /**
  * Visit API surface.
  *
- *   POST   /api/visits                 — create a new visit (doctor)
- *   POST   /api/visits/doctor-new      — doctor-initiated "Vizitë e re"
- *                                        with auto-pairing to today's
- *                                        in-progress booking
- *   GET    /api/visits/:id             — full visit record (doctor)
- *   PATCH  /api/visits/:id             — delta save (doctor — auto-save target)
- *   DELETE /api/visits/:id             — soft delete (doctor)
- *   POST   /api/visits/:id/restore     — restore within the 30s undo window
- *   GET    /api/visits/:id/history     — change history (audit log)
+ *   POST   /api/visits                  — create a new visit (doctor)
+ *   POST   /api/visits/doctor-new       — doctor-initiated "Vizitë e re"
+ *                                         with auto-pairing to today's
+ *                                         in-progress booking
+ *   GET    /api/visits/:id              — full visit record (doctor)
+ *   PATCH  /api/visits/:id              — delta save (doctor — auto-save target)
+ *   DELETE /api/visits/:id              — soft delete (doctor)
+ *   POST   /api/visits/:id/restore      — restore within the 30s undo window
+ *   POST   /api/visits/:id/clear        — Pastro vizitën (Phase 2c)
+ *   POST   /api/visits/:id/clear/undo   — Pastro vizitën undo (15s window)
+ *   GET    /api/visits/:id/history      — change history (audit log)
  *
  * All endpoints are doctor / clinic-admin only — the receptionist
  * privacy boundary (CLAUDE.md §1.2) keeps the receptionist out.
@@ -142,6 +144,46 @@ export class VisitsController {
     @Ctx() ctx: RequestContext,
   ): Promise<{ visit: VisitDto }> {
     const visit = await this.visits.restore(ctx.clinicId!, id, ctx);
+    return { visit };
+  }
+
+  /**
+   * "Pastro vizitën" — return a today's completed visit to an editable
+   * `arrived` state with all clinical fields cleared. A snapshot is
+   * captured so the doctor has 15 seconds to undo via the sibling
+   * `:id/clear/undo` endpoint.
+   *
+   * 400 with `reason='not_completed'` if status != 'completed'.
+   * 400 with `reason='not_today'` if visitDate is not today (clinic-local).
+   * 404 if the visit doesn't exist (or is soft-deleted).
+   */
+  @Post(':id/clear')
+  @Roles('doctor', 'clinic_admin')
+  @HttpCode(HttpStatus.OK)
+  async clear(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Ctx() ctx: RequestContext,
+  ): Promise<{ visit: VisitDto; undoableUntil: string }> {
+    return this.visits.clear(ctx.clinicId!, id, ctx);
+  }
+
+  /**
+   * Undo a "Pastro vizitën" within the 15-second window. Restores the
+   * clinical fields + diagnoses from the snapshot row and flips the
+   * status back to `completed` (or whatever was captured as
+   * previousStatus). Snapshot row is consumed (DELETE) on success.
+   *
+   * 400 with `reason='undo_window_expired'` if the snapshot is past
+   * its TTL. 404 if no snapshot exists for the visit.
+   */
+  @Post(':id/clear/undo')
+  @Roles('doctor', 'clinic_admin')
+  @HttpCode(HttpStatus.OK)
+  async clearUndo(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Ctx() ctx: RequestContext,
+  ): Promise<{ visit: VisitDto }> {
+    const visit = await this.visits.clearUndo(ctx.clinicId!, id, ctx);
     return { visit };
   }
 

@@ -64,36 +64,37 @@ enum PatientSex {
 /// `smtp_config` is optional — clinics that don't override SMTP fall
 /// back to the platform-wide Resend account.
 model Clinic {
-  id           String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  subdomain    String       @unique
-  name         String
-  shortName    String       @map("short_name")
-  address      String
-  city         String
-  phones       String[]
-  email        String
-  hoursConfig  Json         @map("hours_config")
-  paymentCodes Json         @map("payment_codes")
+  id                    String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  subdomain             String       @unique
+  name                  String
+  shortName             String       @map("short_name")
+  address               String
+  city                  String
+  phones                String[]
+  email                 String
+  hoursConfig           Json         @map("hours_config")
+  paymentCodes          Json         @map("payment_codes")
   /// Default duration (minutes) applied to walk-ins by both the
   /// receptionist `/api/visits/walkin` and the doctor's
   /// `/api/visits/doctor-new` flow. DB CHECK constraint bounds 5..60.
   /// Configurable per clinic via Cilësimet → Përgjithshme (clinic_admin only).
-  walkinDurationMinutes Int   @default(5) @map("walkin_duration_minutes")
-  logoUrl      String       @map("logo_url")
-  signatureUrl String       @map("signature_url")
-  smtpConfig   Json?        @map("smtp_config")
-  status       ClinicStatus @default(active)
-  createdAt    DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt    DateTime     @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
-  deletedAt    DateTime?    @map("deleted_at") @db.Timestamptz(6)
+  walkinDurationMinutes Int          @default(5) @map("walkin_duration_minutes")
+  logoUrl               String       @map("logo_url")
+  signatureUrl          String       @map("signature_url")
+  smtpConfig            Json?        @map("smtp_config")
+  status                ClinicStatus @default(active)
+  createdAt             DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt             DateTime     @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt             DateTime?    @map("deleted_at") @db.Timestamptz(6)
 
-  users             User[]
-  patients          Patient[]
-  visits            Visit[]
-  vertetime         Vertetim[]
-  dicomStudies      DicomStudy[]
-  prescriptionLines PrescriptionLine[]
-  diagnosisUsages   DoctorDiagnosisUsage[]
+  users               User[]
+  patients            Patient[]
+  visits              Visit[]
+  vertetime           Vertetim[]
+  dicomStudies        DicomStudy[]
+  prescriptionLines   PrescriptionLine[]
+  diagnosisUsages     DoctorDiagnosisUsage[]
+  visitClearSnapshots VisitClearSnapshot[]
 
   @@map("clinics")
 }
@@ -132,17 +133,17 @@ model User {
   updatedAt    DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
   deletedAt    DateTime? @map("deleted_at") @db.Timestamptz(6)
 
-  clinic              Clinic                   @relation(fields: [clinicId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  visitsCreated       Visit[]                  @relation("VisitCreatedBy")
-  visitsUpdated       Visit[]                  @relation("VisitUpdatedBy")
-  vertetimeIssued     Vertetim[]               @relation("VertetimIssuedBy")
-  dicomLinksCreated   VisitDicomLink[]         @relation("DicomLinkLinkedBy")
-  prescriptionLines   PrescriptionLine[]
-  diagnosisUsages     DoctorDiagnosisUsage[]
-  authSessions        AuthSession[]
-  trustedDevices      AuthTrustedDevice[]
-  mfaCodes            AuthMfaCode[]
-  passwordResets      AuthPasswordResetToken[]
+  clinic            Clinic                   @relation(fields: [clinicId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  visitsCreated     Visit[]                  @relation("VisitCreatedBy")
+  visitsUpdated     Visit[]                  @relation("VisitUpdatedBy")
+  vertetimeIssued   Vertetim[]               @relation("VertetimIssuedBy")
+  dicomLinksCreated VisitDicomLink[]         @relation("DicomLinkLinkedBy")
+  prescriptionLines PrescriptionLine[]
+  diagnosisUsages   DoctorDiagnosisUsage[]
+  authSessions      AuthSession[]
+  trustedDevices    AuthTrustedDevice[]
+  mfaCodes          AuthMfaCode[]
+  passwordResets    AuthPasswordResetToken[]
 
   @@index([clinicId])
   @@map("users")
@@ -266,22 +267,22 @@ model PlatformAuditLog {
 /// allergy field from the Access source. Birth measurements migrate
 /// from `PL`/`Pesha lindjes` and friends; `0` in source maps to NULL.
 model Patient {
-  id                       String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  clinicId                 String    @map("clinic_id") @db.Uuid
-  legacyId                 Int?      @map("legacy_id")
-  firstName                String    @map("first_name")
-  lastName                 String    @map("last_name")
-  dateOfBirth              DateTime  @map("date_of_birth") @db.Date
-  placeOfBirth             String?   @map("place_of_birth")
+  id                       String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  clinicId                 String      @map("clinic_id") @db.Uuid
+  legacyId                 Int?        @map("legacy_id")
+  firstName                String      @map("first_name")
+  lastName                 String      @map("last_name")
+  dateOfBirth              DateTime    @map("date_of_birth") @db.Date
+  placeOfBirth             String?     @map("place_of_birth")
   sex                      PatientSex? @map("sex")
   birthWeightG             Int?        @map("birth_weight_g")
   birthHeadCircumferenceCm Decimal?    @map("birth_head_circumference_cm") @db.Decimal(5, 2)
   birthLengthCm            Decimal?    @map("birth_length_cm") @db.Decimal(5, 2)
   alergjiTjera             String?     @map("alergji_tjera") @db.Text
   phone                    String?
-  createdAt                DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt                DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
-  deletedAt                DateTime? @map("deleted_at") @db.Timestamptz(6)
+  createdAt                DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                DateTime    @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt                DateTime?   @map("deleted_at") @db.Timestamptz(6)
 
   clinic    Clinic     @relation(fields: [clinicId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   visits    Visit[]
@@ -362,15 +363,16 @@ model Visit {
   updatedAt           DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
   deletedAt           DateTime? @map("deleted_at") @db.Timestamptz(6)
 
-  clinic        Clinic           @relation(fields: [clinicId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  patient       Patient          @relation(fields: [patientId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  createdByUser User             @relation("VisitCreatedBy", fields: [createdBy], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  updatedByUser User             @relation("VisitUpdatedBy", fields: [updatedBy], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  pairedWith    Visit?           @relation("VisitWalkinPairing", fields: [pairedWithVisitId], references: [id], onDelete: SetNull, onUpdate: NoAction)
-  pairedWalkIns Visit[]          @relation("VisitWalkinPairing")
+  clinic        Clinic              @relation(fields: [clinicId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  patient       Patient             @relation(fields: [patientId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  createdByUser User                @relation("VisitCreatedBy", fields: [createdBy], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  updatedByUser User                @relation("VisitUpdatedBy", fields: [updatedBy], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  pairedWith    Visit?              @relation("VisitWalkinPairing", fields: [pairedWithVisitId], references: [id], onDelete: SetNull, onUpdate: NoAction)
+  pairedWalkIns Visit[]             @relation("VisitWalkinPairing")
   diagnoses     VisitDiagnosis[]
   vertetime     Vertetim[]
   dicomLinks    VisitDicomLink[]
+  clearSnapshot VisitClearSnapshot?
 
   @@unique([clinicId, legacyId], name: "visit_clinic_legacy_unique")
   @@index([clinicId])
@@ -394,6 +396,40 @@ model VisitDiagnosis {
   @@index([visitId])
   @@index([icd10Code])
   @@map("visit_diagnoses")
+}
+
+/// Short-lived snapshot of a visit's clinical fields, captured at the
+/// moment the doctor clicks "Pastro vizitën" (Phase 2c). The 15-second
+/// undo window is enforced by `expires_at`: the undo endpoint accepts
+/// only rows where `expires_at > now()`, then consumes the row (DELETE).
+/// After expiry the row is dead weight — a future sweeper may prune it,
+/// or the next clear of the same visit will (upsert keyed on `visit_id`).
+///
+/// `fields` carries the 17 clinical columns as a JSON object; numeric
+/// Decimal columns are stringified so precision survives the round-trip.
+/// `diagnoses` carries the ordered ICD-10 code list. `previous_status`
+/// records the status before the clear (always `completed` in v1, but
+/// stored explicitly so restore is self-describing).
+///
+/// PHI lives in `fields` and `diagnoses`. Tenant-scoped via RLS like
+/// every other clinical table.
+model VisitClearSnapshot {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  clinicId       String   @map("clinic_id") @db.Uuid
+  visitId        String   @unique @map("visit_id") @db.Uuid
+  fields         Json
+  diagnoses      Json
+  previousStatus String   @map("previous_status")
+  clearedBy      String   @map("cleared_by") @db.Uuid
+  expiresAt      DateTime @map("expires_at") @db.Timestamptz(6)
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  visit  Visit  @relation(fields: [visitId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([clinicId])
+  @@index([expiresAt])
+  @@map("visit_clear_snapshots")
 }
 
 /// WHO ICD-10 catalogue. Pre-populated from

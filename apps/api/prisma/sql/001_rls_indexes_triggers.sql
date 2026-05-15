@@ -149,6 +149,27 @@ END
 $$;
 
 -- ---------------------------------------------------------------------------
+-- visit_clear_snapshots — short-lived undo snapshots for "Pastro vizitën"
+-- (Phase 2c). The migration that created the table already set the
+-- policy, repeated here so a fresh psql -f apply is idempotent.
+-- ---------------------------------------------------------------------------
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables
+             WHERE table_schema = 'public' AND table_name = 'visit_clear_snapshots') THEN
+    EXECUTE 'ALTER TABLE "visit_clear_snapshots" ENABLE ROW LEVEL SECURITY';
+    EXECUTE 'ALTER TABLE "visit_clear_snapshots" FORCE ROW LEVEL SECURITY';
+    EXECUTE 'DROP POLICY IF EXISTS tenant_isolation ON "visit_clear_snapshots"';
+    EXECUTE $POL$
+      CREATE POLICY tenant_isolation ON "visit_clear_snapshots"
+        USING ("clinic_id" = current_setting('app.clinic_id', true)::uuid)
+        WITH CHECK ("clinic_id" = current_setting('app.clinic_id', true)::uuid)
+    $POL$;
+  END IF;
+END
+$$;
+
+-- ---------------------------------------------------------------------------
 -- vertetime
 -- ---------------------------------------------------------------------------
 ALTER TABLE "vertetime" ENABLE ROW LEVEL SECURITY;
