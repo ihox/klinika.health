@@ -763,6 +763,80 @@ export class VisitsCalendarService {
   }
 
   // -------------------------------------------------------------------------
+  // Pairing helper for doctor-initiated walk-ins
+  // -------------------------------------------------------------------------
+
+  /**
+   * Resolve the scheduled visit a doctor-initiated walk-in should pair
+   * to. Used by the doctor's "Vizitë e re" flow where the sibling /
+   * companion patient arrives without a booking and the doctor creates
+   * the row from inside the chart.
+   *
+   * Selection order:
+   *   1. The currently in-progress scheduled visit, if it doesn't yet
+   *      have a walk-in paired to it.
+   *   2. Otherwise the chronologically next scheduled-ish visit
+   *      (`scheduled` / `arrived` / `in_progress`) that doesn't yet
+   *      have a paired walk-in.
+   *   3. Otherwise `null` — the caller should fall back to the
+   *      calendar-invisible "standalone chart entry" path.
+   *
+   * Deterministic: same input → same paired row. A concurrent doctor
+   * pairing race is accepted (one wins, the other ends up pointing at
+   * the next slot or falling back).
+   */
+  async findNextUnpairedScheduledVisit(
+    clinicId: string,
+    forDate: string,
+  ): Promise<{ id: string; scheduledFor: Date | null } | null> {
+    const dayStartUtc = new Date(localClockToUtc(forDate, '00:00').getTime() - 86_400_000);
+    const dayEndUtc = new Date(localClockToUtc(forDate, '23:59').getTime() + 86_400_000);
+
+    // Candidates: every active booking on the day (not walk-ins, not
+    // completed / cancelled / no-show — once a visit is finalized the
+    // sibling row would lose its "shared row" anchor).
+    const candidates = await this.prisma.visit.findMany({
+      where: {
+        clinicId,
+        deletedAt: null,
+        isWalkIn: false,
+        scheduledFor: { gte: dayStartUtc, lte: dayEndUtc, not: null },
+        status: { in: ['scheduled', 'arrived', 'in_progress'] },
+      },
+      orderBy: { scheduledFor: 'asc' },
+      select: { id: true, scheduledFor: true, status: true },
+    });
+    const onDay = candidates.filter(
+      (r) =>
+        r.scheduledFor != null && utcToLocalParts(r.scheduledFor).date === forDate,
+    );
+    if (onDay.length === 0) return null;
+
+    const candidateIds = onDay.map((r) => r.id);
+    const pairedWalkIns = await this.prisma.visit.findMany({
+      where: {
+        clinicId,
+        deletedAt: null,
+        isWalkIn: true,
+        pairedWithVisitId: { in: candidateIds },
+      },
+      select: { pairedWithVisitId: true },
+    });
+    const taken = new Set(
+      pairedWalkIns
+        .map((r) => r.pairedWithVisitId)
+        .filter((v): v is string => v != null),
+    );
+
+    const inProgress = onDay.find((r) => r.status === 'in_progress');
+    if (inProgress && !taken.has(inProgress.id)) {
+      return { id: inProgress.id, scheduledFor: inProgress.scheduledFor };
+    }
+    const next = onDay.find((r) => !taken.has(r.id));
+    return next ? { id: next.id, scheduledFor: next.scheduledFor } : null;
+  }
+
+  // -------------------------------------------------------------------------
   // Helpers
   // -------------------------------------------------------------------------
 
