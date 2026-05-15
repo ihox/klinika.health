@@ -132,13 +132,23 @@ export function ClinicUserMenu({ user }: Props) {
         aria-expanded={open}
         aria-controls={menuId}
         aria-label={`Menyja e përdoruesit · ${displayName}`}
-        className={[
-          'grid h-8 w-8 place-items-center rounded-full text-[12px] font-semibold text-white',
-          'outline-none focus-visible:ring-2 focus-visible:ring-teal-500/40',
-          avatarBg,
-        ].join(' ')}
+        className="inline-flex items-center gap-2 rounded-md py-1 pl-1 pr-2 outline-none transition-colors hover:bg-surface-subtle focus-visible:ring-2 focus-visible:ring-teal-500/40"
       >
-        {initials}
+        <span
+          className={[
+            'grid h-7 w-7 place-items-center rounded-full text-[11px] font-semibold text-white',
+            avatarBg,
+          ].join(' ')}
+          aria-hidden="true"
+        >
+          {initials}
+        </span>
+        <span className="hidden text-[13px] font-medium text-ink md:inline">
+          {displayName}
+        </span>
+        <span aria-hidden="true" className="hidden text-[10px] leading-none text-ink-faint md:inline">
+          ▾
+        </span>
       </button>
 
       {open ? (
@@ -149,11 +159,11 @@ export function ClinicUserMenu({ user }: Props) {
           aria-orientation="vertical"
           className="absolute right-0 top-[calc(100%+6px)] z-40 w-[232px] overflow-hidden rounded-md border border-line bg-surface-elevated shadow-modal animate-fade-in"
         >
-          <div className="border-b border-line bg-surface-subtle px-3.5 py-3">
+          <div className="border-b border-line-soft bg-surface-subtle px-3.5 py-3">
             <div className="font-display text-[13.5px] font-semibold leading-tight text-ink-strong">
               {displayName}
             </div>
-            <div className="mt-0.5 truncate font-mono text-[11px] text-ink-muted">
+            <div className="mt-[3px] truncate font-mono text-[11px] text-ink-muted">
               {user.email}
             </div>
             {clinicRoles.length > 0 ? (
@@ -168,18 +178,18 @@ export function ClinicUserMenu({ user }: Props) {
             href="/profili-im"
             role="menuitem"
             data-menu-item
-            className="flex items-center gap-2.5 px-3.5 py-2 text-[13px] text-ink outline-none hover:bg-surface-subtle focus-visible:bg-surface-subtle"
+            className="flex items-center gap-2.5 px-3.5 py-[9px] text-[13px] text-ink outline-none hover:bg-surface-subtle focus-visible:bg-surface-subtle"
           >
             <ProfileIcon />
             Profili im
           </a>
-          <div className="h-px bg-line" />
+          <div className="h-px bg-line-soft" />
           <button
             type="button"
             role="menuitem"
             data-menu-item
             onClick={() => void handleLogout()}
-            className="flex w-full items-center gap-2.5 px-3.5 py-2 text-left text-[13px] text-danger outline-none hover:bg-danger-bg focus-visible:bg-danger-bg"
+            className="flex w-full items-center gap-2.5 px-3.5 py-[9px] text-left text-[13px] text-danger outline-none hover:bg-danger-bg focus-visible:bg-danger-bg"
           >
             <LogoutIcon />
             Dilni
