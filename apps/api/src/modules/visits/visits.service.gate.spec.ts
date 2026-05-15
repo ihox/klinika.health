@@ -25,14 +25,16 @@ const PAIR_TARGET = 'pair-uuid';
 function makeCtx(): RequestContext {
   return {
     clinicId: CLINIC,
+    clinicSubdomain: 'donetamed',
+    clinicStatus: 'active',
     userId: DOCTOR,
     roles: ['doctor'],
     sessionId: 'session-uuid',
     ipAddress: '127.0.0.1',
     userAgent: 'vitest',
     requestId: 'req-uuid',
-    isPlatformAdmin: false,
-  } as RequestContext;
+    isPlatform: false,
+  };
 }
 
 interface SetupOpts {

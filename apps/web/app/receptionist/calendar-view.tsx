@@ -389,8 +389,13 @@ export function CalendarView(): ReactElement {
           secondary: `${entry.patient.firstName} ${entry.patient.lastName}${timeLabel ? ` · ${timeLabel}` : ''}`,
           intent: 'restore-deleted',
         });
-      } catch {
-        setToast('Fshirja dështoi.');
+      } catch (err) {
+        // Surface the server's specific Albanian reason when it ships
+        // one (the clinical-data guard returns
+        // "Vizita ka të dhëna klinike. Pastro përmes formularit të
+        // mjekut." with reason='has_clinical_data'); fall back to a
+        // generic message for opaque failures.
+        setToast(err instanceof ApiError ? err.message : 'Fshirja dështoi.');
       }
     },
     [refreshEntries, refreshStats],
@@ -486,8 +491,11 @@ export function CalendarView(): ReactElement {
       }
       await refreshEntries();
       await refreshStats();
-    } catch {
-      setToast('Anulimi dështoi.');
+    } catch (err) {
+      // Same as `onDelete`: pass through the server's Albanian reason
+      // when present so the receptionist understands why the action
+      // was refused (most often: clinical data on the row).
+      setToast(err instanceof ApiError ? err.message : 'Anulimi dështoi.');
     } finally {
       setUndo(null);
     }
