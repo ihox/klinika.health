@@ -19,6 +19,14 @@ interface Props {
   daysSinceLastVisit?: number | null;
   /** Total visit count; if provided, rendered alongside the master data. */
   visitCount?: number | null;
+  /**
+   * Optional handler for the "Të dhënat e pacientit" link rendered
+   * in the strip's top-right corner. Wired by the chart view to
+   * navigate to the master-data form. Omitted (or null) hides the
+   * affordance — handy on the master-data form itself, which would
+   * otherwise link back to itself.
+   */
+  onEditMasterData?: () => void;
 }
 
 /**
@@ -37,7 +45,12 @@ interface Props {
  * NEVER rendered for receptionists — `PatientFullDto` is the doctor's
  * shape. The TypeScript build is the safety net.
  */
-export function MasterDataStrip({ patient, daysSinceLastVisit, visitCount }: Props) {
+export function MasterDataStrip({
+  patient,
+  daysSinceLastVisit,
+  visitCount,
+  onEditMasterData,
+}: Props) {
   const indicator =
     daysSinceLastVisit != null ? daysSinceVisitColor(daysSinceLastVisit) : null;
   return (
@@ -50,7 +63,7 @@ export function MasterDataStrip({ patient, daysSinceLastVisit, visitCount }: Pro
             : `#${patient.id.slice(0, 8)}`}
         </span>
 
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2.5">
             <span className="font-display text-[22px] font-semibold leading-[1.1] tracking-[-0.02em] text-ink-strong">
               {patient.firstName} {patient.lastName}
@@ -94,6 +107,16 @@ export function MasterDataStrip({ patient, daysSinceLastVisit, visitCount }: Pro
             ) : null}
           </div>
         </div>
+
+        {onEditMasterData ? (
+          <button
+            type="button"
+            onClick={onEditMasterData}
+            className="text-[12.5px] font-medium text-ink-muted hover:text-primary hover:underline"
+          >
+            Të dhënat e pacientit →
+          </button>
+        ) : null}
       </div>
 
       {/* ── Row 2: Lindja sub-row ───────────────────────────────────── */}

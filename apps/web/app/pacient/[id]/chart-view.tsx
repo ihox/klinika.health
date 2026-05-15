@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState, type ReactElement } from 'react';
 
 import { ClinicTopNav } from '@/components/clinic-top-nav';
@@ -20,6 +21,7 @@ import { UndoToast } from '@/components/undo-toast';
 import { ApiError } from '@/lib/api';
 import { useMe } from '@/lib/use-me';
 import { ageInMonths } from '@/lib/growth-chart';
+import { masterDataPath } from '@/lib/patient';
 import {
   ageLabelChart,
   formatDob,
@@ -62,6 +64,7 @@ interface Props {
  * be wired up end-to-end.
  */
 export function ChartView({ patientId, initialVisitId }: Props): ReactElement {
+  const router = useRouter();
   const [data, setData] = useState<PatientChartDto | null>(null);
   const [error, setError] = useState<'forbidden' | 'not-found' | 'unknown' | null>(null);
   const [activeVisitId, setActiveVisitId] = useState<string | null>(initialVisitId ?? null);
@@ -113,6 +116,22 @@ export function ChartView({ patientId, initialVisitId }: Props): ReactElement {
       cancelled = true;
     };
   }, [patientId]);
+
+  // Redirect to the master-data form when the patient is missing any
+  // of the four required fields (firstName, lastName, dateOfBirth,
+  // sex). The chart cannot render meaningfully for an incomplete
+  // patient — no growth charts, no print, no vërtetim. Doctors land
+  // here either by deep link (a stale URL from before the patient
+  // was completed) or by edits in another tab that cleared a field.
+  //
+  // `router.replace` so the browser history doesn't carry an empty
+  // chart entry the back button would land on.
+  useEffect(() => {
+    if (!data) return;
+    if (!data.patient.isComplete) {
+      router.replace(masterDataPath(patientId));
+    }
+  }, [data, patientId, router]);
 
   // Default to the most-recent visit when no explicit visit id is in
   // the URL. Reflect the resolved visit in the URL via the History
@@ -264,6 +283,7 @@ export function ChartView({ patientId, initialVisitId }: Props): ReactElement {
                 patient={data.patient}
                 daysSinceLastVisit={data.daysSinceLastVisit}
                 visitCount={data.visitCount}
+                onEditMasterData={() => router.push(masterDataPath(patientId))}
               />
             </div>
           </div>

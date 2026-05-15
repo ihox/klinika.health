@@ -29,6 +29,7 @@ import {
   type DashboardVisitLogEntry,
   type DoctorDashboardResponse,
 } from '@/lib/doctor-dashboard-client';
+import { safeNavigateToPatient } from '@/lib/patient';
 import { ageLabel, type PatientPublicDto } from '@/lib/patient-client';
 import { cn } from '@/lib/utils';
 
@@ -122,14 +123,14 @@ export function DashboardView(): ReactElement {
 
   const openPatientChart = useCallback(
     (patientId: string) => {
-      router.push(`/doctor/pacientet?patientId=${patientId}`);
+      void safeNavigateToPatient(router, patientId);
     },
     [router],
   );
 
   const openVisitChart = useCallback(
     (entry: DashboardVisitLogEntry) => {
-      router.push(`/doctor/pacientet?patientId=${entry.patientId}`);
+      void safeNavigateToPatient(router, entry.patientId);
     },
     [router],
   );

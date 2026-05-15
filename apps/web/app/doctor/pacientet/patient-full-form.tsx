@@ -6,6 +6,7 @@ import { MasterDataStrip } from '@/components/patient/master-data-strip';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ApiError } from '@/lib/api';
+import { isPatientComplete } from '@/lib/patient';
 import {
   patientClient,
   type DoctorPatientInput,
@@ -19,6 +20,15 @@ interface Props {
   patient?: PatientFullDto;
   onSaved: (patient: PatientFullDto) => void;
   onCancel: () => void;
+  /**
+   * Edit-mode only. Fires when a save transitions the patient from
+   * incomplete to complete (per `isPatientComplete`). The te-dhena
+   * page wires this to a router.push back to the chart.
+   *
+   * Saves on an already-complete patient (subsequent edits) do NOT
+   * fire this — the doctor came back to edit, not to complete.
+   */
+  onCompleted?: (patient: PatientFullDto) => void;
 }
 
 interface FormState {
@@ -53,7 +63,13 @@ const DEBOUNCE_MS = 1500;
  * Field-level errors and the save indicator surface inline so the
  * doctor never doubts whether their work is captured.
  */
-export function PatientFullForm({ mode, patient, onSaved, onCancel }: Props) {
+export function PatientFullForm({
+  mode,
+  patient,
+  onSaved,
+  onCancel,
+  onCompleted,
+}: Props) {
   const [form, setForm] = useState<FormState>(() => buildInitial(patient));
   const [saveState, setSaveState] = useState<SaveState>('idle');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -65,6 +81,13 @@ export function PatientFullForm({ mode, patient, onSaved, onCancel }: Props) {
   formRef.current = form;
   const lastSavedRef = useRef(form);
   const debounceRef = useRef<number | null>(null);
+  // Tracks whether the patient was incomplete when the form mounted.
+  // Drives the "completed" transition callback — saving on an
+  // already-complete patient (the doctor came back to edit) must NOT
+  // re-fire navigation back to the chart.
+  const wasIncompleteOnEntryRef = useRef<boolean>(
+    patient ? !patient.isComplete : false,
+  );
 
   // When the parent swaps in a different patient (different id), reset
   // local state so we never write one patient's changes onto another.
@@ -76,6 +99,7 @@ export function PatientFullForm({ mode, patient, onSaved, onCancel }: Props) {
     setSaveState('idle');
     setErrorMsg(null);
     lastSavedRef.current = buildInitial(patient);
+    wasIncompleteOnEntryRef.current = patient ? !patient.isComplete : false;
     if (debounceRef.current != null) {
       window.clearTimeout(debounceRef.current);
       debounceRef.current = null;
@@ -98,6 +122,15 @@ export function PatientFullForm({ mode, patient, onSaved, onCancel }: Props) {
       setSaveState('saved');
       setErrorMsg(null);
       onSaved(res.patient);
+      // Fire the completion-transition callback exactly when a
+      // previously-incomplete patient becomes complete via this save.
+      // Once fired, flip the latch so subsequent saves on the same
+      // mount don't re-navigate (the doctor may stay on the form to
+      // edit additional fields after the transition).
+      if (wasIncompleteOnEntryRef.current && res.patient.isComplete) {
+        wasIncompleteOnEntryRef.current = false;
+        onCompleted?.(res.patient);
+      }
     } catch (err) {
       const msg =
         err instanceof ApiError
@@ -106,7 +139,7 @@ export function PatientFullForm({ mode, patient, onSaved, onCancel }: Props) {
       setErrorMsg(msg);
       setSaveState('error');
     }
-  }, [patient, onSaved]);
+  }, [patient, onSaved, onCompleted]);
 
   // Auto-save in edit mode: debounce 1.5s after each change.
   useEffect(() => {
@@ -169,8 +202,13 @@ export function PatientFullForm({ mode, patient, onSaved, onCancel }: Props) {
     if (creating) return;
     setErrorMsg(null);
     const payload = snapshotToPayload(form);
-    if (!payload.firstName || !payload.lastName || !payload.dateOfBirth) {
-      setErrorMsg('Emri, mbiemri dhe datelindja janë të detyrueshme.');
+    if (
+      !payload.firstName ||
+      !payload.lastName ||
+      !payload.dateOfBirth ||
+      !payload.sex
+    ) {
+      setErrorMsg('Emri, mbiemri, datelindja dhe gjinia janë të detyrueshme.');
       return;
     }
     setCreating(true);
@@ -189,6 +227,19 @@ export function PatientFullForm({ mode, patient, onSaved, onCancel }: Props) {
   }, [creating, form, onSaved]);
 
   const indicator = useMemo(() => SAVE_INDICATORS[saveState], [saveState]);
+  // All four required fields populated? Drives the Save button gate.
+  // Mirrors `isPatientComplete` (the server-side flag) so the doctor
+  // sees the same truth on the form as on the chart.
+  const formIsComplete = useMemo(
+    () =>
+      isPatientComplete({
+        firstName: form.firstName.trim(),
+        lastName: form.lastName.trim(),
+        dateOfBirth: form.dateOfBirth,
+        sex: form.sex,
+      }),
+    [form.firstName, form.lastName, form.dateOfBirth, form.sex],
+  );
 
   return (
     <div className="flex h-full flex-col">
@@ -214,11 +265,31 @@ export function PatientFullForm({ mode, patient, onSaved, onCancel }: Props) {
             Mbyll
           </Button>
           {mode === 'create' ? (
-            <Button onClick={handleCreate} disabled={creating}>
+            <Button
+              onClick={handleCreate}
+              disabled={creating || !formIsComplete}
+              title={
+                !formIsComplete
+                  ? 'Plotëso emrin, mbiemrin, datëlindjen dhe gjininë'
+                  : undefined
+              }
+            >
               {creating ? 'Po ruhet…' : 'Ruaj'}
             </Button>
           ) : (
-            <Button onClick={() => { void runUpdate(); }}>Ruaj</Button>
+            <Button
+              onClick={() => {
+                void runUpdate();
+              }}
+              disabled={!formIsComplete}
+              title={
+                !formIsComplete
+                  ? 'Plotëso emrin, mbiemrin, datëlindjen dhe gjininë'
+                  : undefined
+              }
+            >
+              Ruaj
+            </Button>
           )}
         </div>
       </header>
@@ -261,7 +332,7 @@ export function PatientFullForm({ mode, patient, onSaved, onCancel }: Props) {
               onBlur={blurSave}
             />
           </Field>
-          <Field label="Gjinia">
+          <Field label="Gjinia" required>
             <select
               value={form.sex}
               onChange={(e) => handleField('sex')(e.target.value)}
