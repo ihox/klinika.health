@@ -55,6 +55,24 @@ export interface DashboardVisitLogEntry {
   paymentAmountCents: number | null;
 }
 
+/**
+ * "Vizita të hapura" entry — an `in_progress` visit from a prior local
+ * day that the doctor never marked completed. Surfaced at the top of
+ * the dashboard so the backlog can be cleared before today's queue
+ * begins. Mirror of `DashboardOpenVisitEntry` on the API side.
+ */
+export interface DashboardOpenVisit {
+  id: string;
+  patientId: string;
+  patient: {
+    firstName: string;
+    lastName: string;
+    dateOfBirth: string | null;
+  };
+  visitDate: string;
+  daysAgo: number;
+}
+
 export interface DashboardNextPatientCard {
   appointmentId: string;
   patientId: string;
@@ -93,6 +111,11 @@ export interface DoctorDashboardResponse {
   serverTime: string;
   appointments: DashboardAppointment[];
   todayVisits: DashboardVisitLogEntry[];
+  /**
+   * `in_progress` visits from prior local days. Empty array when the
+   * backlog is clear; the panel hides itself when so.
+   */
+  openVisits: DashboardOpenVisit[];
   nextPatient: DashboardNextPatientCard | null;
   stats: DashboardStats;
 }
@@ -158,6 +181,50 @@ export function formatPaymentLabel(
     return entry.paymentCode;
   }
   return `${entry.paymentCode} · ${formatEuros(entry.paymentAmountCents)}`;
+}
+
+// Albanian month names — kept local to the helpers that produce row
+// labels. The receptionist date formatters in appointment-client.ts
+// hold a private copy; if a third call site appears the array should
+// move to a shared module.
+const MONTHS_AL = [
+  'janar',
+  'shkurt',
+  'mars',
+  'prill',
+  'maj',
+  'qershor',
+  'korrik',
+  'gusht',
+  'shtator',
+  'tetor',
+  'nëntor',
+  'dhjetor',
+] as const;
+
+/**
+ * Row label for an "Vizita të hapura" entry:
+ *
+ *   "13 maj 2026 · dje"
+ *   "10 maj 2026 · 4 ditë më parë"
+ *
+ * The date part is intentionally short (no weekday) — the relative
+ * description already carries the recency signal, and a long weekday
+ * label competes with the patient name on the row.
+ */
+export function formatOpenVisitLabel(
+  entry: Pick<DashboardOpenVisit, 'visitDate' | 'daysAgo'>,
+): string {
+  const [y, m, d] = entry.visitDate.split('-').map(Number) as [
+    number,
+    number,
+    number,
+  ];
+  const monthName = MONTHS_AL[m - 1] ?? '';
+  const dateStr = `${d} ${monthName} ${y}`;
+  const relative =
+    entry.daysAgo === 1 ? 'dje' : `${entry.daysAgo} ditë më parë`;
+  return `${dateStr} · ${relative}`;
 }
 
 export type DaysSinceColor = 'green' | 'yellow' | 'red' | 'neutral';

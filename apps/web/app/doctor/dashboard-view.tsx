@@ -24,9 +24,11 @@ import {
   daysSinceColor,
   doctorDashboardClient,
   formatEuros,
+  formatOpenVisitLabel,
   greetingForInstant,
   type DashboardAppointment,
   type DashboardNextPatientCard,
+  type DashboardOpenVisit,
   type DashboardVisitLogEntry,
   type DoctorDashboardResponse,
 } from '@/lib/doctor-dashboard-client';
@@ -217,6 +219,41 @@ export function DashboardView(): ReactElement {
     [load],
   );
 
+  // "Përfundo" on a "Vizita të hapura" row. Same status PATCH as
+  // `quickComplete` (in_progress → completed), but with an optimistic
+  // local removal so the row disappears immediately — the doctor is
+  // working through a backlog, and re-rendering the row only to have
+  // it vanish on the next fetch is laggy. A failure rolls back via the
+  // load() refresh and surfaces the error toast.
+  const completeOpenVisit = useCallback(
+    async (visitId: string) => {
+      setSnapshot((s) =>
+        s == null
+          ? s
+          : { ...s, openVisits: s.openVisits.filter((v) => v.id !== visitId) },
+      );
+      try {
+        await calendarClient.changeStatus(visitId, 'completed');
+        setToast({
+          id: `complete-open:${visitId}:${Date.now()}`,
+          message: 'Vizita u përfundua.',
+        });
+      } catch (err) {
+        const message =
+          err instanceof ApiError
+            ? err.message
+            : 'Veprimi nuk u krye.';
+        setToast({
+          id: `complete-open-err:${visitId}:${Date.now()}`,
+          message,
+        });
+      } finally {
+        void load();
+      }
+    },
+    [load],
+  );
+
   return (
     <main className="min-h-screen bg-surface pb-12">
       <DashboardTopBar />
@@ -243,6 +280,12 @@ export function DashboardView(): ReactElement {
             {error}
           </div>
         ) : null}
+
+        <OpenVisitsPanel
+          entries={snapshot?.openVisits ?? []}
+          onOpenChart={openPatientChart}
+          onComplete={(v) => void completeOpenVisit(v.id)}
+        />
 
         <div className="grid grid-cols-[40fr_60fr] gap-5">
           {/* LEFT COLUMN */}
@@ -1006,6 +1049,111 @@ function VisitsLogPanel({
         )}
       </div>
     </section>
+  );
+}
+
+// =========================================================================
+// Vizita të hapura — prior-day in_progress backlog
+// =========================================================================
+
+interface OpenVisitsPanelProps {
+  entries: DashboardOpenVisit[];
+  onOpenChart: (patientId: string) => void;
+  onComplete: (entry: DashboardOpenVisit) => void;
+}
+
+/**
+ * Top-of-dashboard list of `in_progress` visits the doctor started on
+ * a previous day and never marked completed. Hides itself when the
+ * backlog is empty — an empty card adds noise to the dashboard, and
+ * the dashboard already polls so the list reappears the moment a new
+ * abandoned row shows up.
+ */
+function OpenVisitsPanel({
+  entries,
+  onOpenChart,
+  onComplete,
+}: OpenVisitsPanelProps): ReactElement | null {
+  if (entries.length === 0) return null;
+  const count = entries.length;
+  const subtitle =
+    count === 1
+      ? '1 vizitë e papërfunduar'
+      : `${count} vizita të papërfunduara`;
+  return (
+    <section
+      data-testid="doctor-open-visits"
+      className="mb-5 overflow-hidden rounded-lg border border-amber-200 bg-amber-50/40 shadow-xs"
+    >
+      <div className="flex items-center justify-between border-b border-amber-200 px-4 py-3">
+        <div>
+          <h2 className="text-[13px] font-semibold tracking-[-0.005em] text-amber-900">
+            Vizita të hapura
+          </h2>
+          <p className="mt-0.5 text-[12px] text-amber-800/80">{subtitle}</p>
+        </div>
+      </div>
+      <ul className="divide-y divide-amber-100">
+        {entries.map((entry) => (
+          <OpenVisitRow
+            key={entry.id}
+            entry={entry}
+            onOpenChart={() => onOpenChart(entry.patientId)}
+            onComplete={() => onComplete(entry)}
+          />
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+interface OpenVisitRowProps {
+  entry: DashboardOpenVisit;
+  onOpenChart: () => void;
+  onComplete: () => void;
+}
+
+function OpenVisitRow({
+  entry,
+  onOpenChart,
+  onComplete,
+}: OpenVisitRowProps): ReactElement {
+  const ageStr = ageLabel(entry.patient.dateOfBirth);
+  const dateLabel = formatOpenVisitLabel(entry);
+  return (
+    <li className="grid grid-cols-[1fr_auto] items-center gap-4 px-4 py-2.5">
+      <div className="min-w-0">
+        <div className="truncate text-[13px] font-medium text-ink-strong">
+          {entry.patient.firstName} {entry.patient.lastName}
+          {ageStr ? (
+            <span className="ml-1.5 text-[12px] font-normal text-ink-faint">
+              {ageStr}
+            </span>
+          ) : null}
+        </div>
+        <div className="truncate text-[11.5px] text-amber-800/80">
+          {dateLabel}
+        </div>
+      </div>
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={onOpenChart}
+          className="rounded-md border border-line-strong bg-surface-elevated px-2.5 py-1 text-[12px] font-medium text-ink transition hover:bg-surface-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35"
+          data-testid="doctor-open-visit-open"
+        >
+          Hap kartelën
+        </button>
+        <button
+          type="button"
+          onClick={onComplete}
+          className="rounded-md border border-primary/40 bg-primary px-2.5 py-1 text-[12px] font-medium text-white transition hover:bg-primary-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35"
+          data-testid="doctor-open-visit-complete"
+        >
+          Përfundo
+        </button>
+      </div>
+    </li>
   );
 }
 
