@@ -137,6 +137,12 @@ export function CalendarView(): ReactElement {
     () => setWeekStart((w) => addLocalDays(w, 7)),
     [],
   );
+  const todayWeekStart = useMemo(() => mondayOfWeekIso(todayIso), [todayIso]);
+  const goThisWeek = useCallback(
+    () => setWeekStart(todayWeekStart),
+    [todayWeekStart],
+  );
+  const isCurrentWeek = weekStart === todayWeekStart;
 
   // ----- Columns: fixed Mon..Sat of the displayed week. Sunday is hidden
   // (clinics are closed; the grid is 6 columns). Each column carries the
@@ -632,6 +638,16 @@ export function CalendarView(): ReactElement {
                 {rangeLabel}
               </div>
               <WeekNavButton dir="next" onClick={goNextWeek} />
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={goThisWeek}
+                disabled={isCurrentWeek}
+                className="ml-1"
+                aria-label="Java aktuale"
+              >
+                Sot
+              </Button>
             </div>
             <div className="flex items-center gap-3 text-[11px] text-ink-muted">
               <span className="flex items-center gap-1.5">
