@@ -7,6 +7,11 @@ import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
 import { BrandLogo } from '@/components/brand-logo';
+import {
+  MfaVerifyForm,
+  type MfaResendResult,
+  type MfaVerifyResult,
+} from '@/components/auth/mfa-verify-form';
 import { Button } from '@/components/ui/button';
 import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
@@ -17,12 +22,8 @@ const LoginSchema = z.object({
   email: z.string().trim().min(1, 'Email-i mungon').email('Email-i është i pasaktë'),
   password: z.string().min(1, 'Fjalëkalimi mungon'),
 });
-const MfaSchema = z.object({
-  code: z.string().trim().regex(/^\d{6}$/, 'Kodi duhet të jetë 6 shifra'),
-});
 
 type LoginValues = z.infer<typeof LoginSchema>;
-type MfaValues = z.infer<typeof MfaSchema>;
 
 interface MfaState {
   pendingSessionId: string;
@@ -32,11 +33,12 @@ interface MfaState {
 /**
  * Platform-admin login form rendered on the apex domain at `/login`.
  *
- * Identical shape to the previous /admin/login form but lives in
- * `components/` now because the apex `/login` page is host-aware
- * (ADR-005 boundary fix). The form switches inline to the MFA step
- * after the password is accepted — no separate /verify route for
- * platform admins.
+ * The MFA step renders the shared `<MfaVerifyForm>` (the same component
+ * used by the clinic /verify route) so both flows are visually
+ * identical — same logo, copy, OTP cells, trusted-device checkbox,
+ * resend cooldown, and locked-out banner. Only the underlying API
+ * surface differs: this form posts to `/api/admin/auth/*`, while the
+ * clinic flow uses `/api/auth/*`.
  */
 export function PlatformAdminLoginForm() {
   const router = useRouter();
@@ -49,10 +51,6 @@ export function PlatformAdminLoginForm() {
   const loginForm = useForm<LoginValues>({
     resolver: zodResolver(LoginSchema),
     defaultValues: { email: '', password: '' },
-  });
-  const mfaForm = useForm<MfaValues>({
-    resolver: zodResolver(MfaSchema),
-    defaultValues: { code: '' },
   });
 
   const onLogin = loginForm.handleSubmit(async (values) => {
@@ -75,33 +73,46 @@ export function PlatformAdminLoginForm() {
     }
   });
 
-  const onMfa = mfaForm.handleSubmit(async (values) => {
-    if (!mfaState) return;
-    setFormError(null);
-    setSubmitting(true);
+  // Visual parity with the clinic MFA: the shared form collects a
+  // `trustDevice` value, but the admin API doesn't accept it today
+  // (adminClient.mfaVerify has no trustDevice field). The checkbox
+  // is purely cosmetic for admin until trusted devices become a
+  // real platform-admin feature — at which point wire it through
+  // here.
+  const handleMfaVerify = async ({ code }: { code: string }): Promise<MfaVerifyResult> => {
+    if (!mfaState) return { ok: false, kind: 'unknown' };
     try {
-      await adminClient.mfaVerify({
-        pendingSessionId: mfaState.pendingSessionId,
-        code: values.code,
-      });
-      router.replace(redirect);
+      await adminClient.mfaVerify({ pendingSessionId: mfaState.pendingSessionId, code });
+      return { ok: true };
     } catch (err) {
-      setFormError(authErrorMessage(err));
-    } finally {
-      setSubmitting(false);
+      return mapVerifyError(err);
     }
-  });
+  };
 
-  const onResend = async () => {
-    if (!mfaState) return;
-    setFormError(null);
+  const handleMfaResend = async (): Promise<MfaResendResult> => {
+    if (!mfaState) return { ok: false, kind: 'unknown' };
     try {
       const out = await adminClient.mfaResend({ pendingSessionId: mfaState.pendingSessionId });
       setMfaState({ ...mfaState, maskedEmail: out.maskedEmail });
+      return { ok: true, maskedEmail: out.maskedEmail };
     } catch (err) {
-      setFormError(authErrorMessage(err));
+      if (err instanceof ApiError && err.status === 429) {
+        return { ok: false, kind: 'rate_limited' };
+      }
+      return { ok: false, kind: 'unknown' };
     }
   };
+
+  if (mfaState) {
+    return (
+      <MfaVerifyForm
+        maskedEmail={mfaState.maskedEmail}
+        onVerify={handleMfaVerify}
+        onResend={handleMfaResend}
+        onSuccess={() => router.replace(redirect)}
+      />
+    );
+  }
 
   return (
     <div className="w-full max-w-[400px]">
@@ -113,79 +124,44 @@ export function PlatformAdminLoginForm() {
       </div>
 
       <h1 className="font-display text-[24px] font-semibold tracking-[-0.025em] text-stone-900">
-        {mfaState ? 'Verifikimi me dy hapa' : 'Hyrja për admin'}
+        Hyrja për admin
       </h1>
       <p className="mt-1.5 mb-7 text-[13px] text-stone-500">
-        {mfaState
-          ? `Kodi 6-shifror u dërgua në ${mfaState.maskedEmail}.`
-          : 'Hyrja kërkon verifikim me email në çdo seancë.'}
+        Hyrja kërkon verifikim me email në çdo seancë.
       </p>
 
-      {!mfaState ? (
-        <form onSubmit={onLogin} className="flex flex-col gap-4" noValidate>
-          <Field
-            label="Email"
-            htmlFor="admin-login-email"
-            error={loginForm.formState.errors.email?.message}
-          >
-            <Input
-              id="admin-login-email"
-              type="email"
-              autoComplete="email"
-              {...loginForm.register('email')}
-              invalid={Boolean(loginForm.formState.errors.email)}
-            />
-          </Field>
-          <Field
-            label="Fjalëkalimi"
-            htmlFor="admin-login-password"
-            error={loginForm.formState.errors.password?.message}
-          >
-            <Input
-              id="admin-login-password"
-              type="password"
-              autoComplete="current-password"
-              {...loginForm.register('password')}
-              invalid={Boolean(loginForm.formState.errors.password)}
-            />
-          </Field>
-          {formError ? <p className="text-[12.5px] text-amber-700">{formError}</p> : null}
-          <Button type="submit" disabled={submitting} size="lg">
-            {submitting ? 'Po hyhet…' : 'Vazhdo'}
-          </Button>
-        </form>
-      ) : (
-        <form onSubmit={onMfa} className="flex flex-col gap-4" noValidate>
-          <Field
-            label="Kodi i verifikimit"
-            htmlFor="admin-mfa-code"
-            error={mfaForm.formState.errors.code?.message}
-            hint="6 shifra, vlen 15 minuta"
-          >
-            <Input
-              id="admin-mfa-code"
-              type="text"
-              inputMode="numeric"
-              autoComplete="one-time-code"
-              maxLength={6}
-              className="text-center text-[20px] tracking-[0.4em] font-mono"
-              {...mfaForm.register('code')}
-              invalid={Boolean(mfaForm.formState.errors.code)}
-            />
-          </Field>
-          {formError ? <p className="text-[12.5px] text-amber-700">{formError}</p> : null}
-          <Button type="submit" disabled={submitting} size="lg">
-            {submitting ? 'Po verifikohet…' : 'Hyr'}
-          </Button>
-          <button
-            type="button"
-            onClick={onResend}
-            className="text-[13px] text-teal-700 hover:underline text-center"
-          >
-            Dërgo kodin përsëri
-          </button>
-        </form>
-      )}
+      <form onSubmit={onLogin} className="flex flex-col gap-4" noValidate>
+        <Field
+          label="Email"
+          htmlFor="admin-login-email"
+          error={loginForm.formState.errors.email?.message}
+        >
+          <Input
+            id="admin-login-email"
+            type="email"
+            autoComplete="email"
+            {...loginForm.register('email')}
+            invalid={Boolean(loginForm.formState.errors.email)}
+          />
+        </Field>
+        <Field
+          label="Fjalëkalimi"
+          htmlFor="admin-login-password"
+          error={loginForm.formState.errors.password?.message}
+        >
+          <Input
+            id="admin-login-password"
+            type="password"
+            autoComplete="current-password"
+            {...loginForm.register('password')}
+            invalid={Boolean(loginForm.formState.errors.password)}
+          />
+        </Field>
+        {formError ? <p className="text-[12.5px] text-amber-700">{formError}</p> : null}
+        <Button type="submit" disabled={submitting} size="lg">
+          {submitting ? 'Po hyhet…' : 'Vazhdo'}
+        </Button>
+      </form>
 
       <div className="mt-10 pt-5 border-t border-stone-200 flex justify-between text-[12px] text-stone-400">
         <span>klinika.health</span>
@@ -209,4 +185,22 @@ function authErrorMessage(err: unknown): string {
     return err.body.message ?? 'Diçka shkoi keq. Provoni përsëri.';
   }
   return 'Gabim i rrjetit. Provoni përsëri.';
+}
+
+function mapVerifyError(err: unknown): MfaVerifyResult {
+  if (!(err instanceof ApiError)) {
+    return { ok: false, kind: 'network', message: 'Gabim i rrjetit. Provoni përsëri.' };
+  }
+  if (err.status === 401) {
+    const reason = err.body.reason;
+    if (reason === 'too_many_attempts') return { ok: false, kind: 'too_many_attempts' };
+    if (reason === 'expired') {
+      return { ok: false, kind: 'expired_code', message: err.body.message };
+    }
+    return { ok: false, kind: 'invalid_code', message: err.body.message };
+  }
+  if (err.status === 429) {
+    return { ok: false, kind: 'rate_limited', message: err.body.message };
+  }
+  return { ok: false, kind: 'unknown', message: err.body.message };
 }

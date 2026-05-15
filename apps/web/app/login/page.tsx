@@ -4,6 +4,7 @@ import { headers } from 'next/headers';
 import { Suspense } from 'react';
 
 import { AuthShell } from '@/components/auth/auth-shell';
+import { CenteredAuthShell } from '@/components/auth/centered-auth-shell';
 import { PlatformAdminLoginForm } from '@/components/auth/platform-admin-login-form';
 
 import { LoginForm } from './login-form';
@@ -67,15 +68,11 @@ export default async function LoginPage() {
 
 function PlatformLoginPage() {
   return (
-    <main className="min-h-screen bg-stone-50 grid place-items-center px-6 py-10">
-      <div
-        aria-hidden="true"
-        className="fixed top-0 left-0 right-0 h-[3px] bg-gradient-to-r from-teal-700 via-teal-500 to-teal-700 z-50"
-      />
+    <CenteredAuthShell>
       <Suspense fallback={<div className="text-stone-500 text-sm">Po ngarkohet…</div>}>
         <PlatformAdminLoginForm />
       </Suspense>
-    </main>
+    </CenteredAuthShell>
   );
 }
 

@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { Suspense } from 'react';
 import { VerifyForm } from './verify-form';
-import { AuthShell } from '@/components/auth/auth-shell';
+import { CenteredAuthShell } from '@/components/auth/centered-auth-shell';
 
 export const metadata: Metadata = {
   title: 'Verifikoni se jeni ju · Klinika',
@@ -10,10 +10,10 @@ export const metadata: Metadata = {
 
 export default function VerifyPage() {
   return (
-    <AuthShell title="Verifikoni se jeni ju">
+    <CenteredAuthShell>
       <Suspense fallback={<div className="text-stone-500 text-sm">Po ngarkohet…</div>}>
         <VerifyForm />
       </Suspense>
-    </AuthShell>
+    </CenteredAuthShell>
   );
 }

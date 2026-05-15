@@ -259,9 +259,15 @@ test.describe('Platform admin', () => {
     await page.getByLabel('Fjalëkalimi').fill('correct-horse-battery-staple');
     await page.getByRole('button', { name: 'Vazhdo' }).click();
 
-    await expect(page.getByRole('heading', { name: 'Verifikimi me dy hapa' })).toBeVisible();
-    await page.getByLabel('Kodi i verifikimit').fill('482613');
-    await page.getByRole('button', { name: 'Hyr' }).click();
+    // The platform-admin MFA step renders the same shared component as
+    // the clinic flow (see components/auth/mfa-verify-form.tsx) —
+    // identical heading + 6-cell OTP layout, auto-submits on the 6th
+    // digit.
+    await expect(page.getByRole('heading', { name: 'Verifikoni se jeni ju' })).toBeVisible();
+    await expect(page.getByLabel('Shifra 1')).toBeVisible();
+    for (const digit of '482613') {
+      await page.keyboard.press(digit);
+    }
 
     await expect(page).toHaveURL(/\/admin$/);
     await expect(page.getByRole('heading', { name: 'Klinikat' })).toBeVisible();

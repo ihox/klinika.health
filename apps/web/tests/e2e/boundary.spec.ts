@@ -138,9 +138,15 @@ test.describe('Boundary login flows (happy paths)', () => {
     await page.getByLabel('Email').fill('founder@klinika.health');
     await page.getByLabel('Fjalëkalimi').fill('correct-horse-battery-staple');
     await page.getByRole('button', { name: 'Vazhdo' }).click();
-    await expect(page.getByRole('heading', { name: 'Verifikimi me dy hapa' })).toBeVisible();
-    await page.getByLabel('Kodi i verifikimit').fill('482613');
-    await page.getByRole('button', { name: 'Hyr' }).click();
+    // The platform-admin MFA step now shares the clinic MFA component
+    // (components/auth/mfa-verify-form.tsx), so the heading is the
+    // unified "Verifikoni se jeni ju" and the form auto-submits on the
+    // 6th digit.
+    await expect(page.getByRole('heading', { name: 'Verifikoni se jeni ju' })).toBeVisible();
+    await expect(page.getByLabel('Shifra 1')).toBeVisible();
+    for (const digit of '482613') {
+      await page.keyboard.press(digit);
+    }
     await expect(page).toHaveURL(/\/admin$/);
   });
 
