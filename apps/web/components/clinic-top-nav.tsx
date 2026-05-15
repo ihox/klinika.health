@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import { useMemo } from 'react';
 
 import type { AuthRole, MeResponse } from '@/lib/auth-client';
+import { BrandLogo } from './brand-logo';
 import { ClinicUserMenu } from './clinic-user-menu';
 
 /**
@@ -97,10 +98,10 @@ export function ClinicTopNav({ me, brandAdjacent }: Props) {
         <div className="flex items-center gap-8">
           <Link
             href="/profili-im"
-            className="font-display text-[17px] font-semibold tracking-[-0.015em] text-ink-strong"
+            className="flex items-center"
             aria-label="Klinika"
           >
-            klinika<span className="text-primary">.</span>
+            <BrandLogo alt="" />
           </Link>
           {items.length > 0 ? (
             <nav className="flex items-center gap-5 text-[14px]" aria-label="Menu kryesore">

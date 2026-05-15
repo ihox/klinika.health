@@ -6,7 +6,7 @@ import { useEffect, useState } from 'react';
 
 import { ApiError } from '@/lib/api';
 import { adminClient, type AdminProfile } from '@/lib/admin-client';
-import { BrandRow } from '@/components/auth/brand-row';
+import { BrandLogo } from '@/components/brand-logo';
 
 interface AdminShellProps {
   children: React.ReactNode;
@@ -90,7 +90,7 @@ export function AdminShell({ children }: AdminShellProps) {
       <header className="bg-white border-b border-stone-200">
         <div className="max-w-[1200px] mx-auto px-8 h-14 flex items-center gap-8">
           <Link href="/admin" className="flex items-center gap-2.5">
-            <BrandRow size={22} />
+            <BrandLogo height={22} />
             <span
               className="text-[10.5px] font-semibold uppercase tracking-wider text-teal-800 bg-teal-50 border border-teal-200 px-2 py-0.5 rounded-full"
               aria-label="Platform Admin"

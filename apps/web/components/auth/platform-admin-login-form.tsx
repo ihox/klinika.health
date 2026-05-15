@@ -6,7 +6,7 @@ import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
-import { BrandRow } from '@/components/auth/brand-row';
+import { BrandLogo } from '@/components/brand-logo';
 import { Button } from '@/components/ui/button';
 import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
@@ -106,7 +106,7 @@ export function PlatformAdminLoginForm() {
   return (
     <div className="w-full max-w-[400px]">
       <div className="flex items-baseline gap-2.5 mb-8">
-        <BrandRow size={28} />
+        <BrandLogo height={28} />
         <span className="text-[11px] font-semibold uppercase tracking-wider text-teal-800 bg-teal-50 border border-teal-200 px-2 py-0.5 rounded-full">
           Admini i Platformës
         </span>

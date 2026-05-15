@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { BrandRow } from './brand-row';
+import { BrandLogo } from '../brand-logo';
 
 interface AuthShellProps {
   title: string;
@@ -7,7 +7,7 @@ interface AuthShellProps {
   children: ReactNode;
   footer?: ReactNode;
   /**
-   * Optional header that replaces the default BrandRow above the title.
+   * Optional header that replaces the default BrandLogo above the title.
    * Used by the clinic login to surface the clinic identity card (logo +
    * name + subdomain) per design-reference/prototype/components/clinic-login.html.
    */
@@ -24,7 +24,7 @@ export function AuthShell({ title, subtitle, children, footer, header }: AuthShe
     <main className="min-h-screen bg-stone-50 grid lg:grid-cols-2">
       <div className="grid place-items-center p-6 lg:p-10">
         <div className="w-full max-w-[380px]">
-          <div className="mb-10">{header ?? <BrandRow />}</div>
+          <div className="mb-10">{header ?? <BrandLogo height={36} />}</div>
           <h1 className="font-display text-[28px] font-semibold tracking-[-0.025em] text-stone-900">
             {title}
           </h1>
