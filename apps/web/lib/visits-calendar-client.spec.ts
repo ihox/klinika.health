@@ -10,8 +10,10 @@ import { describe, expect, it } from 'vitest';
 import {
   ALLOWED_TRANSITIONS,
   findClosestPairing,
+  isReceptionistOnlyRole,
   isScheduledEntry,
   isTransitionAllowed,
+  isVisitLockedForReceptionist,
   isWalkInEntry,
   PAIRABLE_STATUSES,
   VISIT_STATUSES,
@@ -223,5 +225,95 @@ describe('findClosestPairing', () => {
     ];
     const now = Date.parse('2026-05-15T10:30:00Z');
     expect(findClosestPairing(list, now)?.id).toBe('past');
+  });
+});
+
+describe('isReceptionistOnlyRole', () => {
+  it('locks plain receptionist sessions', () => {
+    expect(isReceptionistOnlyRole(['receptionist'])).toBe(true);
+  });
+
+  it('does NOT lock receptionist+doctor combos', () => {
+    expect(isReceptionistOnlyRole(['receptionist', 'doctor'])).toBe(false);
+  });
+
+  it('does NOT lock receptionist+clinic_admin combos', () => {
+    expect(isReceptionistOnlyRole(['receptionist', 'clinic_admin'])).toBe(false);
+  });
+
+  it('does NOT lock pure doctor or clinic_admin', () => {
+    expect(isReceptionistOnlyRole(['doctor'])).toBe(false);
+    expect(isReceptionistOnlyRole(['clinic_admin'])).toBe(false);
+  });
+
+  it('returns false for empty / null', () => {
+    expect(isReceptionistOnlyRole(null)).toBe(false);
+    expect(isReceptionistOnlyRole([])).toBe(false);
+  });
+});
+
+describe('isVisitLockedForReceptionist', () => {
+  const today = '2026-05-15';
+  const entry = (overrides: Partial<CalendarEntry>): CalendarEntry => ({
+    id: 'a',
+    patientId: 'p',
+    patient: { firstName: 'Era', lastName: 'K', dateOfBirth: '2023-08-03' },
+    scheduledFor: null,
+    durationMinutes: null,
+    arrivedAt: null,
+    status: 'scheduled',
+    isWalkIn: false,
+    paymentCode: null,
+    lastVisitAt: null,
+    isNewPatient: true,
+    createdAt: '2026-05-15T08:00:00Z',
+    updatedAt: '2026-05-15T08:00:00Z',
+    ...overrides,
+  });
+
+  it.each(['scheduled', 'arrived', 'in_progress', 'completed', 'no_show', 'cancelled'] as const)(
+    'locks yesterday (%s)',
+    (status) => {
+      const e = entry({ scheduledFor: '2026-05-14T08:00:00Z', status });
+      expect(isVisitLockedForReceptionist(e, today)).toBe(true);
+    },
+  );
+
+  it('locks today + completed', () => {
+    const e = entry({ scheduledFor: '2026-05-15T08:00:00Z', status: 'completed' });
+    expect(isVisitLockedForReceptionist(e, today)).toBe(true);
+  });
+
+  it.each(['scheduled', 'arrived', 'in_progress', 'no_show', 'cancelled'] as const)(
+    'unlocks today (%s)',
+    (status) => {
+      const e = entry({ scheduledFor: '2026-05-15T08:00:00Z', status });
+      expect(isVisitLockedForReceptionist(e, today)).toBe(false);
+    },
+  );
+
+  it.each(['scheduled', 'arrived', 'completed'] as const)(
+    'unlocks tomorrow (%s)',
+    (status) => {
+      const e = entry({ scheduledFor: '2026-05-16T08:00:00Z', status });
+      expect(isVisitLockedForReceptionist(e, today)).toBe(false);
+    },
+  );
+
+  it('uses arrivedAt for walk-ins (no scheduledFor)', () => {
+    const yesterdayWalkIn = entry({
+      isWalkIn: true,
+      arrivedAt: '2026-05-14T09:00:00Z',
+      scheduledFor: null,
+      status: 'arrived',
+    });
+    expect(isVisitLockedForReceptionist(yesterdayWalkIn, today)).toBe(true);
+    const todayWalkIn = entry({
+      isWalkIn: true,
+      arrivedAt: '2026-05-15T09:00:00Z',
+      scheduledFor: null,
+      status: 'arrived',
+    });
+    expect(isVisitLockedForReceptionist(todayWalkIn, today)).toBe(false);
   });
 });

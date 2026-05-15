@@ -29,6 +29,8 @@ import {
   type VisitStatus,
   calendarClient,
   findClosestPairing,
+  isReceptionistOnlyRole,
+  isVisitLockedForReceptionist,
 } from '@/lib/visits-calendar-client';
 
 import { AppointmentActions, type EntryAction } from './appointment-actions';
@@ -118,6 +120,17 @@ interface QuickAddState {
 }
 
 export function CalendarView(): ReactElement {
+  // The receptionist edit-lock (daily-report integrity) is per-visit-
+  // per-role. `me` carries the session's roles array; we mirror the
+  // backend's `isReceptionistOnly` so multi-role users
+  // (receptionist+doctor, receptionist+clinic_admin) keep their full
+  // edit capabilities, and so doctor-only sessions visiting this page
+  // (rare — admin debug?) aren't restricted either. The server is
+  // authoritative; this client predicate just disables affordances
+  // proactively so receptionists don't click into a 403.
+  const { me } = useMe();
+  const isReceptionistOnly = isReceptionistOnlyRole(me?.roles ?? null);
+
   const [settings, setSettings] = useState<ClinicSettings | null>(null);
   const [entries, setEntries] = useState<CalendarEntry[]>([]);
   const [stats, setStats] = useState<CalendarStatsResponse | null>(null);
@@ -137,6 +150,17 @@ export function CalendarView(): ReactElement {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
 
   const todayIso = useMemo(() => todayIsoLocal(now), [now]);
+
+  // Receptionist edit-lock predicate. Recomputed when the day rolls
+  // over or the role flag flips. Doctor / clinic_admin sessions get a
+  // constant `() => false` so locked-state never gates their UI.
+  const isLockedForReceptionist = useCallback(
+    (entry: CalendarEntry): boolean => {
+      if (!isReceptionistOnly) return false;
+      return isVisitLockedForReceptionist(entry, todayIso);
+    },
+    [isReceptionistOnly, todayIso],
+  );
 
   // ----- Displayed week: Monday-anchored, persisted to the URL.
   //
@@ -822,7 +846,10 @@ export function CalendarView(): ReactElement {
         {/* Stats */}
         <StatsRow stats={stats} now={now} />
 
-        {/* End-of-day prompt */}
+        {/* End-of-day prompt. Receptionist-only sessions see the banner
+            for visibility but not the "Shëno status" dropdown — the
+            edit-lock blocks yesterday's transitions at the server, so
+            we hide the affordance rather than letting clicks 403. */}
         {promptCount > 0 ? (
           <div
             className="mt-4 flex items-center justify-between gap-3 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] text-amber-900"
@@ -832,13 +859,18 @@ export function CalendarView(): ReactElement {
             <span>
               <strong className="font-semibold">{promptCount}</strong>{' '}
               {promptCount === 1
-                ? 'termin i djeshëm është pa status. Shëno tani?'
-                : 'termine të djeshme janë pa status. Shëno tani?'}
+                ? 'termin i djeshëm është pa status.'
+                : 'termine të djeshme janë pa status.'}{' '}
+              {isReceptionistOnly
+                ? 'Mjeku duhet të shënojë statusin.'
+                : 'Shëno tani?'}
             </span>
-            <UnmarkedDropdown
-              items={unmarked}
-              onMark={(a, status) => applyStatus(a, status)}
-            />
+            {!isReceptionistOnly ? (
+              <UnmarkedDropdown
+                items={unmarked}
+                onMark={(a, status) => applyStatus(a, status)}
+              />
+            ) : null}
           </div>
         ) : null}
 
@@ -912,6 +944,7 @@ export function CalendarView(): ReactElement {
               onEntryContextMenu={onEntryClick}
               onWalkinForVisit={openWalkinPickerForVisit}
               onReschedule={onDragReschedule}
+              isLocked={isLockedForReceptionist}
             />
           ) : (
             <CalendarSkeleton />

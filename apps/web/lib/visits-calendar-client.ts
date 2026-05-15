@@ -7,6 +7,7 @@
 // shape).
 
 import { apiFetch, apiUrl } from './api';
+import { toLocalParts } from './appointment-client';
 
 // ---------------------------------------------------------------------------
 // Lifecycle (full unified set — no narrowing)
@@ -289,4 +290,63 @@ export function isScheduledEntry(e: CalendarEntry): boolean {
 /** Walk-in entries (`isWalkIn=true`). */
 export function isWalkInEntry(e: CalendarEntry): boolean {
   return e.isWalkIn;
+}
+
+// ---------------------------------------------------------------------------
+// Receptionist edit-lock — frontend mirror of
+// `apps/api/src/modules/visits/visits-calendar.lock.ts`. The server is
+// authoritative; the UI uses this predicate to disable affordances
+// proactively so the receptionist doesn't click into a 403/400.
+// ---------------------------------------------------------------------------
+
+/**
+ * Albanian copy for the receptionist's "this card is locked" tooltip
+ * + the rejection toast. Shared so both surfaces stay aligned with the
+ * server messages.
+ */
+export const LOCKED_HOVER_MESSAGE = 'Vizita është e mbyllur';
+
+/**
+ * True iff a visit is locked from receptionist edits. Doctor and
+ * clinic_admin are never restricted — call sites must gate on the
+ * session's roles via `isReceptionistOnlyRole` before applying this
+ * predicate.
+ *
+ * Lock rule (mirrors the server):
+ *   - visitDate < today (any status)        → locked
+ *   - visitDate === today AND completed     → locked
+ *   - everything else                        → unlocked
+ *
+ * `todayIso` is `YYYY-MM-DD` in `Europe/Belgrade`, computed once per
+ * tick by the parent (it already maintains a `todayIso` for the now-
+ * line). We use the entry's anchor instant (scheduled or arrived) to
+ * derive its LOCAL day via the same `toLocalParts` helper the rest of
+ * the calendar uses, so a walk-in arriving at 00:30 Belgrade time near
+ * the DST boundary lands on the right column — and the lock predicate
+ * agrees with what the receptionist actually sees in the grid.
+ */
+export function isVisitLockedForReceptionist(
+  entry: CalendarEntry,
+  todayIso: string,
+): boolean {
+  const anchorIso = entry.scheduledFor ?? entry.arrivedAt ?? entry.createdAt;
+  if (!anchorIso) return false;
+  const visitDate = toLocalParts(new Date(anchorIso)).date;
+  if (visitDate < todayIso) return true;
+  if (visitDate === todayIso && entry.status === 'completed') return true;
+  return false;
+}
+
+/**
+ * Receptionist-only predicate mirroring the backend
+ * `isReceptionistOnly`. A user with roles ['receptionist', 'doctor']
+ * is NOT receptionist-only and thus NEVER locked — they keep their
+ * doctor edit capabilities.
+ */
+export function isReceptionistOnlyRole(
+  roles: ReadonlyArray<string> | null | undefined,
+): boolean {
+  if (!roles || roles.length === 0) return false;
+  if (roles.includes('doctor') || roles.includes('clinic_admin')) return false;
+  return roles.includes('receptionist');
 }

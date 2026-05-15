@@ -28,6 +28,7 @@ import {
 import type { HoursConfig } from '@/lib/clinic-client';
 import {
   type CalendarEntry,
+  LOCKED_HOVER_MESSAGE,
   PAIRABLE_STATUSES,
   type VisitStatus,
 } from '@/lib/visits-calendar-client';
@@ -79,6 +80,20 @@ export interface CalendarGridProps {
     entry: CalendarEntry,
     next: { date: string; time: string },
   ) => Promise<{ ok: true } | { ok: false; message: string }>;
+  /**
+   * Receptionist edit-lock predicate. Returns true for visits the
+   * current session can't edit — past clinic day (yesterday+), OR
+   * today + completed. Hands down from CalendarView once per render
+   * (gated there on `isReceptionistOnlyRole(me.roles)`, so a doctor
+   * session passes `() => false` and is never locked). Locked cards:
+   *   - don't open the status menu on click
+   *   - don't drag (cursor stays default, useDraggable disabled)
+   *   - render a `title` hint explaining why
+   *   - don't surface the "+ Pa termin" pairing ghost on the row
+   * The server still enforces the rule authoritatively — this is the
+   * defense-in-depth UI half.
+   */
+  isLocked?: (entry: CalendarEntry) => boolean;
 }
 
 
@@ -208,6 +223,7 @@ export function CalendarGrid({
   onEntryContextMenu,
   onWalkinForVisit,
   onReschedule,
+  isLocked,
 }: CalendarGridProps): ReactElement {
   // Scheduled rows feed the time grid; walk-ins feed the per-column
   // right lane. Both still positioned absolutely by time math.
@@ -478,6 +494,7 @@ export function CalendarGrid({
             onEntryContextMenu={onEntryContextMenu}
             onWalkinForVisit={onWalkinForVisit}
             onReschedule={onReschedule}
+            isLocked={isLocked}
           />
         );
       })}
@@ -510,6 +527,7 @@ interface DayColumnBodyProps {
   onEntryContextMenu: CalendarGridProps['onEntryContextMenu'];
   onWalkinForVisit: CalendarGridProps['onWalkinForVisit'];
   onReschedule: CalendarGridProps['onReschedule'];
+  isLocked: CalendarGridProps['isLocked'];
 }
 
 function DayColumnBody({
@@ -530,6 +548,7 @@ function DayColumnBody({
   onEntryContextMenu,
   onWalkinForVisit,
   onReschedule,
+  isLocked,
 }: DayColumnBodyProps): ReactElement {
   // Register this column body as a droppable for the DnD reschedule
   // flow. The `data.date` is read by handleDragEnd to compute the
@@ -580,13 +599,17 @@ function DayColumnBody({
 
   // Resolve a mouse Y to the scheduled visit whose [top, top+height]
   // range contains that point. Returns null when no scheduled visit
-  // overlaps the row or when the visit is in a finalized status that
-  // can't be paired against. Used both by the walk-in suggest ghost
-  // (right-lane hover at the visit's row) and the click handler.
+  // overlaps the row, when the visit is in a finalized status that
+  // can't be paired against, OR when the visit is locked for the
+  // current receptionist session (yesterday-and-earlier rows can't be
+  // paired into — the server rejects the walk-in creation with the
+  // same lock check). Used both by the walk-in suggest ghost (right-
+  // lane hover) and the click handler.
   const findPairableApptAtY = (y: number): CalendarEntry | null => {
     for (const a of entries) {
       if (a.scheduledFor == null || a.durationMinutes == null) continue;
       if (!PAIRABLE_STATUSES.has(a.status)) continue;
+      if (isLocked && isLocked(a)) continue;
       const sMin = timeToMinutes(toLocalParts(new Date(a.scheduledFor)).time);
       const top = (sMin - gridStartMin) * PX_PER_MIN;
       const height = Math.max(20, a.durationMinutes * PX_PER_MIN);
@@ -772,25 +795,29 @@ function DayColumnBody({
             : null,
         gridStartMin,
         gridEndMin,
-      ).map(({ entry: a, pinned }) => (
-        <ScheduledCard
-          key={a.id}
-          entry={a}
-          gridStartMin={gridStartMin}
-          leftLaneOnly={effectivelyTwoLane}
-          isPast={isPast}
-          pinned={pinned}
-          onClick={(ev) =>
-            onEntryClick(a, { x: ev.clientX, y: ev.clientY })
-          }
-          onContextMenu={
-            onEntryContextMenu
-              ? (ev) => onEntryContextMenu(a, { x: ev.clientX, y: ev.clientY })
-              : undefined
-          }
-          onReschedule={onReschedule}
-        />
-      ))}
+      ).map(({ entry: a, pinned }) => {
+        const locked = isLocked ? isLocked(a) : false;
+        return (
+          <ScheduledCard
+            key={a.id}
+            entry={a}
+            gridStartMin={gridStartMin}
+            leftLaneOnly={effectivelyTwoLane}
+            isPast={isPast}
+            pinned={pinned}
+            locked={locked}
+            onClick={(ev) =>
+              onEntryClick(a, { x: ev.clientX, y: ev.clientY })
+            }
+            onContextMenu={
+              onEntryContextMenu
+                ? (ev) => onEntryContextMenu(a, { x: ev.clientX, y: ev.clientY })
+                : undefined
+            }
+            onReschedule={onReschedule}
+          />
+        );
+      })}
 
       {classifyEntriesByGrid(
         walkIns,
@@ -800,23 +827,27 @@ function DayColumnBody({
         },
         gridStartMin,
         gridEndMin,
-      ).map(({ entry: w, pinned }) => (
-        <WalkInCard
-          key={w.id}
-          entry={w}
-          gridStartMin={gridStartMin}
-          isPast={isPast}
-          pinned={pinned}
-          onClick={(ev) =>
-            onEntryClick(w, { x: ev.clientX, y: ev.clientY })
-          }
-          onContextMenu={
-            onEntryContextMenu
-              ? (ev) => onEntryContextMenu(w, { x: ev.clientX, y: ev.clientY })
-              : undefined
-          }
-        />
-      ))}
+      ).map(({ entry: w, pinned }) => {
+        const locked = isLocked ? isLocked(w) : false;
+        return (
+          <WalkInCard
+            key={w.id}
+            entry={w}
+            gridStartMin={gridStartMin}
+            isPast={isPast}
+            pinned={pinned}
+            locked={locked}
+            onClick={(ev) =>
+              onEntryClick(w, { x: ev.clientX, y: ev.clientY })
+            }
+            onContextMenu={
+              onEntryContextMenu
+                ? (ev) => onEntryContextMenu(w, { x: ev.clientX, y: ev.clientY })
+                : undefined
+            }
+          />
+        );
+      })}
 
       {/* Drop preview — the snapped target slot during a drag. Teal
           when valid, red when the position would conflict with another
@@ -981,6 +1012,11 @@ interface ScheduledCardProps {
    *  open band — Fix #4. The card pins to top/bottom with a "← më
    *  herët"/"më vonë →" prefix instead of using time-derived top. */
   pinned: PinnedPosition | null;
+  /** Receptionist edit-lock (per CalendarView). Locked cards don't
+   *  open the status menu on click, don't drag, and surface a hover
+   *  tooltip explaining why. Doctor/clinic_admin sessions always
+   *  receive locked=false (the lock is per-role at the view layer). */
+  locked: boolean;
   onClick: (event: React.MouseEvent) => void;
   onContextMenu?: (event: React.MouseEvent) => void;
   /** Drag-drop reschedule callback (Fix #2) — also drives the
@@ -995,6 +1031,7 @@ function ScheduledCard({
   leftLaneOnly,
   isPast,
   pinned,
+  locked,
   onClick,
   onContextMenu,
   onReschedule,
@@ -1024,7 +1061,11 @@ function ScheduledCard({
   // Pinned (out-of-range) cards: skip — the receptionist should
   // re-open them via the status menu to fix the time, not slide them
   // around an unfamiliar position.
-  const isDraggable = entry.status === 'scheduled' && pinned == null;
+  // Locked cards (receptionist edit-lock): skip drag too — the server
+  // rejects reschedule on locked rows, so disabling the affordance
+  // here keeps the receptionist from grabbing a card that would
+  // bounce back with an error.
+  const isDraggable = entry.status === 'scheduled' && pinned == null && !locked;
   const { attributes, listeners, setNodeRef, transform, isDragging } =
     useDraggable({
       id: `card:${entry.id}`,
@@ -1098,6 +1139,10 @@ function ScheduledCard({
         // status menu, which is the receptionist's primary affordance.
         if (isDragging) return;
         e.stopPropagation();
+        // Locked cards (receptionist edit-lock): swallow the click —
+        // no status menu opens. The hover tooltip explains why. The
+        // server is also authoritative; this is defense in depth.
+        if (locked) return;
         onClick(e);
       }}
       onContextMenu={
@@ -1105,13 +1150,20 @@ function ScheduledCard({
           ? (e) => {
               e.preventDefault();
               e.stopPropagation();
+              if (locked) return;
               onContextMenu(e);
             }
           : undefined
       }
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
-      title={`${entry.patient.firstName} ${entry.patient.lastName} · ${formatDob(entry.patient.dateOfBirth)} · ${STATUS_LABEL[entry.status]}${pinned ? ` · jashtë orarit (${localParts.time})` : ''}`}
+      title={
+        locked
+          ? LOCKED_HOVER_MESSAGE
+          : `${entry.patient.firstName} ${entry.patient.lastName} · ${formatDob(entry.patient.dateOfBirth)} · ${STATUS_LABEL[entry.status]}${pinned ? ` · jashtë orarit (${localParts.time})` : ''}`
+      }
+      data-locked={locked || undefined}
+      aria-disabled={locked || undefined}
       className={cn(
         'absolute left-1.5 px-2 py-0.5 rounded text-left border bg-surface-elevated border-teal-200 border-l-[3px] border-l-primary shadow-xs transition hover:-translate-y-px hover:shadow-sm flex items-center gap-1.5 overflow-hidden',
         !leftLaneOnly && !hovered && 'right-1.5',
@@ -1139,6 +1191,10 @@ function ScheduledCard({
           : 'border-dashed bg-stone-50/80'),
         isDraggable && !isDragging && 'cursor-grab',
         isDragging && 'cursor-grabbing',
+        // Locked: revert to default cursor so the receptionist's
+        // pointer doesn't suggest the card is interactive. The hover
+        // tooltip carries the "Vizita është e mbyllur" explanation.
+        locked && 'cursor-default',
       )}
       style={{
         ...(pinnedStyle ?? { top: inlineTop, height: Math.max(20, inlineHeight) }),
@@ -1244,6 +1300,8 @@ interface WalkInCardProps {
    *  top/bottom of the right lane with a "← më herët"/"më vonë →"
    *  prefix. */
   pinned: PinnedPosition | null;
+  /** Receptionist edit-lock — see ScheduledCardProps.locked. */
+  locked: boolean;
   onClick: (event: React.MouseEvent) => void;
   onContextMenu?: (event: React.MouseEvent) => void;
 }
@@ -1253,6 +1311,7 @@ function WalkInCard({
   gridStartMin,
   isPast,
   pinned,
+  locked,
   onClick,
   onContextMenu,
 }: WalkInCardProps): ReactElement | null {
@@ -1319,6 +1378,7 @@ function WalkInCard({
       data-pinned={pinned?.kind ?? undefined}
       onClick={(e) => {
         e.stopPropagation();
+        if (locked) return;
         onClick(e);
       }}
       onContextMenu={
@@ -1326,20 +1386,29 @@ function WalkInCard({
           ? (e) => {
               e.preventDefault();
               e.stopPropagation();
+              if (locked) return;
               onContextMenu(e);
             }
           : undefined
       }
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
-      title={`${entry.patient.firstName} ${entry.patient.lastName} · pa termin · erdhi ${parts.time} · ${STATUS_LABEL[entry.status]}${pinned ? ' · jashtë orarit' : ''}`}
+      title={
+        locked
+          ? LOCKED_HOVER_MESSAGE
+          : `${entry.patient.firstName} ${entry.patient.lastName} · pa termin · erdhi ${parts.time} · ${STATUS_LABEL[entry.status]}${pinned ? ' · jashtë orarit' : ''}`
+      }
+      data-locked={locked || undefined}
+      aria-disabled={locked || undefined}
       className={cn(
-        'absolute px-2 py-0.5 rounded text-left transition hover:-translate-y-px hover:shadow-sm shadow-xs flex items-center gap-1.5 overflow-hidden',
+        'absolute px-2 py-0.5 rounded text-left transition hover:-translate-y-px hover:shadow-sm shadow-xs flex items-center gap-1.5 overflow-hidden cursor-pointer',
         // Faded status variants — lift the fade when hovered so the
         // expanded text region stays readable.
         isCompleted && !hovered && 'opacity-85',
         isNoShow && !hovered && 'opacity-60',
         isCancelled && !hovered && 'opacity-50',
+        // Locked walk-in: same visual cue as the scheduled-card path.
+        locked && 'cursor-default',
       )}
       style={{
         ...(pinnedStyle ?? { top: inlineTop, height }),
