@@ -94,6 +94,7 @@ model Clinic {
   dicomStudies        DicomStudy[]
   prescriptionLines   PrescriptionLine[]
   diagnosisUsages     DoctorDiagnosisUsage[]
+  visitAmendments     VisitAmendment[]
 
   @@map("clinics")
 }
@@ -143,6 +144,7 @@ model User {
   trustedDevices    AuthTrustedDevice[]
   mfaCodes          AuthMfaCode[]
   passwordResets    AuthPasswordResetToken[]
+  visitAmendments   VisitAmendment[]
 
   @@index([clinicId])
   @@map("users")
@@ -361,6 +363,12 @@ model Visit {
   createdAt           DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt           DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
   deletedAt           DateTime? @map("deleted_at") @db.Timestamptz(6)
+  /// v1.x: electronic signing — NOT exposed in v1 UI. Non-NULL marks
+  /// the visit as signed by the attending doctor; after signing,
+  /// further corrections flow through the `visit_amendments` table
+  /// instead of mutating this row. Schema-only for now so the future
+  /// signing slice ships without a painful migration.
+  signedAt            DateTime? @map("signed_at") @db.Timestamptz(6)
 
   clinic        Clinic              @relation(fields: [clinicId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   patient       Patient             @relation(fields: [patientId], references: [id], onDelete: NoAction, onUpdate: NoAction)
@@ -371,11 +379,13 @@ model Visit {
   diagnoses     VisitDiagnosis[]
   vertetime     Vertetim[]
   dicomLinks    VisitDicomLink[]
+  amendments    VisitAmendment[]
 
   @@unique([clinicId, legacyId], name: "visit_clinic_legacy_unique")
   @@index([clinicId])
   @@index([patientId])
   @@index([clinicId, status])
+  @@index([signedAt])
   @@map("visits")
 }
 
@@ -394,6 +404,45 @@ model VisitDiagnosis {
   @@index([visitId])
   @@index([icd10Code])
   @@map("visit_diagnoses")
+}
+
+/// v1.x: visit amendments — NOT exposed in v1 UI.
+///
+/// Append-only addendum rows attached to a visit. The v1.x signing
+/// slice (see `Visit.signedAt`) will route post-signature corrections
+/// through this table so the original clinical record stays
+/// untouched and the audit trail reads as "original + dated
+/// amendments" — the form regulators expect.
+///
+/// v1 never reads or writes these rows. The schema is here so the
+/// future slice lands without a painful migration. `clinic_id` is
+/// stored explicitly (not derived from `visit`) so the standard
+/// tenant-isolation RLS policy can scope by it like every other
+/// clinical table.
+///
+/// FK semantics:
+///   - visit_id → visits(id) ON DELETE CASCADE — hard-deleting a
+///     visit (admin tooling only) drops its amendments with it.
+///   - author_user_id → users(id) ON DELETE RESTRICT — a user with
+///     authored amendments cannot be hard-deleted. Soft-delete
+///     (users.deleted_at) leaves authorship intact.
+model VisitAmendment {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  clinicId     String   @map("clinic_id") @db.Uuid
+  visitId      String   @map("visit_id") @db.Uuid
+  authorUserId String   @map("author_user_id") @db.Uuid
+  content      String   @db.Text
+  reason       String?  @db.Text
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  visit  Visit  @relation(fields: [visitId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  author User   @relation(fields: [authorUserId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+
+  @@index([visitId])
+  @@index([authorUserId])
+  @@index([clinicId])
+  @@map("visit_amendments")
 }
 
 /// WHO ICD-10 catalogue. Pre-populated from

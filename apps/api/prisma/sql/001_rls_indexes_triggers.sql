@@ -149,6 +149,29 @@ END
 $$;
 
 -- ---------------------------------------------------------------------------
+-- visit_amendments — v1.x append-only addendum rows. Not exposed in v1
+-- UI; schema-only. RLS keeps the table tenant-scoped from day one so
+-- the future signing slice can assume isolation without retrofitting.
+-- The migration that created the table already set the policy, repeated
+-- here so a fresh `psql -f` apply is idempotent.
+-- ---------------------------------------------------------------------------
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables
+             WHERE table_schema = 'public' AND table_name = 'visit_amendments') THEN
+    EXECUTE 'ALTER TABLE "visit_amendments" ENABLE ROW LEVEL SECURITY';
+    EXECUTE 'ALTER TABLE "visit_amendments" FORCE ROW LEVEL SECURITY';
+    EXECUTE 'DROP POLICY IF EXISTS tenant_isolation ON "visit_amendments"';
+    EXECUTE $POL$
+      CREATE POLICY tenant_isolation ON "visit_amendments"
+        USING ("clinic_id" = current_setting('app.clinic_id', true)::uuid)
+        WITH CHECK ("clinic_id" = current_setting('app.clinic_id', true)::uuid)
+    $POL$;
+  END IF;
+END
+$$;
+
+-- ---------------------------------------------------------------------------
 -- vertetime
 -- ---------------------------------------------------------------------------
 ALTER TABLE "vertetime" ENABLE ROW LEVEL SECURITY;
