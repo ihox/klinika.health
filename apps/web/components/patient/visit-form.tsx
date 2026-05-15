@@ -49,6 +49,19 @@ interface Props {
   onIssueVertetim: () => void;
   /** Open the patient-history print dialog (toggles US appendix). */
   onPrintHistory: () => void;
+  /**
+   * Mark the visit complete (arrived | in_progress → completed). Parent
+   * computes visibility (clinical role + active status); when undefined
+   * the button is hidden — and, if the visit is already completed, the
+   * disabled "✓ E përfunduar" confirmation replaces it.
+   */
+  onCompleteVisit?: () => void;
+  /**
+   * Revert a completed visit back to `arrived` so the doctor can keep
+   * editing. Parent computes visibility (clinical role + today +
+   * completed status); when undefined the button is hidden.
+   */
+  onRevertStatus?: () => void;
 }
 
 /**
@@ -75,6 +88,8 @@ export function VisitForm({
   onPrintVisitReport,
   onIssueVertetim,
   onPrintHistory,
+  onCompleteVisit,
+  onRevertStatus,
 }: Props): ReactElement {
   const values = useAutoSaveStore((s) => s.values);
   const setValues = useAutoSaveStore((s) => s.setValues);
@@ -365,6 +380,9 @@ export function VisitForm({
         onPrintVisitReport={onPrintVisitReport}
         onIssueVertetim={onIssueVertetim}
         onPrintHistory={onPrintHistory}
+        onCompleteVisit={onCompleteVisit}
+        onRevertStatus={onRevertStatus}
+        visitStatus={visit.status}
       />
     </section>
   );
@@ -463,8 +481,23 @@ interface VisitActionBarProps {
   onPrintVisitReport: () => void;
   onIssueVertetim: () => void;
   onPrintHistory: () => void;
+  /** Hidden when undefined. Replaced by the "✓ E përfunduar" badge for a completed visit. */
+  onCompleteVisit?: () => void;
+  /** Hidden when undefined. Only fires for completed + today + clinical. */
+  onRevertStatus?: () => void;
+  visitStatus: string;
 }
 
+/**
+ * Two-cluster action bar driven by the visit's lifecycle status. The
+ * left cluster groups chart-level utilities (prints, new visit); the
+ * right cluster carries the visit-level actions and terminates at the
+ * primary completion CTA so the doctor's eye lands there. When the
+ * visit is already completed, the CTA is replaced by a non-interactive
+ * "✓ E përfunduar" badge and (today only) the "Anulo statusin" revert
+ * button surfaces alongside it. See chart.html § action-bar for the
+ * canonical layout.
+ */
 function VisitActionBar({
   autoSaveState,
   lastSavedAt,
@@ -474,7 +507,11 @@ function VisitActionBar({
   onPrintVisitReport,
   onIssueVertetim,
   onPrintHistory,
+  onCompleteVisit,
+  onRevertStatus,
+  visitStatus,
 }: VisitActionBarProps): ReactElement {
+  const showCompletedBadge = !onCompleteVisit && visitStatus === 'completed';
   return (
     <footer className="flex flex-col gap-3 border-t border-line bg-surface-subtle px-4 py-3 lg:flex-row lg:flex-wrap lg:items-center lg:justify-between">
       <div className="flex flex-wrap items-center gap-2">
@@ -502,13 +539,20 @@ function VisitActionBar({
         >
           Printo historinë
         </Button>
-        <span className="hidden h-5 w-px bg-line lg:inline-block" aria-hidden />
         <Button variant="secondary" size="sm" onClick={onNewVisit}>
           + Vizitë e re
         </Button>
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <AutoSaveIndicator
+          state={autoSaveState}
+          lastSavedAt={lastSavedAt}
+          onRetry={onSaveNow}
+        />
         <Button variant="secondary" size="sm" onClick={onSaveNow}>
           Ruaj tani
         </Button>
+        <span className="hidden h-5 w-px bg-line lg:inline-block" aria-hidden />
         <Button
           variant="secondary"
           size="sm"
@@ -517,12 +561,40 @@ function VisitActionBar({
         >
           Fshij vizitën
         </Button>
+        {onRevertStatus ? (
+          <button
+            type="button"
+            onClick={onRevertStatus}
+            data-testid="revert-status-trigger"
+            title="Rikthe vizitën në redaktim"
+            className="inline-flex h-8 items-center gap-1.5 rounded-md border border-line bg-surface-subtle px-3 text-[12.5px] font-medium text-ink-muted transition hover:border-line-strong hover:bg-surface hover:text-ink"
+          >
+            <RevertIcon />
+            Anulo statusin
+          </button>
+        ) : null}
+        {onCompleteVisit ? (
+          <button
+            type="button"
+            onClick={onCompleteVisit}
+            data-testid="complete-visit-trigger"
+            className="inline-flex h-8 items-center gap-1.5 rounded-md border border-primary bg-primary px-3.5 text-[12.5px] font-semibold text-white shadow-xs transition hover:border-primary-dark hover:bg-primary-dark"
+          >
+            <CompleteIcon />
+            Përfundo vizitën
+          </button>
+        ) : null}
+        {showCompletedBadge ? (
+          <span
+            aria-disabled="true"
+            data-testid="completed-state-badge"
+            className="inline-flex h-8 cursor-default items-center gap-1.5 rounded-md border border-success-soft bg-success-bg px-3.5 text-[12.5px] font-medium text-success"
+          >
+            <CompleteIcon />
+            E përfunduar
+          </span>
+        ) : null}
       </div>
-      <AutoSaveIndicator
-        state={autoSaveState}
-        lastSavedAt={lastSavedAt}
-        onRetry={onSaveNow}
-      />
     </footer>
   );
 }
@@ -823,6 +895,52 @@ function FoodCheck({ label, checked, onChange, onBlur }: FoodCheckProps): ReactE
       />
       {label}
     </label>
+  );
+}
+
+/**
+ * "Anulo statusin" icon — a curved arrow looping back. Mirrors
+ * chart.html § .btn-revert-status. Distinct from the trash icon so
+ * "revert" and "delete" read as different intents.
+ */
+function RevertIcon(): ReactElement {
+  return (
+    <svg
+      width="13"
+      height="13"
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M3 8.5a5 5 0 0 1 9.2-2.7" />
+      <path d="M12.5 3v3h-3" />
+    </svg>
+  );
+}
+
+/**
+ * Checkmark icon — the "Përfundo vizitën" CTA glyph. Re-used (in
+ * green) for the disabled "✓ E përfunduar" completed-state badge.
+ */
+function CompleteIcon(): ReactElement {
+  return (
+    <svg
+      width="13"
+      height="13"
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M3 8.5l3 3 7-7" />
+    </svg>
   );
 }
 
