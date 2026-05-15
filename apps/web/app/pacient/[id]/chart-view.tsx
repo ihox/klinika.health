@@ -255,7 +255,10 @@ export function ChartView({ patientId, initialVisitId }: Props): ReactElement {
   }
 
   return (
-    <main className="min-h-screen bg-surface pb-24">
+    // pb-12 (was pb-24): the action bar is inline within VisitForm now,
+    // not the prototype's fixed bottom bar, so we don't need the 96px
+    // clearance — pb-12 is plain page-bottom breathing room.
+    <main className="min-h-screen bg-surface pb-12">
       <ChartTopBar me={me} />
 
       {historyOpenForVisit ? (
