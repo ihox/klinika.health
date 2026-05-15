@@ -985,6 +985,81 @@ describe.skipIf(!ENABLED)('Visits calendar integration', () => {
   });
 
   // -----------------------------------------------------------------------
+  // PATCH /:id/status on a standalone doctor visit
+  //
+  // Doctor-only "Vizitë e re" rows have `scheduled_for=null` and
+  // `isWalkIn=false`, so they sit outside the calendar-visible
+  // predicate. Pre-fix, the status endpoint 404'd on these rows and
+  // both the chart's "Përfundo vizitën" and the home dashboard's
+  // "Vizita të hapura" quick-complete were dead ends. Clinical roles
+  // now skip the calendar-visible filter on this single endpoint.
+  // -----------------------------------------------------------------------
+
+  it('PATCH /:id/status — doctor completes a standalone in_progress visit (no scheduledFor, no walk-in)', async () => {
+    const cookie = await loginAs(DOCTOR_EMAIL, SEED_DOCTOR_PASSWORD!);
+    const tIso = todayIso();
+    const id = await createVisitRaw({
+      visitDate: tIso,
+      scheduledFor: null,
+      isWalkIn: false,
+      status: 'in_progress',
+    });
+
+    const res = await req()
+      .patch(`/api/visits/${id}/status`)
+      .set('host', TENANT_HOST)
+      .set('Cookie', cookie)
+      .send({ status: 'completed' });
+    expect(res.status).toBe(200);
+    expect(res.body.entry.status).toBe('completed');
+
+    const row = await prisma.visit.findUniqueOrThrow({ where: { id } });
+    expect(row.status).toBe('completed');
+  });
+
+  it('PATCH /:id/status — doctor completes a standalone visit from a prior day (Vizita të hapura backlog)', async () => {
+    const cookie = await loginAs(DOCTOR_EMAIL, SEED_DOCTOR_PASSWORD!);
+    const yIso = yesterdayIso();
+    const id = await createVisitRaw({
+      visitDate: yIso,
+      scheduledFor: null,
+      isWalkIn: false,
+      status: 'in_progress',
+    });
+
+    const res = await req()
+      .patch(`/api/visits/${id}/status`)
+      .set('host', TENANT_HOST)
+      .set('Cookie', cookie)
+      .send({ status: 'completed' });
+    expect(res.status).toBe(200);
+    expect(res.body.entry.status).toBe('completed');
+  });
+
+  it('PATCH /:id/status — receptionist still 404s on a standalone doctor visit (visibility unchanged)', async () => {
+    const cookie = await loginAs(RECEPTIONIST_EMAIL, SEED_RECEPTIONIST_PASSWORD!);
+    const tIso = todayIso();
+    const id = await createVisitRaw({
+      visitDate: tIso,
+      scheduledFor: null,
+      isWalkIn: false,
+      status: 'in_progress',
+    });
+
+    const res = await req()
+      .patch(`/api/visits/${id}/status`)
+      .set('host', TENANT_HOST)
+      .set('Cookie', cookie)
+      .send({ status: 'completed' });
+    // Calendar-visible filter still applies for receptionist sessions
+    // — the standalone doctor visit isn't in her surface, and the
+    // server refuses to acknowledge it. 404 ('Vizita nuk u gjet') is
+    // the right shape: indistinguishable from "no such id", so it
+    // doesn't leak the row's existence across the privacy boundary.
+    expect(res.status).toBe(404);
+  });
+
+  // -----------------------------------------------------------------------
   // Helpers (mirror patients.integration.spec.ts)
   // -----------------------------------------------------------------------
 

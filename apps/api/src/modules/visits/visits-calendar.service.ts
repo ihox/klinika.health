@@ -609,8 +609,22 @@ export class VisitsCalendarService {
     payload: UpdateVisitStatusInput,
     ctx: RequestContext,
   ): Promise<CalendarEntryDto> {
+    // Doctor-only "Vizitë e re" rows have `scheduled_for=null` and
+    // `isWalkIn=false`, so they fail the calendar-visible predicate.
+    // The chart's "Përfundo vizitën" and the doctor home's "Vizita të
+    // hapura" panel both transition status through this endpoint;
+    // gating them on the calendar-visible filter would 404 every
+    // standalone doctor visit. Clinical roles drop the filter — the
+    // tenant scope (RLS + clinicId), the soft-delete guard, the
+    // role-aware lock, and ALLOWED_TRANSITIONS together cover the
+    // intent. Receptionist sessions keep the filter; the lock would
+    // refuse them on past/today-completed rows anyway, and standalone
+    // doctor visits are never in their UI to begin with.
+    const visibility: Prisma.VisitWhereInput = isReceptionistOnly(ctx.roles)
+      ? CALENDAR_VISIBLE_WHERE
+      : {};
     const before = await this.prisma.visit.findFirst({
-      where: { id, clinicId, deletedAt: null, ...CALENDAR_VISIBLE_WHERE },
+      where: { id, clinicId, deletedAt: null, ...visibility },
       include: {
         patient: { select: { id: true, firstName: true, lastName: true, dateOfBirth: true } },
       },
