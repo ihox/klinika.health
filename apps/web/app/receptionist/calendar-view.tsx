@@ -83,12 +83,19 @@ interface PickerState {
    * Context that opened the picker.
    *   - 'slot'   : tap on an empty time slot → opens booking dialog after pick
    *   - 'global' : top-bar global search → opens booking dialog after pick (date=today, time=blank)
-   *   - 'walkin' : "+ Pacient pa termin" button → immediately POSTs a walk-in, no dialog
+   *   - 'walkin' : "+ Pacient pa termin" → immediately POSTs a walk-in, no dialog
    */
   source: 'slot' | 'global' | 'walkin';
   date: string;
   time: string;
   anchor: { x: number; y: number };
+  /**
+   * For walk-in flows: the scheduled visit the receptionist explicitly
+   * paired this walk-in to (per-row "+ Pa termin" hover affordance).
+   * When undefined on a walk-in flow (toolbar `[+ Pa termin]` click)
+   * the client picks the slot closest to now — see STEP 5.
+   */
+  pairedVisitId?: string;
 }
 
 interface QuickAddState {
@@ -100,7 +107,7 @@ interface QuickAddState {
    */
   returnTo:
     | { kind: 'booking'; date: string; time: string; prefilledFromSlot: boolean }
-    | { kind: 'walkin' };
+    | { kind: 'walkin'; pairedVisitId?: string };
 }
 
 export function CalendarView(): ReactElement {
@@ -440,10 +447,18 @@ export function CalendarView(): ReactElement {
   // ----- Walk-in entry: POST /api/visits/walkin and refresh. No dialog,
   // no follow-up question — the receptionist's intent is "this patient
   // is here NOW, the doctor will pull them in." Toast confirms.
+  //
+  // `pairedVisitId` carries the explicit pairing the receptionist
+  // selected via the per-row hover affordance (STEP 3) or the closest
+  // match computed for the toolbar `[+ Pa termin]` click (STEP 5).
+  // Server validates it against the operational rules in STEP 4.
   const addWalkin = useCallback(
-    async (p: PatientPublicDto) => {
+    async (p: PatientPublicDto, pairedVisitId?: string) => {
       try {
-        await calendarClient.createWalkin({ patientId: p.id });
+        await calendarClient.createWalkin({
+          patientId: p.id,
+          ...(pairedVisitId ? { pairedWithVisitId: pairedVisitId } : {}),
+        });
         await refreshEntries();
         await refreshStats();
         setToast('Pacienti u shtua. Shfaqet menjëherë në kalendar.');
@@ -459,9 +474,10 @@ export function CalendarView(): ReactElement {
     (p: PatientPublicDto) => {
       if (!picker) return;
       const source = picker.source;
+      const pairedVisitId = picker.pairedVisitId;
       setPicker(null);
       if (source === 'walkin') {
-        void addWalkin(p);
+        void addWalkin(p, pairedVisitId);
         return;
       }
       setBooking({
@@ -481,9 +497,13 @@ export function CalendarView(): ReactElement {
     (query: string) => {
       if (!picker) return;
       const source = picker.source;
+      const pairedVisitId = picker.pairedVisitId;
       setPicker(null);
       if (source === 'walkin') {
-        setQuickAdd({ seed: query, returnTo: { kind: 'walkin' } });
+        setQuickAdd({
+          seed: query,
+          returnTo: { kind: 'walkin', ...(pairedVisitId ? { pairedVisitId } : {}) },
+        });
         return;
       }
       setQuickAdd({
@@ -508,7 +528,7 @@ export function CalendarView(): ReactElement {
       const returnTo = quickAdd.returnTo;
       setQuickAdd(null);
       if (returnTo.kind === 'walkin') {
-        void addWalkin(p);
+        void addWalkin(p, returnTo.pairedVisitId);
         return;
       }
       setBooking({
@@ -532,6 +552,28 @@ export function CalendarView(): ReactElement {
       anchor: { x: window.innerWidth / 2, y: 180 },
     });
   }, [todayIso]);
+
+  // ----- Open the walk-in picker paired to a specific scheduled visit.
+  // The per-row "+ Pa termin" hover affordance routes here: receptionist
+  // hovers an appt row → ghost in right lane → click → picker opens →
+  // pick patient → POST /api/visits/walkin with `pairedWithVisitId`
+  // = the appt's id (server validates per STEP 4).
+  const openWalkinPickerForVisit = useCallback(
+    (pairedVisit: CalendarEntry, anchor: { x: number; y: number }) => {
+      setActionsFor(null);
+      const dateForPicker = pairedVisit.scheduledFor
+        ? toLocalParts(new Date(pairedVisit.scheduledFor)).date
+        : todayIso;
+      setPicker({
+        source: 'walkin',
+        date: dateForPicker,
+        time: '',
+        anchor,
+        pairedVisitId: pairedVisit.id,
+      });
+    },
+    [todayIso],
+  );
 
   // ----- Path 2: global search opens a picker without a slot anchor.
   const openGlobalPickerForPatient = useCallback(
@@ -729,6 +771,7 @@ export function CalendarView(): ReactElement {
               // as a left-click; users on tablets get the same menu via
               // the long-press gesture they expect.
               onEntryContextMenu={onEntryClick}
+              onWalkinForVisit={openWalkinPickerForVisit}
             />
           ) : (
             <CalendarSkeleton />

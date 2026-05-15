@@ -45,7 +45,25 @@ export interface CalendarGridProps {
     entry: CalendarEntry,
     anchor: { x: number; y: number },
   ) => void;
+  /**
+   * Right-lane click at a row where a scheduled visit exists, OR a
+   * direct click on the "+ Pa termin" suggest ghost. The receptionist's
+   * intent is to add a walk-in paired to that visit — the calendar-view
+   * opens the patient picker and POSTs with `pairedWithVisitId` set.
+   */
+  onWalkinForVisit: (pairedVisit: CalendarEntry, anchor: { x: number; y: number }) => void;
 }
+
+// Active statuses a walk-in is allowed to pair with. Completed /
+// no_show / cancelled visits are finalized — pairing a walk-in to them
+// no longer matches the operational rule ("patient who arrived while
+// another is being seen"). UI hides the suggest ghost on those rows;
+// the API enforces the same boundary (STEP 4).
+const PAIRABLE_STATUSES: ReadonlySet<VisitStatus> = new Set<VisitStatus>([
+  'scheduled',
+  'arrived',
+  'in_progress',
+]);
 
 const STATUS_LABEL: Record<VisitStatus, string> = {
   scheduled: 'Planifikuar',
@@ -110,6 +128,7 @@ export function CalendarGrid({
   onSlotClick,
   onEntryClick,
   onEntryContextMenu,
+  onWalkinForVisit,
 }: CalendarGridProps): ReactElement {
   // Scheduled rows feed the time grid; walk-ins feed the per-column
   // right lane. Both still positioned absolutely by time math.
@@ -247,6 +266,7 @@ export function CalendarGrid({
             onSlotClick={onSlotClick}
             onEntryClick={onEntryClick}
             onEntryContextMenu={onEntryContextMenu}
+            onWalkinForVisit={onWalkinForVisit}
           />
         );
       })}
@@ -273,6 +293,7 @@ interface DayColumnBodyProps {
   onSlotClick: CalendarGridProps['onSlotClick'];
   onEntryClick: CalendarGridProps['onEntryClick'];
   onEntryContextMenu: CalendarGridProps['onEntryContextMenu'];
+  onWalkinForVisit: CalendarGridProps['onWalkinForVisit'];
 }
 
 function DayColumnBody({
@@ -290,6 +311,7 @@ function DayColumnBody({
   onSlotClick,
   onEntryClick,
   onEntryContextMenu,
+  onWalkinForVisit,
 }: DayColumnBodyProps): ReactElement {
   // A column is in two-lane mode whenever it carries ≥1 walk-in OR is
   // today (today's right lane is always reserved — when empty it shows
@@ -299,28 +321,47 @@ function DayColumnBody({
   const hasWalkIns = walkIns.length > 0;
   const isTwoLane = isToday || hasWalkIns;
 
-  // Snap the mouse Y to the nearest 10-minute slot inside the open
-  // window. Returns null when the cursor is outside hours or over a
-  // card; busy-overlap is a separate check (the click handler still
-  // lets the booking dialog surface conflicts, while the hover ghost
-  // hides itself on busy slots).
+  // Snap the mouse Y to the nearest 5-minute slot inside the open
+  // window. Returns null when the cursor is outside hours; busy-overlap
+  // and the over-an-appt case are handled separately so the hover ghost
+  // and the click handler can fork on the same primitive.
+  //
+  // The 5-min granularity matches design-reference/prototype/
+  // receptionist.html — the empty-slot ghost reads "Termin i ri · HH:MM"
+  // where HH:MM is rounded to 10:05, 10:10, 10:15, ...
   const snapSlot = (
     event: React.MouseEvent<HTMLDivElement>,
   ): { targetMin: number; top: number; time: string } | null => {
     if (!col.open) return null;
-    if ((event.target as HTMLElement).closest('[data-appt]')) return null;
     const rect = event.currentTarget.getBoundingClientRect();
     const y = event.clientY - rect.top;
-    const minFromStart = Math.max(0, Math.round(y / PX_PER_MIN / 10) * 10);
+    const minFromStart = Math.max(0, Math.round(y / PX_PER_MIN / 5) * 5);
     const colStart = timeToMinutes(col.startTime);
     const colEnd = timeToMinutes(col.endTime);
     const targetMin = gridStartMin + minFromStart;
-    if (targetMin < colStart || targetMin + 10 > colEnd) return null;
+    if (targetMin < colStart || targetMin + 5 > colEnd) return null;
     return {
       targetMin,
       top: (targetMin - gridStartMin) * PX_PER_MIN,
       time: minutesToTime(targetMin),
     };
+  };
+
+  // Resolve a mouse Y to the scheduled visit whose [top, top+height]
+  // range contains that point. Returns null when no scheduled visit
+  // overlaps the row or when the visit is in a finalized status that
+  // can't be paired against. Used both by the walk-in suggest ghost
+  // (right-lane hover at the visit's row) and the click handler.
+  const findPairableApptAtY = (y: number): CalendarEntry | null => {
+    for (const a of entries) {
+      if (a.scheduledFor == null || a.durationMinutes == null) continue;
+      if (!PAIRABLE_STATUSES.has(a.status)) continue;
+      const sMin = timeToMinutes(toLocalParts(new Date(a.scheduledFor)).time);
+      const top = (sMin - gridStartMin) * PX_PER_MIN;
+      const height = Math.max(20, a.durationMinutes * PX_PER_MIN);
+      if (y >= top && y <= top + height) return a;
+    }
+    return null;
   };
 
   // Overlap check: would a default-duration booking starting at
@@ -336,19 +377,55 @@ function DayColumnBody({
     });
   };
 
-  const handleClick = (event: React.MouseEvent<HTMLDivElement>): void => {
-    const slot = snapSlot(event);
-    if (!slot) return;
-    onSlotClick({ date: col.date, time: slot.time });
-  };
-
-  // Hover preview ghost. Mirrors receptionist.html `.ghost-slot` —
-  // a small dashed-teal pill that snaps to the 10-min slot the
-  // receptionist's cursor sits over and labels it
-  // "Termin i ri · HH:MM · N min". Hidden when the would-be booking
-  // overlaps a busy interval. Skipped on touch (mousemove doesn't fire).
+  // Hover state. Only one of `walkinSuggest` / `hoverSlot` is set at
+  // a time — the row decides:
+  //   - cursor over a row with a pairable scheduled visit → walk-in
+  //     suggest ghost in the right lane (and the column expands to
+  //     two-lane preview if it isn't already).
+  //   - cursor over an empty 5-min slot → empty-slot ghost in the
+  //     left lane labeled "Termin i ri · HH:MM".
+  //   - otherwise → no ghost.
+  const [walkinSuggest, setWalkinSuggest] = useState<{
+    pairedVisit: CalendarEntry;
+    top: number;
+    height: number;
+    time: string;
+  } | null>(null);
   const [hoverSlot, setHoverSlot] = useState<{ top: number; time: string } | null>(null);
+
   const handleMouseMove = (event: React.MouseEvent<HTMLDivElement>): void => {
+    if (!col.open) return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    const y = event.clientY - rect.top;
+
+    // Row check first — the receptionist's cursor over an appt (or its
+    // row in the right lane) means "walk-in suggest" wins, regardless
+    // of whether the 5-min snap would land cleanly.
+    const apptAtRow = findPairableApptAtY(y);
+    if (apptAtRow && apptAtRow.scheduledFor != null && apptAtRow.durationMinutes != null) {
+      const sMin = timeToMinutes(toLocalParts(new Date(apptAtRow.scheduledFor)).time);
+      const top = (sMin - gridStartMin) * PX_PER_MIN;
+      const height = Math.max(20, apptAtRow.durationMinutes * PX_PER_MIN);
+      const time = minutesToTime(sMin);
+      if (
+        !walkinSuggest ||
+        walkinSuggest.pairedVisit.id !== apptAtRow.id
+      ) {
+        setWalkinSuggest({ pairedVisit: apptAtRow, top, height, time });
+      }
+      if (hoverSlot) setHoverSlot(null);
+      return;
+    }
+
+    if (walkinSuggest) setWalkinSuggest(null);
+
+    // Empty-slot path: skip when the cursor is over a card (the card's
+    // own handler takes over) or when the snapped slot would overlap a
+    // busy interval. Skipped on touch (mousemove doesn't fire).
+    if ((event.target as HTMLElement).closest('[data-appt]')) {
+      if (hoverSlot) setHoverSlot(null);
+      return;
+    }
     const slot = snapSlot(event);
     if (!slot || isSlotBusy(slot.targetMin)) {
       if (hoverSlot) setHoverSlot(null);
@@ -359,6 +436,33 @@ function DayColumnBody({
   };
   const handleMouseLeave = (): void => {
     if (hoverSlot) setHoverSlot(null);
+    if (walkinSuggest) setWalkinSuggest(null);
+  };
+
+  const handleClick = (event: React.MouseEvent<HTMLDivElement>): void => {
+    if (!col.open) return;
+    // Appt cards capture their own clicks (stopPropagation in the
+    // card's onClick). This guard catches the right-lane click path,
+    // where the click reaches the day-col itself.
+    if ((event.target as HTMLElement).closest('[data-appt]')) return;
+
+    const rect = event.currentTarget.getBoundingClientRect();
+    const y = event.clientY - rect.top;
+    const x = event.clientX - rect.left;
+    const apptAtRow = findPairableApptAtY(y);
+
+    // Walk-in suggest click: cursor over a pairable row AND the click
+    // landed in the right half of the column. The right-lane area is
+    // only meaningfully clickable when the column is two-lane (today
+    // or has-walkins) OR during the live walk-in suggest preview.
+    if (apptAtRow && x > rect.width / 2) {
+      onWalkinForVisit(apptAtRow, { x: event.clientX, y: event.clientY });
+      return;
+    }
+
+    const slot = snapSlot(event);
+    if (!slot) return;
+    onSlotClick({ date: col.date, time: slot.time });
   };
 
   const nowLineTop = (() => {
@@ -371,11 +475,17 @@ function DayColumnBody({
     return { top, label: parts.time };
   })();
 
+  // Lane preview during hover: a single-lane day with bookings briefly
+  // expands to two-lane when the receptionist hovers an appt, so the
+  // "+ Pa termin" suggest ghost has somewhere to live. Matches the
+  // rationale comment in design-reference/prototype/receptionist.html.
+  const effectivelyTwoLane = isTwoLane || walkinSuggest !== null;
+
   // Background-image stack. Divider is layered FIRST so it sits visually
   // on top of the gridlines — matches the design's reading order.
   const backgroundImage = !col.open
     ? CLOSED_HATCH_BG
-    : isTwoLane
+    : effectivelyTwoLane
       ? `${CENTER_DIVIDER_BG}, ${OPEN_GRID_BG}`
       : OPEN_GRID_BG;
 
@@ -427,7 +537,7 @@ function DayColumnBody({
           key={a.id}
           entry={a}
           gridStartMin={gridStartMin}
-          leftLaneOnly={isTwoLane}
+          leftLaneOnly={effectivelyTwoLane}
           isPast={isPast}
           onClick={(ev) =>
             onEntryClick(a, { x: ev.clientX, y: ev.clientY })
@@ -486,7 +596,7 @@ function DayColumnBody({
             top: hoverSlot.top,
             height: defaultDuration * PX_PER_MIN,
             left: 6,
-            ...(isTwoLane ? { right: 'calc(50% + 2px)' } : { right: 6 }),
+            ...(effectivelyTwoLane ? { right: 'calc(50% + 2px)' } : { right: 6 }),
           }}
           aria-hidden
         >
@@ -496,6 +606,32 @@ function DayColumnBody({
           <span className="truncate">
             Termin i ri · {hoverSlot.time} · {defaultDuration} min
           </span>
+        </div>
+      ) : null}
+
+      {/* Walk-in suggest ghost — `.hover-suggest-walkin` in
+          receptionist.html. Appears in the right lane at the row of a
+          pairable scheduled visit while the receptionist hovers. On a
+          single-lane day this also flips the column into two-lane
+          preview mode (effectivelyTwoLane) so the ghost has a lane to
+          live in. Clicking the area routes through the day-col's
+          onClick → onWalkinForVisit. */}
+      {walkinSuggest ? (
+        <div
+          className="absolute z-[4] pointer-events-none flex items-center gap-1.5 rounded-sm border border-dashed border-accent-500 bg-accent-50 px-2 py-[3px] text-[11px] font-semibold leading-none text-[#9A3412] shadow-[0_2px_8px_rgba(249,115,22,0.16)] tabular-nums"
+          style={{
+            top: walkinSuggest.top,
+            height: Math.min(walkinSuggest.height, 28),
+            left: 'calc(50% + 2px)',
+            right: 6,
+            borderLeft: '3px dashed var(--accent-500, #F97316)',
+          }}
+          aria-hidden
+        >
+          <span className="inline-grid h-3.5 w-3.5 flex-none place-items-center rounded-[3px] border border-accent-400 bg-surface-elevated text-[12px] font-bold leading-none text-accent-500">
+            +
+          </span>
+          <span className="truncate">Pa termin · {walkinSuggest.time}</span>
         </div>
       ) : null}
 

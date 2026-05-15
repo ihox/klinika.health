@@ -106,6 +106,15 @@ export interface CreateScheduledVisitInput {
 export interface CreateWalkinVisitInput {
   patientId: string;
   initialStatus?: 'arrived' | 'in_progress';
+  /**
+   * UUID of the scheduled visit this walk-in is paired with. Server
+   * validates that the visit exists, is in the same clinic, is not
+   * soft-deleted, has `scheduledFor !== null`, and is in an active
+   * status (scheduled / arrived / in_progress). Omitting it lets the
+   * server pick the closest match — used by the toolbar `[+ Pa termin]`
+   * flow where the receptionist hasn't picked a specific row.
+   */
+  pairedWithVisitId?: string;
 }
 
 export interface RescheduleVisitInput {
