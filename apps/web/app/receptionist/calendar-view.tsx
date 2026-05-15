@@ -28,6 +28,7 @@ import {
   type CalendarStatsResponse,
   type VisitStatus,
   calendarClient,
+  findClosestPairing,
 } from '@/lib/visits-calendar-client';
 
 import { AppointmentActions, type EntryAction } from './appointment-actions';
@@ -542,16 +543,45 @@ export function CalendarView(): ReactElement {
     [addWalkin, quickAdd],
   );
 
-  // ----- Open the walk-in picker, anchored to the centre of the page.
+  // ----- Today's scheduled visits, used to gate the toolbar
+  // `[+ Pa termin]` button and to compute the closest pairing for a
+  // toolbar-driven walk-in. A receptionist may be browsing next week
+  // but the toolbar always creates a walk-in for today (the patient is
+  // here NOW), so we filter to today regardless of `weekStart`.
+  const todayScheduledVisits = useMemo<CalendarEntry[]>(
+    () =>
+      entries.filter(
+        (e) =>
+          !e.isWalkIn &&
+          e.scheduledFor != null &&
+          toLocalParts(new Date(e.scheduledFor)).date === todayIso,
+      ),
+    [entries, todayIso],
+  );
+  const todayHasBookings = useMemo(
+    () => findClosestPairing(todayScheduledVisits, now.getTime()) !== null,
+    [todayScheduledVisits, now],
+  );
+
+  // ----- Open the walk-in picker from the toolbar. Pairs to the slot
+  // closest to the current wall time (current-or-most-recent), per
+  // CLAUDE.md §13. Refuses when today has no pairable bookings — the
+  // button is also disabled in that state for visual feedback.
   const openWalkinPicker = useCallback(() => {
     setActionsFor(null);
+    const paired = findClosestPairing(todayScheduledVisits, now.getTime());
+    if (!paired) {
+      setToast("Asnjë termin për t'i bashkuar sot.");
+      return;
+    }
     setPicker({
       source: 'walkin',
       date: todayIso,
       time: '',
       anchor: { x: window.innerWidth / 2, y: 180 },
+      pairedVisitId: paired.id,
     });
-  }, [todayIso]);
+  }, [now, todayIso, todayScheduledVisits]);
 
   // ----- Open the walk-in picker paired to a specific scheduled visit.
   // The per-row "+ Pa termin" hover affordance routes here: receptionist
@@ -665,8 +695,17 @@ export function CalendarView(): ReactElement {
             variant="secondary"
             size="sm"
             onClick={openWalkinPicker}
-            title="Shto pacient që erdhi pa termin"
-            className="gap-1.5 border border-dashed border-primary bg-teal-50 text-primary-dark shadow-none hover:border-solid hover:bg-primary-soft"
+            disabled={!todayHasBookings}
+            title={
+              todayHasBookings
+                ? 'Shto pacient që erdhi pa termin'
+                : "Asnjë termin për t'i bashkuar"
+            }
+            className={cn(
+              'gap-1.5 border border-dashed border-primary bg-teal-50 text-primary-dark shadow-none hover:border-solid hover:bg-primary-soft',
+              !todayHasBookings &&
+                'cursor-not-allowed border-line opacity-50 hover:border-line hover:bg-surface-subtle',
+            )}
           >
             <svg
               width="14"

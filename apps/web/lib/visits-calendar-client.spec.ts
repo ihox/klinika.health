@@ -9,9 +9,11 @@ import { describe, expect, it } from 'vitest';
 
 import {
   ALLOWED_TRANSITIONS,
+  findClosestPairing,
   isScheduledEntry,
   isTransitionAllowed,
   isWalkInEntry,
+  PAIRABLE_STATUSES,
   VISIT_STATUSES,
   type CalendarEntry,
 } from './visits-calendar-client';
@@ -132,5 +134,94 @@ describe('isScheduledEntry / isWalkInEntry', () => {
     };
     expect(isScheduledEntry(entry)).toBe(false);
     expect(isWalkInEntry(entry)).toBe(true);
+  });
+});
+
+describe('PAIRABLE_STATUSES', () => {
+  // Mirrors the server-side allow-list in visits-calendar.service.ts.
+  it('contains exactly scheduled / arrived / in_progress', () => {
+    expect([...PAIRABLE_STATUSES].sort()).toEqual(
+      ['arrived', 'in_progress', 'scheduled'],
+    );
+  });
+});
+
+describe('findClosestPairing', () => {
+  // Test fixture: a minimal-but-realistic scheduled entry. All factory
+  // calls inherit these defaults and override what they're exercising.
+  const base: CalendarEntry = {
+    id: 'a',
+    patientId: 'p',
+    patient: { firstName: 'Era', lastName: 'K', dateOfBirth: '2023-08-03' },
+    scheduledFor: '2026-05-15T08:00:00Z',
+    durationMinutes: 15,
+    arrivedAt: null,
+    status: 'scheduled',
+    isWalkIn: false,
+    paymentCode: null,
+    lastVisitAt: null,
+    isNewPatient: true,
+    createdAt: '2026-05-15T08:00:00Z',
+    updatedAt: '2026-05-15T08:00:00Z',
+  };
+  const at = (iso: string, overrides: Partial<CalendarEntry> = {}): CalendarEntry => ({
+    ...base,
+    id: overrides.id ?? iso,
+    scheduledFor: iso,
+    ...overrides,
+  });
+
+  it('returns null when no pairable visits exist', () => {
+    expect(findClosestPairing([], Date.now())).toBeNull();
+  });
+
+  it('returns null when every entry is a walk-in', () => {
+    const walkins: CalendarEntry[] = [
+      { ...base, id: 'w', isWalkIn: true, scheduledFor: null, arrivedAt: base.scheduledFor },
+    ];
+    expect(findClosestPairing(walkins, Date.now())).toBeNull();
+  });
+
+  it('skips finalized statuses (completed / no_show / cancelled)', () => {
+    const list: CalendarEntry[] = [
+      at('2026-05-15T10:00:00Z', { id: 'done', status: 'completed' }),
+      at('2026-05-15T11:00:00Z', { id: 'miss', status: 'no_show' }),
+      at('2026-05-15T12:00:00Z', { id: 'cncl', status: 'cancelled' }),
+    ];
+    expect(findClosestPairing(list, Date.parse('2026-05-15T11:00:00Z'))).toBeNull();
+  });
+
+  it('prefers the in-flight visit (scheduled_for ≤ now ≤ scheduled_for + duration)', () => {
+    // now sits 5 min into the 10:00 booking — the in-flight pick beats
+    // the closer 10:30 future booking that "minimum distance" alone
+    // would prefer.
+    const list: CalendarEntry[] = [
+      at('2026-05-15T10:00:00Z', { id: 'in-flight', durationMinutes: 15 }),
+      at('2026-05-15T10:30:00Z', { id: 'next', durationMinutes: 15 }),
+    ];
+    const now = Date.parse('2026-05-15T10:05:00Z');
+    const pick = findClosestPairing(list, now);
+    expect(pick?.id).toBe('in-flight');
+  });
+
+  it('picks the closest scheduled_for to now when nothing is in-flight', () => {
+    const list: CalendarEntry[] = [
+      at('2026-05-15T08:00:00Z', { id: 'far-past' }),
+      at('2026-05-15T10:00:00Z', { id: 'closest' }),
+      at('2026-05-15T14:00:00Z', { id: 'far-future' }),
+    ];
+    const now = Date.parse('2026-05-15T10:20:00Z');
+    expect(findClosestPairing(list, now)?.id).toBe('closest');
+  });
+
+  it('tie-breaks equal distance by preferring the past slot', () => {
+    // Now is exactly between 10:00 and 11:00; "just-passed" wins per
+    // CLAUDE.md §13.
+    const list: CalendarEntry[] = [
+      at('2026-05-15T10:00:00Z', { id: 'past', durationMinutes: 5 }),
+      at('2026-05-15T11:00:00Z', { id: 'future', durationMinutes: 5 }),
+    ];
+    const now = Date.parse('2026-05-15T10:30:00Z');
+    expect(findClosestPairing(list, now)?.id).toBe('past');
   });
 });

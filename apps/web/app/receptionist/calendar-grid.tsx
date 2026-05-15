@@ -14,7 +14,11 @@ import {
   toLocalParts,
 } from '@/lib/appointment-client';
 import type { HoursConfig } from '@/lib/clinic-client';
-import { type CalendarEntry, type VisitStatus } from '@/lib/visits-calendar-client';
+import {
+  type CalendarEntry,
+  PAIRABLE_STATUSES,
+  type VisitStatus,
+} from '@/lib/visits-calendar-client';
 
 // Layout constants. 120px per hour = 2px per minute. The grid keeps a
 // continuous open band per day (no in-day "Mbyllur" splits in v1) so a
@@ -54,16 +58,6 @@ export interface CalendarGridProps {
   onWalkinForVisit: (pairedVisit: CalendarEntry, anchor: { x: number; y: number }) => void;
 }
 
-// Active statuses a walk-in is allowed to pair with. Completed /
-// no_show / cancelled visits are finalized — pairing a walk-in to them
-// no longer matches the operational rule ("patient who arrived while
-// another is being seen"). UI hides the suggest ghost on those rows;
-// the API enforces the same boundary (STEP 4).
-const PAIRABLE_STATUSES: ReadonlySet<VisitStatus> = new Set<VisitStatus>([
-  'scheduled',
-  'arrived',
-  'in_progress',
-]);
 
 const STATUS_LABEL: Record<VisitStatus, string> = {
   scheduled: 'Planifikuar',

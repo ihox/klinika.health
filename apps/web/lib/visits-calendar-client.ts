@@ -41,6 +41,71 @@ export function isTransitionAllowed(from: VisitStatus, to: VisitStatus): boolean
   return ALLOWED_TRANSITIONS[from].includes(to);
 }
 
+/**
+ * Statuses the receptionist UI offers as pairing targets for a walk-in.
+ * The server-side rule (visits-calendar.service.ts createWalkin) is
+ * laxer — it only rejects `completed`. The UI is more conservative on
+ * purpose: pairing to a `no_show` or `cancelled` row is technically
+ * allowed by the server (the row has scheduled_for set, and isn't
+ * finalized as completed) but doesn't match the operational picture
+ * ("a patient who arrives while another is being seen"). Hiding those
+ * rows in the per-row hover + skipping them in the toolbar
+ * `[+ Pa termin]` closest-pairing keeps the UI from suggesting
+ * pairings that would technically succeed but feel off.
+ */
+export const PAIRABLE_STATUSES: ReadonlySet<VisitStatus> = new Set<VisitStatus>([
+  'scheduled',
+  'arrived',
+  'in_progress',
+]);
+
+/**
+ * Pick the scheduled visit a toolbar `[+ Pa termin]` click should pair
+ * to, given the entries the receptionist can see and the current wall
+ * time. Picks:
+ *   1. A visit currently in progress (scheduled_for ≤ now ≤
+ *      scheduled_for + duration), or
+ *   2. The scheduled-only visit whose scheduled_for is closest to now.
+ *      Tie-broken by preferring the past visit (just-passed slot is
+ *      the more natural "the doctor's still in the room").
+ * Returns null when no pairable visit exists.
+ */
+export function findClosestPairing(
+  entries: ReadonlyArray<CalendarEntry>,
+  nowMs: number,
+): CalendarEntry | null {
+  let inFlight: CalendarEntry | null = null;
+  let closest: CalendarEntry | null = null;
+  let smallestDiff = Number.POSITIVE_INFINITY;
+
+  for (const e of entries) {
+    if (e.isWalkIn) continue;
+    if (e.scheduledFor == null) continue;
+    if (!PAIRABLE_STATUSES.has(e.status)) continue;
+    const start = new Date(e.scheduledFor).getTime();
+    if (Number.isNaN(start)) continue;
+    const duration = e.durationMinutes ?? 0;
+    if (duration > 0 && start <= nowMs && nowMs <= start + duration * 60_000) {
+      inFlight = e;
+      // Keep scanning in case another in-flight visit starts earlier
+      // (rare overlap), but the first match is a fine choice.
+    }
+    const diff = Math.abs(start - nowMs);
+    if (diff < smallestDiff) {
+      smallestDiff = diff;
+      closest = e;
+    } else if (
+      diff === smallestDiff &&
+      closest &&
+      start <= nowMs &&
+      new Date(closest.scheduledFor!).getTime() > nowMs
+    ) {
+      closest = e;
+    }
+  }
+  return inFlight ?? closest;
+}
+
 // ---------------------------------------------------------------------------
 // Wire shapes
 // ---------------------------------------------------------------------------
