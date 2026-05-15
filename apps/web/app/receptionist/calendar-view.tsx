@@ -122,10 +122,21 @@ export function CalendarView(): ReactElement {
 
   const todayIso = useMemo(() => todayIsoLocal(now), [now]);
 
-  // ----- Displayed week: Monday of the week containing today. STEP 2 will
-  // turn this into stateful navigation (prev/next/Sot); for now the
-  // calendar always renders the current week.
-  const weekStart = useMemo(() => mondayOfWeekIso(todayIso), [todayIso]);
+  // ----- Displayed week: Monday-anchored. Defaults to the Monday of the
+  // week containing today. The prev/next buttons in the toolbar step the
+  // anchor by ±7 days; the existing `refreshEntries` effect re-fetches
+  // whenever the range bounds change.
+  const [weekStart, setWeekStart] = useState<string>(() =>
+    mondayOfWeekIso(todayIsoLocal(now)),
+  );
+  const goPrevWeek = useCallback(
+    () => setWeekStart((w) => addLocalDays(w, -7)),
+    [],
+  );
+  const goNextWeek = useCallback(
+    () => setWeekStart((w) => addLocalDays(w, 7)),
+    [],
+  );
 
   // ----- Columns: fixed Mon..Sat of the displayed week. Sunday is hidden
   // (clinics are closed; the grid is 6 columns). Each column carries the
@@ -616,9 +627,11 @@ export function CalendarView(): ReactElement {
         <section className="mt-5 overflow-hidden rounded-lg border border-line bg-surface-elevated shadow-xs">
           <div className="flex items-center justify-between border-b border-line bg-surface-elevated px-5 py-3.5">
             <div className="flex items-center gap-3">
-              <div className="font-display text-[17px] font-semibold tracking-[-0.015em]">
+              <WeekNavButton dir="prev" onClick={goPrevWeek} />
+              <div className="font-display text-[17px] font-semibold tracking-[-0.015em] tabular-nums">
                 {rangeLabel}
               </div>
+              <WeekNavButton dir="next" onClick={goNextWeek} />
             </div>
             <div className="flex items-center gap-3 text-[11px] text-ink-muted">
               <span className="flex items-center gap-1.5">
@@ -748,6 +761,51 @@ export function CalendarView(): ReactElement {
 function CalendarTopNav({ searchSlot }: { searchSlot: ReactElement }): ReactElement {
   const { me } = useMe();
   return <ClinicTopNav me={me} brandAdjacent={searchSlot} />;
+}
+
+// =========================================================================
+// Week navigation chevron — used in the calendar toolbar to step the
+// displayed Monday-anchored week by ±7 days. Matches the design
+// reference's `.nav-btn` styling in receptionist.html.
+// =========================================================================
+
+function WeekNavButton({
+  dir,
+  onClick,
+  disabled,
+}: {
+  dir: 'prev' | 'next';
+  onClick: () => void;
+  disabled?: boolean;
+}): ReactElement {
+  const label = dir === 'prev' ? 'Java e kaluar' : 'Java tjetër';
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={label}
+      title={label}
+      className={cn(
+        'grid h-8 w-8 place-items-center rounded-sm border border-line-strong bg-surface-elevated text-ink-muted transition',
+        'hover:bg-surface-subtle hover:text-ink',
+        'disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-surface-elevated disabled:hover:text-ink-muted',
+      )}
+    >
+      <svg
+        width="14"
+        height="14"
+        viewBox="0 0 16 16"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        aria-hidden
+      >
+        {dir === 'prev' ? <path d="M10 3l-5 5 5 5" /> : <path d="M6 3l5 5-5 5" />}
+      </svg>
+    </button>
+  );
 }
 
 // =========================================================================
