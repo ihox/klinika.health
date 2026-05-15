@@ -1110,15 +1110,28 @@ function ScheduledCard({
       className={cn(
         'absolute left-1.5 px-2 py-0.5 rounded text-left border bg-surface-elevated border-teal-200 border-l-[3px] border-l-primary shadow-xs transition hover:-translate-y-px hover:shadow-sm flex items-center gap-1.5 overflow-hidden',
         !leftLaneOnly && !hovered && 'right-1.5',
-        isArrived && 'bg-teal-50/60 border-teal-300',
+        // Status backgrounds — translucent variants flip to solid on
+        // hover so the expanded card's text stays readable over the
+        // grid lines.
+        isArrived &&
+          (hovered && !isDragging
+            ? 'bg-teal-50 border-teal-300'
+            : 'bg-teal-50/60 border-teal-300'),
         isInProgress && 'relative bg-teal-50 border-teal-300',
         isCompleted &&
-          'bg-success-bg/50 border-success-soft border-l-success opacity-90',
-        isNoShow && 'border border-dashed border-danger-soft border-l-danger opacity-70',
-        isCancelled && 'opacity-50',
+          (hovered && !isDragging
+            ? 'bg-success-bg border-success-soft border-l-success'
+            : 'bg-success-bg/50 border-success-soft border-l-success opacity-90'),
+        isNoShow &&
+          (hovered && !isDragging
+            ? 'bg-surface-elevated border border-dashed border-danger-soft border-l-danger'
+            : 'border border-dashed border-danger-soft border-l-danger opacity-70'),
+        isCancelled && !(hovered && !isDragging) && 'opacity-50',
         isNew && !isCompleted && !isNoShow && !isArrived && !isInProgress &&
           'border-l-accent-500 border-warning-soft',
-        pinned && 'border-dashed bg-stone-50/80',
+        pinned && (hovered && !isDragging
+          ? 'border-dashed bg-surface-elevated'
+          : 'border-dashed bg-stone-50/80'),
         isDraggable && !isDragging && 'cursor-grab',
         isDragging && 'cursor-grabbing',
       )}
@@ -1135,8 +1148,8 @@ function ScheduledCard({
           : leftLaneOnly
             ? { right: 'calc(50% + 2px)', zIndex: pinned ? 6 : 3 }
             : { zIndex: pinned ? 6 : 3 }),
-        ...(pinned ? { opacity: 0.88 } : {}),
-        ...(isPast && !isCompleted && !isNoShow && !isCancelled && !pinned
+        ...(pinned && !(hovered && !isDragging) ? { opacity: 0.88 } : {}),
+        ...(isPast && !isCompleted && !isNoShow && !isCancelled && !pinned && !(hovered && !isDragging)
           ? { opacity: 0.85, filter: 'saturate(0.78)' }
           : {}),
         ...(isDragging ? { zIndex: 100, transform: dragTransform } : {}),
@@ -1317,9 +1330,11 @@ function WalkInCard({
       title={`${entry.patient.firstName} ${entry.patient.lastName} · pa termin · erdhi ${parts.time} · ${STATUS_LABEL[entry.status]}${pinned ? ' · jashtë orarit' : ''}`}
       className={cn(
         'absolute px-2 py-0.5 rounded text-left transition hover:-translate-y-px hover:shadow-sm shadow-xs flex items-center gap-1.5 overflow-hidden',
-        isCompleted && 'opacity-85',
-        isNoShow && 'opacity-60',
-        isCancelled && 'opacity-50',
+        // Faded status variants — lift the fade when hovered so the
+        // expanded text region stays readable.
+        isCompleted && !hovered && 'opacity-85',
+        isNoShow && !hovered && 'opacity-60',
+        isCancelled && !hovered && 'opacity-50',
       )}
       style={{
         ...(pinnedStyle ?? { top: inlineTop, height }),
@@ -1330,8 +1345,8 @@ function WalkInCard({
           ? { right: 'auto', width: 'max-content', maxWidth: 260, zIndex: 20 }
           : { right: 6, zIndex: pinned ? 6 : 3 }),
         ...borderStyle,
-        ...(pinned ? { opacity: 0.88 } : {}),
-        ...(isPast && !isCompleted && !pinned ? { opacity: 0.9, filter: 'saturate(0.82)' } : {}),
+        ...(pinned && !hovered ? { opacity: 0.88 } : {}),
+        ...(isPast && !isCompleted && !pinned && !hovered ? { opacity: 0.9, filter: 'saturate(0.82)' } : {}),
       }}
       aria-label={`${entry.patient.firstName} ${entry.patient.lastName}, pa termin, erdhi ${parts.time}, ${STATUS_LABEL[entry.status]}${pinned ? ', jashtë orarit' : ''}`}
     >
