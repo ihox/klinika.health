@@ -1194,11 +1194,11 @@ async function confirmClear(
     setPendingClear({ visitId, undoableUntil: res.undoableUntil });
     setClearDialogOpen(false);
     await refresh();
-  } catch {
+  } catch (err) {
     setClearDialogOpen(false);
     if (typeof window !== 'undefined') {
       // eslint-disable-next-line no-alert
-      window.alert('Pastrimi i vizitës dështoi. Provoni përsëri.');
+      window.alert(clearErrorMessage(err));
     }
   } finally {
     setClearBusy(false);
@@ -1218,13 +1218,27 @@ async function undoClear(
     setActiveVisit(res.visit);
     setPendingClear(null);
     await refresh();
-  } catch {
+  } catch (err) {
     setPendingClear(null);
     if (typeof window !== 'undefined') {
       // eslint-disable-next-line no-alert
-      window.alert('Anulimi dështoi. Dritarja prej 15 sekondash ka skaduar.');
+      window.alert(clearErrorMessage(err, 'Anulimi dështoi. Dritarja prej 15 sekondash ka skaduar.'));
     }
   }
+}
+
+/**
+ * Render an ApiError as a user-facing Albanian sentence. Falls back
+ * to the provided default when the server didn't send a message — that
+ * keeps a network failure readable while still surfacing 400/403/404
+ * server messages verbatim (those carry the actual reason).
+ */
+function clearErrorMessage(err: unknown, fallback?: string): string {
+  if (err instanceof ApiError) {
+    if (err.body.message) return err.body.message;
+    return `${fallback ?? 'Pastrimi i vizitës dështoi.'} (HTTP ${err.status})`;
+  }
+  return fallback ?? 'Pastrimi i vizitës dështoi. Provoni përsëri.';
 }
 
 // =========================================================================
