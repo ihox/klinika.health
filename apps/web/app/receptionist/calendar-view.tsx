@@ -37,6 +37,12 @@ import { CalendarGrid, type DayColumn } from './calendar-grid';
 import { GlobalPatientSearch } from './global-patient-search';
 import { QuickAddPatientModal } from './pacientet/quick-add-patient-modal';
 import { PatientPicker } from './patient-picker';
+import {
+  type StatusFilter,
+  StatusFilters,
+  countByStatusFilter,
+  entryMatchesStatusFilter,
+} from './status-filters';
 
 // The receptionist calendar shows a fixed Monday-Saturday week. Sunday is
 // hidden — clinics are closed by default, and the design reference reserves
@@ -128,6 +134,7 @@ export function CalendarView(): ReactElement {
     entry: CalendarEntry;
     anchor: { x: number; y: number };
   } | null>(null);
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
 
   const todayIso = useMemo(() => todayIsoLocal(now), [now]);
 
@@ -543,6 +550,19 @@ export function CalendarView(): ReactElement {
     [addWalkin, quickAdd],
   );
 
+  // ----- Status filter pills (above the grid). Counts are derived
+  // from the week's `entries` so the badge tracks the visible range.
+  // `visibleEntries` is what feeds the grid — when "Të gjitha" is
+  // active it's a no-op pass-through.
+  const statusCounts = useMemo(() => countByStatusFilter(entries), [entries]);
+  const visibleEntries = useMemo(
+    () =>
+      statusFilter === 'all'
+        ? entries
+        : entries.filter((e) => entryMatchesStatusFilter(e, statusFilter)),
+    [entries, statusFilter],
+  );
+
   // ----- Today's scheduled visits, used to gate the toolbar
   // `[+ Pa termin]` button and to compute the closest pairing for a
   // toolbar-driven walk-in. A receptionist may be browsing next week
@@ -797,13 +817,21 @@ export function CalendarView(): ReactElement {
             />
           </div>
 
+          {/* Status filter pills — narrows the grid view to one bucket.
+              Counts mirror the loaded week's entries. */}
+          <StatusFilters
+            active={statusFilter}
+            counts={statusCounts}
+            onChange={setStatusFilter}
+          />
+
           {settings && columns.length > 0 ? (
             <CalendarGrid
               todayIso={todayIso}
               now={now}
               hours={settings.hours}
               columns={columns}
-              entries={entries}
+              entries={visibleEntries}
               onSlotClick={onSlotClick}
               onEntryClick={onEntryClick}
               // Right-click / tap-and-hold opens the same status menu
