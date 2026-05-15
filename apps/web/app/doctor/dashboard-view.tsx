@@ -395,10 +395,14 @@ function AppointmentRow({
   const isPast = a.position === 'past';
   const isDone = a.status === 'completed';
   const isMissed = a.status === 'no_show';
-  const time = toLocalParts(new Date(a.scheduledFor)).time;
+  // Walk-ins anchor on `arrivedAt`; scheduled bookings on `scheduledFor`.
+  // The DTO guarantees at least one is set for any row that surfaced
+  // here, so the non-null assertion is safe.
+  const anchorIso = (a.scheduledFor ?? a.arrivedAt)!;
+  const time = toLocalParts(new Date(anchorIso)).time;
   const ageStr = ageLabel(a.patient.dateOfBirth);
   const minutesUntil = Math.round(
-    (new Date(a.scheduledFor).getTime() - now.getTime()) / 60_000,
+    (new Date(anchorIso).getTime() - now.getTime()) / 60_000,
   );
   return (
     <button
@@ -436,6 +440,7 @@ function AppointmentRow({
             isPast && isDone && 'text-ink-muted',
           )}
         >
+          {a.isWalkIn ? <WalkInMark dimmed={isPast && isDone} /> : null}
           {a.patient.firstName} {a.patient.lastName}
           {ageStr ? (
             <span className="ml-1.5 text-[12px] font-normal text-ink-faint">
@@ -444,6 +449,12 @@ function AppointmentRow({
           ) : null}
         </div>
         <div className="truncate text-[11px] text-ink-muted">
+          {a.isWalkIn ? (
+            <>
+              <span className="font-medium text-primary-dark">Pa termin</span>
+              <span> · </span>
+            </>
+          ) : null}
           {isMissed
             ? 'Mungesë'
             : isCurrent
@@ -479,9 +490,49 @@ function statusToReason(
       return 'E anuluar';
     case 'no_show':
       return 'Mungesë';
+    case 'arrived':
+      return 'Po pret';
+    case 'in_progress':
+      return 'Po vazhdon';
     default:
       return `${durationMinutes} min · në pritje`;
   }
+}
+
+/**
+ * Walk-in glyph that prefixes the patient name on doctor-home rows.
+ * Mirrors `.appt-row .name .wn-mark` in
+ * `design-reference/prototype/components/doctor-home-walkin-row.html`:
+ * 16×16 box, teal-on-soft-teal in the live state; muted greys when the
+ * row itself is faded (completed).
+ */
+function WalkInMark({ dimmed }: { dimmed: boolean }): ReactElement {
+  return (
+    <span
+      aria-label="Pa termin"
+      className={cn(
+        'mr-1.5 inline-flex h-4 w-4 -translate-y-px items-center justify-center rounded border align-middle',
+        dimmed
+          ? 'border-line bg-surface-subtle text-ink-faint'
+          : 'border-teal-200 bg-primary-soft text-primary-dark',
+      )}
+    >
+      <svg
+        width="9"
+        height="9"
+        viewBox="0 0 16 16"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden
+      >
+        <path d="M3 8a5 5 0 0 1 8.5-3.5L13 6" />
+        <path d="M13 2.5V6h-3.5" />
+      </svg>
+    </span>
+  );
 }
 
 // =========================================================================

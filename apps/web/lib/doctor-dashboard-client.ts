@@ -13,6 +13,8 @@ export type DashboardAppointmentPosition =
 
 export type DashboardAppointmentStatus =
   | 'scheduled'
+  | 'arrived'
+  | 'in_progress'
   | 'completed'
   | 'no_show'
   | 'cancelled';
@@ -25,7 +27,12 @@ export interface DashboardAppointment {
     lastName: string;
     dateOfBirth: string | null;
   };
-  scheduledFor: string;
+  /** ISO instant of the booked time, or null for walk-ins. */
+  scheduledFor: string | null;
+  /** ISO instant of patient arrival; set for walk-ins and any
+   *  scheduled booking that has transitioned to status >= 'arrived'. */
+  arrivedAt: string | null;
+  isWalkIn: boolean;
   durationMinutes: number;
   status: DashboardAppointmentStatus;
   position: DashboardAppointmentPosition;
@@ -57,7 +64,10 @@ export interface DashboardNextPatientCard {
     dateOfBirth: string | null;
     sex: 'm' | 'f' | null;
   };
+  /** For scheduled bookings: the booked time. For walk-in targets: the
+   *  arrival time. Always non-null so the card's hero clock works. */
   scheduledFor: string;
+  isWalkIn: boolean;
   durationMinutes: number;
   visitCount: number;
   lastVisitDate: string | null;

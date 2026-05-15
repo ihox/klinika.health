@@ -39,11 +39,24 @@ export type DashboardQuery = z.infer<typeof DashboardQuerySchema>;
 
 export type DashboardAppointmentStatus =
   | 'scheduled'
+  | 'arrived'
+  | 'in_progress'
   | 'completed'
   | 'no_show'
   | 'cancelled';
 
-/** The slim row in `appointments[]`. */
+/**
+ * The slim row in `appointments[]`.
+ *
+ * Phase 2b — walk-ins are folded into this list alongside scheduled
+ * bookings. They differ in three places:
+ *   - `scheduledFor` is null (no booking), `arrivedAt` is set
+ *   - `isWalkIn === true`
+ *   - status passes through 'arrived' → 'in_progress' → 'completed'
+ *     rather than 'scheduled' → 'completed'
+ *
+ * Consumers sort by the anchor `scheduledFor ?? arrivedAt`.
+ */
 export interface DashboardAppointmentDto {
   id: string;
   patientId: string;
@@ -52,17 +65,24 @@ export interface DashboardAppointmentDto {
     lastName: string;
     dateOfBirth: string | null;
   };
-  scheduledFor: string;
+  /** ISO instant of the booked time, or null for walk-ins. */
+  scheduledFor: string | null;
+  /** ISO instant of patient arrival; set for walk-ins and for scheduled
+   *  bookings that have transitioned to status >= 'arrived'. */
+  arrivedAt: string | null;
   durationMinutes: number;
+  isWalkIn: boolean;
   status: DashboardAppointmentStatus;
   /**
-   * `current` — `scheduledFor <= now < scheduledFor + duration` and
-   *             status === scheduled. Highlights the "Tani" row.
-   * `next`    — earliest still-scheduled appointment whose start is
-   *             after `now`. Drives the teal-border highlight.
-   * `past`    — already done/cancelled/no-show OR scheduled-but-time
-   *             passed without status update.
-   * `upcoming`— any other scheduled appointment after the next one.
+   * `current` — status === 'in_progress' OR (status === 'scheduled' and
+   *             anchor <= now < anchor + duration). Highlights "Tani".
+   * `next`    — earliest still-unstarted row (status in {scheduled,
+   *             arrived}) whose anchor is in the future, OR an arrived
+   *             walk-in whose anchor has passed but who hasn't been
+   *             seen yet (patient is waiting in the room).
+   * `past`    — done/cancelled/no-show, or scheduled with the time
+   *             window already ended.
+   * `upcoming`— any other still-pending row.
    */
   position: 'current' | 'next' | 'upcoming' | 'past';
 }
@@ -99,7 +119,15 @@ export interface DashboardNextPatientCard {
     dateOfBirth: string | null;
     sex: 'm' | 'f' | null;
   };
+  /**
+   * Time anchor for the card's hero clock. For scheduled bookings,
+   * this is the booked time. For walk-in targets (Phase 2b), this is
+   * the arrival time — keeps the card's existing rendering working
+   * without a second time field.
+   */
   scheduledFor: string;
+  /** True when the upcoming patient is a walk-in (no booking). */
+  isWalkIn: boolean;
   durationMinutes: number;
   /** Total visits on file for this patient. */
   visitCount: number;

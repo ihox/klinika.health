@@ -20,17 +20,19 @@ import { computeDayStats } from './doctor-dashboard.stats';
 
 const DASHBOARD_APPOINTMENT_STATUSES: readonly DashboardAppointmentStatus[] = [
   'scheduled',
+  'arrived',
+  'in_progress',
   'completed',
   'no_show',
   'cancelled',
 ];
 
 /**
- * Collapse the unified `visits.status` TEXT column to the dashboard's
- * four-value enum. Phase-2 statuses (`arrived`, `in_progress`) fold to
- * `scheduled` so the doctor's day-view treats them as still-pending
- * work; Phase 1 data never writes those values so this is a defensive
- * mapping.
+ * Narrow the unified `visits.status` TEXT column to the dashboard's
+ * status enum. Post Phase 2b every value in the CHECK constraint is
+ * exposed verbatim — walk-ins surface 'arrived' / 'in_progress' so the
+ * doctor's day view can distinguish them. An unknown value falls back
+ * to 'scheduled' (defensive).
  */
 function narrowDashboardStatus(value: string): DashboardAppointmentStatus {
   if ((DASHBOARD_APPOINTMENT_STATUSES as readonly string[]).includes(value)) {
@@ -81,17 +83,26 @@ export class DoctorDashboardService {
         where: { id: clinicId },
         select: { paymentCodes: true },
       }),
-      // Appointments view: every visit row carrying a `scheduled_for`
-      // anchored on the day. Post-merge (ADR-011) the appointment list
-      // and the clinical visit list both live in `visits`; the two
-      // queries below split them by the relevant predicate.
+      // Appointments view: scheduled bookings anchored on `scheduled_for`,
+      // PLUS walk-ins anchored on `arrived_at` (Phase 2b — walk-ins fold
+      // into the doctor's day list with an `isWalkIn` marker on each row).
+      // Post-merge (ADR-011) both flavours live in `visits`; the OR
+      // predicate pulls them together in one round-trip.
       this.prisma.visit.findMany({
         where: {
           clinicId,
           deletedAt: null,
-          scheduledFor: { gte: dayQueryStart, lte: dayQueryEnd, not: null },
+          OR: [
+            {
+              scheduledFor: { gte: dayQueryStart, lte: dayQueryEnd, not: null },
+            },
+            {
+              isWalkIn: true,
+              arrivedAt: { gte: dayQueryStart, lte: dayQueryEnd, not: null },
+            },
+          ],
         },
-        orderBy: { scheduledFor: 'asc' },
+        orderBy: [{ scheduledFor: 'asc' }, { arrivedAt: 'asc' }],
         include: {
           patient: {
             select: {
@@ -141,19 +152,30 @@ export class DoctorDashboardService {
       paymentCodes[code]?.amountCents ?? null;
 
     // Post-merge: `scheduledFor`, `durationMinutes` and the TEXT
-    // `status` column are all schema-nullable / loosely typed even
-    // though the query only pulls rows where `scheduledFor IS NOT
-    // NULL`. Project to the classifier's strict shape at the boundary.
+    // `status` column are all schema-nullable / loosely typed. The
+    // anchor for a row is `scheduledFor` (booking) or `arrivedAt`
+    // (walk-in); rows missing both are dropped. Sorting is by the
+    // anchor so walk-ins interleave with bookings chronologically.
     const appointments = rawAppointments
-      .filter((a): a is typeof a & { scheduledFor: Date } => a.scheduledFor != null)
-      .filter((a) => utcToLocalParts(a.scheduledFor).date === today)
-      .map((a) => ({
-        id: a.id,
-        patientId: a.patientId,
-        scheduledFor: a.scheduledFor,
-        durationMinutes: a.durationMinutes ?? 0,
-        status: narrowDashboardStatus(a.status),
-        patient: a.patient,
+      .map((a) => {
+        const anchor = a.scheduledFor ?? a.arrivedAt;
+        return anchor ? { row: a, anchor } : null;
+      })
+      .filter(
+        (v): v is { row: (typeof rawAppointments)[number]; anchor: Date } =>
+          v !== null && utcToLocalParts(v.anchor).date === today,
+      )
+      .sort((a, b) => a.anchor.getTime() - b.anchor.getTime())
+      .map(({ row, anchor }) => ({
+        id: row.id,
+        patientId: row.patientId,
+        scheduledFor: row.scheduledFor,
+        arrivedAt: row.arrivedAt,
+        isWalkIn: row.isWalkIn,
+        durationMinutes: row.durationMinutes ?? 0,
+        status: narrowDashboardStatus(row.status),
+        patient: row.patient,
+        anchor,
       }));
 
     const dashboardAppointments = this.classifyAppointments(appointments, now);
@@ -210,51 +232,73 @@ export class DoctorDashboardService {
     appointments: Array<{
       id: string;
       patientId: string;
-      scheduledFor: Date;
-      durationMinutes: number | null;
-      status: string;
+      scheduledFor: Date | null;
+      arrivedAt: Date | null;
+      isWalkIn: boolean;
+      durationMinutes: number;
+      status: DashboardAppointmentStatus;
       patient: {
         firstName: string;
         lastName: string;
         dateOfBirth: Date | string | null;
       };
+      anchor: Date;
     }>,
     now: Date,
   ): DashboardAppointmentDto[] {
-    let nextIndex = -1;
-    let currentIndex = -1;
-    appointments.forEach((a, idx) => {
-      if (narrowDashboardStatus(a.status) !== 'scheduled') return;
-      const start = a.scheduledFor.getTime();
-      const end = start + (a.durationMinutes ?? 0) * 60_000;
-      const nowMs = now.getTime();
-      if (start <= nowMs && nowMs < end && currentIndex === -1) {
-        currentIndex = idx;
-      }
-    });
+    const nowMs = now.getTime();
+
+    // current = first in_progress; otherwise first scheduled booking
+    // whose own time window contains `now`.
+    let currentIndex = appointments.findIndex(
+      (a) => a.status === 'in_progress',
+    );
     if (currentIndex === -1) {
-      // No appointment is in-progress; the next is the earliest
-      // scheduled one whose start is strictly in the future.
-      appointments.forEach((a, idx) => {
-        if (narrowDashboardStatus(a.status) !== 'scheduled') return;
-        if (a.scheduledFor.getTime() <= now.getTime()) return;
-        if (nextIndex === -1) nextIndex = idx;
+      currentIndex = appointments.findIndex((a) => {
+        if (a.status !== 'scheduled' || a.scheduledFor == null) return false;
+        const start = a.scheduledFor.getTime();
+        const end = start + a.durationMinutes * 60_000;
+        return start <= nowMs && nowMs < end;
       });
     }
+
+    // next = first pending row that isn't already 'current'. An arrived
+    // walk-in counts even when its anchor has passed (patient is in the
+    // room and waiting); a scheduled booking only counts if its anchor
+    // is in the future (not yet in its time window).
+    let nextIndex = -1;
+    appointments.forEach((a, idx) => {
+      if (idx === currentIndex || nextIndex !== -1) return;
+      if (a.status === 'arrived') {
+        nextIndex = idx;
+        return;
+      }
+      if (a.status === 'scheduled' && a.scheduledFor != null) {
+        if (a.scheduledFor.getTime() > nowMs) {
+          nextIndex = idx;
+        }
+      }
+    });
+
     return appointments.map((a, idx) => {
-      const narrowedStatus = narrowDashboardStatus(a.status);
-      const duration = a.durationMinutes ?? 0;
       let position: DashboardAppointmentDto['position'];
       if (idx === currentIndex) {
         position = 'current';
       } else if (idx === nextIndex) {
         position = 'next';
-      } else if (narrowedStatus !== 'scheduled') {
+      } else if (
+        a.status === 'completed' ||
+        a.status === 'cancelled' ||
+        a.status === 'no_show'
+      ) {
         position = 'past';
       } else if (
-        a.scheduledFor.getTime() + duration * 60_000 <
-        now.getTime()
+        a.status === 'scheduled' &&
+        a.scheduledFor != null &&
+        a.scheduledFor.getTime() + a.durationMinutes * 60_000 < nowMs
       ) {
+        // Scheduled but the booked time window has ended without a
+        // transition. Same "past" treatment as before.
         position = 'past';
       } else {
         position = 'upcoming';
@@ -267,9 +311,11 @@ export class DoctorDashboardService {
           lastName: a.patient.lastName,
           dateOfBirth: serializeDob(a.patient.dateOfBirth),
         },
-        scheduledFor: a.scheduledFor.toISOString(),
-        durationMinutes: duration,
-        status: narrowedStatus,
+        scheduledFor: a.scheduledFor ? a.scheduledFor.toISOString() : null,
+        arrivedAt: a.arrivedAt ? a.arrivedAt.toISOString() : null,
+        isWalkIn: a.isWalkIn,
+        durationMinutes: a.durationMinutes,
+        status: a.status,
         position,
       };
     });
@@ -353,6 +399,11 @@ export class DoctorDashboardService {
             latinDescription: lastVisit.diagnoses[0].code.latinDescription,
           }
         : null;
+    // For walk-in targets `scheduledFor` is null; the card hero clock
+    // shows the arrival time instead. Resolve the anchor once so the
+    // contract stays `scheduledFor: string` on the wire.
+    const hero = target.scheduledFor ?? target.arrivedAt;
+    if (!hero) return null;
     return {
       appointmentId: target.id,
       patientId: patient.id,
@@ -362,7 +413,8 @@ export class DoctorDashboardService {
         dateOfBirth: serializeDob(patient.dateOfBirth),
         sex: patient.sex ?? null,
       },
-      scheduledFor: target.scheduledFor,
+      scheduledFor: hero,
+      isWalkIn: target.isWalkIn,
       durationMinutes: target.durationMinutes,
       visitCount,
       lastVisitDate: lastVisitDateIso,
