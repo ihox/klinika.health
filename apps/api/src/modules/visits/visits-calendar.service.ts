@@ -42,7 +42,31 @@ import {
 import { computeAvailability, type OccupiedInterval } from './visits-calendar.availability';
 import { VisitsCalendarEventsService } from './visits-calendar.events';
 import { fitsInsideHours, toMinutes } from './visits-calendar.hours';
+import { isVisitLockedForReceptionist } from './visits-calendar.lock';
 import { localClockToUtc, utcToLocalParts } from './visits-calendar.tz';
+
+/**
+ * Albanian error copy for receptionist edit-lock refusals. Two distinct
+ * messages so the receptionist's UI can disambiguate "this row is
+ * locked, period" (the four edit paths) from "the row you tried to
+ * pair into is locked" (walk-in pairing).
+ */
+export const LOCKED_REFUSAL_MESSAGE =
+  'Vizita është e mbyllur. Nuk mund të ndryshohet.';
+export const LOCKED_PAIRING_REFUSAL_MESSAGE =
+  'Termini është i mbyllur dhe nuk mund të bashkohet.';
+
+/**
+ * The discrete edit operations the lock blocks. Logged in the audit
+ * row so analytics queries on `visit.edit_blocked` can group by which
+ * affordance was being attempted.
+ */
+type LockBlockedOperation =
+  | 'status_change'
+  | 'reschedule'
+  | 'delete'
+  | 'restore'
+  | 'walkin_pairing';
 
 interface RangeIso {
   from: string;
@@ -365,6 +389,15 @@ export class VisitsCalendarService {
     //     with)
     // Any other failure mode returns the same single Albanian error to
     // avoid leaking visit identity probing.
+    //
+    // Receptionist edit-lock layered ON TOP of the structural checks:
+    // for a receptionist-only caller, a locked pairing target (past
+    // day OR today + completed) is refused with the more informative
+    // LOCKED_PAIRING_REFUSAL_MESSAGE + a `visit.edit_blocked` audit
+    // row. The check fires before the structural completed-rejection
+    // so the receptionist sees the lock reason rather than the
+    // generic "pairing invalid" copy. Doctor / clinic_admin paths are
+    // unchanged.
     const pairedWith = await this.prisma.visit.findFirst({
       where: {
         id: payload.pairedWithVisitId,
@@ -372,11 +405,13 @@ export class VisitsCalendarService {
         deletedAt: null,
         scheduledFor: { not: null },
         isWalkIn: false,
-        status: { not: 'completed' },
       },
-      select: { id: true },
+      select: { id: true, status: true, visitDate: true },
     });
-    if (!pairedWith) {
+    if (pairedWith) {
+      await this.assertNotLockedForReceptionist(pairedWith, ctx, 'walkin_pairing');
+    }
+    if (!pairedWith || pairedWith.status === 'completed') {
       throw new BadRequestException({
         message: WALKIN_PAIRING_REFUSAL_MESSAGE,
         reason: 'walkin_pairing_invalid',
@@ -485,6 +520,7 @@ export class VisitsCalendarService {
         reason: 'walkin_immovable',
       });
     }
+    await this.assertNotLockedForReceptionist(before, ctx, 'reschedule');
 
     const targetDate = payload.date ?? utcToLocalParts(before.scheduledFor).date;
     const targetTime = payload.time ?? utcToLocalParts(before.scheduledFor).time;
@@ -580,6 +616,7 @@ export class VisitsCalendarService {
       },
     });
     if (!before) throw new NotFoundException('Vizita nuk u gjet.');
+    await this.assertNotLockedForReceptionist(before, ctx, 'status_change');
 
     const from = narrowToVisitStatus(before.status);
     const to = payload.status;
@@ -651,6 +688,7 @@ export class VisitsCalendarService {
       include: { diagnoses: { select: { id: true } } },
     });
     if (!before) throw new NotFoundException('Vizita nuk u gjet.');
+    await this.assertNotLockedForReceptionist(before, ctx, 'delete');
 
     // Receptionist deleting a row that already has clinical content is
     // refused — the doctor must use the chart-form "Pastro vizitën"
@@ -723,6 +761,10 @@ export class VisitsCalendarService {
       where: { id, clinicId, deletedAt: { not: null }, ...CALENDAR_VISIBLE_WHERE },
     });
     if (!row) throw new NotFoundException('Vizita nuk u gjet.');
+    // The lock check applies to the CURRENT state of the visit. A row
+    // deleted yesterday is on a past day → locked → receptionist can't
+    // restore it. Doctor / clinic_admin still can (their escape hatch).
+    await this.assertNotLockedForReceptionist(row, ctx, 'restore');
     const restored = await this.prisma.visit.update({
       where: { id },
       data: { deletedAt: null },
@@ -967,6 +1009,72 @@ export class VisitsCalendarService {
     }
     const next = onDay.find((r) => !taken.has(r.id));
     return next ? { id: next.id, scheduledFor: next.scheduledFor } : null;
+  }
+
+  // -------------------------------------------------------------------------
+  // Receptionist edit-lock (daily-report integrity)
+  // -------------------------------------------------------------------------
+  //
+  // The lock rule + rationale live in visits-calendar.lock.ts. This
+  // method is the single chokepoint the four edit endpoints and the
+  // walk-in pairing path call before mutating. It writes a structured
+  // `visit.edit_blocked` audit row on every refusal so an operator can
+  // later answer "why couldn't the receptionist save this?" without
+  // reproducing the click path.
+  //
+  // The audit shape is intentionally uniform across all five
+  // operations so analytics queries don't have to fork:
+  //
+  //   action       = 'visit.edit_blocked'
+  //   resourceType = 'visit'
+  //   resourceId   = the targeted visit's id
+  //   changes      = [
+  //     { field: 'reason',       new: 'locked' },
+  //     { field: 'operation',    new: <LockBlockedOperation> },
+  //     { field: 'actorRole',    new: 'receptionist' },
+  //     { field: 'visitDate',    new: 'YYYY-MM-DD' },
+  //     { field: 'visitStatus',  new: <VisitStatus> },
+  //   ]
+  //
+  // Doctor and clinic_admin sessions short-circuit at the
+  // `isReceptionistOnly(ctx.roles)` gate — they are never affected.
+  private async assertNotLockedForReceptionist(
+    visit: { id: string; status: string; visitDate: Date | string },
+    ctx: RequestContext,
+    operation: LockBlockedOperation,
+  ): Promise<void> {
+    if (!isReceptionistOnly(ctx.roles)) return;
+    if (!isVisitLockedForReceptionist(visit)) return;
+
+    const visitDateStr =
+      typeof visit.visitDate === 'string'
+        ? visit.visitDate
+        : visit.visitDate.toISOString().slice(0, 10);
+
+    await this.audit.record({
+      ctx,
+      action: 'visit.edit_blocked',
+      resourceType: 'visit',
+      resourceId: visit.id,
+      changes: [
+        { field: 'reason', old: null, new: 'locked' },
+        { field: 'operation', old: null, new: operation },
+        { field: 'actorRole', old: null, new: 'receptionist' },
+        { field: 'visitDate', old: null, new: visitDateStr },
+        { field: 'visitStatus', old: null, new: visit.status },
+      ],
+    });
+
+    if (operation === 'walkin_pairing') {
+      throw new BadRequestException({
+        message: LOCKED_PAIRING_REFUSAL_MESSAGE,
+        reason: 'locked',
+      });
+    }
+    throw new ForbiddenException({
+      message: LOCKED_REFUSAL_MESSAGE,
+      reason: 'locked',
+    });
   }
 
   // -------------------------------------------------------------------------
