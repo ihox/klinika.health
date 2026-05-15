@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import type { ReactElement } from 'react';
 
 import { cn } from '@/lib/utils';
@@ -232,6 +233,7 @@ export function CalendarGrid({
             colEndOffsetPx={closedBandTop * PX_PER_MIN}
             entries={dayEntries}
             walkIns={dayWalkIns}
+            defaultDuration={hours.defaultDuration}
             onSlotClick={onSlotClick}
             onEntryClick={onEntryClick}
             onEntryContextMenu={onEntryContextMenu}
@@ -253,6 +255,10 @@ interface DayColumnBodyProps {
   colEndOffsetPx: number;
   entries: CalendarEntry[];
   walkIns: CalendarEntry[];
+  /** Clinic's "Kohëzgjatja e parazgjedhur". Drives the hover ghost
+   * height so the receptionist sees the actual default-duration
+   * footprint a click would create. */
+  defaultDuration: number;
   onSlotClick: CalendarGridProps['onSlotClick'];
   onEntryClick: CalendarGridProps['onEntryClick'];
   onEntryContextMenu: CalendarGridProps['onEntryContextMenu'];
@@ -268,6 +274,7 @@ function DayColumnBody({
   colEndOffsetPx,
   entries,
   walkIns,
+  defaultDuration,
   onSlotClick,
   onEntryClick,
   onEntryContextMenu,
@@ -277,17 +284,66 @@ function DayColumnBody({
   // constraint, and (in STEP 2) the header lane-hint.
   const hasWalkIns = walkIns.length > 0;
 
-  const handleClick = (event: React.MouseEvent<HTMLDivElement>): void => {
-    if (!col.open) return;
-    if ((event.target as HTMLElement).closest('[data-appt]')) return;
+  // Snap the mouse Y to the nearest 10-minute slot inside the open
+  // window. Returns null when the cursor is outside hours or over a
+  // card; busy-overlap is a separate check (the click handler still
+  // lets the booking dialog surface conflicts, while the hover ghost
+  // hides itself on busy slots).
+  const snapSlot = (
+    event: React.MouseEvent<HTMLDivElement>,
+  ): { targetMin: number; top: number; time: string } | null => {
+    if (!col.open) return null;
+    if ((event.target as HTMLElement).closest('[data-appt]')) return null;
     const rect = event.currentTarget.getBoundingClientRect();
     const y = event.clientY - rect.top;
     const minFromStart = Math.max(0, Math.round(y / PX_PER_MIN / 10) * 10);
     const colStart = timeToMinutes(col.startTime);
     const colEnd = timeToMinutes(col.endTime);
-    const targetMin = (gridStartMin + minFromStart);
-    if (targetMin < colStart || targetMin + 10 > colEnd) return;
-    onSlotClick({ date: col.date, time: minutesToTime(targetMin) });
+    const targetMin = gridStartMin + minFromStart;
+    if (targetMin < colStart || targetMin + 10 > colEnd) return null;
+    return {
+      targetMin,
+      top: (targetMin - gridStartMin) * PX_PER_MIN,
+      time: minutesToTime(targetMin),
+    };
+  };
+
+  // Overlap check: would a default-duration booking starting at
+  // `targetMin` collide with any existing scheduled visit? Walk-ins
+  // don't occupy time slots so they're ignored.
+  const isSlotBusy = (targetMin: number): boolean => {
+    const slotEndMin = targetMin + defaultDuration;
+    return entries.some((a) => {
+      if (a.scheduledFor == null || a.durationMinutes == null) return false;
+      const sMin = timeToMinutes(toLocalParts(new Date(a.scheduledFor)).time);
+      const eMin = sMin + a.durationMinutes;
+      return targetMin < eMin && slotEndMin > sMin;
+    });
+  };
+
+  const handleClick = (event: React.MouseEvent<HTMLDivElement>): void => {
+    const slot = snapSlot(event);
+    if (!slot) return;
+    onSlotClick({ date: col.date, time: slot.time });
+  };
+
+  // Hover preview ghost. Mirrors receptionist.html `.ghost-slot` —
+  // a small dashed-teal pill that snaps to the 10-min slot the
+  // receptionist's cursor sits over and labels it
+  // "Termin i ri · HH:MM · N min". Hidden when the would-be booking
+  // overlaps a busy interval. Skipped on touch (mousemove doesn't fire).
+  const [hoverSlot, setHoverSlot] = useState<{ top: number; time: string } | null>(null);
+  const handleMouseMove = (event: React.MouseEvent<HTMLDivElement>): void => {
+    const slot = snapSlot(event);
+    if (!slot || isSlotBusy(slot.targetMin)) {
+      if (hoverSlot) setHoverSlot(null);
+      return;
+    }
+    if (hoverSlot && hoverSlot.time === slot.time) return;
+    setHoverSlot({ top: slot.top, time: slot.time });
+  };
+  const handleMouseLeave = (): void => {
+    if (hoverSlot) setHoverSlot(null);
   };
 
   const nowLineTop = (() => {
@@ -317,6 +373,8 @@ function DayColumnBody({
       )}
       style={{ height: gridHeightPx, backgroundImage }}
       onClick={handleClick}
+      onMouseMove={handleMouseMove}
+      onMouseLeave={handleMouseLeave}
       role="grid"
       data-has-walkins={hasWalkIns || undefined}
       aria-label={col.open ? `Kolonë termin për ${col.date}` : `Klinika e mbyllur ${col.date}`}
@@ -377,6 +435,31 @@ function DayColumnBody({
           }
         />
       ))}
+
+      {/* Hover slot ghost — `.ghost-slot` in receptionist.html. Height
+          tracks the clinic's default duration so the receptionist sees
+          the footprint a click would actually create. Lives in the
+          LEFT lane when the column carries walk-ins so it lines up
+          with where the scheduled card will land. */}
+      {hoverSlot ? (
+        <div
+          className="absolute z-[2] pointer-events-none flex items-center gap-1.5 rounded-sm border border-dashed border-teal-400 bg-teal-100/55 px-1.5 py-[3px] text-[11px] font-medium leading-none text-primary-dark shadow-xs tabular-nums"
+          style={{
+            top: hoverSlot.top,
+            height: defaultDuration * PX_PER_MIN,
+            left: 6,
+            ...(hasWalkIns ? { right: 'calc(50% + 2px)' } : { right: 6 }),
+          }}
+          aria-hidden
+        >
+          <span className="inline-grid h-3.5 w-3.5 flex-none place-items-center rounded-[3px] border border-teal-300 bg-surface-elevated text-[12px] font-bold leading-none text-primary">
+            +
+          </span>
+          <span className="truncate">
+            Termin i ri · {hoverSlot.time} · {defaultDuration} min
+          </span>
+        </div>
+      ) : null}
 
       {nowLineTop ? (
         <div
