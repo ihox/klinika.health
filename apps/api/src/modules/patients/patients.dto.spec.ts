@@ -274,11 +274,31 @@ describe('ReceptionistCreatePatientSchema', () => {
     expect(out.success).toBe(false);
   });
 
-  it('rejects empty first or last name', () => {
+  it('rejects empty first name', () => {
     const a = ReceptionistCreatePatientSchema.safeParse({ firstName: '', lastName: 'X' });
-    const b = ReceptionistCreatePatientSchema.safeParse({ firstName: 'X', lastName: '   ' });
+    const b = ReceptionistCreatePatientSchema.safeParse({ firstName: '   ' });
     expect(a.success).toBe(false);
     expect(b.success).toBe(false);
+  });
+
+  it('accepts firstName-only (lastName optional)', () => {
+    const out = ReceptionistCreatePatientSchema.safeParse({ firstName: 'Rita' });
+    expect(out.success).toBe(true);
+    if (out.success) {
+      expect(out.data.firstName).toBe('Rita');
+      expect(out.data.lastName).toBe('');
+    }
+  });
+
+  it('treats whitespace-only lastName as empty', () => {
+    const out = ReceptionistCreatePatientSchema.safeParse({
+      firstName: 'Rita',
+      lastName: '   ',
+    });
+    expect(out.success).toBe(true);
+    if (out.success) {
+      expect(out.data.lastName).toBe('');
+    }
   });
 });
 

@@ -316,13 +316,17 @@ export class PatientsService {
     payload: ReceptionistCreatePatientInput,
     ctx: RequestContext,
   ): Promise<PatientPublicDto> {
-    // Strict DTO already stripped any unknown keys; here we just commit
-    // the three permitted fields.
+    // Strict DTO already stripped any unknown keys; here we just
+    // commit the three permitted columns. `lastName` may be an empty
+    // string when the receptionist captures only the first name — the
+    // column is NOT NULL but stores '', and the doctor's
+    // isPatientComplete predicate treats '' as missing so the patient
+    // is routed to the master-data form on the doctor's next click.
     const created = await this.prisma.patient.create({
       data: {
         clinicId,
         firstName: payload.firstName,
-        lastName: payload.lastName,
+        lastName: payload.lastName ?? '',
         // dateOfBirth is required at the schema level (column is NOT
         // NULL). When the receptionist doesn't capture it, the doctor
         // fills it on the first visit; until then we store a sentinel
@@ -338,7 +342,7 @@ export class PatientsService {
       resourceId: created.id,
       changes: [
         { field: 'firstName', old: null, new: created.firstName },
-        { field: 'lastName', old: null, new: created.lastName },
+        { field: 'lastName', old: null, new: created.lastName || null },
         {
           field: 'dateOfBirth',
           old: null,

@@ -64,11 +64,16 @@ export function QuickAddPatientModal({
     setTouchedDuplicates(false);
   }, [open, seed]);
 
-  // Soft-duplicate probe — debounced, fires once both name fields have
-  // content. Never blocking.
+  // Soft-duplicate probe — debounced, fires once we have enough to
+  // ask the server. We allow firstName-only queries because that's
+  // the new minimum bar for receptionist add (CLAUDE.md §1.2 still
+  // holds: the receptionist sees only id + name + DOB on the
+  // returned candidates).
   useEffect(() => {
     if (!open) return;
-    if (form.firstName.trim().length < 2 || form.lastName.trim().length < 2) {
+    const firstHasContent = form.firstName.trim().length >= 2;
+    const lastHasContent = form.lastName.trim().length >= 2;
+    if (!firstHasContent && !lastHasContent) {
       setCandidates([]);
       return;
     }
@@ -76,7 +81,7 @@ export function QuickAddPatientModal({
       try {
         const res = await patientClient.duplicateCheck({
           firstName: form.firstName.trim(),
-          lastName: form.lastName.trim(),
+          lastName: form.lastName.trim() || undefined,
           dateOfBirth: form.dateOfBirth || undefined,
         });
         setCandidates(res.candidates);
@@ -92,12 +97,12 @@ export function QuickAddPatientModal({
     async (e?: React.FormEvent) => {
       e?.preventDefault();
       if (submitting) return;
-      if (!form.firstName.trim() || !form.lastName.trim()) return;
+      if (!form.firstName.trim()) return;
       setSubmitting(true);
       try {
         const res = await patientClient.createMinimal({
           firstName: form.firstName.trim(),
-          lastName: form.lastName.trim(),
+          lastName: form.lastName.trim() || undefined,
           dateOfBirth: form.dateOfBirth || undefined,
         });
         onCreated(res.patient);
@@ -127,10 +132,7 @@ export function QuickAddPatientModal({
 
   if (!open) return null;
 
-  const canSubmit =
-    form.firstName.trim().length > 0 &&
-    form.lastName.trim().length > 0 &&
-    !submitting;
+  const canSubmit = form.firstName.trim().length > 0 && !submitting;
 
   return (
     <div
@@ -177,7 +179,7 @@ export function QuickAddPatientModal({
             </label>
             <label className="block">
               <span className="mb-1 block text-[12px] font-medium uppercase tracking-wide text-stone-500">
-                Mbiemri
+                Mbiemri <span className="text-stone-400 normal-case">(opsionale)</span>
               </span>
               <Input
                 value={form.lastName}

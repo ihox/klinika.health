@@ -117,7 +117,12 @@ const optionalText = (max = 1000) =>
  */
 export const ReceptionistCreatePatientSchema = z.object({
   firstName: trimmedName('Emri'),
-  lastName: trimmedName('Mbiemri'),
+  lastName: z
+    .string()
+    .trim()
+    .max(80, 'Mbiemri është shumë i gjatë')
+    .optional()
+    .transform((v) => v ?? ''),
   dateOfBirth: dateOfBirth.optional(),
 });
 

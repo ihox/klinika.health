@@ -65,7 +65,10 @@ export interface DoctorPatientUpdate extends Partial<DoctorPatientInput> {}
 
 export interface ReceptionistPatientInput {
   firstName: string;
-  lastName: string;
+  /** Optional — the receptionist may register a patient with only
+   *  a first name. The doctor completes the record on the first
+   *  visit. */
+  lastName?: string;
   dateOfBirth?: string;
 }
 
