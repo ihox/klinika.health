@@ -86,10 +86,57 @@ export class PatientsService {
     const redact = isReceptionistOnly(ctx.roles);
 
     const rows = await this.runSearch(clinicId, rawTerm, limit, redact);
+    // Attach the most-recent-completed-visit date so search results
+    // can render the recency dot the receptionist already sees on
+    // calendar cards. Cheap groupBy query, runs once per search.
+    const lastVisitMap = await this.fetchLastVisitMap(
+      clinicId,
+      rows.map((r) => (typeof r.id === 'string' ? r.id : String(r.id))),
+    );
+    const enriched = rows.map((r) => {
+      const id = typeof r.id === 'string' ? r.id : String(r.id);
+      return { ...r, lastVisitAt: lastVisitMap.get(id) ?? null };
+    });
     if (redact) {
-      return { patients: rows.map(rowToPublicDto) };
+      return { patients: enriched.map(rowToPublicDto) };
     }
-    return { patients: rows.map(rowToFullDto) };
+    return { patients: enriched.map(rowToFullDto) };
+  }
+
+  /**
+   * For each patient id, return the date of their most recent
+   * COMPLETED visit in this clinic. Used by the patient search to
+   * power the receptionist's recency dot. Soft-deleted visits are
+   * filtered; non-completed statuses don't count (a no-show or
+   * cancelled booking isn't a "visit" from the recency perspective).
+   */
+  private async fetchLastVisitMap(
+    clinicId: string,
+    patientIds: string[],
+  ): Promise<Map<string, Date>> {
+    if (patientIds.length === 0) return new Map();
+    const unique = Array.from(new Set(patientIds));
+    const rows = await this.prisma.visit.groupBy({
+      by: ['patientId'],
+      where: {
+        clinicId,
+        patientId: { in: unique },
+        deletedAt: null,
+        status: 'completed',
+      },
+      _max: { visitDate: true },
+    });
+    const map = new Map<string, Date>();
+    for (const r of rows) {
+      if (r._max.visitDate) {
+        const d =
+          typeof r._max.visitDate === 'string'
+            ? new Date(r._max.visitDate)
+            : r._max.visitDate;
+        map.set(r.patientId, d);
+      }
+    }
+    return map;
   }
 
   private async runSearch(
@@ -609,6 +656,10 @@ function rowToPublicDto(row: SearchRow & Record<string, unknown>): PatientPublic
       (row.dateOfBirth as Date | string | null | undefined) ??
       (row.date_of_birth as Date | string | null | undefined) ??
       null,
+    lastVisitAt:
+      (row.lastVisitAt as Date | string | null | undefined) ??
+      (row.last_visit_at as Date | string | null | undefined) ??
+      null,
   });
 }
 
@@ -641,6 +692,10 @@ function rowToFullDto(row: SearchRow & Record<string, unknown>): PatientFullDto 
       (row.birth_head_circumference_cm as number | string | null | undefined) ??
       null,
     alergjiTjera: (row.alergjiTjera as string | null | undefined) ?? null,
+    lastVisitAt:
+      (row.lastVisitAt as Date | string | null | undefined) ??
+      (row.last_visit_at as Date | string | null | undefined) ??
+      null,
     createdAt:
       (row.createdAt as Date | string | undefined) ??
       (row.created_at as Date | string | undefined) ??

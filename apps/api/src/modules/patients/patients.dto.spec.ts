@@ -38,9 +38,15 @@ describe('PatientPublicDto serialization', () => {
     deletedAt: null,
   };
 
-  it('returns exactly four keys', () => {
+  it('returns exactly the public keys', () => {
     const out = toPublicDto(fullRow);
-    expect(Object.keys(out).sort()).toEqual(['dateOfBirth', 'firstName', 'id', 'lastName']);
+    expect(Object.keys(out).sort()).toEqual([
+      'dateOfBirth',
+      'firstName',
+      'id',
+      'lastName',
+      'lastVisitAt',
+    ]);
   });
 
   it('omits every PHI field even when given a full Prisma row', () => {
@@ -80,17 +86,38 @@ describe('PatientPublicDto serialization', () => {
     expect(out.dateOfBirth).toBe('2023-08-03');
   });
 
-  it('round-tripping a 200-key garbage object still only returns four keys', () => {
+  it('round-tripping a 200-key garbage object only returns the allowed keys', () => {
     // Defensive property-style proof. If someone in the future hands
     // toPublicDto a result of a raw `SELECT *` PLUS arbitrary extra
-    // keys, only the four allowed ones come back.
+    // keys, only the allowed ones come back.
     const garbage: Record<string, unknown> = { ...fullRow };
     for (let i = 0; i < 200; i += 1) garbage[`extra_${i}`] = `secret-${i}`;
     const out = toPublicDto(garbage as Parameters<typeof toPublicDto>[0]) as unknown as Record<string, unknown>;
-    expect(Object.keys(out)).toHaveLength(4);
+    expect(Object.keys(out)).toHaveLength(5);
     for (let i = 0; i < 200; i += 1) {
       expect(out[`extra_${i}`]).toBeUndefined();
     }
+  });
+
+  it('renders lastVisitAt as ISO yyyy-mm-dd when present', () => {
+    const out = toPublicDto({
+      ...fullRow,
+      lastVisitAt: new Date('2026-05-01T00:00:00Z'),
+    });
+    expect(out.lastVisitAt).toBe('2026-05-01');
+  });
+
+  it('returns null lastVisitAt when the row has none', () => {
+    const out = toPublicDto(fullRow);
+    expect(out.lastVisitAt).toBeNull();
+  });
+
+  it('accepts string lastVisitAt from raw $queryRaw rows', () => {
+    const out = toPublicDto({
+      ...fullRow,
+      lastVisitAt: '2026-05-01' as unknown as Date,
+    });
+    expect(out.lastVisitAt).toBe('2026-05-01');
   });
 });
 

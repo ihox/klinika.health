@@ -410,6 +410,7 @@ export function CalendarView(): ReactElement {
         firstName: entry.patient.firstName,
         lastName: entry.patient.lastName,
         dateOfBirth: entry.patient.dateOfBirth,
+        lastVisitAt: entry.lastVisitAt,
       },
       initialDate: local.date,
       initialTime: local.time,

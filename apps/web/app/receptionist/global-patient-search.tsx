@@ -6,6 +6,7 @@ import type { ReactElement } from 'react';
 import { cn } from '@/lib/utils';
 import { ApiError } from '@/lib/api';
 import { formatDob } from '@/lib/appointment-client';
+import { LastVisitDot } from '@/components/last-visit-dot';
 import { patientClient, type PatientPublicDto } from '@/lib/patient-client';
 
 /**
@@ -178,8 +179,11 @@ export function GlobalPatientSearch({
                   )}
                 >
                   <div>
-                    <div className="text-[13px] font-semibold text-ink-strong">
-                      {p.firstName} {p.lastName}
+                    <div className="flex items-center gap-2 text-[13px] font-semibold text-ink-strong">
+                      <LastVisitDot lastVisitAt={p.lastVisitAt} />
+                      <span>
+                        {p.firstName} {p.lastName}
+                      </span>
                     </div>
                     <div className="mt-px text-[11.5px] text-ink-muted tabular-nums">
                       DL {formatDob(p.dateOfBirth)}

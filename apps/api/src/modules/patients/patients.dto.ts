@@ -180,6 +180,11 @@ export type PatientSearchQuery = z.infer<typeof PatientSearchQuerySchema>;
  * The receptionist's view: just enough to identify the patient when
  * booking an appointment. Adding any field here is a privacy
  * regression — see CLAUDE.md §1.2 and ADR-005.
+ *
+ * `lastVisitAt` is a recency signal (date only, no clinical content)
+ * used to drive the search-result dot the receptionist already sees
+ * on calendar cards. It is the date of the patient's most recent
+ * COMPLETED visit in this clinic — null when the patient has none.
  */
 export interface PatientPublicDto {
   id: string;
@@ -187,6 +192,9 @@ export interface PatientPublicDto {
   lastName: string;
   /** ISO yyyy-mm-dd, or null when not yet captured (quick-add). */
   dateOfBirth: string | null;
+  /** ISO yyyy-mm-dd of the patient's most recent completed visit, or
+   *  null when there are none. */
+  lastVisitAt: string | null;
 }
 
 /**
@@ -208,6 +216,7 @@ export interface PatientFullDto {
   birthLengthCm: number | null;
   birthHeadCircumferenceCm: number | null;
   alergjiTjera: string | null;
+  lastVisitAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -234,6 +243,10 @@ export interface PatientRowLike {
   firstName: string;
   lastName: string;
   dateOfBirth: Date | string | null;
+  /** Optional recency signal — surfaced when the caller has joined
+   *  the patient row with a last-visit aggregation. Absent on rows
+   *  that didn't include the field; defaults to null in that case. */
+  lastVisitAt?: Date | string | null;
   // any other fields are tolerated but never read here
   [extra: string]: unknown;
 }
@@ -247,6 +260,7 @@ export function toPublicDto(row: PatientRowLike): PatientPublicDto {
     firstName: row.firstName,
     lastName: row.lastName,
     dateOfBirth: dateToIso(row.dateOfBirth),
+    lastVisitAt: lastVisitToIso(row.lastVisitAt ?? null),
   };
 }
 
@@ -282,6 +296,7 @@ export function toFullDto(row: PatientFullRowLike): PatientFullDto {
     birthLengthCm: decimalToNumber(row.birthLengthCm),
     birthHeadCircumferenceCm: decimalToNumber(row.birthHeadCircumferenceCm),
     alergjiTjera: row.alergjiTjera ?? null,
+    lastVisitAt: lastVisitToIso(row.lastVisitAt ?? null),
     createdAt: timestampToIso(row.createdAt),
     updatedAt: timestampToIso(row.updatedAt),
   };
@@ -313,6 +328,17 @@ function dateToIso(value: Date | string | null | undefined): string | null {
 function timestampToIso(value: Date | string): string {
   if (typeof value === 'string') return value;
   return value.toISOString();
+}
+
+// Last-visit date doesn't share the DOB sentinel — a real 1900-01-01
+// visit can't exist, but we use a dedicated helper anyway so the
+// privacy boundary helpers stay separated by concern.
+function lastVisitToIso(value: Date | string | null | undefined): string | null {
+  if (value == null) return null;
+  if (typeof value === 'string') {
+    return /^\d{4}-\d{2}-\d{2}/.test(value) ? value.slice(0, 10) : null;
+  }
+  return value.toISOString().slice(0, 10);
 }
 
 function decimalToNumber(

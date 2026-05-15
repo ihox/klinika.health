@@ -16,6 +16,9 @@ export interface PatientPublicDto {
   lastName: string;
   /** ISO yyyy-mm-dd, or null when not yet captured. */
   dateOfBirth: string | null;
+  /** ISO yyyy-mm-dd of the patient's most recent completed visit, or
+   *  null when they have none. Drives the recency dot in search rows. */
+  lastVisitAt: string | null;
 }
 
 export interface PatientFullDto {
@@ -32,6 +35,7 @@ export interface PatientFullDto {
   birthLengthCm: number | null;
   birthHeadCircumferenceCm: number | null;
   alergjiTjera: string | null;
+  lastVisitAt: string | null;
   createdAt: string;
   updatedAt: string;
 }

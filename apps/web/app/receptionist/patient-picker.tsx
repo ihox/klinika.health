@@ -5,6 +5,7 @@ import type { ReactElement } from 'react';
 
 import { cn } from '@/lib/utils';
 import { ApiError } from '@/lib/api';
+import { LastVisitDot } from '@/components/last-visit-dot';
 import { patientClient, type PatientPublicDto } from '@/lib/patient-client';
 
 import { formatDob } from '@/lib/appointment-client';
@@ -169,8 +170,11 @@ export function PatientPicker({
               )}
             >
               <div>
-                <div className="text-[13px] font-semibold text-ink-strong">
-                  {p.firstName} {p.lastName}
+                <div className="flex items-center gap-2 text-[13px] font-semibold text-ink-strong">
+                  <LastVisitDot lastVisitAt={p.lastVisitAt} />
+                  <span>
+                    {p.firstName} {p.lastName}
+                  </span>
                 </div>
                 <div className="text-[11.5px] text-ink-muted tabular-nums mt-px">
                   DL {formatDob(p.dateOfBirth)}
