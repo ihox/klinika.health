@@ -9,6 +9,7 @@ import {
   AuditLogService,
   type AuditFieldDiff,
 } from '../../common/audit/audit-log.service';
+import { localDateToday, utcMidnight } from '../../common/datetime';
 import type { RequestContext } from '../../common/request-context/request-context';
 import { hasClinicalAccess, primaryRoleForDisplay } from '../../common/request-context/role-helpers';
 import type { AppRole } from '../../common/decorators/roles.decorator';
@@ -21,6 +22,9 @@ import {
   type VisitHistoryFieldChange,
   toVisitDto,
 } from './visits.dto';
+import { VisitsCalendarEventsService } from './visits-calendar.events';
+import { VisitsCalendarService } from './visits-calendar.service';
+import { utcToLocalParts } from './visits-calendar.tz';
 
 const BELGRADE_TZ = 'Europe/Belgrade';
 
@@ -55,6 +59,8 @@ export class VisitsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditLogService,
+    private readonly calendar: VisitsCalendarService,
+    private readonly calendarEvents: VisitsCalendarEventsService,
   ) {}
 
   // -------------------------------------------------------------------------
@@ -104,6 +110,100 @@ export class VisitsService {
           new: created.visitDate.toISOString().slice(0, 10),
         },
       ],
+    });
+
+    return toVisitDto(created);
+  }
+
+  // -------------------------------------------------------------------------
+  // Create (doctor-initiated "Vizitë e re")
+  // -------------------------------------------------------------------------
+  //
+  // The doctor opens a chart, clicks "+ Vizitë e re", picks a patient.
+  // Common case: a sibling / companion who walked in alongside today's
+  // booked patient. We pair the new row to the in-progress booking so
+  // the receptionist's calendar surfaces it in the right lane (same
+  // row as the scheduled sibling) without any UI hover required.
+  //
+  // Pairing resolution lives in `VisitsCalendarService.findNextUnpaired
+  // ScheduledVisit`. On a day with no scheduled bookings (or with
+  // every booking already paired), we fall back to the same row shape
+  // `create()` produces — a calendar-invisible chart entry — so the
+  // doctor is never blocked from charting just because there's no
+  // schedule that day.
+
+  async createDoctorNew(
+    clinicId: string,
+    payload: CreateVisitInput,
+    ctx: RequestContext,
+  ): Promise<VisitDto> {
+    this.requireDoctorOrAdmin(ctx);
+    if (!ctx.userId) {
+      throw new ForbiddenException('Sesioni i pavlefshëm.');
+    }
+
+    const patient = await this.prisma.patient.findFirst({
+      where: { id: payload.patientId, clinicId, deletedAt: null },
+    });
+    if (!patient) throw new NotFoundException('Pacienti nuk u gjet.');
+
+    const today = localDateToday();
+    const pair = await this.calendar.findNextUnpairedScheduledVisit(clinicId, today);
+
+    if (pair == null) {
+      // No scheduled visit to pair with → standalone chart entry,
+      // identical to the legacy `POST /api/visits` shape.
+      return this.create(clinicId, payload, ctx);
+    }
+
+    // Paired walk-in. Matches receptionist-initiated walk-in semantics
+    // but skips the pair-validation guard (we just resolved it) and
+    // forces `status='in_progress'` — the doctor is about to start
+    // charting, so the row goes straight to in-progress.
+    const visitDate = payload.visitDate
+      ? utcMidnight(payload.visitDate)
+      : utcMidnight(today);
+    const now = new Date();
+
+    const created = await this.prisma.visit.create({
+      data: {
+        clinicId,
+        patientId: patient.id,
+        visitDate,
+        scheduledFor: null,
+        durationMinutes: null,
+        isWalkIn: true,
+        arrivedAt: now,
+        status: 'in_progress',
+        pairedWithVisitId: pair.id,
+        createdBy: ctx.userId,
+        updatedBy: ctx.userId,
+      },
+      include: { diagnoses: { include: { code: true } } },
+    });
+
+    await this.audit.record({
+      ctx,
+      action: 'visit.walkin.added',
+      resourceType: 'visit',
+      resourceId: created.id,
+      changes: [
+        { field: 'patientId', old: null, new: created.patientId },
+        { field: 'isWalkIn', old: null, new: true },
+        { field: 'arrivedAt', old: null, new: now.toISOString() },
+        { field: 'status', old: null, new: created.status },
+        { field: 'pairedWithVisitId', old: null, new: pair.id },
+      ],
+    });
+
+    this.calendarEvents.emit({
+      type: 'visit.created',
+      clinicId,
+      visitId: created.id,
+      localDate: utcToLocalParts(now).date,
+      isWalkIn: true,
+      status: created.status,
+      emittedAt: new Date().toISOString(),
     });
 
     return toVisitDto(created);

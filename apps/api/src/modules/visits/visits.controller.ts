@@ -32,6 +32,9 @@ import { VisitsService } from './visits.service';
  * Visit API surface.
  *
  *   POST   /api/visits                 — create a new visit (doctor)
+ *   POST   /api/visits/doctor-new      — doctor-initiated "Vizitë e re"
+ *                                        with auto-pairing to today's
+ *                                        in-progress booking
  *   GET    /api/visits/:id             — full visit record (doctor)
  *   PATCH  /api/visits/:id             — delta save (doctor — auto-save target)
  *   DELETE /api/visits/:id             — soft delete (doctor)
@@ -61,6 +64,35 @@ export class VisitsController {
       });
     }
     const visit = await this.visits.create(ctx.clinicId!, parsed.data, ctx);
+    return { visit };
+  }
+
+  /**
+   * Doctor-initiated "Vizitë e re" with auto-pairing. Same payload as
+   * the legacy `POST /api/visits`; the server decides whether the new
+   * row becomes a paired walk-in (today's in-progress booking is
+   * unpaired) or a standalone chart entry (no pairing available).
+   *
+   * Registered as a fixed sub-path so Express matches it before the
+   * `:id` patterns below — `'doctor-new'` is not a UUID so it would
+   * fall through the ParseUUIDPipe anyway, but explicit ordering keeps
+   * the route table readable.
+   */
+  @Post('doctor-new')
+  @Roles('doctor', 'clinic_admin')
+  @HttpCode(HttpStatus.CREATED)
+  async createDoctorNew(
+    @Body() body: unknown,
+    @Ctx() ctx: RequestContext,
+  ): Promise<{ visit: VisitDto }> {
+    const parsed = CreateVisitSchema.safeParse(body);
+    if (!parsed.success) {
+      throw new BadRequestException({
+        message: 'Të dhëna të pavlefshme.',
+        issues: parsed.error.flatten(),
+      });
+    }
+    const visit = await this.visits.createDoctorNew(ctx.clinicId!, parsed.data, ctx);
     return { visit };
   }
 
