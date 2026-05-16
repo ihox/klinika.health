@@ -644,6 +644,150 @@ describe.skipIf(!ENABLED)('Visits calendar integration', () => {
     expect(recRes.body.paymentTotalCents).toBe(docRes.body.stats.paymentsCents);
   });
 
+  // Cross-view parity lock (PR 2 of the doctor/receptionist alignment
+  // work). The doctor's dashboard `stats.appointmentsTotal` must match
+  // the receptionist's `/calendar/stats.total` by construction — both
+  // use the same clinical-scope query `visit_date=today AND
+  // deleted_at IS NULL`. Pre-PR-2 the dashboard's count was calendar-
+  // scope and silently excluded standalones, so doctor's "10" disagreed
+  // with receptionist's "15" any time a standalone existed.
+  //
+  // This seed exercises every shape across multiple statuses; if either
+  // side ever drops or double-counts a shape, this test breaks.
+  it('stats: doctor appointmentsTotal matches receptionist total across all visit shapes', async () => {
+    const doctorCookie = await loginAs(DOCTOR_EMAIL, SEED_DOCTOR_PASSWORD!);
+    const recCookie = await loginAs(RECEPTIONIST_EMAIL, SEED_RECEPTIONIST_PASSWORD!);
+    const creator = await prisma.user.findFirstOrThrow({ where: { clinicId } });
+    const today = todayBelgradeIso();
+    const todayDate = new Date(`${today}T00:00:00Z`);
+    const at = (hhmm: string): Date => new Date(`${today}T${hhmm}:00Z`);
+
+    // Scheduled bookings — varied statuses.
+    for (const [hhmm, status, code] of [
+      ['07:00', 'completed', 'A'],
+      ['07:30', 'completed', 'B'],
+      ['08:00', 'completed', 'A'],
+      ['08:30', 'in_progress', null],
+      ['09:00', 'scheduled', null],
+      ['09:30', 'scheduled', null],
+      ['10:00', 'no_show', null],
+      ['10:30', 'cancelled', null],
+    ] as const) {
+      await prisma.visit.create({
+        data: {
+          clinicId,
+          patientId,
+          visitDate: todayDate,
+          scheduledFor: at(hhmm),
+          durationMinutes: 15,
+          isWalkIn: false,
+          status,
+          paymentCode: code,
+          createdBy: creator.id,
+          updatedBy: creator.id,
+        },
+      });
+    }
+
+    // Walk-ins — one completed (with payment), one still in progress.
+    await prisma.visit.create({
+      data: {
+        clinicId,
+        patientId,
+        visitDate: todayDate,
+        arrivedAt: at('11:00'),
+        isWalkIn: true,
+        durationMinutes: 5,
+        status: 'completed',
+        paymentCode: 'B',
+        createdBy: creator.id,
+        updatedBy: creator.id,
+      },
+    });
+    await prisma.visit.create({
+      data: {
+        clinicId,
+        patientId,
+        visitDate: todayDate,
+        arrivedAt: at('11:30'),
+        isWalkIn: true,
+        durationMinutes: 5,
+        status: 'in_progress',
+        createdBy: creator.id,
+        updatedBy: creator.id,
+      },
+    });
+
+    // Standalones — the shape that previously caused divergence. One
+    // completed with payment (must contribute to revenue + completed
+    // counts on both sides), one in_progress (must contribute to total
+    // on both sides), one cancelled (must contribute to total on both
+    // sides).
+    for (const [status, code] of [
+      ['completed', 'A'],
+      ['in_progress', null],
+      ['cancelled', null],
+    ] as const) {
+      await prisma.visit.create({
+        data: {
+          clinicId,
+          patientId,
+          visitDate: todayDate,
+          scheduledFor: null,
+          arrivedAt: null,
+          isWalkIn: false,
+          status,
+          paymentCode: code,
+          createdBy: creator.id,
+          updatedBy: creator.id,
+        },
+      });
+    }
+
+    const recRes = await req()
+      .get(`/api/visits/calendar/stats?date=${today}`)
+      .set('host', TENANT_HOST)
+      .set('Cookie', recCookie);
+    expect(recRes.status).toBe(200);
+
+    const docRes = await req()
+      .get(`/api/doctor/dashboard?date=${today}`)
+      .set('host', TENANT_HOST)
+      .set('Cookie', doctorCookie);
+    expect(docRes.status).toBe(200);
+
+    // Ground truth: count all non-deleted visits on today's local
+    // date directly from Prisma so the parity assertions can't both
+    // be wrong in the same way. The beforeEach wipes visits for this
+    // clinic, so dbTotal is exactly what was seeded above:
+    // 8 scheduled + 2 walk-in + 3 standalone = 13.
+    const dbTotal = await prisma.visit.count({
+      where: { clinicId, deletedAt: null, visitDate: todayDate },
+    });
+    expect(dbTotal).toBe(13);
+
+    // Receptionist and doctor must agree with the DB.
+    expect(recRes.body.total).toBe(dbTotal);
+    expect(docRes.body.stats.appointmentsTotal).toBe(dbTotal);
+    expect(docRes.body.stats.appointmentsTotal).toBe(recRes.body.total);
+
+    // Completed parity: 3 scheduled + 1 walk-in + 1 standalone = 5.
+    expect(recRes.body.completed).toBe(5);
+    expect(docRes.body.stats.visitsCompleted).toBe(5);
+    expect(docRes.body.stats.appointmentsCompleted).toBe(5);
+    expect(docRes.body.stats.appointmentsCompleted).toBe(recRes.body.completed);
+
+    // Revenue parity (whatever the seed payment-code values resolve
+    // to in this clinic, both views must report the same number).
+    expect(docRes.body.stats.paymentsCents).toBe(recRes.body.paymentTotalCents);
+
+    // The Terminet panel list is still calendar-anchored — the count
+    // changed scope but the row contents did not. 8 scheduled + 2
+    // walk-ins = 10 calendar-anchored rows surface in `appointments[]`;
+    // the 3 standalones do not.
+    expect(docRes.body.appointments.length).toBe(10);
+  });
+
   // Today's Belgrade-local date string. Matches the canonical helper
   // used in service code (apps/api/src/common/datetime.ts §
   // localDateToday) so seeded rows align with what the endpoints

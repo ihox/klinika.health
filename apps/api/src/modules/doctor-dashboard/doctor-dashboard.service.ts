@@ -80,7 +80,13 @@ export class DoctorDashboardService {
     const dayQueryStart = new Date(dayStartUtc.getTime() - 86_400_000);
     const dayQueryEnd = new Date(dayEndUtc.getTime() + 86_400_000);
 
-    const [clinic, rawAppointments, visits, openVisitRows] = await Promise.all([
+    const [
+      clinic,
+      rawAppointments,
+      visits,
+      openVisitRows,
+      dayTotalCount,
+    ] = await Promise.all([
       this.prisma.clinic.findUnique({
         where: { id: clinicId },
         select: { paymentCodes: true },
@@ -90,6 +96,12 @@ export class DoctorDashboardService {
       // into the doctor's day list with an `isWalkIn` marker on each row).
       // Post-merge (ADR-011) both flavours live in `visits`; the OR
       // predicate pulls them together in one round-trip.
+      //
+      // This list drives the "Terminet e sotit" panel CONTENT and the
+      // `appointments[]` array on the DTO — explicitly calendar-scope
+      // (standalones do not appear in the appointment book). The
+      // day-total *count* for the panel header and DayStats tile is a
+      // separate clinical-scope query below.
       this.prisma.visit.findMany({
         where: {
           clinicId,
@@ -172,6 +184,19 @@ export class DoctorDashboardService {
           },
         },
       }),
+      // Day total for `stats.appointmentsTotal` — **clinical scope**.
+      // Counts every shape on `visit_date=today` (scheduled, walk-in,
+      // standalone) so the doctor's DayStats tile and Terminet panel
+      // header agree with the receptionist's `/calendar/stats.total`.
+      // The `appointments[]` list above stays calendar-anchored —
+      // only the *count* on the header changes.
+      this.prisma.visit.count({
+        where: {
+          clinicId,
+          deletedAt: null,
+          visitDate: utcMidnight(today),
+        },
+      }),
     ]);
 
     const paymentCodes = parsePaymentCodesOrDefault(clinic?.paymentCodes);
@@ -237,7 +262,7 @@ export class DoctorDashboardService {
         paymentCode: v.paymentCode ?? null,
         createdAt: v.createdAt,
       })),
-      appointments: appointments.map((a) => ({ status: a.status })),
+      dayTotalCount,
       paymentAmount,
     });
 

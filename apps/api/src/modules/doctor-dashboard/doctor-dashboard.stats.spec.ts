@@ -67,25 +67,23 @@ describe('computeDayStats', () => {
         // No code — zero contribution.
         { paymentCode: null, createdAt: new Date(t0 + 40 * 60_000) },
       ],
-      appointments: [
-        { status: 'completed' },
-        { status: 'completed' },
-        { status: 'scheduled' },
-        { status: 'no_show' },
-      ],
+      // Clinical-scope day total — 8 visits today (5 completed above
+      // + 3 non-completed, e.g. scheduled / in_progress / no_show).
+      dayTotalCount: 8,
       paymentAmount,
     });
     expect(result.paymentsCents).toBe(1500 + 1500 + 1000);
     expect(result.visitsCompleted).toBe(5);
-    expect(result.appointmentsTotal).toBe(4);
-    expect(result.appointmentsCompleted).toBe(2);
+    expect(result.appointmentsTotal).toBe(8);
+    // appointmentsCompleted equals visitsCompleted by construction.
+    expect(result.appointmentsCompleted).toBe(5);
     expect(result.averageVisitMinutes).toBe(10);
   });
 
   it('returns zero payments and null average for an empty day', () => {
     const result = computeDayStats({
       visits: [],
-      appointments: [],
+      dayTotalCount: 0,
       paymentAmount,
     });
     expect(result).toEqual({
@@ -95,5 +93,23 @@ describe('computeDayStats', () => {
       averageVisitMinutes: null,
       paymentsCents: 0,
     });
+  });
+
+  it('appointmentsTotal reflects the clinical-scope day count, not visits.length', () => {
+    const t0 = Date.UTC(2026, 4, 14, 10, 0);
+    // Only 2 completed visits today, but 7 total in clinical scope —
+    // appointmentsTotal must reflect the day count, not the completed
+    // subset.
+    const result = computeDayStats({
+      visits: [
+        { paymentCode: 'A', createdAt: new Date(t0) },
+        { paymentCode: 'A', createdAt: new Date(t0 + 10 * 60_000) },
+      ],
+      dayTotalCount: 7,
+      paymentAmount,
+    });
+    expect(result.visitsCompleted).toBe(2);
+    expect(result.appointmentsTotal).toBe(7);
+    expect(result.appointmentsCompleted).toBe(2);
   });
 });

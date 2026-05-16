@@ -180,9 +180,23 @@ export interface DashboardOpenVisitEntry {
 export interface DashboardStats {
   /** Visits actually entered by the doctor for the day. */
   visitsCompleted: number;
-  /** Total appointments on the local day (any status, excluding deleted). */
+  /**
+   * Total visits on the local day (any status, excluding deleted) —
+   * **clinical scope**: counts every shape on `visit_date=today`
+   * (scheduled bookings, walk-ins, AND standalones). Matches the
+   * receptionist's `/calendar/stats.total` by construction so the two
+   * views report the same day total. (Pre-PR-2 of cross-view parity
+   * this was calendar-scope and excluded standalones; doctor and
+   * receptionist totals could disagree by the number of standalone
+   * rows.)
+   */
   appointmentsTotal: number;
-  /** Appointments with status `completed`. */
+  /**
+   * Visits on the local day with status `completed` — **clinical
+   * scope**. Equals `visitsCompleted` by construction; retained as a
+   * separate field for backward-compatibility with consumers. A future
+   * refactor could collapse the two.
+   */
   appointmentsCompleted: number;
   /**
    * Average minutes per completed visit, derived from the gaps

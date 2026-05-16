@@ -195,7 +195,15 @@ describe.skipIf(!ENABLED)('Doctor dashboard integration', () => {
 
     expect(res.body.stats.visitsCompleted).toBe(1);
     expect(res.body.stats.paymentsCents).toBe(1500);
-    expect(res.body.stats.appointmentsTotal).toBe(1);
+    // appointmentsTotal is clinical-scope (PR 2 of the doctor/
+    // receptionist alignment): counts every shape on visit_date=today.
+    // Seeded above: 1 scheduled future booking + 1 completed standalone
+    // (the latter has no scheduled_for and would have been excluded
+    // pre-PR-2). Both rows carry visit_date=today, so total = 2.
+    expect(res.body.stats.appointmentsTotal).toBe(2);
+    // appointmentsCompleted equals visitsCompleted by construction
+    // — both count today's completed visits across all shapes.
+    expect(res.body.stats.appointmentsCompleted).toBe(1);
   });
 
   // ------------------------------------------------------------------

@@ -1,12 +1,19 @@
 // Day-stats aggregation for the doctor's home screen.
 //
 // Pure helper kept separate from the service so the calculation can
-// be unit-tested without spinning up Prisma. The service hands in the
-// raw visit + appointment rows for the local day, and this returns
-// the four numbers that drive the stats card:
+// be unit-tested without spinning up Prisma. The service hands in
+// today's completed visits plus the day-total clinical-scope count;
+// this returns the four numbers that drive the stats card:
 //
-//   - visitsCompleted    (count of today's saved visits)
-//   - appointmentsTotal  (all non-deleted appointments)
+//   - visitsCompleted    (count of today's completed visits, clinical
+//                         scope: scheduled + walk-in + standalone)
+//   - appointmentsTotal  (count of ALL today's visits, any status,
+//                         clinical scope; matches receptionist's
+//                         /calendar/stats.total by construction)
+//   - appointmentsCompleted (equals visitsCompleted by construction;
+//                            retained for backward-compatibility with
+//                            consumers that still read it — could be
+//                            collapsed in v1.x)
 //   - averageVisitMinutes (mean gap between consecutive visit saves;
 //                          null when fewer than two visits exist)
 //   - paymentsCents      (sum of each visit's paymentCode amount in
@@ -22,14 +29,6 @@
 export interface VisitLike {
   paymentCode: string | null;
   createdAt: Date;
-}
-
-export interface AppointmentLike {
-  // Post-merge `visits.status` is TEXT with six allowed values
-  // (`scheduled | arrived | in_progress | completed | no_show | cancelled`);
-  // the stats only need to count 'completed' vs everything else, so the
-  // type is intentionally widened to `string` to accept the unified column.
-  status: string;
 }
 
 export type PaymentAmountResolver = (code: string) => number | null;
@@ -72,24 +71,35 @@ export function averageVisitMinutes(visits: VisitLike[]): number | null {
 }
 
 export function computeDayStats(opts: {
+  /** Today's completed visits (clinical scope; one row per shape). */
   visits: VisitLike[];
-  appointments: AppointmentLike[];
+  /**
+   * Count of ALL today's visits in clinical scope (any status, not
+   * deleted) — matches receptionist's `/calendar/stats.total`. The
+   * service computes this with a single `visit.count` so the doctor
+   * and receptionist views agree by construction (PR 2 of the
+   * cross-view parity fix).
+   */
+  dayTotalCount: number;
   paymentAmount: PaymentAmountResolver;
 }): DayStatsResult {
-  const { visits, appointments, paymentAmount } = opts;
+  const { visits, dayTotalCount, paymentAmount } = opts;
   let paymentsCents = 0;
   for (const v of visits) {
     if (!v.paymentCode) continue;
     const amount = paymentAmount(v.paymentCode);
     if (typeof amount === 'number') paymentsCents += amount;
   }
-  const appointmentsCompleted = appointments.filter(
-    (a) => a.status === 'completed',
-  ).length;
+  const visitsCompleted = visits.length;
   return {
-    visitsCompleted: visits.length,
-    appointmentsTotal: appointments.length,
-    appointmentsCompleted,
+    visitsCompleted,
+    appointmentsTotal: dayTotalCount,
+    // Equals visitsCompleted by construction now that both fields
+    // count today's completed visits across all shapes (scheduled,
+    // walk-in, standalone). Retained as a separate field for
+    // backward-compatibility with the DTO; a future refactor could
+    // collapse the two.
+    appointmentsCompleted: visitsCompleted,
     averageVisitMinutes: averageVisitMinutes(visits),
     paymentsCents,
   };
