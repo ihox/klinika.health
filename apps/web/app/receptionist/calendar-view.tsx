@@ -28,7 +28,6 @@ import {
   type CalendarStatsResponse,
   type VisitStatus,
   calendarClient,
-  findClosestPairing,
   isReceptionistOnlyRole,
   isVisitLockedForReceptionist,
 } from '@/lib/visits-calendar-client';
@@ -650,46 +649,6 @@ export function CalendarView(): ReactElement {
     [entries, statusFilter],
   );
 
-  // ----- Today's scheduled visits, used to gate the toolbar
-  // `[+ Pa termin]` button and to compute the closest pairing for a
-  // toolbar-driven walk-in. A receptionist may be browsing next week
-  // but the toolbar always creates a walk-in for today (the patient is
-  // here NOW), so we filter to today regardless of `weekStart`.
-  const todayScheduledVisits = useMemo<CalendarEntry[]>(
-    () =>
-      entries.filter(
-        (e) =>
-          !e.isWalkIn &&
-          e.scheduledFor != null &&
-          toLocalParts(new Date(e.scheduledFor)).date === todayIso,
-      ),
-    [entries, todayIso],
-  );
-  const todayHasBookings = useMemo(
-    () => findClosestPairing(todayScheduledVisits, now.getTime()) !== null,
-    [todayScheduledVisits, now],
-  );
-
-  // ----- Open the walk-in picker from the toolbar. Pairs to the slot
-  // closest to the current wall time (current-or-most-recent), per
-  // CLAUDE.md §13. Refuses when today has no pairable bookings — the
-  // button is also disabled in that state for visual feedback.
-  const openWalkinPicker = useCallback(() => {
-    setActionsFor(null);
-    const paired = findClosestPairing(todayScheduledVisits, now.getTime());
-    if (!paired) {
-      setToast("Asnjë termin për t'i bashkuar sot.");
-      return;
-    }
-    setPicker({
-      source: 'walkin',
-      date: todayIso,
-      time: '',
-      anchor: { x: window.innerWidth / 2, y: 180 },
-      pairedVisitId: paired.id,
-    });
-  }, [now, todayIso, todayScheduledVisits]);
-
   // ----- Open the walk-in picker paired to a specific scheduled visit.
   // The per-row "+ Pa termin" hover affordance routes here: receptionist
   // hovers an appt row → ghost in right lane → click → picker opens →
@@ -796,51 +755,19 @@ export function CalendarView(): ReactElement {
       <CalendarTopNav />
 
       <div className="mx-auto max-w-page px-page-x pt-6">
-        {/* Greeting + [+ Pacient pa termin] */}
-        <div className="mb-5 flex items-end justify-between gap-4">
-          <div>
-            <h1 className="font-display text-[28px] font-semibold tracking-[-0.025em] text-ink-strong">
-              Mirëdita.
-            </h1>
-            <p className="mt-1 text-[14px] text-ink-muted">
-              {formatLongAlbanianDate(todayIso)}
-              {settings ? ` · ${settings.general.shortName}` : ''}
-            </p>
-          </div>
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={openWalkinPicker}
-            disabled={!todayHasBookings}
-            title={
-              todayHasBookings
-                ? 'Shto pacient që erdhi pa termin'
-                : "Asnjë termin për t'i bashkuar"
-            }
-            className={cn(
-              'gap-1.5 border border-dashed border-primary bg-teal-50 text-primary-dark shadow-none hover:border-solid hover:bg-primary-soft',
-              !todayHasBookings &&
-                'cursor-not-allowed border-line opacity-50 hover:border-line hover:bg-surface-subtle',
-            )}
-          >
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 16 16"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.7"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden
-              className="text-primary"
-            >
-              <path d="M3 8a5 5 0 0 1 8.5-3.5L13 6" />
-              <path d="M13 2.5V6h-3.5" />
-              <circle cx="8" cy="11.5" r="0.8" fill="currentColor" />
-            </svg>
-            Pacient pa termin
-          </Button>
+        {/* Greeting strip. The toolbar's "Pacient pa termin" button was
+            retired — the per-row hover affordance inside the grid is
+            the canonical entry point for paired walk-ins, and the
+            filter-pill counts above the grid replace the redundant
+            top-right summary chip. */}
+        <div className="mb-5">
+          <h1 className="font-display text-[28px] font-semibold tracking-[-0.025em] text-ink-strong">
+            Mirëdita.
+          </h1>
+          <p className="mt-1 text-[14px] text-ink-muted">
+            {formatLongAlbanianDate(todayIso)}
+            {settings ? ` · ${settings.general.shortName}` : ''}
+          </p>
         </div>
 
         {/* Stats */}
@@ -893,20 +820,6 @@ export function CalendarView(): ReactElement {
               >
                 Sot
               </Button>
-            </div>
-            <div className="flex items-center gap-3 text-[11px] text-ink-muted">
-              <span className="flex items-center gap-1.5">
-                <span className="h-2.5 w-2.5 rounded-sm bg-primary" />
-                Planifikuar
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="h-2.5 w-2.5 rounded-sm bg-success" />
-                Kryer
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="h-2.5 w-2.5 rounded-sm bg-danger/80" />
-                Mungesë
-              </span>
             </div>
           </div>
 
@@ -1147,11 +1060,25 @@ function StatsRow({ stats, now }: StatsRowProps): ReactElement {
           <span>
             <strong className="text-ink font-semibold">{stats.completed}</strong> të kryera
           </span>
-          <span>
-            <strong className="text-ink font-semibold">{stats.noShow}</strong> mungesë
+          {/* In-progress is a sustained state. The receptionist sees
+              at a glance whether the doctor is mid-visit so they can
+              gauge wait time without opening any chart. Blue dot +
+              numerals borrow the dashboard `--in-progress-*` family,
+              intentionally distinct from the calendar cards' cyan
+              treatment (see design note in chart.html). */}
+          <span
+            data-testid="stat-foot-in-progress"
+            className="inline-flex items-center gap-1.5 rounded-pill border border-in-progress-soft bg-in-progress-bg px-2 py-0.5 text-[12px] text-in-progress-fg"
+          >
+            <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-in-progress-dot" />
+            <strong className="font-semibold tabular-nums">{stats.inProgress}</strong>{' '}
+            në vijim
           </span>
           <span>
             <strong className="text-ink font-semibold">{stats.scheduled}</strong> në pritje
+          </span>
+          <span>
+            <strong className="text-ink font-semibold">{stats.noShow}</strong> mungesë
           </span>
           <span>
             <strong className="text-ink font-semibold">{formatEur(stats.paymentTotalCents)}</strong>{' '}
