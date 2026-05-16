@@ -46,6 +46,7 @@ Triggers that would justify reopening this decision.
 | 009 | [DICOM storage](009-dicom-storage.md) | Accepted |
 | 010 | [Migration approach](010-migration-approach.md) | Accepted |
 | 011 | [Unified visit model](011-unified-visit-model.md) | Accepted |
+| 013 | [Standalone clinical visits](013-standalone-visits.md) | Accepted |
 
 ## Adding a new ADR
 

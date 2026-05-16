@@ -222,6 +222,14 @@ RLS policies enforce this at the database layer. If you ever need to bypass scop
 
 **Visits and appointments are one table.** As of 2026-05-14 the `appointments` table is gone — bookings and clinical visits both live in `visits`. An appointment-style row has `scheduled_for IS NOT NULL`; a clinical-only row (the doctor's "[Vizitë e re]") has `scheduled_for IS NULL`. `status` is a TEXT column with a CHECK constraint over `{scheduled, arrived, in_progress, completed, no_show, cancelled}`. The receptionist API at `/api/appointments/*` is preserved by a translation layer in `apps/api/src/modules/appointments/appointments.service.ts` (will be removed in Phase 2a). See ADR-011 for the rationale, the lifecycle, and the known deferred follow-ups.
 
+**Three visit shapes.** The unified `visits` table holds three distinct row shapes, derived from `(scheduled_for, is_walk_in, paired_with_visit_id)`:
+
+- `scheduled` — `scheduled_for IS NOT NULL`, `is_walk_in=false`. Receptionist booking. Audit action `visit.scheduled`.
+- `walk_in` — `scheduled_for IS NULL`, `is_walk_in=true`, `paired_with_visit_id` set. Walk-in paired to a scheduled booking. Audit action `visit.walkin.added`.
+- `standalone` — `scheduled_for IS NULL`, `is_walk_in=false`. Off-schedule chart entry (doctor's "+ Vizitë e re" when no booking is available, or legacy `POST /api/visits`). Audit action `visit.standalone.created`. Invisible to the calendar feed but contributes to receptionist day-stats (completed count + revenue). Same patient + active row today → `POST /api/visits/doctor-new` returns the existing visit's id instead of creating a duplicate; "active" excludes `completed`/`no_show`/`cancelled`.
+
+The pure classifier `classifyVisitShape({ scheduledFor, isWalkIn })` at `apps/api/src/modules/visits/visit-shape.ts` is the single chokepoint readers use. See ADR-013 for the policy, the legitimate use cases, and the Scenarios A–E table.
+
 ### 5.3 Audit log
 
 Every mutation on clinical or sensitive data writes an audit row:
