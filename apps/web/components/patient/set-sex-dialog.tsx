@@ -169,8 +169,8 @@ function SexOption({
         'flex flex-col items-center gap-1 rounded-md border-2 px-3 py-4 text-[13px] font-medium transition-colors',
         selected
           ? tone === 'male'
-            ? 'border-chart-male bg-chart-male-soft text-chart-male-strong'
-            : 'border-chart-female bg-chart-female-soft text-chart-female-strong'
+            ? 'border-chart-male bg-chart-male-bg text-chart-male'
+            : 'border-chart-female bg-chart-female-bg text-chart-female'
           : 'border-line bg-surface-elevated text-ink-muted hover:border-line-strong hover:text-ink',
       )}
     >

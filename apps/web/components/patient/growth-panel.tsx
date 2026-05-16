@@ -6,6 +6,7 @@ import {
   isToddlerAge,
   pointsForMetric,
   resolveSex,
+  sexChipLabel,
   toneForSex,
   type PatientSexCode,
 } from '@/lib/growth-chart';
@@ -149,12 +150,18 @@ export function GrowthPanel({
         aria-label="Diagramet e rritjes"
         className="overflow-hidden rounded-lg border border-line bg-surface-elevated shadow-xs"
       >
-        <header className="flex items-center justify-between border-b border-line px-4 py-2.5">
+        <header className="flex items-center justify-between gap-2 border-b border-line px-4 py-2.5">
           <h3 className="text-[12.5px] font-semibold text-ink-strong">
             Diagramet e rritjes · WHO
           </h3>
-          <span className="text-[11px] text-ink-faint">
-            {inWhoBand.length} {inWhoBand.length === 1 ? 'pikë' : 'pikë'}
+          {/* Sex-tinted patient chip — blue for boys, pink for girls.
+              Color alone never carries the signal: the Albanian label
+              (Djalë / Vajzë) is the non-color accessibility backup so
+              color-blind doctors get the same information. Tokens
+              `--chart-male*` / `--chart-female*` defined in globals.css
+              and mirrored in tailwind.config. */}
+          <span data-testid="growth-panel-sex-chip" data-tone={toneForSex(sex)}>
+            <SexTintedChip sex={sex} />
           </span>
         </header>
         {inWhoBand.length === 0 ? (
@@ -205,6 +212,37 @@ export function GrowthPanel({
 
 function Divider() {
   return <div aria-hidden className="h-px bg-line" />;
+}
+
+/**
+ * Patient chip rendered in the growth-panel header. Mirrors
+ * `.growth-patient-chip` in design-reference/prototype/chart.html —
+ * sex-tinted background + border driven by the canonical
+ * `--chart-male*` / `--chart-female*` tokens, with the colored dot
+ * matching the patient line color downstream. The "Djalë" / "Vajzë"
+ * label is always present so the chip never relies on color alone.
+ */
+function SexTintedChip({ sex }: { sex: PatientSexCode }): ReactElement {
+  const tone = toneForSex(sex);
+  return (
+    <span
+      className={cn(
+        'inline-flex items-center gap-1.5 rounded-pill border px-2.5 py-0.5 text-[11px] font-medium text-ink',
+        tone === 'male'
+          ? 'border-chart-male-border bg-chart-male-bg'
+          : 'border-chart-female-border bg-chart-female-bg',
+      )}
+    >
+      <span
+        aria-hidden
+        className={cn(
+          'h-[7px] w-[7px] rounded-full',
+          tone === 'male' ? 'bg-chart-male' : 'bg-chart-female',
+        )}
+      />
+      <span className="text-ink-muted font-normal">{sexChipLabel(sex)}</span>
+    </span>
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -326,7 +364,7 @@ function SparklineSvg({
     .join(' ');
 
   const lineColorStrong =
-    tone === 'male' ? 'var(--chart-male-strong)' : 'var(--chart-female-strong)';
+    tone === 'male' ? 'var(--chart-male)' : 'var(--chart-female)';
 
   return (
     <svg

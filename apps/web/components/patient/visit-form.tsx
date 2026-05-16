@@ -610,7 +610,10 @@ function VisitActionBar({
           <span
             aria-disabled="true"
             data-testid="completed-state-badge"
-            className="inline-flex h-8 cursor-default items-center gap-1.5 rounded-md border border-success-soft bg-success-bg px-3.5 text-[12.5px] font-medium text-success"
+            // Canonical status-completed palette so the disabled
+            // confirmation reads the same green as a completed visit
+            // card on the calendar / dashboard.
+            className="inline-flex h-8 cursor-default items-center gap-1.5 rounded-md border border-status-completed-border bg-status-completed-bg px-3.5 text-[12.5px] font-medium text-status-completed-fg"
           >
             <CompleteIcon />
             E përfunduar

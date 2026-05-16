@@ -113,8 +113,9 @@ test.describe('WHO growth charts', () => {
     const strokeColor = await patientLine.evaluate((el) =>
       window.getComputedStyle(el).stroke,
     );
-    // The browser resolves var(--chart-male-strong) to rgb(47,111,184).
-    expect(strokeColor.replace(/\s/g, '')).toBe('rgb(47,111,184)');
+    // The browser resolves var(--chart-male) to rgb(74,144,217)
+    // (#4A90D9 — canonical klinika v1.2 sex tint for boys).
+    expect(strokeColor.replace(/\s/g, '')).toBe('rgb(74,144,217)');
 
     // Tab between metrics — title swaps and the data table re-fills.
     await dialog.getByRole('tab', { name: 'Gjatësia' }).click();
@@ -151,8 +152,9 @@ test.describe('WHO growth charts', () => {
     const stroke = await page
       .getByTestId('patient-line')
       .evaluate((el) => window.getComputedStyle(el).stroke);
-    // var(--chart-female-strong) is rgb(184, 73, 102).
-    expect(stroke.replace(/\s/g, '')).toBe('rgb(184,73,102)');
+    // var(--chart-female) is rgb(232,114,142) (#E8728E — canonical
+    // klinika v1.2 sex tint for girls).
+    expect(stroke.replace(/\s/g, '')).toBe('rgb(232,114,142)');
   });
 
   test('empty state when no measurements recorded', async ({ page }) => {

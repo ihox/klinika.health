@@ -219,8 +219,8 @@ function SexChip({
       className={cn(
         'inline-flex items-center rounded-xs border px-2 py-px text-[11px] font-semibold',
         tone === 'male'
-          ? 'border-chart-male-soft bg-chart-male-soft text-chart-male-strong'
-          : 'border-chart-female-soft bg-chart-female-soft text-chart-female-strong',
+          ? 'border-chart-male-border bg-chart-male-bg text-chart-male'
+          : 'border-chart-female-border bg-chart-female-bg text-chart-female',
       )}
     >
       {sexChipLabel(sex)}
@@ -251,7 +251,7 @@ function Body({
   const meta = WHO_METRIC_META[metric];
   const tone = toneForSex(patientSex);
   const lineColorStrong =
-    tone === 'male' ? 'var(--chart-male-strong)' : 'var(--chart-female-strong)';
+    tone === 'male' ? 'var(--chart-male)' : 'var(--chart-female)';
 
   return (
     <div className="grid min-h-0 flex-1 grid-cols-[1fr_240px] overflow-hidden">
