@@ -1,26 +1,23 @@
-"""Klinika Access -> Postgres migration entry point.
+"""Klinika Access -> Postgres migration tool (ADR-010).
 
-Stub for slice-01. Real mapping logic lands in a later slice; see
-docs/data-migration.md.
+Thin executable shim. All logic lives in the `klinika_migrate`
+package; this file just sets up the import path and hands off to
+`klinika_migrate.cli.main`.
+
+Usage:
+  python migrate.py patients --config config.yaml [--commit]
+  python migrate.py visits   --config config.yaml [--commit]
+  python migrate.py report   --config config.yaml --output report.json
 """
 
 from __future__ import annotations
 
-import argparse
 import sys
+from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="migrate", description="Klinika Access -> Postgres migrator (stub).")
-    parser.add_argument("--config", required=True, help="Path to config.yaml")
-    parser.add_argument("--source", required=True, help="Path to .accdb file (never committed)")
-    mode = parser.add_mutually_exclusive_group(required=True)
-    mode.add_argument("--dry-run", action="store_true", help="Profile and validate without writing")
-    mode.add_argument("--execute", action="store_true", help="Apply migration to the target database")
-
-    args = parser.parse_args(argv)
-    print(f"klinika-migrate stub — config={args.config} source={args.source} dry_run={args.dry_run}")
-    return 0
+from klinika_migrate.cli import main  # noqa: E402
 
 
 if __name__ == "__main__":

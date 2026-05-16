@@ -39,3 +39,14 @@ pnpm-debug.log*
 
 # Misc local artifacts
 health.zip
+
+# Python (migration tool)
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Migration tool runtime artifacts (per-operator config + run output)
+tools/migrate/config.yaml
+tools/migrate/migration-logs/
+tools/migrate/PEDIATRIA.accdb

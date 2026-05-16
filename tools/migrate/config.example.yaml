@@ -1,0 +1,28 @@
+# Klinika migration tool — copy to config.yaml and fill in your env.
+# config.yaml is gitignored alongside .accdb (see /.gitignore).
+
+source:
+  # Absolute path to the .accdb. Never commit this file.
+  path: ~/PEDIATRIA.accdb
+  # Name of the ODBC driver as registered in odbcinst.ini.
+  # macOS (Homebrew):   MDBTools  -> /opt/homebrew/lib/libmdbodbc.so
+  # Ubuntu 24.04:       MDBTools  -> /usr/lib/x86_64-linux-gnu/libmdbodbc.so.1
+  odbc_driver: MDBTools
+
+target:
+  # Postgres DSN. Must connect as a role GRANTed platform_admin_role
+  # (BYPASSRLS) — the tool issues `SET ROLE platform_admin_role` after
+  # connect so RLS doesn't block cross-clinic inserts. In dev the local
+  # superuser already has this; on the on-prem cutover host create a
+  # dedicated klinika_migration role with the grant.
+  dsn: ${DATABASE_URL}
+  # Subdomain of the clinic receiving the data (resolved to clinic_id
+  # at runtime). DonetaMED is the only customer in v1.
+  clinic_subdomain: donetamed
+
+options:
+  # Default to dry-run. Override per-invocation with --commit.
+  dry_run: true
+  # Where the tool writes migration-report.json, orphans.jsonl, and
+  # warnings.jsonl. Created if missing.
+  log_dir: ./migration-logs
