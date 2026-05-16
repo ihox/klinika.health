@@ -92,14 +92,14 @@ model Clinic {
   updatedAt             DateTime     @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
   deletedAt             DateTime?    @map("deleted_at") @db.Timestamptz(6)
 
-  users               User[]
-  patients            Patient[]
-  visits              Visit[]
-  vertetime           Vertetim[]
-  dicomStudies        DicomStudy[]
-  prescriptionLines   PrescriptionLine[]
-  diagnosisUsages     DoctorDiagnosisUsage[]
-  visitAmendments     VisitAmendment[]
+  users             User[]
+  patients          Patient[]
+  visits            Visit[]
+  vertetime         Vertetim[]
+  dicomStudies      DicomStudy[]
+  prescriptionLines PrescriptionLine[]
+  diagnosisUsages   DoctorDiagnosisUsage[]
+  visitAmendments   VisitAmendment[]
 
   @@map("clinics")
 }
@@ -269,6 +269,15 @@ model PlatformAuditLog {
 /// migration have `legacy_id = NULL`. Patient names migrate with
 /// asterisks stripped per ADR-010.
 ///
+/// `legacy_display_name` preserves the original Access "Emri dhe
+/// mbiemri" exactly as it was — including trailing asterisks the old
+/// system used as a uniqueness workaround for duplicate names. It is
+/// the FK key used by the visit-import phase to match `Vizitat.x`
+/// back to a patient. `has_name_duplicate` is true for the ~462
+/// patients whose original display name carried one or more
+/// asterisks; the UI surfaces a "shared name" warning chip on those
+/// charts so Dr. Taulant can disambiguate by DOB/phone.
+///
 /// `alergji_tjera` ("other allergies" in Albanian) is the free-text
 /// allergy field from the Access source. Birth measurements migrate
 /// from `PL`/`Pesha lindjes` and friends; `0` in source maps to NULL.
@@ -276,6 +285,8 @@ model Patient {
   id                       String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   clinicId                 String      @map("clinic_id") @db.Uuid
   legacyId                 Int?        @map("legacy_id")
+  legacyDisplayName        String?     @map("legacy_display_name") @db.Text
+  hasNameDuplicate         Boolean     @default(false) @map("has_name_duplicate")
   firstName                String      @map("first_name")
   lastName                 String      @map("last_name")
   dateOfBirth              DateTime    @map("date_of_birth") @db.Date
@@ -296,6 +307,7 @@ model Patient {
 
   @@unique([clinicId, legacyId], name: "patient_clinic_legacy_unique")
   @@index([clinicId])
+  @@index([clinicId, legacyDisplayName], name: "patient_clinic_legacy_display_name_idx")
   @@map("patients")
 }
 
@@ -376,12 +388,12 @@ model Visit {
   /// signing slice ships without a painful migration.
   signedAt            DateTime? @map("signed_at") @db.Timestamptz(6)
 
-  clinic        Clinic              @relation(fields: [clinicId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  patient       Patient             @relation(fields: [patientId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  createdByUser User                @relation("VisitCreatedBy", fields: [createdBy], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  updatedByUser User                @relation("VisitUpdatedBy", fields: [updatedBy], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  pairedWith    Visit?              @relation("VisitWalkinPairing", fields: [pairedWithVisitId], references: [id], onDelete: SetNull, onUpdate: NoAction)
-  pairedWalkIns Visit[]             @relation("VisitWalkinPairing")
+  clinic        Clinic           @relation(fields: [clinicId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  patient       Patient          @relation(fields: [patientId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  createdByUser User             @relation("VisitCreatedBy", fields: [createdBy], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  updatedByUser User             @relation("VisitUpdatedBy", fields: [updatedBy], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  pairedWith    Visit?           @relation("VisitWalkinPairing", fields: [pairedWithVisitId], references: [id], onDelete: SetNull, onUpdate: NoAction)
+  pairedWalkIns Visit[]          @relation("VisitWalkinPairing")
   diagnoses     VisitDiagnosis[]
   vertetime     Vertetim[]
   dicomLinks    VisitDicomLink[]
