@@ -174,10 +174,21 @@ def test_load_sex_dictionary_happy_path(tmp_path: Path) -> None:
     assert d.names["Arber"] == "m"
 
 
-def test_load_sex_dictionary_rejects_schema_version_other_than_one(tmp_path: Path) -> None:
-    path = _write_dict(tmp_path / "dict.json", schema_version=2)
+def test_load_sex_dictionary_rejects_unsupported_schema_version(tmp_path: Path) -> None:
+    # 999 is far enough out that we won't accidentally collide with a
+    # legitimate future version added to SUPPORTED_SCHEMA_VERSIONS.
+    path = _write_dict(tmp_path / "dict.json", schema_version=999)
     with pytest.raises(DictionaryValidationError, match="schema_version"):
         load_sex_dictionary(path)
+
+
+def test_load_sex_dictionary_accepts_all_supported_versions(tmp_path: Path) -> None:
+    from klinika_migrate.sex_inference import SUPPORTED_SCHEMA_VERSIONS
+
+    for v in sorted(SUPPORTED_SCHEMA_VERSIONS):
+        path = _write_dict(tmp_path / f"dict_v{v}.json", schema_version=v)
+        d = load_sex_dictionary(path)
+        assert d.schema_version == v
 
 
 def test_load_sex_dictionary_rejects_wrong_culture(tmp_path: Path) -> None:

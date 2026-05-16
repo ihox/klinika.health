@@ -36,9 +36,16 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-# Hard pins. Bump SUPPORTED_SCHEMA_VERSION and add a migration path the
-# moment we ship a dictionary in a non-backwards-compatible shape.
-SUPPORTED_SCHEMA_VERSION = 1
+# Hard pins. The supported set widens every time a doctor-confirmed
+# correction round bumps the dictionary's `schema_version`. The shape
+# itself hasn't changed across v1..v2 (only the name->sex mappings),
+# so the apply path stays compatible; the version is tracked purely
+# for audit-log traceability. The moment we change the JSON *shape*
+# we'll need a real migration path here.
+SUPPORTED_SCHEMA_VERSIONS = frozenset({1, 2})
+# Latest supported version — surfaced via `SUPPORTED_SCHEMA_VERSION`
+# for backwards compatibility with any caller that still reads it.
+SUPPORTED_SCHEMA_VERSION = max(SUPPORTED_SCHEMA_VERSIONS)
 SUPPORTED_CULTURE = "albanian_kosovan"
 
 # Stable repo-relative path the audit_log records. The actual file is
@@ -107,9 +114,10 @@ def load_sex_dictionary(path: Path) -> SexDictionary:
         raise DictionaryValidationError(f"Dictionary must be a JSON object, got {type(raw).__name__}")
 
     schema_version = raw.get("schema_version")
-    if schema_version != SUPPORTED_SCHEMA_VERSION:
+    if schema_version not in SUPPORTED_SCHEMA_VERSIONS:
         raise DictionaryValidationError(
-            f"Unsupported schema_version: got {schema_version!r}, expected {SUPPORTED_SCHEMA_VERSION}"
+            f"Unsupported schema_version: got {schema_version!r}, "
+            f"expected one of {sorted(SUPPORTED_SCHEMA_VERSIONS)}"
         )
 
     culture = raw.get("culture")
