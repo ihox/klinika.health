@@ -1,7 +1,11 @@
 import { Controller, Get, HttpCode, HttpStatus, Res } from '@nestjs/common';
 import type { Response } from 'express';
 
-import { HealthService, type DeepHealthSnapshot } from './health.service';
+import {
+  HealthService,
+  type DeepHealthSnapshot,
+  type SchemaProbeResult,
+} from './health.service';
 
 @Controller('health')
 export class HealthController {
@@ -32,6 +36,24 @@ export class HealthController {
     return {
       status: ok ? 'ok' : 'degraded',
       db: { ok: db.ok, latencyMs: db.latencyMs },
+    };
+  }
+
+  /**
+   * Schema drift check. 200 if all probes pass, 503 if any column the
+   * Prisma client expects is missing from the live DB. The response
+   * lists every probe so the failing one is obvious. See
+   * {@link HealthService.probeSchema} for the rationale.
+   */
+  @Get('schema')
+  async schema(
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<{ status: 'ok' | 'drift' } & SchemaProbeResult> {
+    const result = await this.health.probeSchema();
+    res.status(result.ok ? HttpStatus.OK : HttpStatus.SERVICE_UNAVAILABLE);
+    return {
+      status: result.ok ? 'ok' : 'drift',
+      ...result,
     };
   }
 

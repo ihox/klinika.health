@@ -9,6 +9,16 @@ function makeService(overrides: Partial<HealthService> = {}): HealthService {
     readiness: vi
       .fn()
       .mockResolvedValue({ ok: true, db: { ok: true, latencyMs: 3 } }),
+    probeSchema: vi.fn().mockResolvedValue({
+      ok: true,
+      latencyMs: 4,
+      checks: {
+        'clinics.license_number': true,
+        'visits.signed_at': true,
+        'visit_amendments': true,
+        'patients.sex': true,
+      },
+    }),
     deep: vi.fn().mockResolvedValue({
       app: { ok: true, version: '0.0.0-dev', uptimeSeconds: 1 },
       db: { ok: true, latencyMs: 3 },
@@ -68,6 +78,38 @@ describe('HealthController', () => {
     const body = await controller.ready(res as never);
     expect(res.statusCode).toBe(503);
     expect(body.status).toBe('degraded');
+  });
+
+  it('GET /health/schema returns 200 when all probes pass', async () => {
+    const controller = new HealthController(makeService());
+    const res = makeRes();
+    const body = await controller.schema(res as never);
+    expect(res.statusCode).toBe(200);
+    expect(body.status).toBe('ok');
+    expect(body.checks['clinics.license_number']).toBe(true);
+  });
+
+  it('GET /health/schema returns 503 with the failing probe name on drift', async () => {
+    const controller = new HealthController(
+      makeService({
+        probeSchema: vi.fn().mockResolvedValue({
+          ok: false,
+          latencyMs: 2,
+          checks: {
+            'clinics.license_number': false,
+            'visits.signed_at': true,
+            'visit_amendments': true,
+            'patients.sex': true,
+          },
+          failedCheck: 'clinics.license_number',
+        }),
+      }),
+    );
+    const res = makeRes();
+    const body = await controller.schema(res as never);
+    expect(res.statusCode).toBe(503);
+    expect(body.status).toBe('drift');
+    expect(body.failedCheck).toBe('clinics.license_number');
   });
 
   it('GET /health/deep returns the full snapshot', async () => {
