@@ -590,16 +590,15 @@ function AppointmentRow({
         className={cn(
           // Canonical status colors (klinika v1.2). Default = neutral
           // (scheduled, no extra signal yet); completed → green;
-          // no_show → amber (NOT red); in_progress/arrived → cyan;
-          // cancelled → red. The "current/next" patient highlight
-          // keeps the teal ring so the doctor's eye lands on the
-          // active row regardless of status.
+          // no_show → amber (NOT red); in_progress/arrived → cyan.
+          // The "current/next" patient highlight keeps the teal ring
+          // so the doctor's eye lands on the active row regardless
+          // of status.
           'h-2 w-2 rounded-full bg-line-strong',
           isDone && 'bg-status-completed-solid',
           isMissed && 'bg-status-no-show-solid',
           a.status === 'in_progress' && 'bg-status-in-progress-solid',
           a.status === 'arrived' && 'bg-status-in-progress-solid',
-          a.status === 'cancelled' && 'bg-status-cancelled-solid',
           (isCurrent || isNext) && 'bg-primary ring-4 ring-primary-soft',
         )}
         aria-hidden
@@ -679,8 +678,6 @@ function statusToReason(
   switch (status) {
     case 'completed':
       return 'E kryer';
-    case 'cancelled':
-      return 'E anuluar';
     case 'no_show':
       return 'Mungesë';
     case 'arrived':

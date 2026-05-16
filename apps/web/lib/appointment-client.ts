@@ -5,7 +5,7 @@ import { apiFetch, apiUrl } from './api';
 //   apps/api/src/modules/appointments/appointments.dto.ts
 // ---------------------------------------------------------------------------
 
-export type AppointmentStatus = 'scheduled' | 'completed' | 'no_show' | 'cancelled';
+export type AppointmentStatus = 'scheduled' | 'completed' | 'no_show';
 
 export interface AppointmentDto {
   id: string;
@@ -37,7 +37,6 @@ export interface AppointmentStatsResponse {
   completed: number;
   noShow: number;
   scheduled: number;
-  cancelled: number;
   firstStart: string | null;
   lastEnd: string | null;
   nextAppointment: {

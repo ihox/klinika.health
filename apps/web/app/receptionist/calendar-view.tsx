@@ -383,7 +383,6 @@ export function CalendarView(): ReactElement {
           in_progress: 'i shënuar si në vizitë',
           completed: 'i shënuar si kryer',
           no_show: 'i shënuar si mungesë',
-          cancelled: 'i anuluar',
         };
         setToast(`Termini ${labels[next] ?? 'u përditësua'}.`);
       } catch {
@@ -1079,9 +1078,9 @@ function StatsRow({ stats, now }: StatsRowProps): ReactElement {
               slot; arrived = waiting in the waiting room). Card-level
               differentiation is preserved via canonical colors —
               indigo for scheduled, cyan for arrived — but the summary
-              stat collapses them so chip math sums to total minus
-              cancelled across every visit-shape mix. Matches the
-              doctor's DayStats "X në pritje" by construction. */}
+              stat collapses them so chip math sums to total across
+              every visit-shape mix. Matches the doctor's DayStats "X
+              në pritje" by construction. */}
           <span data-testid="stat-foot-waiting">
             <strong className="text-ink font-semibold">{stats.scheduled + stats.arrived}</strong>{' '}
             në pritje
@@ -1220,7 +1219,7 @@ function CalendarSkeleton(): ReactElement {
 
 interface UnmarkedDropdownProps {
   items: CalendarEntry[];
-  onMark: (a: CalendarEntry, status: 'completed' | 'no_show' | 'cancelled') => void;
+  onMark: (a: CalendarEntry, status: 'completed' | 'no_show') => void;
 }
 
 function UnmarkedDropdown({ items, onMark }: UnmarkedDropdownProps): ReactElement {
@@ -1273,16 +1272,6 @@ function UnmarkedDropdown({ items, onMark }: UnmarkedDropdownProps): ReactElemen
                   }}
                 >
                   Mungoi
-                </button>
-                <button
-                  type="button"
-                  className="rounded border border-line-strong bg-surface-elevated px-2 py-1 text-[11.5px] text-ink-strong hover:bg-surface-subtle"
-                  onClick={() => {
-                    onMark(a, 'cancelled');
-                    setOpen(false);
-                  }}
-                >
-                  Anulluar
                 </button>
               </div>
             </div>

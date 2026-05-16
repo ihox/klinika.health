@@ -18,7 +18,7 @@ export interface VisitDto {
   clinicId: string;
   patientId: string;
   visitDate: string;
-  /** Lifecycle status (scheduled / arrived / in_progress / completed / no_show / cancelled). */
+  /** Lifecycle status (scheduled / arrived / in_progress / completed / no_show). */
   status: string;
   complaint: string | null;
   feedingNotes: string | null;

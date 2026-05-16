@@ -101,7 +101,6 @@ const STATUS_LABEL: Record<VisitStatus, string> = {
   in_progress: 'Në vizitë',
   completed: 'Kryer',
   no_show: 'Mungesë',
-  cancelled: 'Anuluar',
 };
 
 // Canonical status → Tailwind class triplet (bg + border-color + text).
@@ -120,8 +119,6 @@ const STATUS_CARD_CLASSES: Record<VisitStatus, string> = {
     'bg-status-completed-bg border-status-completed-border text-status-completed-fg',
   no_show:
     'bg-status-no-show-bg border-status-no-show-border text-status-no-show-fg',
-  cancelled:
-    'bg-status-cancelled-bg border-status-cancelled-border text-status-cancelled-fg opacity-85',
 };
 
 // Canonical status → left-accent color used for the 3px stripe on the
@@ -133,7 +130,6 @@ const STATUS_LEFT_ACCENT: Record<VisitStatus, string> = {
   in_progress: 'var(--status-in-progress-solid)',
   completed:   'var(--status-completed-solid)',
   no_show:     'var(--status-no-show-solid)',
-  cancelled:   'var(--status-cancelled-solid)',
 };
 
 // Default duration assumed for walk-in rows missing one (legacy data
@@ -1074,15 +1070,14 @@ function ScheduledCard({
   const inlineHeight = entry.durationMinutes * PX_PER_MIN;
 
   const isNoShow = entry.status === 'no_show';
-  const isCancelled = entry.status === 'cancelled';
   const isCompleted = entry.status === 'completed';
   const { hovered, onMouseEnter, onMouseLeave } = useDelayedHover(
     CARD_HOVER_DELAY_MS,
   );
 
   // Drag-and-drop reschedule: only the `scheduled` status is movable.
-  // arrived/in-progress/completed/no-show/cancelled cards stay
-  // anchored (you don't reschedule a patient who's already arrived).
+  // arrived/in-progress/completed/no-show cards stay anchored (you
+  // don't reschedule a patient who's already arrived).
   // Walk-ins live in the right lane and aren't reachable here.
   // Pinned (out-of-range) cards: skip — the receptionist should
   // re-open them via the status menu to fix the time, not slide them
@@ -1209,10 +1204,10 @@ function ScheduledCard({
         zIndex: pinned ? 6 : 3,
         ...(pinned ? { opacity: 0.88 } : {}),
         // Past-day fade — pipeline statuses dim slightly so the day's
-        // resolved (completed/no_show/cancelled) cards read as the
-        // primary signal. Their canonical bg already does the heavy
-        // lifting visually.
-        ...(isPast && !isCompleted && !isNoShow && !isCancelled && !pinned
+        // resolved (completed/no_show) cards read as the primary
+        // signal. Their canonical bg already does the heavy lifting
+        // visually.
+        ...(isPast && !isCompleted && !isNoShow && !pinned
           ? { opacity: 0.85, filter: 'saturate(0.78)' }
           : {}),
         ...(isDragging ? { zIndex: 100, transform: dragTransform, opacity: 0.35 } : {}),
@@ -1226,7 +1221,6 @@ function ScheduledCard({
         className={cn(
           'flex-1 min-w-0 truncate text-[12px] font-semibold leading-[1.2] tracking-[-0.005em]',
           isNoShow && 'line-through decoration-1',
-          isCancelled && 'line-through decoration-1',
         )}
       >
         {pinPrefix ? (
@@ -1325,7 +1319,6 @@ function WalkInCard({
   const height = walkInHeightPx(entry.durationMinutes);
 
   const isNoShow = entry.status === 'no_show';
-  const isCancelled = entry.status === 'cancelled';
   const isCompleted = entry.status === 'completed';
   const { hovered, onMouseEnter, onMouseLeave } = useDelayedHover(
     CARD_HOVER_DELAY_MS,
@@ -1391,7 +1384,7 @@ function WalkInCard({
         borderLeftColor: STATUS_LEFT_ACCENT[entry.status],
         zIndex: pinned ? 6 : 3,
         ...(pinned ? { opacity: 0.88 } : {}),
-        ...(isPast && !isCompleted && !isNoShow && !isCancelled && !pinned
+        ...(isPast && !isCompleted && !isNoShow && !pinned
           ? { opacity: 0.9, filter: 'saturate(0.82)' }
           : {}),
       }}
@@ -1401,7 +1394,6 @@ function WalkInCard({
         className={cn(
           'flex-1 min-w-0 truncate text-[12px] font-semibold leading-[1.2] tracking-[-0.005em]',
           isNoShow && 'line-through decoration-1',
-          isCancelled && 'line-through decoration-1',
         )}
       >
         {pinPrefix ? (

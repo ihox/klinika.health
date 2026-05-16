@@ -16,7 +16,6 @@ import type { CalendarEntry, VisitStatus } from '@/lib/visits-calendar-client';
  *   - scheduled   → scheduled / arrived / in_progress (in-pipeline)
  *   - completed   → completed only
  *   - no_show     → no_show only
- *   - cancelled   → cancelled only
  *
  * `scheduled` collapses the three active statuses because the design's
  * legend (top toolbar) uses the same teal swatch for all three — the
@@ -27,8 +26,7 @@ export type StatusFilter =
   | 'all'
   | 'scheduled'
   | 'completed'
-  | 'no_show'
-  | 'cancelled';
+  | 'no_show';
 
 const PIPELINE_STATUSES: ReadonlySet<VisitStatus> = new Set([
   'scheduled',
@@ -53,13 +51,11 @@ export function countByStatusFilter(
     scheduled: 0,
     completed: 0,
     no_show: 0,
-    cancelled: 0,
   };
   for (const e of entries) {
     if (PIPELINE_STATUSES.has(e.status)) counts.scheduled += 1;
     else if (e.status === 'completed') counts.completed += 1;
     else if (e.status === 'no_show') counts.no_show += 1;
-    else if (e.status === 'cancelled') counts.cancelled += 1;
   }
   return counts;
 }
@@ -106,14 +102,6 @@ const PILLS: readonly PillSpec[] = [
       'border-status-no-show-border bg-status-no-show-bg text-status-no-show-fg',
     activeClass: 'border-transparent bg-status-no-show-solid text-white',
     dotClass: 'bg-status-no-show-solid',
-  },
-  {
-    filter: 'cancelled',
-    label: 'Anuluar',
-    inactiveClass:
-      'border-status-cancelled-border bg-status-cancelled-bg text-status-cancelled-fg',
-    activeClass: 'border-transparent bg-status-cancelled-solid text-white',
-    dotClass: 'bg-status-cancelled-solid',
   },
 ];
 

@@ -19,7 +19,6 @@ export const VISIT_STATUSES = [
   'in_progress',
   'completed',
   'no_show',
-  'cancelled',
 ] as const;
 export type VisitStatus = (typeof VISIT_STATUSES)[number];
 
@@ -29,12 +28,11 @@ export type VisitStatus = (typeof VISIT_STATUSES)[number];
  * also gates here on the server.
  */
 export const ALLOWED_TRANSITIONS: Record<VisitStatus, readonly VisitStatus[]> = {
-  scheduled: ['arrived', 'no_show', 'cancelled'],
+  scheduled: ['arrived', 'no_show'],
   arrived: ['in_progress', 'no_show'],
   in_progress: ['completed'],
   completed: ['arrived'],
   no_show: ['arrived'],
-  cancelled: ['arrived'],
 };
 
 export function isTransitionAllowed(from: VisitStatus, to: VisitStatus): boolean {
@@ -46,13 +44,13 @@ export function isTransitionAllowed(from: VisitStatus, to: VisitStatus): boolean
  * Statuses the receptionist UI offers as pairing targets for a walk-in.
  * The server-side rule (visits-calendar.service.ts createWalkin) is
  * laxer — it only rejects `completed`. The UI is more conservative on
- * purpose: pairing to a `no_show` or `cancelled` row is technically
- * allowed by the server (the row has scheduled_for set, and isn't
- * finalized as completed) but doesn't match the operational picture
- * ("a patient who arrives while another is being seen"). Hiding those
- * rows in the per-row hover + skipping them in the toolbar
- * `[+ Pa termin]` closest-pairing keeps the UI from suggesting
- * pairings that would technically succeed but feel off.
+ * purpose: pairing to a `no_show` row is technically allowed by the
+ * server (the row has scheduled_for set, and isn't finalized as
+ * completed) but doesn't match the operational picture ("a patient
+ * who arrives while another is being seen"). Hiding those rows in the
+ * per-row hover + skipping them in the toolbar `[+ Pa termin]`
+ * closest-pairing keeps the UI from suggesting pairings that would
+ * technically succeed but feel off.
  */
 export const PAIRABLE_STATUSES: ReadonlySet<VisitStatus> = new Set<VisitStatus>([
   'scheduled',
@@ -153,7 +151,6 @@ export interface CalendarStatsResponse {
   standaloneCount: number;
   completed: number;
   noShow: number;
-  cancelled: number;
   arrived: number;
   inProgress: number;
   firstStart: string | null;

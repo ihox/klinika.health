@@ -36,7 +36,6 @@ const STATUS_LABEL: Record<VisitStatus, string> = {
   in_progress: 'Në vizitë',
   completed: 'Kryer',
   no_show: 'Mungesë',
-  cancelled: 'Anuluar',
 };
 
 // Albanian copy for each transition target, matching status-menu.html.
@@ -49,25 +48,24 @@ const TRANSITION_LABEL: Record<VisitStatus, string> = {
   in_progress: 'Filloi vizita',
   completed: 'Shëno si kryer',
   no_show: 'Mungoi',
-  cancelled: 'Anulo',
 };
 
 // "Rikthe te paraqitur" overrides the default `arrived` label when the
-// current row is in no_show or cancelled — semantically the same
-// action ("set to arrived"), but the verb in Albanian reads
-// "restore to arrived" rather than "mark as arrived" so the
-// receptionist's intent is unmistakable.
+// current row is in no_show — semantically the same action ("set to
+// arrived"), but the verb in Albanian reads "restore to arrived"
+// rather than "mark as arrived" so the receptionist's intent is
+// unmistakable.
 function transitionLabel(from: VisitStatus, to: VisitStatus): string {
-  if (to === 'arrived' && (from === 'no_show' || from === 'cancelled')) {
+  if (to === 'arrived' && from === 'no_show') {
     return 'Rikthe te paraqitur';
   }
   return TRANSITION_LABEL[to];
 }
 
-// Which transitions render as "danger" (red). Mungoi + Anulo are the
-// two emotionally-loaded actions; everything else is neutral.
+// Which transitions render as "danger" (red). Mungoi is the only
+// emotionally-loaded action; everything else is neutral.
 function isDangerTransition(to: VisitStatus): boolean {
-  return to === 'no_show' || to === 'cancelled';
+  return to === 'no_show';
 }
 
 // Build the ordered list of menu rows for the current entry.
@@ -80,10 +78,6 @@ function buildRows(entry: CalendarEntry): EntryAction[] {
   }
 
   // Status transitions follow the server's ALLOWED_TRANSITIONS table.
-  // Walk-ins skip the 'cancelled' transition out of scheduled (they
-  // can't be cancelled — they never had a slot to cancel from),
-  // which is moot since walk-ins start at 'arrived' anyway and
-  // 'scheduled → cancelled' never fires.
   const allowed = ALLOWED_TRANSITIONS[entry.status] ?? [];
   for (const to of allowed) {
     rows.push({ kind: 'transition', to });
@@ -264,7 +258,6 @@ export function AppointmentActions({
                 row={row}
                 label={transitionLabel(entry.status, row.to)}
                 danger={isDangerTransition(row.to)}
-                muted={row.to === 'cancelled'}
                 focused={focusIdx === idx}
                 onMouseEnter={() => setFocusIdx(idx)}
                 onClick={() => onAction(row)}
@@ -307,7 +300,6 @@ interface MenuRowProps {
   row: EntryAction;
   label: string;
   danger?: boolean;
-  muted?: boolean;
   focused: boolean;
   onClick: () => void;
   onMouseEnter: () => void;
@@ -316,7 +308,6 @@ interface MenuRowProps {
 function MenuRow({
   label,
   danger,
-  muted,
   focused,
   onClick,
   onMouseEnter,
@@ -329,11 +320,10 @@ function MenuRow({
       onMouseEnter={onMouseEnter}
       className={cn(
         'flex items-center gap-2.5 px-3.5 py-2.5 text-left text-[13px] transition',
-        focused && !danger && !muted && 'bg-surface-subtle',
+        focused && !danger && 'bg-surface-subtle',
         focused && danger && 'bg-danger-bg',
-        !focused && !danger && !muted && 'hover:bg-surface-subtle',
+        !focused && !danger && 'hover:bg-surface-subtle',
         danger && 'text-danger hover:bg-danger-bg',
-        muted && !danger && 'text-ink-muted',
       )}
     >
       {label}

@@ -16,8 +16,7 @@ export type DashboardAppointmentStatus =
   | 'arrived'
   | 'in_progress'
   | 'completed'
-  | 'no_show'
-  | 'cancelled';
+  | 'no_show';
 
 export interface DashboardAppointment {
   id: string;
