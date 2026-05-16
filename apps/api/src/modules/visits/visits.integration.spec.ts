@@ -225,8 +225,16 @@ describe.skipIf(!ENABLED)('Visits integration', () => {
       });
       expect(row!.status).toBe('in_progress');
 
+      // Slice G: VisitsService.create() — the legacy POST /api/visits
+      // path and the doctor-new standalone fallback — emits the
+      // standalone-created action so retrospective queries can count
+      // standalones per doctor. See ADR-013.
       const audits = await prisma.auditLog.findMany({
-        where: { clinicId, resourceId: res.body.visit.id, action: 'visit.created' },
+        where: {
+          clinicId,
+          resourceId: res.body.visit.id,
+          action: 'visit.standalone.created',
+        },
       });
       expect(audits.length).toBe(1);
     });
@@ -623,11 +631,14 @@ describe.skipIf(!ENABLED)('Visits integration', () => {
       expect(row!.pairedWithVisitId).toBeNull();
       expect(row!.status).toBe('in_progress');
 
+      // Standalone fallback flows through `VisitsService.create()`,
+      // which after Slice G emits the standalone-created action
+      // (ADR-013).
       const audits = await prisma.auditLog.findMany({
         where: {
           clinicId,
           resourceId: res.body.visit.id,
-          action: 'visit.created',
+          action: 'visit.standalone.created',
         },
       });
       expect(audits.length).toBe(1);

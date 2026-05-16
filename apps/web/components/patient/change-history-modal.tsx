@@ -191,7 +191,13 @@ interface HistoryEventProps {
 }
 
 function HistoryEvent({ entry, isLatest, isLast }: HistoryEventProps): ReactElement {
-  const isCreation = entry.action === 'visit.created';
+  // ADR-013 Slice G: both `visit.created` (legacy rows) and
+  // `visit.standalone.created` (post-Slice-G standalone visits) are
+  // creation events for the chart's history timeline — they share
+  // the same dot, ribbon, and "Krijuar" badge styling.
+  const isCreation =
+    entry.action === 'visit.created' ||
+    entry.action === 'visit.standalone.created';
   return (
     <li className="grid grid-cols-[24px_1fr] gap-3.5">
       <div className="flex flex-col items-center">
@@ -219,7 +225,7 @@ function HistoryEvent({ entry, isLatest, isLast }: HistoryEventProps): ReactElem
               {redactIp(entry.ipAddress)}
             </span>
           ) : null}
-          {entry.action !== 'visit.created' && entry.action !== 'visit.updated' ? (
+          {!isCreation && entry.action !== 'visit.updated' ? (
             <span className="ml-1 rounded-full bg-warning-bg px-2 py-0.5 text-[10.5px] font-medium uppercase tracking-[0.05em] text-warning">
               {actionLabel(entry.action)}
             </span>

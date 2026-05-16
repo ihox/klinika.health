@@ -104,9 +104,16 @@ export class VisitsService {
       include: { diagnoses: { include: { code: true } } },
     });
 
+    // Slice G / ADR-013 — `VisitsService.create()` is the standalone
+    // visit creation path (legacy `POST /api/visits` and the
+    // `createDoctorNew` standalone fallback both flow through here).
+    // The action label distinguishes these rows from scheduled
+    // bookings (`visit.scheduled`) and paired walk-ins
+    // (`visit.walkin.added`) in retrospective queries. Pre-PR rows
+    // tagged `visit.created` keep that label — append-only audit log.
     await this.audit.record({
       ctx,
-      action: 'visit.created',
+      action: 'visit.standalone.created',
       resourceType: 'visit',
       resourceId: created.id,
       changes: [
@@ -615,7 +622,20 @@ export class VisitsService {
         clinicId,
         resourceType: 'visit',
         resourceId: id,
-        action: { in: ['visit.created', 'visit.updated', 'visit.deleted', 'visit.restored'] },
+        // `visit.standalone.created` is the post-Slice-G label for
+        // creations through `VisitsService.create()`. Pre-PR rows
+        // still carry `visit.created`; the filter accepts both so the
+        // chart's change-history modal keeps surfacing the creation
+        // event for legacy visits. See ADR-013.
+        action: {
+          in: [
+            'visit.created',
+            'visit.standalone.created',
+            'visit.updated',
+            'visit.deleted',
+            'visit.restored',
+          ],
+        },
       },
       orderBy: { timestamp: 'desc' },
       take: limit,

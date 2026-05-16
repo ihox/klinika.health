@@ -288,7 +288,17 @@ export interface DoctorNewVisitResult {
 
 export interface VisitHistoryEntryDto {
   id: string;
-  action: 'visit.created' | 'visit.updated' | 'visit.deleted' | 'visit.restored';
+  /**
+   * Audit-log action surfaced on the change-history modal. Includes
+   * the legacy `visit.created` (pre-Slice G; pre-PR standalone rows)
+   * and the post-Slice-G `visit.standalone.created` (ADR-013).
+   */
+  action:
+    | 'visit.created'
+    | 'visit.standalone.created'
+    | 'visit.updated'
+    | 'visit.deleted'
+    | 'visit.restored';
   timestamp: string;
   userId: string;
   userDisplayName: string;

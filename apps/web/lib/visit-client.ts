@@ -80,7 +80,18 @@ export interface VisitHistoryFieldChange {
 
 export interface VisitHistoryEntryDto {
   id: string;
-  action: 'visit.created' | 'visit.updated' | 'visit.deleted' | 'visit.restored';
+  /**
+   * Audit-log action surfaced on the change-history modal. `visit.created`
+   * is the pre-Slice-G label retained for legacy rows;
+   * `visit.standalone.created` is the post-Slice-G label for new
+   * standalone visit creations (ADR-013).
+   */
+  action:
+    | 'visit.created'
+    | 'visit.standalone.created'
+    | 'visit.updated'
+    | 'visit.deleted'
+    | 'visit.restored';
   timestamp: string;
   userId: string;
   userDisplayName: string;
