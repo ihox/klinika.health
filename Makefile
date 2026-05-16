@@ -14,7 +14,7 @@ DATABASE_URL ?= postgresql://klinika:klinika@localhost:5432/klinika?schema=publi
 
 COMPOSE := docker compose -f infra/compose/docker-compose.dev.yml --project-directory .
 
-.PHONY: dev stop logs ps db-migrate db-reset db-studio db-seed refresh-api lint typecheck test test-e2e build clean
+.PHONY: dev stop logs ps db-migrate db-reset db-studio db-seed refresh-api lint typecheck test test-migrate test-e2e build clean
 
 dev:
 	$(COMPOSE) up -d --build
@@ -68,6 +68,18 @@ typecheck:
 
 test:
 	pnpm -r test
+
+# Python migration-tool tests. Uses tools/migrate/.venv if present;
+# otherwise falls back to a system python3.12+. The venv is created on
+# first run by `python3.12 -m venv tools/migrate/.venv && \
+# tools/migrate/.venv/bin/pip install -r tools/migrate/requirements-dev.txt`.
+test-migrate:
+	@cd tools/migrate && \
+	if [ -x .venv/bin/python ]; then PY=.venv/bin/python; \
+	else PY=$$(command -v python3.12 || command -v python3.14 || command -v python3.13); \
+	     [ -n "$$PY" ] || { echo "no python3.12+ found"; exit 1; }; \
+	fi; \
+	"$$PY" -m pytest tests/ -v
 
 test-e2e:
 	pnpm --filter @klinika/web test:e2e
