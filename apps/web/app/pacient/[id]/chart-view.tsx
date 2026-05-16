@@ -222,6 +222,24 @@ export function ChartView({ patientId, initialVisitId }: Props): ReactElement {
     };
   }, [patientId]);
 
+  // Bridge the auto-save's status-transition side-effect back into
+  // chart state. When the doctor types in a scheduled/arrived visit
+  // for the first time, the autosave PATCHes the row AND transitions
+  // status to in_progress; without this bridge the form's
+  // `visit.status` would stay stale and the "Përfundo vizitën" CTA
+  // wouldn't surface, plus the chart bundle wouldn't refresh so the
+  // visits list / right column would lag. `refresh` is stable across
+  // renders (useCallback), so the registration runs once per patient.
+  useEffect(() => {
+    useAutoSaveStore.getState().setOnVisitChanged((updated) => {
+      setActiveVisit((current) => (current?.id === updated.id ? updated : current));
+      void refresh();
+    });
+    return () => {
+      useAutoSaveStore.getState().setOnVisitChanged(null);
+    };
+  }, [refresh]);
+
   // ← / → arrow keys jump between visits. Skip when focus is on an
   // editable element so the doctor's free-text typing isn't hijacked.
   useEffect(() => {

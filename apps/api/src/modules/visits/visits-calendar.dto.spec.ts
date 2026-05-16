@@ -219,7 +219,6 @@ describe('isTransitionAllowed (and ALLOWED_TRANSITIONS)', () => {
   });
 
   it('rejects illegal jumps', () => {
-    expect(isTransitionAllowed('scheduled', 'in_progress')).toBe(false);
     expect(isTransitionAllowed('scheduled', 'completed')).toBe(false);
     expect(isTransitionAllowed('arrived', 'cancelled')).toBe(false);
     expect(isTransitionAllowed('in_progress', 'no_show')).toBe(false);
@@ -233,8 +232,20 @@ describe('isTransitionAllowed (and ALLOWED_TRANSITIONS)', () => {
     expect(isTransitionAllowed('arrived', 'completed')).toBe(true);
   });
 
+  it('accepts the autosave fast-path: scheduled → in_progress', () => {
+    // The doctor opens a pre-booked patient's chart and types in a
+    // clinical field. Autosave flips status straight from scheduled
+    // to in_progress without the waiting-room `arrived` stop.
+    expect(isTransitionAllowed('scheduled', 'in_progress')).toBe(true);
+  });
+
   it('matrix mirrors the user-facing spec (ADR-011 / Phase 2a)', () => {
-    expect(ALLOWED_TRANSITIONS.scheduled).toEqual(['arrived', 'no_show', 'cancelled']);
+    expect(ALLOWED_TRANSITIONS.scheduled).toEqual([
+      'arrived',
+      'in_progress',
+      'no_show',
+      'cancelled',
+    ]);
     expect(ALLOWED_TRANSITIONS.arrived).toEqual([
       'in_progress',
       'completed',

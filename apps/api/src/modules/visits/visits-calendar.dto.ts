@@ -31,8 +31,8 @@ export const VisitStatusSchema = z.enum(VISIT_STATUSES);
  * Allowed status transitions. The keys are the current state; values are
  * the states the row may transition into.
  *
- *   scheduled  → arrived | no_show | cancelled
- *   arrived    → in_progress | no_show
+ *   scheduled  → arrived | in_progress | no_show | cancelled
+ *   arrived    → in_progress | completed | no_show
  *   in_progress → completed
  *   completed  → arrived           ("Anulo statusin" — reopen a finished visit for edits)
  *   no_show    → arrived           ("Rikthe te paraqitur" — patient did show up after all)
@@ -41,7 +41,13 @@ export const VisitStatusSchema = z.enum(VISIT_STATUSES);
  * Anything not listed is rejected with HTTP 400 and reason='invalid_transition'.
  */
 export const ALLOWED_TRANSITIONS: Record<VisitStatus, readonly VisitStatus[]> = {
-  scheduled: ['arrived', 'no_show', 'cancelled'],
+  // scheduled → in_progress: the doctor opens the chart for a
+  // pre-booked patient and starts typing in a clinical field. The
+  // autosave flips status straight to in_progress without an
+  // explicit `arrived` stop — the doctor is documenting, the
+  // patient is in front of them, the waiting-room state is moot.
+  // See `auto-save status transition` in the patient chart flow.
+  scheduled: ['arrived', 'in_progress', 'no_show', 'cancelled'],
   // arrived → completed (Phase 2b): the doctor's home "Shëno si kryer"
   // quick-action closes a visit straight from `arrived` when the
   // doctor confirms the patient was seen without going through an

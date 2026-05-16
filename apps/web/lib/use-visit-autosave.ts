@@ -11,6 +11,7 @@ import {
   visitToFormValues,
   visitClient,
 } from './visit-client';
+import { calendarClient } from './visits-calendar-client';
 import { clearBackup, writeBackup } from './visit-backup';
 
 // ---------------------------------------------------------------------------
@@ -36,6 +37,15 @@ export type AutoSaveState = 'idle' | 'dirty' | 'saving' | 'saved-flash' | 'error
 export interface AutoSaveStore {
   // Per-visit fields. `null` when no visit is loaded.
   visitId: string | null;
+  /**
+   * Tracked lifecycle status — sourced from `visit.status` at load
+   * time and re-stamped whenever a status-transition side-effect
+   * succeeds. The autosave coordinator reads this to decide whether
+   * to fast-path scheduled/arrived → in_progress on the first
+   * clinical edit; without it we'd re-fire the transition on every
+   * save. `null` when no visit is loaded.
+   */
+  visitStatus: string | null;
   /** The last-known server-side values. */
   serverValues: VisitFormValues | null;
   /** The user's working copy — what the inputs render. */
@@ -48,6 +58,16 @@ export interface AutoSaveStore {
   unsavedFields: string[];
   failureDialogOpen: boolean;
 
+  /**
+   * Callback the chart-shell registers to re-sync its `activeVisit`
+   * state after the autosave triggers a status transition (e.g.
+   * scheduled → in_progress on first clinical edit). Without this,
+   * the form's `visit.status` prop would stay stale and the
+   * "Përfundo vizitën" button wouldn't surface until manual refresh.
+   * `null` when no consumer is attached.
+   */
+  onVisitChanged: ((visit: VisitDto) => void) | null;
+
   // Imperative actions (called from the form + lifecycle hooks).
   setVisit: (visit: VisitDto | null) => void;
   setValues: (values: VisitFormValues) => void;
@@ -59,6 +79,8 @@ export interface AutoSaveStore {
   dismissDialog: () => void;
   /** Mark the visit dirty manually (used by the unit tests). */
   markDirty: () => void;
+  /** Register/clear the chart-shell's post-status-change callback. */
+  setOnVisitChanged: (cb: ((visit: VisitDto) => void) | null) => void;
   /** Reset everything (used when switching patients/visits). */
   reset: () => void;
 }
@@ -71,12 +93,14 @@ const internal: InternalState = { inflight: null, pendingValues: null };
 
 export const useAutoSaveStore = create<AutoSaveStore>((set, get) => ({
   visitId: null,
+  visitStatus: null,
   serverValues: null,
   values: null,
   state: 'idle',
   lastSavedAt: null,
   unsavedFields: [],
   failureDialogOpen: false,
+  onVisitChanged: null,
 
   setVisit: (visit) => {
     if (!visit) {
@@ -84,6 +108,7 @@ export const useAutoSaveStore = create<AutoSaveStore>((set, get) => ({
       internal.pendingValues = null;
       set({
         visitId: null,
+        visitStatus: null,
         serverValues: null,
         values: null,
         state: 'idle',
@@ -96,6 +121,7 @@ export const useAutoSaveStore = create<AutoSaveStore>((set, get) => ({
     const values = visitToFormValues(visit);
     set({
       visitId: visit.id,
+      visitStatus: visit.status,
       serverValues: values,
       values,
       state: 'idle',
@@ -104,6 +130,8 @@ export const useAutoSaveStore = create<AutoSaveStore>((set, get) => ({
       failureDialogOpen: false,
     });
   },
+
+  setOnVisitChanged: (cb) => set({ onVisitChanged: cb }),
 
   setValues: (values) => {
     const { serverValues, state } = get();
@@ -143,12 +171,14 @@ export const useAutoSaveStore = create<AutoSaveStore>((set, get) => ({
     internal.pendingValues = null;
     set({
       visitId: null,
+      visitStatus: null,
       serverValues: null,
       values: null,
       state: 'idle',
       lastSavedAt: null,
       unsavedFields: [],
       failureDialogOpen: false,
+      onVisitChanged: null,
     });
   },
 }));
@@ -180,6 +210,9 @@ async function runSave(
   internal.inflight = (async () => {
     try {
       set({ state: 'saving' });
+      // Snapshot the pre-PATCH status so we know whether to fire the
+      // arrived/scheduled → in_progress fast-path after the save lands.
+      const statusBefore = get().visitStatus;
       const res = await visitClient.update(visitId, patch);
       const next = visitToFormValues(res.visit);
       const after = get().values;
@@ -202,6 +235,40 @@ async function runSave(
         window.setTimeout(() => {
           if (get().state === 'saved-flash') set({ state: 'idle' });
         }, 1_000);
+      }
+
+      // First clinical edit on a scheduled or arrived visit transitions
+      // the row to `in_progress` so the receptionist's calendar shows
+      // the doctor is actively documenting. We fire this AFTER the
+      // PATCH lands because:
+      //   - The transition is a side-effect of the doctor's first
+      //     real edit (the PATCH already produced one); a passive
+      //     chart open with no typing leaves the row scheduled.
+      //   - The status PATCH returns CalendarEntryDto, not the full
+      //     visit, so we follow up with `visitClient.getOne` to
+      //     re-seed the form / chart-shell with the new status. This
+      //     refresh is what makes the "Përfundo vizitën" CTA appear
+      //     once the visit is in_progress.
+      // Errors are swallowed: the doctor's clinical data is already
+      // saved; a failed transition is a downstream nuisance, not a
+      // data-loss event. Logged for ops via the console.
+      if (statusBefore === 'scheduled' || statusBefore === 'arrived') {
+        try {
+          await calendarClient.changeStatus(visitId, 'in_progress');
+          const refreshed = await visitClient.getOne(visitId);
+          // Re-seed the store's tracked status so subsequent saves
+          // skip the transition path. The serverValues / values are
+          // already in sync from the PATCH response above.
+          set({ visitStatus: refreshed.visit.status });
+          const cb = get().onVisitChanged;
+          cb?.(refreshed.visit);
+        } catch (err) {
+          console.warn('autosave status transition failed', {
+            visitId,
+            from: statusBefore,
+            message: err instanceof Error ? err.message : 'unknown',
+          });
+        }
       }
     } catch (err) {
       const dirtyFields = listDirtyFields(serverValues, values);
