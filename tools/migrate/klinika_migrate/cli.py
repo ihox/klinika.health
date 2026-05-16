@@ -2,9 +2,11 @@
 
 Subcommands:
 
-  patients --config CFG [--dry-run|--commit]   STEP 2
-  visits   --config CFG [--dry-run|--commit]   STEP 3 (not yet implemented)
-  report   --config CFG --output REPORT.json   STEP 4 (not yet implemented)
+  patients              --config CFG [--dry-run|--commit]
+  visits                --config CFG [--dry-run|--commit] [--skip-preflight]
+  report                --config CFG [--output REPORT.json]
+  apply-sex-inference   --config CFG [--dry-run|--commit] [--dictionary PATH]
+                                                                  (Slice 17.5)
 
 The flag defaults follow ADR-010's safety convention: `--dry-run` is
 on unless the operator explicitly opts into `--commit`.
@@ -23,7 +25,19 @@ from .logger import get_logger
 from .patients import import_patients
 from .reconciliation import reconcile
 from .reports import JsonlWriter, write_summary_report
+from .sex_inference import (
+    DICTIONARY_REPO_PATH,
+    SUPPORTED_CULTURE,
+    SUPPORTED_SCHEMA_VERSION,
+    apply_sex_dictionary,
+    load_sex_dictionary,
+)
 from .visits import import_visits, run_preflight_checks
+
+# Default dictionary path: resolve `tools/migrate/klinika_migrate/data/...`
+# relative to this file so the CLI works regardless of where the
+# operator runs it from.
+DEFAULT_SEX_DICTIONARY = Path(__file__).resolve().parent / "data" / "sex_dictionary_albanian_kosovan.json"
 
 
 def _add_common_args(parser: argparse.ArgumentParser) -> None:
@@ -68,6 +82,21 @@ def _build_parser() -> argparse.ArgumentParser:
         type=Path,
         default=None,
         help="Output path. Defaults to <log_dir>/migration-report.json",
+    )
+
+    sex_inf = sub.add_parser(
+        "apply-sex-inference",
+        help="Slice 17.5: backfill patients.sex from a versioned name dictionary",
+    )
+    _add_common_args(sex_inf)
+    sex_inf.add_argument(
+        "--dictionary",
+        type=Path,
+        default=DEFAULT_SEX_DICTIONARY,
+        help=(
+            "Path to the versioned sex dictionary JSON. Defaults to the "
+            "committed albanian_kosovan dictionary inside the package."
+        ),
     )
 
     return parser
@@ -190,6 +219,49 @@ def cmd_visits(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_apply_sex_inference(args: argparse.Namespace) -> int:
+    cfg = load_config(args.config)
+    dry_run = _resolve_dry_run(args, default=cfg.options.dry_run)
+    log_dir = cfg.options.log_dir
+    logger = get_logger(log_dir)
+    dictionary = load_sex_dictionary(args.dictionary)
+    logger.info(
+        "cli.apply_sex_inference",
+        extra={
+            "dry_run": dry_run,
+            "clinic": cfg.target.clinic_subdomain,
+            "dictionary_path": str(args.dictionary),
+            "schema_version": dictionary.schema_version,
+            "culture": dictionary.culture,
+            "name_count": dictionary.name_count,
+        },
+    )
+
+    with Database.open(cfg.target.dsn, dry_run=dry_run) as db:
+        clinic_id = db.resolve_clinic_id(cfg.target.clinic_subdomain)
+        migration_user_id = db.resolve_migration_user_id(clinic_id, cfg.target.migration_user_email)
+        report = apply_sex_dictionary(
+            db,
+            clinic_id=clinic_id,
+            migration_user_id=migration_user_id,
+            dictionary=dictionary,
+            dry_run=dry_run,
+            logger=logger,
+        )
+
+    print("\nSex inference applied:")
+    print(f"  schema_version:           {report.schema_version}")
+    print(f"  culture:                  {report.culture}")
+    print(f"  name_count:               {report.name_count}")
+    print(f"  patients_updated_male:    {report.patients_updated_male}")
+    print(f"  patients_updated_female:  {report.patients_updated_female}")
+    print(f"  patients_left_null:       {report.patients_left_null}")
+    print(f"  audit_log_id:             {report.audit_log_id}")
+    print(f"  dictionary_repo_path:     {DICTIONARY_REPO_PATH}")
+    print(f"  dry_run:                  {dry_run}")
+    return 0
+
+
 def cmd_report(args: argparse.Namespace) -> int:
     cfg = load_config(args.config)
     log_dir = cfg.options.log_dir
@@ -228,6 +300,8 @@ def main(argv: list[str] | None = None) -> int:
             return cmd_visits(args)
         case "report":
             return cmd_report(args)
+        case "apply-sex-inference":
+            return cmd_apply_sex_inference(args)
         case _:
             parser.print_help(sys.stderr)
             return 2

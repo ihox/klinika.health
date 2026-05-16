@@ -15,6 +15,7 @@ audit decorator behaviour in apps/api/src/modules/visits/visits.service.ts.
 from __future__ import annotations
 
 import contextlib
+import json
 from typing import Any, Iterator
 
 import psycopg
@@ -259,6 +260,108 @@ class Database:
             "birth_length_cm": p.birth_length_cm,
             "alergji_tjera": p.alergji_tjera,
             "phone": p.phone,
+        }
+        with self._conn.cursor() as cursor:
+            cursor.execute(sql, params)
+            row = cursor.fetchone()
+        assert row is not None  # noqa: S101 — INSERT...RETURNING always yields a row
+        return str(row["id"])
+
+    def apply_sex_for_names(
+        self,
+        clinic_id: str,
+        first_names: list[str],
+        sex: str,
+    ) -> int:
+        """Set sex=? on migrated patients whose first_name is in the list.
+
+        Only touches rows where:
+          * clinic_id matches (multi-tenant safety, also enforced by RLS)
+          * legacy_id IS NOT NULL (manually-created patients are off-limits)
+          * sex IS NULL (never overwrite an explicit value)
+          * sex_inferred = false (the column default; flips to true here)
+          * deleted_at IS NULL (don't resurrect soft-deleted rows)
+
+        Returns the number of rows updated. Empty `first_names` is a no-op
+        and returns 0 — the SQL `= ANY(%s::text[])` clause would still be
+        valid with an empty array, but skipping the round-trip is cleaner.
+        """
+        if not first_names:
+            return 0
+        if sex not in ("m", "f"):
+            raise ValueError(f"sex must be 'm' or 'f', got {sex!r}")
+        sql = """
+            UPDATE patients
+            SET sex = %(sex)s::patient_sex,
+                sex_inferred = true,
+                updated_at = now()
+            WHERE clinic_id = %(clinic_id)s
+              AND legacy_id IS NOT NULL
+              AND sex IS NULL
+              AND sex_inferred = false
+              AND deleted_at IS NULL
+              AND first_name = ANY(%(names)s::text[])
+        """
+        with self._conn.cursor() as cursor:
+            cursor.execute(sql, {"sex": sex, "clinic_id": clinic_id, "names": first_names})
+            return cursor.rowcount
+
+    def count_null_sex_after_apply(self, clinic_id: str) -> int:
+        """How many migrated rows still have sex IS NULL post-apply.
+
+        Drives the `patients_left_null` count in the audit_log payload
+        — Dr. Taulant's manual-review bucket.
+        """
+        with self._conn.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT COUNT(*) AS n FROM patients
+                WHERE clinic_id = %s
+                  AND legacy_id IS NOT NULL
+                  AND sex IS NULL
+                  AND deleted_at IS NULL
+                """,
+                (clinic_id,),
+            )
+            row = cursor.fetchone()
+        return int(row["n"]) if row else 0
+
+    def write_sex_inference_audit_log(
+        self,
+        *,
+        clinic_id: str,
+        user_id: str,
+        payload: dict[str, Any],
+    ) -> str:
+        """Append one audit_log row summarising the inference run.
+
+        resource_type='clinic' because this is a clinic-wide operation;
+        resource_id=clinic_id keeps the row queryable by clinic. The
+        migration tool synthesises non-PHI placeholders for the NOT-NULL
+        operational columns (ip_address, user_agent, session_id) since
+        it runs offline.
+        """
+        sql = """
+            INSERT INTO audit_log (
+              clinic_id, user_id, action, resource_type, resource_id,
+              changes, ip_address, user_agent, session_id
+            )
+            VALUES (
+              %(clinic_id)s, %(user_id)s, 'sex_inference_applied',
+              'clinic', %(clinic_id)s,
+              %(changes)s::jsonb,
+              '127.0.0.1'::inet,
+              'klinika-migrate/slice-17.5',
+              %(session_id)s
+            )
+            RETURNING id
+        """
+        session_id = f"sex-inference-{payload.get('schema_version')}-{payload.get('culture')}"
+        params: dict[str, Any] = {
+            "clinic_id": clinic_id,
+            "user_id": user_id,
+            "changes": json.dumps(payload, ensure_ascii=False),
+            "session_id": session_id,
         }
         with self._conn.cursor() as cursor:
             cursor.execute(sql, params)

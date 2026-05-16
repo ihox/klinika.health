@@ -24,6 +24,28 @@
   - Reference: print.integration.spec.ts has inline notes on the
     specific blocker
 
+## Recurring operations
+- Sex-inference dictionary correction loop (Slice 17.5 follow-up):
+  the apply step marks Claude-inferred sex with
+  `patients.sex_inferred = true`. When Dr. Taulant manually corrects
+  one of those rows in the UI, the row should flip to
+  `sex_inferred = false` (the doctor's value, no longer inferred).
+  Quarterly:
+    1. Query rows where `legacy_id IS NOT NULL` and
+       `sex_inferred = false` and `sex IS NOT NULL` — these are
+       either manual originals OR doctor-corrected inferences.
+       Cross-reference against the `sex_inference_applied` audit_log
+       row to isolate the corrections.
+    2. For each correction, look at first_name in
+       `tools/migrate/klinika_migrate/data/sex_dictionary_albanian_kosovan.json`.
+       If the dictionary disagrees with the doctor's value, update
+       the dictionary entry, bump `schema_version`, document the
+       change in a one-line ADR or commit message.
+    3. Re-apply: future migrated patients (other clinics, or a
+       redo) benefit from the corrections.
+  Effort: ~30 min/quarter. Automatable later — for v1 it's a manual
+  pass to keep the dictionary honest.
+
 ## Cleanup tasks
 - Stale slice-XX branches (slice-01 through slice-16) can be pruned
 - E2E mocks in apps/web/tests/e2e/{booking,kalendari}.spec.ts still mock the
