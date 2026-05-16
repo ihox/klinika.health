@@ -17,6 +17,12 @@ import type { PatientFullDto } from './patients.dto';
 export interface ChartVisitDto {
   id: string;
   visitDate: string;
+  /**
+   * Lifecycle status. Used by the chart shell to identify today's
+   * active visit (scheduled/arrived/in_progress) so the form mounts
+   * on it and the "+ Vizitë e re" button knows whether to hide.
+   */
+  status: string;
   primaryDiagnosis: {
     code: string;
     latinDescription: string;

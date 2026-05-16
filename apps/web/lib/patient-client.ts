@@ -89,6 +89,12 @@ export interface SoftDeleteResponse {
 export interface ChartVisitDto {
   id: string;
   visitDate: string;
+  /**
+   * Lifecycle status (scheduled / arrived / in_progress / completed /
+   * no_show / cancelled). Used by the chart shell to identify today's
+   * active visit and gate the "+ Vizitë e re" affordance.
+   */
+  status: string;
   primaryDiagnosis: {
     code: string;
     latinDescription: string;

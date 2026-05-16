@@ -1,6 +1,7 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 
 import { AuditLogService } from '../../common/audit/audit-log.service';
+import { localDateToday, utcMidnight } from '../../common/datetime';
 import type { RequestContext } from '../../common/request-context/request-context';
 import { hasClinicalAccess } from '../../common/request-context/role-helpers';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -46,20 +47,31 @@ export class PatientChartService {
     });
     if (!patient) throw new NotFoundException('Pacienti nuk u gjet.');
 
+    const today = utcMidnight(localDateToday());
     const [visits, vertetime] = await Promise.all([
       this.prisma.visit.findMany({
         // Post-merge (ADR-011): the unified `visits` table holds both
         // scheduled appointments and clinical visits. The chart's
         // history list is "vizita të mëparshme" — rows the doctor has
         // actually touched — so we narrow to `status IN ('completed',
-        // 'in_progress')`. Scheduled / arrived / no_show / cancelled
-        // rows are receptionist-controlled lifecycle states and must
-        // not leak into the clinical history.
+        // 'in_progress')`. Scheduled / arrived rows from today are
+        // included so the doctor's chart surfaces today's booking as
+        // the editable form (eliminates the "+ Vizitë e re" conflict
+        // when a receptionist has already scheduled the patient).
+        // No_show / cancelled rows stay excluded — those are
+        // receptionist-controlled lifecycle states and the doctor's
+        // history list should not surface them.
         where: {
           clinicId,
           patientId,
           deletedAt: null,
-          status: { in: ['completed', 'in_progress'] },
+          OR: [
+            { status: { in: ['completed', 'in_progress'] } },
+            {
+              status: { in: ['scheduled', 'arrived'] },
+              visitDate: today,
+            },
+          ],
         },
         orderBy: [{ visitDate: 'desc' }, { createdAt: 'desc' }],
         include: {
@@ -95,6 +107,7 @@ export class PatientChartService {
     const visitDtos: ChartVisitDto[] = visits.map((v) => ({
       id: v.id,
       visitDate: dateToIso(v.visitDate),
+      status: v.status,
       primaryDiagnosis: v.diagnoses[0]
         ? {
             code: v.diagnoses[0].code.code,

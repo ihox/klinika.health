@@ -34,6 +34,7 @@ import {
   type PatientChartDto,
   type PatientFullDto,
 } from '@/lib/patient-client';
+import { todayIsoLocal } from '@/lib/appointment-client';
 import { openPrintFrame } from '@/lib/print-frame';
 import { useAutoSaveStore } from '@/lib/use-visit-autosave';
 import { printUrls, type VertetimDto } from '@/lib/vertetim-client';
@@ -141,10 +142,17 @@ export function ChartView({ patientId, initialVisitId }: Props): ReactElement {
     }
   }, [data, patientId, router]);
 
-  // Default to the most-recent visit when no explicit visit id is in
-  // the URL. Reflect the resolved visit in the URL via the History
-  // API (NOT `router.replace`) so the chart shell doesn't re-mount
-  // across visit switches — Next.js treats `/pacient/:id` and
+  // Default to today's active visit when one exists, else fall back to
+  // the most-recent visit. The chart bundle returns scheduled/arrived
+  // rows for today alongside the completed/in_progress history; the
+  // doctor's chart should mount the editable form on the active visit
+  // so they can document without misclicking "+ Vizitë e re" (which
+  // would route them back here via the same-patient guard). When the
+  // URL already carries a visit id we honour it — that's a deep link.
+  //
+  // Reflect the resolved visit in the URL via the History API (NOT
+  // `router.replace`) so the chart shell doesn't re-mount across visit
+  // switches — Next.js treats `/pacient/:id` and
   // `/pacient/:id/vizita/:vid` as separate routes, but they render
   // the same `ChartView`, so we keep all client state in place.
   useEffect(() => {
@@ -157,9 +165,9 @@ export function ChartView({ patientId, initialVisitId }: Props): ReactElement {
       ? data.visits.find((v) => v.id === activeVisitId)
       : null;
     if (!matches) {
-      const first = data.visits[0]!;
-      setActiveVisitId(first.id);
-      replaceUrl(`/pacient/${patientId}/vizita/${first.id}`);
+      const preferred = pickInitialVisit(data.visits);
+      setActiveVisitId(preferred.id);
+      replaceUrl(`/pacient/${patientId}/vizita/${preferred.id}`);
     }
   }, [data, activeVisitId, patientId]);
 
@@ -1033,6 +1041,40 @@ function UnknownErrorChart(): ReactElement {
 // =========================================================================
 // Helpers
 // =========================================================================
+
+/**
+ * "Active" today = a visit row dated today (Europe/Belgrade) whose
+ * status sits in the pre-finish band (`scheduled`/`arrived`/
+ * `in_progress`). The chart shell uses this predicate twice:
+ *   1. Auto-selecting the editable visit on chart open.
+ *   2. Hiding the "+ Vizitë e re" affordance — there's nothing valid
+ *      to do until the active visit is closed (same-patient guard
+ *      from `POST /api/visits/doctor-new` would refuse anyway).
+ * Completed-today rows do NOT count: legitimate follow-up case.
+ */
+export function findActiveVisitToday(
+  visits: readonly ChartVisitDto[],
+  today: string = todayIsoLocal(),
+): ChartVisitDto | null {
+  for (const v of visits) {
+    if (v.visitDate !== today) continue;
+    if (v.status === 'scheduled' || v.status === 'arrived' || v.status === 'in_progress') {
+      return v;
+    }
+  }
+  return null;
+}
+
+/**
+ * Pick the visit the chart should mount on at load. Prefers today's
+ * active visit when one exists; falls back to the newest visit
+ * (`visits[0]`) when the patient has only past or completed visits.
+ * The caller has already confirmed the list is non-empty.
+ */
+export function pickInitialVisit(visits: readonly ChartVisitDto[]): ChartVisitDto {
+  const active = findActiveVisitToday(visits);
+  return active ?? visits[0]!;
+}
 
 function isEditableTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
