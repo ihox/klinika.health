@@ -22,7 +22,6 @@ export const VISIT_STATUSES = [
   'in_progress',
   'completed',
   'no_show',
-  'cancelled',
 ] as const;
 export type VisitStatus = (typeof VISIT_STATUSES)[number];
 export const VisitStatusSchema = z.enum(VISIT_STATUSES);
@@ -31,12 +30,11 @@ export const VisitStatusSchema = z.enum(VISIT_STATUSES);
  * Allowed status transitions. The keys are the current state; values are
  * the states the row may transition into.
  *
- *   scheduled  → arrived | in_progress | no_show | cancelled
+ *   scheduled  → arrived | in_progress | no_show
  *   arrived    → in_progress | completed | no_show
  *   in_progress → completed
  *   completed  → arrived           ("Anulo statusin" — reopen a finished visit for edits)
  *   no_show    → arrived           ("Rikthe te paraqitur" — patient did show up after all)
- *   cancelled  → arrived           ("Rikthe te paraqitur" — booking restored)
  *
  * Anything not listed is rejected with HTTP 400 and reason='invalid_transition'.
  */
@@ -47,7 +45,7 @@ export const ALLOWED_TRANSITIONS: Record<VisitStatus, readonly VisitStatus[]> = 
   // explicit `arrived` stop — the doctor is documenting, the
   // patient is in front of them, the waiting-room state is moot.
   // See `auto-save status transition` in the patient chart flow.
-  scheduled: ['arrived', 'in_progress', 'no_show', 'cancelled'],
+  scheduled: ['arrived', 'in_progress', 'no_show'],
   // arrived → completed (Phase 2b): the doctor's home "Shëno si kryer"
   // quick-action closes a visit straight from `arrived` when the
   // doctor confirms the patient was seen without going through an
@@ -57,7 +55,6 @@ export const ALLOWED_TRANSITIONS: Record<VisitStatus, readonly VisitStatus[]> = 
   in_progress: ['completed'],
   completed: ['arrived'],
   no_show: ['arrived'],
-  cancelled: ['arrived'],
 };
 
 export function isTransitionAllowed(from: VisitStatus, to: VisitStatus): boolean {
@@ -305,7 +302,6 @@ export interface CalendarStatsResponse {
   standaloneCount: number;
   completed: number;
   noShow: number;
-  cancelled: number;
   arrived: number;
   inProgress: number;
   /** First start (any visit) of the day as ISO instant. */

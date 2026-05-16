@@ -58,9 +58,9 @@ export class PatientChartService {
         // included so the doctor's chart surfaces today's booking as
         // the editable form (eliminates the "+ Vizitë e re" conflict
         // when a receptionist has already scheduled the patient).
-        // No_show / cancelled rows stay excluded — those are
-        // receptionist-controlled lifecycle states and the doctor's
-        // history list should not surface them.
+        // No_show rows stay excluded — that's a receptionist-controlled
+        // lifecycle state and the doctor's history list should not
+        // surface it.
         where: {
           clinicId,
           patientId,

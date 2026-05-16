@@ -26,7 +26,6 @@ const DASHBOARD_APPOINTMENT_STATUSES: readonly DashboardAppointmentStatus[] = [
   'in_progress',
   'completed',
   'no_show',
-  'cancelled',
 ];
 
 /**

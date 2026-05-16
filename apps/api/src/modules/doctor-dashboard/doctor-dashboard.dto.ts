@@ -42,8 +42,7 @@ export type DashboardAppointmentStatus =
   | 'arrived'
   | 'in_progress'
   | 'completed'
-  | 'no_show'
-  | 'cancelled';
+  | 'no_show';
 
 /**
  * The slim row in `appointments[]`.
@@ -80,8 +79,8 @@ export interface DashboardAppointmentDto {
    *             arrived}) whose anchor is in the future, OR an arrived
    *             walk-in whose anchor has passed but who hasn't been
    *             seen yet (patient is waiting in the room).
-   * `past`    — done/cancelled/no-show, or scheduled with the time
-   *             window already ended.
+   * `past`    — done/no-show, or scheduled with the time window
+   *             already ended.
    * `upcoming`— any other still-pending row.
    */
   position: 'current' | 'next' | 'upcoming' | 'past';

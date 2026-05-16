@@ -107,8 +107,8 @@ export class PatientsService {
    * For each patient id, return the date of their most recent
    * COMPLETED visit in this clinic. Used by the patient search to
    * power the receptionist's recency dot. Soft-deleted visits are
-   * filtered; non-completed statuses don't count (a no-show or
-   * cancelled booking isn't a "visit" from the recency perspective).
+   * filtered; non-completed statuses don't count (a no-show booking
+   * isn't a "visit" from the recency perspective).
    */
   private async fetchLastVisitMap(
     clinicId: string,

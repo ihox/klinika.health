@@ -15,7 +15,7 @@
 //
 //   A visit is UNLOCKED for the receptionist when
 //     - it's today AND status ∈ {scheduled, arrived, in_progress,
-//       no_show, cancelled}, OR
+//       no_show}, OR
 //     - it's a future day (any status).
 //
 // Doctor and clinic_admin are NEVER restricted by this rule — call

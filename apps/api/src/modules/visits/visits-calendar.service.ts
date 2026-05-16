@@ -176,7 +176,6 @@ export class VisitsCalendarService {
       in_progress: 0,
       completed: 0,
       no_show: 0,
-      cancelled: 0,
     };
     let walkInCount = 0;
     let standaloneCount = 0;
@@ -228,7 +227,6 @@ export class VisitsCalendarService {
       inProgress: counts.in_progress,
       completed: counts.completed,
       noShow: counts.no_show,
-      cancelled: counts.cancelled,
       firstStart: firstStart ? firstStart.toISOString() : null,
       lastEnd: lastEnd ? lastEnd.toISOString() : null,
       paymentTotalCents,
@@ -652,7 +650,7 @@ export class VisitsCalendarService {
 
     // Side-effects keyed off the target state:
     //   - arrived: stamp `arrived_at` if it isn't set yet (first transition).
-    //   - in_progress / completed / no_show / cancelled: leave timestamps as-is.
+    //   - in_progress / completed / no_show: leave timestamps as-is.
     // Walk-ins always already have arrived_at set; bookings get it on
     // the first scheduled→arrived (or completed→arrived rewind).
     const data: Prisma.VisitUpdateInput = { status: to };
@@ -989,8 +987,8 @@ export class VisitsCalendarService {
     const dayEndUtc = new Date(localClockToUtc(forDate, '23:59').getTime() + 86_400_000);
 
     // Candidates: every active booking on the day (not walk-ins, not
-    // completed / cancelled / no-show — once a visit is finalized the
-    // sibling row would lose its "shared row" anchor).
+    // completed / no-show — once a visit is finalized the sibling row
+    // would lose its "shared row" anchor).
     const candidates = await this.prisma.visit.findMany({
       where: {
         clinicId,

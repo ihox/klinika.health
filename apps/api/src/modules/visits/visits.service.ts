@@ -168,10 +168,9 @@ export class VisitsService {
     // If this patient already has an active visit today, do NOT create
     // a parallel row — return the existing visit so the frontend can
     // route the doctor into it. "Active" = pre-finish statuses
-    // (scheduled / arrived / in_progress). Completed / no_show /
-    // cancelled today do NOT trigger the guard — a morning-completed
-    // patient who walks back in this afternoon legitimately gets a
-    // fresh visit row.
+    // (scheduled / arrived / in_progress). Completed / no_show today
+    // do NOT trigger the guard — a morning-completed patient who walks
+    // back in this afternoon legitimately gets a fresh visit row.
     const activeVisitToday = await this.prisma.visit.findFirst({
       where: {
         clinicId,

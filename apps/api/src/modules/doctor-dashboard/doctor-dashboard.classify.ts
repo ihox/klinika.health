@@ -41,9 +41,8 @@ export interface ClassifyAppointmentInput {
  *                already passed (the patient is waiting in the room).
  *                A scheduled booking only counts when its anchor is in
  *                the future.
- *   `past`     — completed / cancelled / no_show, or a scheduled
- *                booking whose time window has ended without a
- *                transition.
+ *   `past`     — completed / no_show, or a scheduled booking whose
+ *                time window has ended without a transition.
  *   `upcoming` — everything else still pending.
  */
 export function classifyAppointments(
@@ -86,7 +85,6 @@ export function classifyAppointments(
       position = 'next';
     } else if (
       a.status === 'completed' ||
-      a.status === 'cancelled' ||
       a.status === 'no_show'
     ) {
       position = 'past';
