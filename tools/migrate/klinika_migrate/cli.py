@@ -22,6 +22,7 @@ from .db import Database
 from .logger import get_logger
 from .patients import import_patients
 from .reports import JsonlWriter, write_summary_report
+from .visits import import_visits, run_preflight_checks
 
 
 def _add_common_args(parser: argparse.ArgumentParser) -> None:
@@ -46,8 +47,13 @@ def _build_parser() -> argparse.ArgumentParser:
     patients = sub.add_parser("patients", help="Import Pacientet (STEP 2)")
     _add_common_args(patients)
 
-    visits = sub.add_parser("visits", help="Import Vizitat (STEP 3, not yet implemented)")
+    visits = sub.add_parser("visits", help="Import Vizitat (STEP 3)")
     _add_common_args(visits)
+    visits.add_argument(
+        "--skip-preflight",
+        action="store_true",
+        help="Skip the ADR-012 cardinality probes (only safe on confirmed re-runs)",
+    )
 
     report = sub.add_parser("report", help="Re-emit reconciliation report (STEP 4, not yet implemented)")
     report.add_argument("--config", required=True, type=Path)
@@ -108,9 +114,69 @@ def cmd_patients(args: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_visits(_args: argparse.Namespace) -> int:
-    print("visits import — implemented in STEP 3", file=sys.stderr)
-    return 2
+def cmd_visits(args: argparse.Namespace) -> int:
+    cfg = load_config(args.config)
+    dry_run = _resolve_dry_run(args, default=cfg.options.dry_run)
+    log_dir = cfg.options.log_dir
+    logger = get_logger(log_dir)
+    logger.info(
+        "cli.visits",
+        extra={
+            "dry_run": dry_run,
+            "source": str(cfg.source.path),
+            "clinic": cfg.target.clinic_subdomain,
+            "skip_preflight": bool(args.skip_preflight),
+        },
+    )
+
+    with Database.open(cfg.target.dsn, dry_run=dry_run) as db:
+        clinic_id = db.resolve_clinic_id(cfg.target.clinic_subdomain)
+        migration_user_id = db.resolve_migration_user_id(clinic_id, cfg.target.migration_user_email)
+        patient_lookup = db.load_patient_lookup(clinic_id)
+        logger.info(
+            "cli.visits.lookup_loaded",
+            extra={"patient_lookup_size": len(patient_lookup)},
+        )
+        if not patient_lookup:
+            raise RuntimeError(
+                f"No migrated patients in clinic {cfg.target.clinic_subdomain}. "
+                "Run `migrate.py patients --commit` first."
+            )
+
+        with AccessReader.open(cfg.source.path, cfg.source.odbc_driver) as reader:
+            if not args.skip_preflight:
+                run_preflight_checks(reader, logger)
+            with JsonlWriter(log_dir / "visits-warnings.jsonl") as warnings, \
+                 JsonlWriter(log_dir / "visits-orphans.jsonl") as orphans:
+                report = import_visits(
+                    reader,
+                    db,
+                    clinic_id,
+                    migration_user_id,
+                    patient_lookup,
+                    dry_run=dry_run,
+                    logger=logger,
+                    warnings_writer=warnings,
+                    orphans_writer=orphans,
+                )
+
+        write_summary_report(
+            log_dir / "migration-report-visits.json",
+            phase="visits",
+            dry_run=dry_run,
+            visits=report,
+        )
+
+    logger.info(
+        "cli.visits.done",
+        extra={
+            "imported": report.imported,
+            "skipped_orphan": report.skipped_orphan,
+            "parse_warnings": report.parse_warnings,
+            "log_dir": str(log_dir),
+        },
+    )
+    return 0
 
 
 def cmd_report(_args: argparse.Namespace) -> int:

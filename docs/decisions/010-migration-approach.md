@@ -1,7 +1,10 @@
 # ADR 010: Migration approach (Access → Postgres, legacy_id-based idempotency)
 
 Date: 2026-05-13
-Status: Accepted
+Status: Accepted (partially superseded by [ADR-012](./012-vizitat-field-mapping-correction.md))
+
+> **Note (2026-05-16):** The source-data findings below mis-identified `Vizitat.x` as the payment code and `Vizitat.ALERT` as the patient FK. A re-audit against `MSysRelationships` showed the opposite. The high-level migration approach in this ADR (Python at `tools/migrate/`, idempotent legacy_id upserts, JSON reconciliation report, no checkpointing) still stands; only the column-role mapping is superseded. See [ADR-012](./012-vizitat-field-mapping-correction.md) for the corrected table.
+>
 
 ## Context
 

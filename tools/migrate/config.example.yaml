@@ -19,6 +19,10 @@ target:
   # Subdomain of the clinic receiving the data (resolved to clinic_id
   # at runtime). DonetaMED is the only customer in v1.
   clinic_subdomain: donetamed
+  # Email of the user to attribute every migrated visit to
+  # (created_by / updated_by). Omit to default to the oldest active
+  # doctor in the clinic.
+  migration_user_email: taulant.shala@klinika.health
 
 options:
   # Default to dry-run. Override per-invocation with --commit.

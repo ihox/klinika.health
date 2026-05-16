@@ -15,30 +15,15 @@ audit decorator behaviour in apps/api/src/modules/visits/visits.service.ts.
 from __future__ import annotations
 
 import contextlib
-from dataclasses import dataclass
-from datetime import date
-from decimal import Decimal
 from typing import Any, Iterator
 
 import psycopg
 from psycopg import Connection
 from psycopg.rows import dict_row
 
+from .models import PatientUpsertInput, VisitUpsertInput
 
-@dataclass(frozen=True)
-class PatientUpsertInput:
-    legacy_id: int
-    legacy_display_name: str
-    has_name_duplicate: bool
-    first_name: str
-    last_name: str
-    date_of_birth: date
-    place_of_birth: str | None
-    birth_weight_g: int | None
-    birth_head_circumference_cm: Decimal | None
-    birth_length_cm: Decimal | None
-    alergji_tjera: str | None
-    phone: str | None
+__all__ = ["Database", "PatientUpsertInput", "VisitUpsertInput"]
 
 
 class Database:
@@ -83,6 +68,71 @@ class Database:
         if not row:
             raise RuntimeError(f"Clinic not found by subdomain: {subdomain}")
         return str(row["id"])
+
+    def resolve_migration_user_id(self, clinic_id: str, email: str | None) -> str:
+        """Resolve the user id to credit as created_by/updated_by on migrated visits.
+
+        If `email` is provided, look that user up in the target clinic.
+        Otherwise pick the oldest active user with role='doctor' — for
+        DonetaMED that is Dr. Taulant, by construction. Fails loudly if
+        no doctor exists (the migration target must be seeded first).
+        """
+        with self._conn.cursor() as cursor:
+            if email:
+                cursor.execute(
+                    """
+                    SELECT id FROM users
+                    WHERE clinic_id = %s AND email = %s AND deleted_at IS NULL AND is_active
+                    """,
+                    (clinic_id, email),
+                )
+            else:
+                cursor.execute(
+                    """
+                    SELECT id FROM users
+                    WHERE clinic_id = %s
+                      AND 'doctor' = ANY(roles)
+                      AND deleted_at IS NULL
+                      AND is_active
+                    ORDER BY created_at ASC
+                    LIMIT 1
+                    """,
+                    (clinic_id,),
+                )
+            row = cursor.fetchone()
+        if not row:
+            who = f"email={email!r}" if email else "the oldest active doctor"
+            raise RuntimeError(
+                f"Migration-user lookup failed for {who} in clinic {clinic_id}. "
+                "Seed the clinic before running the migration."
+            )
+        return str(row["id"])
+
+    def load_patient_lookup(self, clinic_id: str) -> dict[str, str]:
+        """Build {legacy_display_name: patient_id} for one clinic.
+
+        Loaded once at the start of the visit-import phase so the 220k
+        row loop does O(1) hash lookups instead of 220k DB round-trips
+        (see ADR-012 lookup decision). At ~11k patients the dict is a
+        few megabytes.
+
+        Patients without a legacy_display_name (created post-migration
+        through the API) are skipped — they cannot be the FK target of
+        any legacy visit row.
+        """
+        with self._conn.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT id, legacy_display_name
+                FROM patients
+                WHERE clinic_id = %s
+                  AND legacy_display_name IS NOT NULL
+                  AND deleted_at IS NULL
+                """,
+                (clinic_id,),
+            )
+            rows = cursor.fetchall()
+        return {row["legacy_display_name"]: str(row["id"]) for row in rows}
 
     def upsert_patient(self, clinic_id: str, p: PatientUpsertInput) -> str:
         """Idempotent insert keyed on (clinic_id, legacy_id).
@@ -137,4 +187,83 @@ class Database:
             cursor.execute(sql, params)
             row = cursor.fetchone()
         assert row is not None  # noqa: S101 — INSERT...RETURNING always yields a row
+        return str(row["id"])
+
+    def upsert_visit(
+        self,
+        clinic_id: str,
+        migration_user_id: str,
+        v: VisitUpsertInput,
+    ) -> str:
+        """Idempotent insert keyed on (clinic_id, legacy_id).
+
+        Migrated visits land at status='completed', scheduled_for=NULL,
+        is_walk_in=false (no booking concept in the source). All
+        attributable to the migration user (Dr. Taulant for DonetaMED).
+        """
+        sql = """
+            INSERT INTO visits (
+              clinic_id, patient_id, legacy_id,
+              visit_date, scheduled_for, is_walk_in, status,
+              complaint, feeding_notes,
+              weight_g, height_cm, head_circumference_cm, temperature_c,
+              payment_code, examinations, ultrasound_notes, legacy_diagnosis,
+              prescription, lab_results, followup_notes, other_notes,
+              created_by, updated_by
+            )
+            VALUES (
+              %(clinic_id)s, %(patient_id)s, %(legacy_id)s,
+              %(visit_date)s, NULL, false, 'completed',
+              %(complaint)s, %(feeding_notes)s,
+              %(weight_g)s, %(height_cm)s, %(head_circumference_cm)s, %(temperature_c)s,
+              %(payment_code)s, %(examinations)s, %(ultrasound_notes)s, %(legacy_diagnosis)s,
+              %(prescription)s, %(lab_results)s, %(followup_notes)s, %(other_notes)s,
+              %(user_id)s, %(user_id)s
+            )
+            ON CONFLICT (clinic_id, legacy_id) DO UPDATE SET
+              patient_id = EXCLUDED.patient_id,
+              visit_date = EXCLUDED.visit_date,
+              complaint = EXCLUDED.complaint,
+              feeding_notes = EXCLUDED.feeding_notes,
+              weight_g = EXCLUDED.weight_g,
+              height_cm = EXCLUDED.height_cm,
+              head_circumference_cm = EXCLUDED.head_circumference_cm,
+              temperature_c = EXCLUDED.temperature_c,
+              payment_code = EXCLUDED.payment_code,
+              examinations = EXCLUDED.examinations,
+              ultrasound_notes = EXCLUDED.ultrasound_notes,
+              legacy_diagnosis = EXCLUDED.legacy_diagnosis,
+              prescription = EXCLUDED.prescription,
+              lab_results = EXCLUDED.lab_results,
+              followup_notes = EXCLUDED.followup_notes,
+              other_notes = EXCLUDED.other_notes,
+              updated_by = EXCLUDED.updated_by,
+              updated_at = now()
+            RETURNING id
+        """
+        params: dict[str, Any] = {
+            "clinic_id": clinic_id,
+            "patient_id": v.patient_id,
+            "legacy_id": v.legacy_id,
+            "visit_date": v.visit_date,
+            "complaint": v.complaint,
+            "feeding_notes": v.feeding_notes,
+            "weight_g": v.weight_g,
+            "height_cm": v.height_cm,
+            "head_circumference_cm": v.head_circumference_cm,
+            "temperature_c": v.temperature_c,
+            "payment_code": v.payment_code,
+            "examinations": v.examinations,
+            "ultrasound_notes": v.ultrasound_notes,
+            "legacy_diagnosis": v.legacy_diagnosis,
+            "prescription": v.prescription,
+            "lab_results": v.lab_results,
+            "followup_notes": v.followup_notes,
+            "other_notes": v.other_notes,
+            "user_id": migration_user_id,
+        }
+        with self._conn.cursor() as cursor:
+            cursor.execute(sql, params)
+            row = cursor.fetchone()
+        assert row is not None  # noqa: S101
         return str(row["id"])

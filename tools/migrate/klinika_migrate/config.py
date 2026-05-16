@@ -30,6 +30,11 @@ class SourceConfig:
 class TargetConfig:
     dsn: str
     clinic_subdomain: str
+    # Email of the user to credit as created_by / updated_by on all
+    # migrated visits. Optional — if omitted, the tool picks the
+    # oldest active doctor in the target clinic (Dr. Taulant for
+    # DonetaMED, by construction).
+    migration_user_email: str | None
 
 
 @dataclass(frozen=True)
@@ -86,6 +91,7 @@ def load_config(path: Path) -> Config:
         target=TargetConfig(
             dsn=str(tgt.get("dsn") or ""),
             clinic_subdomain=str(tgt.get("clinic_subdomain") or ""),
+            migration_user_email=(str(tgt["migration_user_email"]) if tgt.get("migration_user_email") else None),
         ),
         options=OptionsConfig(
             dry_run=bool(opts.get("dry_run", True)),

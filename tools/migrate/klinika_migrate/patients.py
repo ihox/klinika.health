@@ -28,10 +28,13 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from .access import AbstractReader
-from .db import Database, PatientUpsertInput
+from .models import PatientUpsertInput
+
+if TYPE_CHECKING:
+    from .db import Database
 from .parsers import (
     clean_text,
     parse_dob,
