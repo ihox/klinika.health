@@ -126,20 +126,36 @@ export function AppointmentActions({
       : new Date(entry.createdAt);
   const localParts = toLocalParts(anchorInstant);
 
-  // Estimated menu height for clamping. The exact height depends on the
-  // row count; ~38px per row + ~70px header is close enough to keep
-  // the menu inside the viewport.
+  // Edge-aware placement. Default is below the click anchor; when the
+  // anchor sits near the viewport bottom (e.g. a 22:20 slot), flip
+  // above so the menu doesn't get clipped. Horizontal axis is centered
+  // on the anchor and clamped to the viewport.
   const style = useMemo(() => {
     const width = 260;
     const approxHeight = 70 + rows.length * 38 + 40;
+    const padding = 8;
+    const gap = 8;
     const left = Math.max(
-      8,
-      Math.min(window.innerWidth - width - 8, anchor.x - width / 2),
+      padding,
+      Math.min(window.innerWidth - width - padding, anchor.x - width / 2),
     );
-    const top = Math.max(
-      8,
-      Math.min(window.innerHeight - approxHeight - 8, anchor.y + 8),
-    );
+    const fitsBelow = anchor.y + gap + approxHeight + padding <= window.innerHeight;
+    const fitsAbove = anchor.y - gap - approxHeight >= padding;
+    let top: number;
+    if (fitsBelow) {
+      top = anchor.y + gap;
+    } else if (fitsAbove) {
+      top = anchor.y - gap - approxHeight;
+    } else {
+      // Neither side fits — pick the larger side and clamp. The menu
+      // will scroll if its content overflows the available room.
+      const spaceBelow = window.innerHeight - anchor.y - gap;
+      const spaceAbove = anchor.y - gap;
+      top =
+        spaceBelow >= spaceAbove
+          ? Math.max(padding, Math.min(window.innerHeight - approxHeight - padding, anchor.y + gap))
+          : padding;
+    }
     return { left, top, width } as const;
   }, [anchor, rows.length]);
 
