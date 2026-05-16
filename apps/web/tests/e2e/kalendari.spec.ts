@@ -43,7 +43,7 @@ interface StoredAppointment {
   patient: { firstName: string; lastName: string; dateOfBirth: string | null };
   scheduledFor: string;
   durationMinutes: number;
-  status: 'scheduled' | 'completed' | 'no_show' | 'cancelled';
+  status: 'scheduled' | 'completed' | 'no_show';
   lastVisitAt: string | null;
   isNewPatient: boolean;
   createdAt: string;
@@ -131,7 +131,6 @@ async function mockApi(page: Page, state: MockState): Promise<void> {
         scheduled: onDay.filter((a) => a.status === 'scheduled').length,
         completed: onDay.filter((a) => a.status === 'completed').length,
         noShow: onDay.filter((a) => a.status === 'no_show').length,
-        cancelled: onDay.filter((a) => a.status === 'cancelled').length,
         firstStart: onDay[0]?.scheduledFor ?? null,
         lastEnd: onDay[onDay.length - 1]?.scheduledFor ?? null,
         nextAppointment:

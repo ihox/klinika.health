@@ -32,7 +32,6 @@ describe('isVisitLockedForReceptionist', () => {
       'in_progress',
       'completed',
       'no_show',
-      'cancelled',
     ])('locks yesterday + %s', (status) => {
       expect(isVisitLockedForReceptionist(visit('2026-05-14', status))).toBe(true);
     });
@@ -48,7 +47,7 @@ describe('isVisitLockedForReceptionist', () => {
       expect(isVisitLockedForReceptionist(visit('2026-05-15', 'completed'))).toBe(true);
     });
 
-    it.each(['scheduled', 'arrived', 'in_progress', 'no_show', 'cancelled'])(
+    it.each(['scheduled', 'arrived', 'in_progress', 'no_show'])(
       'unlocks today + %s',
       (status) => {
         expect(isVisitLockedForReceptionist(visit('2026-05-15', status))).toBe(false);
@@ -63,7 +62,6 @@ describe('isVisitLockedForReceptionist', () => {
       'in_progress',
       'completed',
       'no_show',
-      'cancelled',
     ])('unlocks tomorrow + %s', (status) => {
       expect(isVisitLockedForReceptionist(visit('2026-05-16', status))).toBe(false);
     });

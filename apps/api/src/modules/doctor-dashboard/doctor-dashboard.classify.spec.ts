@@ -106,7 +106,7 @@ describe('classifyAppointments', () => {
     expect(out.find((r) => r.id === 'past-completed')?.position).toBe('past');
   });
 
-  it('puts completed / no_show / cancelled rows in past', () => {
+  it('puts completed / no_show rows in past', () => {
     const out = classifyAppointments(
       [
         row('done', {
@@ -117,14 +117,10 @@ describe('classifyAppointments', () => {
           scheduledFor: '2026-05-15T09:15:00Z',
           status: 'no_show',
         }),
-        row('cancelled', {
-          scheduledFor: '2026-05-15T09:30:00Z',
-          status: 'cancelled',
-        }),
       ],
       NOW,
     );
-    expect(out.map((r) => r.position)).toEqual(['past', 'past', 'past']);
+    expect(out.map((r) => r.position)).toEqual(['past', 'past']);
   });
 
   it('falls back to past for scheduled rows whose window ended without a transition', () => {

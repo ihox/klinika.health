@@ -43,13 +43,10 @@ describe('findActiveVisitToday', () => {
     expect(findActiveVisitToday([v], TODAY)).toBeNull();
   });
 
-  it.each(['no_show', 'cancelled'] as const)(
-    'returns null for non-active terminal status %s today',
-    (status) => {
-      const v = visit({ id: 'today-terminal', status });
-      expect(findActiveVisitToday([v], TODAY)).toBeNull();
-    },
-  );
+  it('returns null for a no_show row today (non-active terminal status)', () => {
+    const v = visit({ id: 'today-terminal', status: 'no_show' });
+    expect(findActiveVisitToday([v], TODAY)).toBeNull();
+  });
 
   it('ignores active visits on other days (scheduled tomorrow does NOT count)', () => {
     const v = visit({ id: 'tomorrow', visitDate: '2026-05-17', status: 'scheduled' });

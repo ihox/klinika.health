@@ -788,8 +788,8 @@ describe.skipIf(!ENABLED)('Visits integration', () => {
     // {scheduled, arrived, in_progress}), the server must NOT create a
     // parallel row — it returns the existing visit's id with
     // `existed: true` so the frontend routes the doctor into it.
-    // Completed / no_show / cancelled today do NOT trigger the guard:
-    // a morning-completed patient who returns this afternoon
+    // Completed / no_show today do NOT trigger the guard: a
+    // morning-completed patient who returns this afternoon
     // legitimately gets a fresh visit row.
 
     describe('patient-active-visit-today gate', () => {
@@ -800,8 +800,7 @@ describe.skipIf(!ENABLED)('Visits integration', () => {
           | 'arrived'
           | 'in_progress'
           | 'completed'
-          | 'no_show'
-          | 'cancelled',
+          | 'no_show',
       ): Promise<{ id: string }> {
         const today = todayBelgradeIso();
         const [hh, mm] = time.split(':');
@@ -908,19 +907,6 @@ describe.skipIf(!ENABLED)('Visits integration', () => {
 
       it("does not collapse 'no_show' today into the gate", async () => {
         const seed = await seedForSelf('09:00', 'no_show');
-        const res = await postDoctorNewForSelf();
-        expect(res.status).toBe(201);
-        expect(res.body.existed).toBe(false);
-        expect(res.body.visit.id).not.toBe(seed.id);
-        const row = await prisma.visit.findUnique({
-          where: { id: res.body.visit.id },
-        });
-        expect(row!.isWalkIn).toBe(false);
-        expect(row!.pairedWithVisitId).toBeNull();
-      });
-
-      it("does not collapse 'cancelled' today into the gate", async () => {
-        const seed = await seedForSelf('09:00', 'cancelled');
         const res = await postDoctorNewForSelf();
         expect(res.status).toBe(201);
         expect(res.body.existed).toBe(false);

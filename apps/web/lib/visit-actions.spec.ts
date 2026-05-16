@@ -49,7 +49,7 @@ describe('canCompleteVisit', () => {
     expect(canCompleteVisit(visit({ status: 'arrived' }), ['receptionist'])).toBe(false);
   });
 
-  it.each(['scheduled', 'completed', 'no_show', 'cancelled'] as const)(
+  it.each(['scheduled', 'completed', 'no_show'] as const)(
     'refuses completion from %s',
     (status) => {
       expect(canCompleteVisit(visit({ status }), ['doctor'])).toBe(false);
@@ -72,7 +72,7 @@ describe('canRevertStatus', () => {
     ).toBe(false);
   });
 
-  it.each(['scheduled', 'arrived', 'in_progress', 'no_show', 'cancelled'] as const)(
+  it.each(['scheduled', 'arrived', 'in_progress', 'no_show'] as const)(
     'refuses revert from %s',
     (status) => {
       expect(canRevertStatus(visit({ status }), ['doctor'], NOW)).toBe(false);

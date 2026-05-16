@@ -31,7 +31,7 @@ function entry(id: string, status: VisitStatus): CalendarEntry {
 
 describe('entryMatchesStatusFilter', () => {
   it('"all" matches every status', () => {
-    for (const s of ['scheduled', 'arrived', 'in_progress', 'completed', 'no_show', 'cancelled'] as const) {
+    for (const s of ['scheduled', 'arrived', 'in_progress', 'completed', 'no_show'] as const) {
       expect(entryMatchesStatusFilter(entry('x', s), 'all')).toBe(true);
     }
   });
@@ -43,7 +43,6 @@ describe('entryMatchesStatusFilter', () => {
     // finalized statuses are excluded
     expect(entryMatchesStatusFilter(entry('d', 'completed'), 'scheduled')).toBe(false);
     expect(entryMatchesStatusFilter(entry('e', 'no_show'), 'scheduled')).toBe(false);
-    expect(entryMatchesStatusFilter(entry('f', 'cancelled'), 'scheduled')).toBe(false);
   });
 
   it('terminal-status filters match only their exact status', () => {
@@ -52,9 +51,6 @@ describe('entryMatchesStatusFilter', () => {
 
     expect(entryMatchesStatusFilter(entry('c', 'no_show'), 'no_show')).toBe(true);
     expect(entryMatchesStatusFilter(entry('d', 'scheduled'), 'no_show')).toBe(false);
-
-    expect(entryMatchesStatusFilter(entry('e', 'cancelled'), 'cancelled')).toBe(true);
-    expect(entryMatchesStatusFilter(entry('f', 'completed'), 'cancelled')).toBe(false);
   });
 });
 
@@ -67,7 +63,7 @@ describe('countByStatusFilter', () => {
     entry('e', 'completed'),
     entry('f', 'completed'),
     entry('g', 'no_show'),
-    entry('h', 'cancelled'),
+    entry('h', 'no_show'),
   ];
 
   it('"all" equals the total entries length', () => {
@@ -81,8 +77,7 @@ describe('countByStatusFilter', () => {
   it('counts each terminal status separately', () => {
     const counts = countByStatusFilter(entries);
     expect(counts.completed).toBe(2);
-    expect(counts.no_show).toBe(1);
-    expect(counts.cancelled).toBe(1);
+    expect(counts.no_show).toBe(2);
   });
 
   it('handles an empty input', () => {
@@ -91,7 +86,6 @@ describe('countByStatusFilter', () => {
       scheduled: 0,
       completed: 0,
       no_show: 0,
-      cancelled: 0,
     });
   });
 });

@@ -38,7 +38,7 @@ interface MockAppointment {
   patient: { firstName: string; lastName: string; dateOfBirth: string | null };
   scheduledFor: string;
   durationMinutes: number;
-  status: 'scheduled' | 'completed' | 'no_show' | 'cancelled';
+  status: 'scheduled' | 'completed' | 'no_show';
   lastVisitAt: string | null;
   isNewPatient: boolean;
   createdAt: string;
@@ -141,7 +141,6 @@ async function mockApi(page: Page, state: MockState): Promise<void> {
         scheduled: state.current.filter((a) => a.status === 'scheduled').length,
         completed: state.current.filter((a) => a.status === 'completed').length,
         noShow: state.current.filter((a) => a.status === 'no_show').length,
-        cancelled: state.current.filter((a) => a.status === 'cancelled').length,
         firstStart: state.current[0]?.scheduledFor ?? null,
         lastEnd: state.current[state.current.length - 1]?.scheduledFor ?? null,
         nextAppointment: null,

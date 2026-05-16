@@ -28,17 +28,29 @@ describe('VISIT_STATUSES', () => {
       'in_progress',
       'completed',
       'no_show',
-      'cancelled',
     ]);
+  });
+
+  it('no longer carries cancelled (collapsed into no_show 2026-05-21)', () => {
+    expect((VISIT_STATUSES as readonly string[]).includes('cancelled')).toBe(
+      false,
+    );
+    expect(
+      Object.keys(ALLOWED_TRANSITIONS as Record<string, unknown>),
+    ).not.toContain('cancelled');
+    for (const targets of Object.values(ALLOWED_TRANSITIONS)) {
+      expect(targets as readonly string[]).not.toContain('cancelled');
+    }
   });
 });
 
 describe('ALLOWED_TRANSITIONS / isTransitionAllowed', () => {
   it('mirrors the server matrix from visits-calendar.status.ts', () => {
-    // scheduled may move to arrived / no_show / cancelled
+    // scheduled may move to arrived / no_show (autosave path also
+    // allows scheduled → in_progress on the server; the menu doesn't
+    // surface it).
     expect(ALLOWED_TRANSITIONS.scheduled).toContain('arrived');
     expect(ALLOWED_TRANSITIONS.scheduled).toContain('no_show');
-    expect(ALLOWED_TRANSITIONS.scheduled).toContain('cancelled');
     // arrived → in_progress | no_show
     expect(ALLOWED_TRANSITIONS.arrived).toContain('in_progress');
     expect(ALLOWED_TRANSITIONS.arrived).toContain('no_show');
@@ -46,9 +58,8 @@ describe('ALLOWED_TRANSITIONS / isTransitionAllowed', () => {
     expect(ALLOWED_TRANSITIONS.in_progress).toEqual(['completed']);
     // completed → arrived only ("Anulo statusin" escape hatch)
     expect(ALLOWED_TRANSITIONS.completed).toEqual(['arrived']);
-    // no_show / cancelled both reopen to arrived
+    // no_show reopens to arrived
     expect(ALLOWED_TRANSITIONS.no_show).toEqual(['arrived']);
-    expect(ALLOWED_TRANSITIONS.cancelled).toEqual(['arrived']);
   });
 
   it('rejects self-transitions', () => {
@@ -57,16 +68,8 @@ describe('ALLOWED_TRANSITIONS / isTransitionAllowed', () => {
     }
   });
 
-  it('rejects scheduled → in_progress (must go through arrived)', () => {
-    expect(isTransitionAllowed('scheduled', 'in_progress')).toBe(false);
-  });
-
   it('rejects in_progress → no_show (no rollback that way)', () => {
     expect(isTransitionAllowed('in_progress', 'no_show')).toBe(false);
-  });
-
-  it('rejects completed → cancelled (clinical record is closed)', () => {
-    expect(isTransitionAllowed('completed', 'cancelled')).toBe(false);
   });
 
   it('allows the full forward path: scheduled → arrived → in_progress → completed', () => {
@@ -75,9 +78,8 @@ describe('ALLOWED_TRANSITIONS / isTransitionAllowed', () => {
     expect(isTransitionAllowed('in_progress', 'completed')).toBe(true);
   });
 
-  it('allows the "Rikthe te paraqitur" reopen from no_show and cancelled', () => {
+  it('allows the "Rikthe te paraqitur" reopen from no_show', () => {
     expect(isTransitionAllowed('no_show', 'arrived')).toBe(true);
-    expect(isTransitionAllowed('cancelled', 'arrived')).toBe(true);
   });
 });
 
@@ -184,11 +186,10 @@ describe('findClosestPairing', () => {
     expect(findClosestPairing(walkins, Date.now())).toBeNull();
   });
 
-  it('skips finalized statuses (completed / no_show / cancelled)', () => {
+  it('skips finalized statuses (completed / no_show)', () => {
     const list: CalendarEntry[] = [
       at('2026-05-15T10:00:00Z', { id: 'done', status: 'completed' }),
       at('2026-05-15T11:00:00Z', { id: 'miss', status: 'no_show' }),
-      at('2026-05-15T12:00:00Z', { id: 'cncl', status: 'cancelled' }),
     ];
     expect(findClosestPairing(list, Date.parse('2026-05-15T11:00:00Z'))).toBeNull();
   });
@@ -271,7 +272,7 @@ describe('isVisitLockedForReceptionist', () => {
     ...overrides,
   });
 
-  it.each(['scheduled', 'arrived', 'in_progress', 'completed', 'no_show', 'cancelled'] as const)(
+  it.each(['scheduled', 'arrived', 'in_progress', 'completed', 'no_show'] as const)(
     'locks yesterday (%s)',
     (status) => {
       const e = entry({ scheduledFor: '2026-05-14T08:00:00Z', status });
@@ -284,7 +285,7 @@ describe('isVisitLockedForReceptionist', () => {
     expect(isVisitLockedForReceptionist(e, today)).toBe(true);
   });
 
-  it.each(['scheduled', 'arrived', 'in_progress', 'no_show', 'cancelled'] as const)(
+  it.each(['scheduled', 'arrived', 'in_progress', 'no_show'] as const)(
     'unlocks today (%s)',
     (status) => {
       const e = entry({ scheduledFor: '2026-05-15T08:00:00Z', status });

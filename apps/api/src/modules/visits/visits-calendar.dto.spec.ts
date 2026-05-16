@@ -194,18 +194,16 @@ describe('isTransitionAllowed (and ALLOWED_TRANSITIONS)', () => {
     expect(isTransitionAllowed('in_progress', 'completed')).toBe(true);
   });
 
-  it('allows the scheduled→no_show and scheduled→cancelled branches', () => {
+  it('allows scheduled→no_show', () => {
     expect(isTransitionAllowed('scheduled', 'no_show')).toBe(true);
-    expect(isTransitionAllowed('scheduled', 'cancelled')).toBe(true);
   });
 
   it('allows arrived→no_show', () => {
     expect(isTransitionAllowed('arrived', 'no_show')).toBe(true);
   });
 
-  it('allows the "Rikthe te paraqitur" reopens', () => {
+  it('allows the "Rikthe te paraqitur" reopen from no_show', () => {
     expect(isTransitionAllowed('no_show', 'arrived')).toBe(true);
-    expect(isTransitionAllowed('cancelled', 'arrived')).toBe(true);
   });
 
   it('allows completed→arrived (Phase 2c Pastro vizitën)', () => {
@@ -220,12 +218,9 @@ describe('isTransitionAllowed (and ALLOWED_TRANSITIONS)', () => {
 
   it('rejects illegal jumps', () => {
     expect(isTransitionAllowed('scheduled', 'completed')).toBe(false);
-    expect(isTransitionAllowed('arrived', 'cancelled')).toBe(false);
     expect(isTransitionAllowed('in_progress', 'no_show')).toBe(false);
-    expect(isTransitionAllowed('in_progress', 'cancelled')).toBe(false);
     expect(isTransitionAllowed('completed', 'in_progress')).toBe(false);
     expect(isTransitionAllowed('no_show', 'completed')).toBe(false);
-    expect(isTransitionAllowed('cancelled', 'completed')).toBe(false);
   });
 
   it('accepts the Phase 2b doctor-quick-complete shortcut: arrived → completed', () => {
@@ -244,7 +239,6 @@ describe('isTransitionAllowed (and ALLOWED_TRANSITIONS)', () => {
       'arrived',
       'in_progress',
       'no_show',
-      'cancelled',
     ]);
     expect(ALLOWED_TRANSITIONS.arrived).toEqual([
       'in_progress',
@@ -254,7 +248,24 @@ describe('isTransitionAllowed (and ALLOWED_TRANSITIONS)', () => {
     expect(ALLOWED_TRANSITIONS.in_progress).toEqual(['completed']);
     expect(ALLOWED_TRANSITIONS.completed).toEqual(['arrived']);
     expect(ALLOWED_TRANSITIONS.no_show).toEqual(['arrived']);
-    expect(ALLOWED_TRANSITIONS.cancelled).toEqual(['arrived']);
+  });
+
+  it('no longer accepts cancelled as a valid status', () => {
+    // Regression guard for the cancelled-status removal (2026-05-21).
+    // Both the runtime VISIT_STATUSES list and the ALLOWED_TRANSITIONS
+    // record must not carry the dropped value.
+    expect((VISIT_STATUSES as readonly string[]).includes('cancelled')).toBe(
+      false,
+    );
+    expect(
+      Object.keys(ALLOWED_TRANSITIONS as Record<string, unknown>),
+    ).not.toContain('cancelled');
+    for (const targets of Object.values(ALLOWED_TRANSITIONS)) {
+      expect(targets as readonly string[]).not.toContain('cancelled');
+    }
+    expect(UpdateVisitStatusSchema.safeParse({ status: 'cancelled' }).success).toBe(
+      false,
+    );
   });
 });
 
@@ -316,7 +327,7 @@ describe('hasClinicalData', () => {
 describe('VISIT_STATUSES', () => {
   it('contains every lifecycle value the API/DB CHECK constraint expects', () => {
     expect([...VISIT_STATUSES].sort()).toEqual(
-      (['arrived', 'cancelled', 'completed', 'in_progress', 'no_show', 'scheduled'] as VisitStatus[]).sort(),
+      (['arrived', 'completed', 'in_progress', 'no_show', 'scheduled'] as VisitStatus[]).sort(),
     );
   });
 });

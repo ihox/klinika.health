@@ -671,7 +671,7 @@ describe.skipIf(!ENABLED)('Visits calendar integration', () => {
       ['09:00', 'scheduled', null],
       ['09:30', 'scheduled', null],
       ['10:00', 'no_show', null],
-      ['10:30', 'cancelled', null],
+      ['10:30', 'no_show', null],
     ] as const) {
       await prisma.visit.create({
         data: {
@@ -721,12 +721,12 @@ describe.skipIf(!ENABLED)('Visits calendar integration', () => {
     // Standalones — the shape that previously caused divergence. One
     // completed with payment (must contribute to revenue + completed
     // counts on both sides), one in_progress (must contribute to total
-    // on both sides), one cancelled (must contribute to total on both
-    // sides).
+    // on both sides), one no_show (must contribute to total on both
+    // sides as a terminal "didn't happen" row).
     for (const [status, code] of [
       ['completed', 'A'],
       ['in_progress', null],
-      ['cancelled', null],
+      ['no_show', null],
     ] as const) {
       await prisma.visit.create({
         data: {
@@ -816,19 +816,19 @@ describe.skipIf(!ENABLED)('Visits calendar integration', () => {
     expect(docInProgressFromAppts).toBe(2);
 
     // Chip math invariant — receptionist's stat-foot chips must sum to
-    // total minus cancelled. The chip set is:
+    // total. The chip set is:
     //   completed + inProgress + (scheduled + arrived) + noShow.
-    // Cancelled is intentionally excluded; it's a different category
-    // (the patient didn't show up and won't). The seed has 1 cancelled
-    // scheduled + 1 cancelled standalone = 2 cancelled.
+    // Every seeded row falls into exactly one bucket, so the chips
+    // partition the day.
     const chipSum =
       recRes.body.completed +
       recRes.body.inProgress +
       recRes.body.scheduled +
       recRes.body.arrived +
       recRes.body.noShow;
-    expect(chipSum).toBe(recRes.body.total - recRes.body.cancelled);
-    expect(recRes.body.cancelled).toBe(2);
+    expect(chipSum).toBe(recRes.body.total);
+    // 2 scheduled-as-no_show + 1 standalone-as-no_show = 3.
+    expect(recRes.body.noShow).toBe(3);
   });
 
   // Walk-ins-only edge case for the "në pritje" collapse. When the day
@@ -1138,7 +1138,7 @@ describe.skipIf(!ENABLED)('Visits calendar integration', () => {
     scheduledFor?: Date | null;
     arrivedAt?: Date | null;
     durationMinutes?: number;
-    status: 'scheduled' | 'arrived' | 'in_progress' | 'completed' | 'no_show' | 'cancelled';
+    status: 'scheduled' | 'arrived' | 'in_progress' | 'completed' | 'no_show';
     isWalkIn?: boolean;
     deletedAt?: Date | null;
   }): Promise<string> {
