@@ -5,10 +5,9 @@ package; this file just sets up the import path and hands off to
 `klinika_migrate.cli.main`.
 
 Usage:
-  python migrate.py patients    --config config.yaml [--commit]
-  python migrate.py visits      --config config.yaml [--commit]
-  python migrate.py report      --config config.yaml --output report.json
-  python migrate.py wipe-clinic --config config.yaml [--clinic-id UUID|--clinic-subdomain X|--clinic-name X] [--commit]
+  python migrate.py patients --config config.yaml [--commit]
+  python migrate.py visits   --config config.yaml [--commit]
+  python migrate.py report   --config config.yaml --output report.json
 """
 
 from __future__ import annotations

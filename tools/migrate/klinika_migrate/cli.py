@@ -2,12 +2,9 @@
 
 Subcommands:
 
-  patients    --config CFG [--dry-run|--commit]   STEP 2
-  visits      --config CFG [--dry-run|--commit]   STEP 3 (not yet implemented)
-  report      --config CFG --output REPORT.json   STEP 4 (not yet implemented)
-  wipe-clinic --config CFG (--clinic-id|--clinic-subdomain|--clinic-name) [--commit]
-              Pre-migration cleanup: hard-delete all patient + visit data
-              for one clinic. See klinika_migrate.wipe_clinic for scope.
+  patients --config CFG [--dry-run|--commit]   STEP 2
+  visits   --config CFG [--dry-run|--commit]   STEP 3 (not yet implemented)
+  report   --config CFG --output REPORT.json   STEP 4 (not yet implemented)
 
 The flag defaults follow ADR-010's safety convention: `--dry-run` is
 on unless the operator explicitly opts into `--commit`.
@@ -25,7 +22,6 @@ from .db import Database
 from .logger import get_logger
 from .patients import import_patients
 from .reports import JsonlWriter, write_summary_report
-from .wipe_clinic import print_summary, resolve_clinic, wipe_clinic
 
 
 def _add_common_args(parser: argparse.ArgumentParser) -> None:
@@ -56,24 +52,6 @@ def _build_parser() -> argparse.ArgumentParser:
     report = sub.add_parser("report", help="Re-emit reconciliation report (STEP 4, not yet implemented)")
     report.add_argument("--config", required=True, type=Path)
     report.add_argument("--output", required=True, type=Path)
-
-    wipe = sub.add_parser(
-        "wipe-clinic",
-        help="Pre-migration cleanup: hard-delete clinical data for one clinic",
-    )
-    wipe.add_argument(
-        "--config",
-        required=True,
-        type=Path,
-        help="Path to config.yaml (provides DSN; clinic_subdomain used if no --clinic-* flag given)",
-    )
-    target = wipe.add_mutually_exclusive_group()
-    target.add_argument("--clinic-id", help="Clinic UUID")
-    target.add_argument("--clinic-subdomain", help="Clinic subdomain (e.g. 'donetamed')")
-    target.add_argument("--clinic-name", help="Clinic name (exact match)")
-    mode = wipe.add_mutually_exclusive_group()
-    mode.add_argument("--dry-run", action="store_true", help="Show counts only, no DB writes (default)")
-    mode.add_argument("--commit", action="store_true", help="Actually delete rows")
 
     return parser
 
@@ -140,37 +118,6 @@ def cmd_report(_args: argparse.Namespace) -> int:
     return 2
 
 
-def cmd_wipe_clinic(args: argparse.Namespace) -> int:
-    cfg = load_config(args.config)
-    dry_run = _resolve_dry_run(args, default=True)
-    logger = get_logger(cfg.options.log_dir)
-
-    # If no clinic flag was passed, fall back to the config's subdomain
-    # so `wipe-clinic --config config.yaml --commit` is enough for the
-    # common DonetaMED case.
-    subdomain = args.clinic_subdomain
-    if not (args.clinic_id or args.clinic_subdomain or args.clinic_name):
-        subdomain = cfg.target.clinic_subdomain
-
-    with Database.open(cfg.target.dsn, dry_run=dry_run) as db:
-        clinic = resolve_clinic(
-            db,
-            clinic_id=args.clinic_id,
-            subdomain=subdomain,
-            name=args.clinic_name,
-        )
-        if not dry_run:
-            print(
-                f"About to delete clinical data for {clinic.name} "
-                f"({clinic.subdomain})  id={clinic.id}",
-                file=sys.stderr,
-            )
-        results = wipe_clinic(db, clinic, dry_run=dry_run, logger=logger)
-
-    print_summary(clinic, results, dry_run=dry_run)
-    return 0
-
-
 def main(argv: list[str] | None = None) -> int:
     parser = _build_parser()
     args = parser.parse_args(argv)
@@ -181,8 +128,6 @@ def main(argv: list[str] | None = None) -> int:
             return cmd_visits(args)
         case "report":
             return cmd_report(args)
-        case "wipe-clinic":
-            return cmd_wipe_clinic(args)
         case _:
             parser.print_help(sys.stderr)
             return 2
