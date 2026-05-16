@@ -10,6 +10,20 @@
 - Local integration tests blocked by psql 18.3 + Prisma URL param compatibility
 - TelemetryService.onApplicationBootstrap fails in @nestjs/testing harness
 
+## CI / test infrastructure
+- test(ci): enable print integration tests in CI
+  - Blocker: vitest uses esbuild which doesn't emit decorator
+    metadata for NestJS DI
+  - Fix: install + configure unplugin-swc in
+    apps/api/vitest.config.ts
+  - Then: add postgres-service to CI job + run print integration
+    suite
+  - Effort: ~3-4 hours
+  - Priority: high — most valuable test prevention layer for
+    catching schema/template drift before manual smoke
+  - Reference: print.integration.spec.ts has inline notes on the
+    specific blocker
+
 ## Cleanup tasks
 - Stale slice-XX branches (slice-01 through slice-16) can be pruned
 - E2E mocks in apps/web/tests/e2e/{booking,kalendari}.spec.ts still mock the
