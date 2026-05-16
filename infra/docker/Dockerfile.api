@@ -35,9 +35,24 @@ COPY apps/api ./apps/api
 
 WORKDIR /workspace/apps/api
 EXPOSE 3001
-# `pnpm install` above ran before the Prisma schema was copied, so its
-# postinstall `prisma generate` produced a stub `PrismaClient: any`.
-# At runtime apps/api is bind-mounted from the host (live schema), so
-# we regenerate the client on every container start before booting
-# the dev server. Idempotent and cheap (~1s).
-CMD ["sh", "-lc", "pnpm exec prisma generate && pnpm dev"]
+# Every container start, in order:
+#   1. `prisma generate` — `pnpm install` above ran before the schema
+#      was copied, so its postinstall produced a stub `PrismaClient: any`.
+#      At runtime apps/api is bind-mounted (live schema), so we
+#      regenerate against the current schema. Idempotent and cheap (~1s).
+#   2. `prisma migrate deploy` — applies any pending Prisma migrations
+#      against the dev DB. This is the dev convenience that prevents the
+#      "schema drift after `make stop && make dev`" class of bug: a
+#      developer pulls new code with a new migration but doesn't run
+#      `make db-migrate`, and prints / chart queries 500 because the
+#      Prisma client expects columns the DB doesn't have. A bad migration
+#      fails the container start loudly — the desired behavior over
+#      silently serving against a stale schema.
+#
+#      Production keeps a separate CI/CD migration step (see
+#      docs/deployment.md); this Dockerfile is dev-only.
+#
+#      Raw SQL extras (apps/api/prisma/sql/*.sql) are applied by
+#      `make db-migrate` and not on container start — they're stable
+#      infra (RLS, search indexes) that doesn't change per slice.
+CMD ["sh", "-lc", "pnpm exec prisma generate && pnpm exec prisma migrate deploy && pnpm dev"]
