@@ -22,6 +22,12 @@ import { z } from 'zod';
 // `include_ultrasound` is the only knob the doctor toggles in the
 // "Printo historinë" dialog. Defaults to `false` so a stray fetch
 // doesn't accidentally embed 100+ image refs in the PDF.
+//
+// `.passthrough()` (not `.strict()`) so cache-buster params like `_t`
+// — appended by the iframe-print harness in
+// `apps/web/lib/print-frame.ts` to defeat the PDF cache — don't
+// trip validation. The transform only emits the typed fields, so
+// the controller can't accidentally lean on a stray query param.
 
 export const HistoryPrintQuerySchema = z
   .object({
@@ -32,7 +38,7 @@ export const HistoryPrintQuerySchema = z
       )
       .transform((v) => v === 'true'),
   })
-  .strict();
+  .passthrough();
 
 export type HistoryPrintQuery = z.infer<typeof HistoryPrintQuerySchema>;
 

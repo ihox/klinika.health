@@ -316,6 +316,22 @@ describe.skipIf(!ENABLED)('Print integration', () => {
         .set('Cookie', cookie);
       expect(res.status).toBe(403);
     });
+
+    it('tolerates the iframe-print cache-buster `_t` query param', async () => {
+      // Regression: the iframe-print harness appends `_t=<timestamp>`
+      // to defeat the PDF cache (apps/web/lib/print-frame.ts). The
+      // history schema used `.strict()` and rejected the request
+      // with a 400; only history failed this way because visit and
+      // vërtetim don't parse their query. Schema is now
+      // `.passthrough()`.
+      const cookie = await loginAs(DOCTOR_EMAIL, SEED_DOCTOR_PASSWORD!);
+      const res = await req()
+        .get(`/api/print/history/${patientId}?include_ultrasound=false&_t=${Date.now()}`)
+        .set('host', TENANT_HOST)
+        .set('Cookie', cookie);
+      expect(res.status).toBe(200);
+      expect(res.headers['content-type']).toMatch(/application\/pdf/);
+    });
   });
 
   // --------------------------------------------------------------------------
