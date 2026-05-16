@@ -44,6 +44,7 @@ const PATIENT = {
   placeOfBirth: 'Prizren',
   paymentCode: 'A',
   legacyId: 15626,
+  patientIdShort: '15626',
   birthWeightG: 3280,
   birthLengthCm: 51,
   birthHeadCircumferenceCm: 34,
@@ -76,6 +77,7 @@ const VISIT_BASE: VisitReportTemplateData = {
   ],
   legacyDiagnosis: null,
   prescription: 'Spray.Axxa 2× në ditë, 5 ditë',
+  analyses: null,
   ultrasoundNotes: null,
   ultrasoundImages: [],
   signature: SIGNATURE,
@@ -94,10 +96,27 @@ describe('visit-report template', () => {
     expect(html).toContain('DONETA-MED');
     expect(html).toContain('Ordinanca Specialistike Pediatrike');
     expect(html).toContain('Lic. MSH-Nr. 1487-AM/24');
-    // Payment letter + legacy id pair, rendered as teal-sigil + mono id.
-    expect(html).toContain('15626');
-    expect(html).toMatch(/<span class="id-sigil">A<\/span>/);
     expect(html).toContain('03.08.2023');
+  });
+
+  it('pt-id row shows "paymentCode · patientId" with plain mono styling (no sigil)', () => {
+    const html = renderVisitReport(VISIT_BASE);
+    // "A · 15626" — dot separator, no teal sigil wrapper, both
+    // elements share the same muted-mono styling on .pt-id.
+    expect(html).toMatch(/<div class="pt-id">A · 15626<\/div>/);
+    expect(html).not.toMatch(/<span class="id-sigil">A<\/span>/);
+  });
+
+  it('pt-id falls back to a UUID slug when legacyId is null', () => {
+    const newPatient = renderVisitReport({
+      ...VISIT_BASE,
+      patient: {
+        ...VISIT_BASE.patient,
+        legacyId: null,
+        patientIdShort: 'A1B2C3D4',
+      },
+    });
+    expect(newPatient).toMatch(/<div class="pt-id">A · A1B2C3D4<\/div>/);
   });
 
   it('renders today + birth measurements in the right header', () => {
@@ -135,6 +154,30 @@ describe('visit-report template', () => {
     expect(html).not.toContain('· Terapia');
     expect(html).not.toContain('· DIAGNOZA');
     expect(html).not.toContain('· TERAPIA');
+  });
+
+  it('renders the An (analyses) box below Th when analyses content exists', () => {
+    const html = renderVisitReport({
+      ...VISIT_BASE,
+      analyses: 'Hb 12.4 g/dl · CRP <5 mg/L',
+    });
+    expect(html).toContain('>An<');
+    expect(html).toContain('Hb 12.4 g/dl');
+    // An sits below Th in the body order.
+    const thAt = html.indexOf('>Th<');
+    const anAt = html.indexOf('>An<');
+    expect(thAt).toBeGreaterThan(0);
+    expect(anAt).toBeGreaterThan(thAt);
+    // No "· ANALIZAT" suffix — label minimalism.
+    expect(html).not.toContain('· ANALIZAT');
+    expect(html).not.toContain('· Analizat');
+  });
+
+  it('omits the An box entirely when analyses is null or blank', () => {
+    expect(renderVisitReport(VISIT_BASE)).not.toContain('>An<');
+    expect(
+      renderVisitReport({ ...VISIT_BASE, analyses: '   ' }),
+    ).not.toContain('>An<');
   });
 
   it('renders the issue block (date+time, place) on the footer left', () => {

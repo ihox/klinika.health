@@ -83,6 +83,12 @@ export interface PatientHeaderForPrint {
   paymentCode: string | null;
   /** Legacy ID (`15626`) — shown next to the payment code letter. */
   legacyId: number | null;
+  /** Always-present clinic-scoped patient identifier for paper records.
+   *  Migrated patients render their `legacyId` as a bare number
+   *  ("15626"); patients created in-app fall back to an 8-character
+   *  UUID slug ("A1B2C3D4") since no auto-incrementing per-clinic
+   *  sequence exists yet. */
+  patientIdShort: string;
   birthWeightG: number | null;
   birthLengthCm: number | null;
   birthHeadCircumferenceCm: number | null;
@@ -124,6 +130,10 @@ export interface VisitReportTemplateData {
   diagnoses: VisitDiagnosisForPrint[];
   legacyDiagnosis: string | null;
   prescription: string | null;
+  /** Lab results / analyses free-text (visits.lab_results). Renders
+   *  as the "An" box on the visit report, below Th. Null/empty
+   *  hides the section entirely. */
+  analyses: string | null;
   ultrasoundNotes: string | null;
   ultrasoundImages: UltrasoundImageForPrint[];
   signature: DoctorSignature;

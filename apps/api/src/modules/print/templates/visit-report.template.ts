@@ -49,6 +49,14 @@ function renderPage1(data: VisitReportTemplateData): string {
       </div>
     `
     : '';
+  const analysesBox = hasText(data.analyses)
+    ? `
+      <div class="box">
+        <div class="lab">An</div>
+        <div class="notes-content">${escapeHtml(data.analyses).replace(/\n/g, '<br>')}</div>
+      </div>
+    `
+    : '';
 
   return `
     <style>
@@ -60,6 +68,7 @@ function renderPage1(data: VisitReportTemplateData): string {
       <div class="doc-body">
         ${diagnosisBox}
         ${prescriptionBox}
+        ${analysesBox}
       </div>
 
       <footer class="doc-footer">
@@ -189,15 +198,15 @@ function renderCompactLetterhead(
 }
 
 function renderPatientIdLine(patient: PatientHeaderForPrint): string {
-  // "A15626" — teal sigil for the payment code letter, mono numerals.
-  // When no payment code, fall back to just the legacy id.
-  if (patient.legacyId == null && !patient.paymentCode) return '';
-  const sigil = patient.paymentCode
-    ? `<span class="id-sigil">${escapeHtml(patient.paymentCode)}</span>`
-    : '';
-  const id =
-    patient.legacyId != null ? escapeHtml(String(patient.legacyId)) : '';
-  return `<div class="pt-id">${sigil}${id}</div>`;
+  // "B · 15626" — payment-category code + clinic-scoped patient id,
+  // both rendered in the same muted-mono style with a plain dot
+  // separator. No teal sigil. patientIdShort is always defined
+  // (falls back to a UUID slug for app-created patients).
+  const parts: string[] = [];
+  if (patient.paymentCode) parts.push(escapeHtml(patient.paymentCode));
+  if (patient.patientIdShort) parts.push(escapeHtml(patient.patientIdShort));
+  if (parts.length === 0) return '';
+  return `<div class="pt-id">${parts.join(' · ')}</div>`;
 }
 
 function renderBirthMeasurementsRow(patient: PatientHeaderForPrint): string {

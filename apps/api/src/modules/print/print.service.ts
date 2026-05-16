@@ -113,6 +113,7 @@ export class PrintService {
       })),
       legacyDiagnosis: visit.legacyDiagnosis,
       prescription: visit.prescription,
+      analyses: visit.labResults,
       ultrasoundNotes: visit.ultrasoundNotes,
       // Ultrasound study linkage lands in a later slice (DICOM); the
       // renderer treats an empty array as "no page 2 unless notes
@@ -455,6 +456,7 @@ export function clinicLetterhead(clinic: {
 
 export function patientHeader(
   patient: {
+    id: string;
     firstName: string;
     lastName: string;
     dateOfBirth: Date | null;
@@ -476,10 +478,22 @@ export function patientHeader(
     placeOfBirth: patient.placeOfBirth,
     paymentCode,
     legacyId: patient.legacyId,
+    patientIdShort: patientIdShort(patient.legacyId, patient.id),
     birthWeightG: patient.birthWeightG,
     birthLengthCm: decimalToNumber(patient.birthLengthCm),
     birthHeadCircumferenceCm: decimalToNumber(patient.birthHeadCircumferenceCm),
   };
+}
+
+function patientIdShort(legacyId: number | null, uuid: string): string {
+  // Migrated patients carry a clinic-scoped numeric id from the
+  // Access import (e.g. "15626"). New patients created in-app have
+  // no per-clinic auto-incrementing sequence yet, so we fall back
+  // to an 8-character slug from the UUID — short enough to scan,
+  // unique within a clinic, and consistent with the PT-XXXXXXXX
+  // pattern used elsewhere.
+  if (legacyId != null) return String(legacyId);
+  return uuid.replace(/-/g, '').slice(0, 8).toUpperCase();
 }
 
 function dateToIso(value: Date): string {
