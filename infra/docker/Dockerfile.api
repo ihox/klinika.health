@@ -1,6 +1,17 @@
 ## Klinika api — NestJS 10
 ##
-## Dev image: hot-reload via bind-mount in docker-compose.dev.yml.
+## ⚠️ DEV-ONLY image. Hot-reload via bind-mount in
+## docker-compose.dev.yml. Production (cloud + on-premise) uses
+## ghcr.io/donetamed/klinika-api:${KLINIKA_VERSION} — a separately-
+## built release image pulled by docker-compose.onprem.yml. Migrations
+## in production run as a deliberate two-step deploy
+## (docs/deployment.md §"Database migrations"), never on container
+## start.
+##
+## The CMD below auto-runs `prisma migrate deploy` only when
+## NODE_ENV=development as a defensive guard — if this image is ever
+## misused outside the dev compose file, migrations won't fire and
+## the container will boot like a normal production API.
 
 FROM node:20.18-bookworm-slim AS dev
 
@@ -41,18 +52,22 @@ EXPOSE 3001
 #      At runtime apps/api is bind-mounted (live schema), so we
 #      regenerate against the current schema. Idempotent and cheap (~1s).
 #   2. `prisma migrate deploy` — applies any pending Prisma migrations
-#      against the dev DB. This is the dev convenience that prevents the
-#      "schema drift after `make stop && make dev`" class of bug: a
-#      developer pulls new code with a new migration but doesn't run
-#      `make db-migrate`, and prints / chart queries 500 because the
-#      Prisma client expects columns the DB doesn't have. A bad migration
-#      fails the container start loudly — the desired behavior over
-#      silently serving against a stale schema.
+#      against the dev DB, but ONLY when NODE_ENV=development. This is
+#      the dev convenience that prevents the "schema drift after
+#      `make stop && make dev`" class of bug: a developer pulls new
+#      code with a new migration but doesn't run `make db-migrate`,
+#      and prints / chart queries 500 because the Prisma client
+#      expects columns the DB doesn't have. A bad migration fails the
+#      container start loudly — the desired behavior over silently
+#      serving against a stale schema.
 #
-#      Production keeps a separate CI/CD migration step (see
-#      docs/deployment.md); this Dockerfile is dev-only.
+#      The NODE_ENV guard is defense-in-depth: production runs out of
+#      the GHCR release image, never this Dockerfile, and migrations
+#      there are a deliberate two-step deploy (docs/deployment.md).
+#      But if this image ever leaks into another environment, the
+#      guard keeps it from clobbering a prod schema.
 #
 #      Raw SQL extras (apps/api/prisma/sql/*.sql) are applied by
 #      `make db-migrate` and not on container start — they're stable
 #      infra (RLS, search indexes) that doesn't change per slice.
-CMD ["sh", "-lc", "pnpm exec prisma generate && pnpm exec prisma migrate deploy && pnpm dev"]
+CMD ["sh", "-lc", "pnpm exec prisma generate && { [ \"$NODE_ENV\" = development ] && pnpm exec prisma migrate deploy || echo 'Skipping prisma migrate deploy (NODE_ENV != development)'; } && pnpm dev"]
