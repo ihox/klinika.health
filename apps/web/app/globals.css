@@ -31,8 +31,7 @@
        scheduled    → indigo  (calm, future event)
        in-progress  → cyan    (active; arrived shares this family)
        completed    → green   (done, positive)
-       no-show      → amber   (didn't happen, attention)
-       cancelled    → red     (won't happen, destructive)                  */
+       no-show      → amber   (didn't happen, attention)                  */
   --status-scheduled-bg:       #E0E7FF;
   --status-scheduled-fg:       #3730A3;
   --status-scheduled-border:   #C7D2FE;
@@ -52,11 +51,6 @@
   --status-no-show-fg:         #92400E;
   --status-no-show-border:     #FDE68A;
   --status-no-show-solid:      #B45309;
-
-  --status-cancelled-bg:       #FEE2E2;
-  --status-cancelled-fg:       #991B1B;
-  --status-cancelled-border:   #FECACA;
-  --status-cancelled-solid:    #B91C1C;
 
   /* Dashboard in-progress chip family (BLUE, distinct from the CYAN
      `--status-in-progress-*` cards). Receptionist stat-foot chip,
