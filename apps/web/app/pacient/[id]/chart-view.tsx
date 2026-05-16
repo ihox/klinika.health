@@ -176,6 +176,15 @@ export function ChartView({ patientId, initialVisitId }: Props): ReactElement {
     return data.visits.findIndex((v) => v.id === activeVisitId);
   }, [data, activeVisitId]);
 
+  // Reactive — re-evaluates whenever the chart bundle refreshes. When
+  // the doctor clicks "Përfundo vizitën" and the chart refetches, the
+  // active visit flips to `completed` and this returns null again, so
+  // the "+ Vizitë e re" button reappears for legitimate follow-ups.
+  const hasActiveVisitToday = useMemo(() => {
+    if (!data) return false;
+    return findActiveVisitToday(data.visits) != null;
+  }, [data]);
+
   const navigateVisit = useCallback(
     (visitId: string) => {
       setActiveVisitId(visitId);
@@ -375,8 +384,16 @@ export function ChartView({ patientId, initialVisitId }: Props): ReactElement {
                     daysSincePrevious={daysSincePreviousFor(data.visits, activeIndex)}
                     onOpenHistory={() => setHistoryOpenForVisit(activeVisit)}
                     onDeleteRequest={() => setDeleteDialogOpen(true)}
-                    onNewVisitRequest={() =>
-                      void createNewVisit(patientId, navigateVisit, refresh, setStatusToast)
+                    onNewVisitRequest={
+                      hasActiveVisitToday
+                        ? undefined
+                        : () =>
+                            void createNewVisit(
+                              patientId,
+                              navigateVisit,
+                              refresh,
+                              setStatusToast,
+                            )
                     }
                     onPrintVisitReport={() =>
                       void printVisitReport(activeVisit)

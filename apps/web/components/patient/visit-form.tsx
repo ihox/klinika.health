@@ -42,7 +42,14 @@ interface Props {
   daysSincePrevious: number | null;
   onOpenHistory: () => void;
   onDeleteRequest: () => void;
-  onNewVisitRequest: () => void;
+  /**
+   * Open the "+ Vizitë e re" flow. Hidden in the action bar when
+   * undefined — the chart shell omits this prop while the patient
+   * still has an active visit today, since creating another row
+   * would just route the doctor back into the existing one via the
+   * same-patient guard (ADR-013 §C).
+   */
+  onNewVisitRequest?: () => void;
   /** Open the print pipeline for the active visit (PDF iframe + browser print). */
   onPrintVisitReport: () => void;
   /** Open the "Lësho vërtetim absencë" modal anchored at this visit. */
@@ -478,7 +485,8 @@ interface VisitActionBarProps {
   lastSavedAt: string | null;
   onSaveNow: () => void;
   onDelete: () => void;
-  onNewVisit: () => void;
+  /** Undefined hides the affordance — see Props.onNewVisitRequest. */
+  onNewVisit?: () => void;
   onPrintVisitReport: () => void;
   onIssueVertetim: () => void;
   onPrintHistory: () => void;
@@ -546,9 +554,16 @@ function VisitActionBar({
         >
           Printo historinë
         </Button>
-        <Button variant="secondary" size="sm" onClick={onNewVisit}>
-          + Vizitë e re
-        </Button>
+        {onNewVisit ? (
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={onNewVisit}
+            data-testid="new-visit-trigger"
+          >
+            + Vizitë e re
+          </Button>
+        ) : null}
       </div>
       <div className="flex flex-wrap items-center gap-2">
         <AutoSaveIndicator
