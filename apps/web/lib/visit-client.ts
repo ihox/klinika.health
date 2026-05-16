@@ -102,13 +102,16 @@ export const visitClient = {
   /**
    * Doctor's "Vizitë e re" — POSTs to /api/visits/doctor-new, which
    * auto-pairs the new row to today's in-progress booking when one
-   * is available (sibling / companion arrives without a booking) and
-   * otherwise falls through to a calendar-invisible chart entry. The
-   * caller doesn't need to know which path the server took; the
-   * returned VisitDto is the same shape either way.
+   * is available (sibling / companion arrives without a booking),
+   * routes the doctor into an existing active visit when this
+   * patient already has one today (`existed: true` — ADR-013 §C),
+   * and otherwise falls through to a calendar-invisible standalone
+   * chart entry. The caller can branch on `existed` to show the
+   * "Po hapet vizita ekzistuese" toast; the visit DTO is the same
+   * shape across all three branches.
    */
   create: (patientId: string, visitDate?: string) =>
-    apiFetch<{ visit: VisitDto }>('/api/visits/doctor-new', {
+    apiFetch<{ visit: VisitDto; existed: boolean }>('/api/visits/doctor-new', {
       method: 'POST',
       json: visitDate ? { patientId, visitDate } : { patientId },
     }),

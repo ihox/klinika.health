@@ -1,13 +1,17 @@
-// Phase 2b patch — unit tests for `VisitsService.createDoctorNew`'s
+// Slice B — unit tests for `VisitsService.createDoctorNew`'s
 // patient-active-visit-today gate.
 //
 // The full DB round-trip lives in the gated integration spec; this
 // spec stubs Prisma + collaborators so the gate logic runs in the
-// fast unit suite. We assert which DB-create shape the service emits:
-//   - regular  → no isWalkIn, no scheduledFor, no pairedWithVisitId
-//                (defaults from Prisma schema apply)
-//   - walk-in  → isWalkIn=true, status='in_progress', pairedWithVisitId set
-//   - standalone fallback → no isWalkIn (defaults from Prisma schema apply)
+// fast unit suite. Three creation paths get covered:
+//
+//   - existed-route → gate fires; NO new row created; service returns
+//                     `{ visit, existed: true }` with the seeded
+//                     active visit's DTO.
+//   - walk-in       → no active row today + pair target available;
+//                     paired walk-in row created.
+//   - standalone    → no active row today + no pair target; calendar-
+//                     invisible standalone row created.
 //
 // CLAUDE.md §1.5 — Albanian-only UI applies to user-facing strings, not
 // to comments or test identifiers, which stay in English for clarity.
@@ -37,9 +41,46 @@ function makeCtx(): RequestContext {
   };
 }
 
+/**
+ * Build a row shape compatible with `toVisitDto` so the existed-route
+ * branch can serialize it without exploding. Only the fields the DTO
+ * touches need to be present.
+ */
+function existingVisitRow(id: string): Record<string, unknown> {
+  return {
+    id,
+    clinicId: CLINIC,
+    patientId: PATIENT,
+    visitDate: new Date('2026-05-15T00:00:00Z'),
+    status: 'in_progress',
+    complaint: null,
+    feedingNotes: null,
+    feedingBreast: false,
+    feedingFormula: false,
+    feedingSolid: false,
+    weightG: null,
+    heightCm: null,
+    headCircumferenceCm: null,
+    temperatureC: null,
+    paymentCode: null,
+    examinations: null,
+    ultrasoundNotes: null,
+    legacyDiagnosis: null,
+    prescription: null,
+    labResults: null,
+    followupNotes: null,
+    otherNotes: null,
+    createdAt: new Date('2026-05-15T09:00:00Z'),
+    updatedAt: new Date('2026-05-15T09:00:00Z'),
+    createdBy: DOCTOR,
+    updatedBy: DOCTOR,
+    diagnoses: [],
+  };
+}
+
 interface SetupOpts {
   /** What `prisma.visit.findFirst` returns for the active-visit-today check. */
-  activeVisitToday: { id: string } | null;
+  activeVisitToday: Record<string, unknown> | null;
   /**
    * What `calendar.findNextUnpairedScheduledVisit` returns when the gate
    * does NOT short-circuit. Default `null` (fallback path).
@@ -48,10 +89,6 @@ interface SetupOpts {
 }
 
 function setup(opts: SetupOpts) {
-  // `toVisitDto` calls `.toISOString()` on createdAt + updatedAt, so the
-  // mock returns concrete Dates. We don't care about the row contents
-  // beyond what the service projects — every test asserts on the
-  // `data` argument that was passed in, not the response.
   const visitCreate = vi.fn().mockImplementation(({ data }: { data: Record<string, unknown> }) =>
     Promise.resolve({
       id: 'new-visit-uuid',
@@ -103,33 +140,29 @@ function setup(opts: SetupOpts) {
 describe('VisitsService.createDoctorNew — patient-active-visit-today gate', () => {
   const payload = { patientId: PATIENT };
 
-  it('takes the regular-visit path when the patient has an active row today', async () => {
-    const { service, calendar, visitCreate } = setup({
-      activeVisitToday: { id: 'today-row' },
+  it('returns the existing visit with existed=true when the patient has an active row today', async () => {
+    const existing = existingVisitRow('today-row');
+    const { service, calendar, visitCreate, audit } = setup({
+      activeVisitToday: existing,
     });
-    await service.createDoctorNew(CLINIC, payload, makeCtx());
+    const result = await service.createDoctorNew(CLINIC, payload, makeCtx());
 
-    // Gate fired → pair lookup never runs.
+    // Gate fired → NO new row was created, no pair lookup ran, no
+    // walk-in arrival side effects.
+    expect(visitCreate).not.toHaveBeenCalled();
     expect(calendar.findNextUnpairedScheduledVisit).not.toHaveBeenCalled();
     expect(calendar.computeWalkInArrivedAt).not.toHaveBeenCalled();
+    // No `visit.created` / `visit.standalone.created` audit row.
+    expect(audit.record).not.toHaveBeenCalled();
 
-    // visit.create is invoked with the regular shape: no isWalkIn,
-    // no pairing, no scheduledFor. `status` is set explicitly to
-    // 'in_progress' by VisitsService.create() (migration
-    // 20260519120000 flipped the schema default to 'in_progress'; the
-    // service still passes it through so the call-site intent is
-    // readable).
-    expect(visitCreate).toHaveBeenCalledTimes(1);
-    const data = visitCreate.mock.calls[0]?.[0]?.data as Record<string, unknown>;
-    expect(data['isWalkIn']).toBeUndefined();
-    expect(data['scheduledFor']).toBeUndefined();
-    expect(data['pairedWithVisitId']).toBeUndefined();
-    expect(data['arrivedAt']).toBeUndefined();
-    expect(data['status']).toBe('in_progress');
+    expect(result.existed).toBe(true);
+    expect(result.visit.id).toBe('today-row');
   });
 
   it('queries the gate scoped to this patient with the active-status whitelist', async () => {
-    const { service, prisma } = setup({ activeVisitToday: { id: 't' } });
+    const { service, prisma } = setup({
+      activeVisitToday: existingVisitRow('today-row'),
+    });
     await service.createDoctorNew(CLINIC, payload, makeCtx());
 
     expect(prisma.visit.findFirst).toHaveBeenCalledTimes(1);
@@ -152,8 +185,9 @@ describe('VisitsService.createDoctorNew — patient-active-visit-today gate', ()
       activeVisitToday: null,
       pair: { id: PAIR_TARGET, scheduledFor: new Date('2026-05-15T10:30:00Z') },
     });
-    await service.createDoctorNew(CLINIC, payload, makeCtx());
+    const result = await service.createDoctorNew(CLINIC, payload, makeCtx());
 
+    expect(result.existed).toBe(false);
     expect(visitCreate).toHaveBeenCalledTimes(1);
     const data = visitCreate.mock.calls[0]?.[0]?.data as Record<string, unknown>;
     expect(data['isWalkIn']).toBe(true);
@@ -168,8 +202,9 @@ describe('VisitsService.createDoctorNew — patient-active-visit-today gate', ()
       activeVisitToday: null,
       pair: null,
     });
-    await service.createDoctorNew(CLINIC, payload, makeCtx());
+    const result = await service.createDoctorNew(CLINIC, payload, makeCtx());
 
+    expect(result.existed).toBe(false);
     // Fallback is `this.create()` — regular shape, no walk-in flag.
     expect(visitCreate).toHaveBeenCalledTimes(1);
     const data = visitCreate.mock.calls[0]?.[0]?.data as Record<string, unknown>;
@@ -178,9 +213,9 @@ describe('VisitsService.createDoctorNew — patient-active-visit-today gate', ()
     expect(data['scheduledFor']).toBeUndefined();
   });
 
-  it('does not emit the walk-in arrival SSE on the regular-visit gate path', async () => {
+  it('does not emit any SSE event on the existed-route gate path', async () => {
     const { service, calendarEvents } = setup({
-      activeVisitToday: { id: 't' },
+      activeVisitToday: existingVisitRow('today-row'),
     });
     await service.createDoctorNew(CLINIC, payload, makeCtx());
     expect(calendarEvents.emit).not.toHaveBeenCalled();

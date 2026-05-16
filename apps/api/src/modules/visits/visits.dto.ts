@@ -273,6 +273,19 @@ export interface VisitDiagnosisDto {
   orderIndex: number;
 }
 
+/**
+ * Result of `POST /api/visits/doctor-new`. Carries the visit DTO plus
+ * an `existed` flag that tells the caller whether the server created
+ * a new row (`false`) or routed them to a pre-existing active visit
+ * for the same patient on the same day (`true`). The frontend uses
+ * the flag to toast "Po hapet vizita ekzistuese" and skip the
+ * fresh-creation animation. See ADR-013 Scenario C.
+ */
+export interface DoctorNewVisitResult {
+  visit: VisitDto;
+  existed: boolean;
+}
+
 export interface VisitHistoryEntryDto {
   id: string;
   action: 'visit.created' | 'visit.updated' | 'visit.deleted' | 'visit.restored';

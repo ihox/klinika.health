@@ -329,7 +329,7 @@ export function ChartView({ patientId, initialVisitId }: Props): ReactElement {
           {data.visits.length === 0 ? (
             <EmptyVisitsState
               patientId={patientId}
-              onCreateVisit={() => void createNewVisit(patientId, navigateVisit, refresh)}
+              onCreateVisit={() => void createNewVisit(patientId, navigateVisit, refresh, setStatusToast)}
             />
           ) : (
             <>
@@ -350,7 +350,7 @@ export function ChartView({ patientId, initialVisitId }: Props): ReactElement {
                     onOpenHistory={() => setHistoryOpenForVisit(activeVisit)}
                     onDeleteRequest={() => setDeleteDialogOpen(true)}
                     onNewVisitRequest={() =>
-                      void createNewVisit(patientId, navigateVisit, refresh)
+                      void createNewVisit(patientId, navigateVisit, refresh, setStatusToast)
                     }
                     onPrintVisitReport={() =>
                       void printVisitReport(activeVisit)
@@ -1121,12 +1121,24 @@ async function createNewVisit(
   patientId: string,
   navigateVisit: (visitId: string) => void,
   refresh: () => Promise<void>,
+  setStatusToast: (toast: { id: string; message: string } | null) => void,
 ): Promise<void> {
   // Flush the auto-save store before navigating away from the current
   // visit so the doctor's pending edits land server-side first.
   await useAutoSaveStore.getState().save();
   try {
     const res = await visitClient.create(patientId);
+    if (res.existed) {
+      // ADR-013 Scenario C: server detected an active visit for this
+      // patient today and routed us into it. Toast tells the doctor
+      // why their click didn't produce a fresh visit; navigation
+      // still goes to the visit id the server returned.
+      setStatusToast({
+        id: `existed-${res.visit.id}`,
+        message:
+          'Pacienti ka tashmë një vizitë aktive sot. Po hapet vizita ekzistuese.',
+      });
+    }
     await refresh();
     navigateVisit(res.visit.id);
   } catch {

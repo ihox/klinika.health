@@ -772,13 +772,14 @@ describe.skipIf(!ENABLED)('Visits integration', () => {
       expect(row!.status).toBe('in_progress');
     });
 
-    // Phase 2b patch — the patient-has-active-visit-today gate. When
-    // the doctor opens a chart for a patient who already has a row on
-    // today's active calendar (scheduled / arrived / in_progress) and
-    // clicks "+ Vizitë e re" while picking the SAME patient, the new
-    // visit must be a regular visit, not a walk-in paired to the
-    // patient's own scheduled row. The pair-or-fallback path only
-    // runs when this patient is genuinely fresh on the day.
+    // Slice B / ADR-013 §C: when the doctor opens "+ Vizitë e re" for
+    // a patient who already has an active visit today (status ∈
+    // {scheduled, arrived, in_progress}), the server must NOT create a
+    // parallel row — it returns the existing visit's id with
+    // `existed: true` so the frontend routes the doctor into it.
+    // Completed / no_show / cancelled today do NOT trigger the guard:
+    // a morning-completed patient who returns this afternoon
+    // legitimately gets a fresh visit row.
 
     describe('patient-active-visit-today gate', () => {
       async function seedForSelf(
@@ -818,51 +819,73 @@ describe.skipIf(!ENABLED)('Visits integration', () => {
           .send({ patientId });
       }
 
-      async function expectRegularRow(visitId: string): Promise<void> {
-        const row = await prisma.visit.findUnique({ where: { id: visitId } });
-        expect(row).toBeTruthy();
-        expect(row!.isWalkIn).toBe(false);
-        expect(row!.scheduledFor).toBeNull();
-        expect(row!.arrivedAt).toBeNull();
-        expect(row!.pairedWithVisitId).toBeNull();
-        expect(row!.status).toBe('in_progress');
-        // Regular-visit path emits the legacy `visit.created` audit row.
-        const audits = await prisma.auditLog.findMany({
-          where: { clinicId, resourceId: visitId, action: 'visit.created' },
+      /**
+       * Assert that the doctor-new response routed the caller to a
+       * pre-existing visit instead of creating a new one. The seeded
+       * row's id must equal the returned visit id; no extra rows for
+       * the patient today; no fresh `visit.created` /
+       * `visit.standalone.created` audit row.
+       */
+      async function expectExistedRoute(
+        seededId: string,
+        body: { visit: { id: string }; existed: boolean },
+      ): Promise<void> {
+        expect(body.existed).toBe(true);
+        expect(body.visit.id).toBe(seededId);
+
+        const rows = await prisma.visit.findMany({
+          where: {
+            clinicId,
+            patientId,
+            visitDate: new Date(`${todayBelgradeIso()}T00:00:00Z`),
+            deletedAt: null,
+          },
         });
-        expect(audits.length).toBe(1);
+        expect(rows.length).toBe(1);
+        expect(rows[0]!.id).toBe(seededId);
+
+        const creationAudits = await prisma.auditLog.findMany({
+          where: {
+            clinicId,
+            resourceId: seededId,
+            action: { in: ['visit.created', 'visit.standalone.created'] },
+          },
+        });
+        expect(creationAudits.length).toBe(0);
       }
 
-      it('returns a regular visit when the patient already has a SCHEDULED row today', async () => {
-        await seedForSelf('10:30', 'scheduled');
+      it('routes to the existing visit when the patient already has a SCHEDULED row today', async () => {
+        const seed = await seedForSelf('10:30', 'scheduled');
         const res = await postDoctorNewForSelf();
         expect(res.status).toBe(201);
-        await expectRegularRow(res.body.visit.id);
+        await expectExistedRoute(seed.id, res.body);
       });
 
-      it('returns a regular visit when the patient already has an ARRIVED row today', async () => {
-        await seedForSelf('10:30', 'arrived');
+      it('routes to the existing visit when the patient already has an ARRIVED row today', async () => {
+        const seed = await seedForSelf('10:30', 'arrived');
         const res = await postDoctorNewForSelf();
         expect(res.status).toBe(201);
-        await expectRegularRow(res.body.visit.id);
+        await expectExistedRoute(seed.id, res.body);
       });
 
-      it('returns a regular visit when the patient already has an IN_PROGRESS row today', async () => {
-        await seedForSelf('10:30', 'in_progress');
+      it('routes to the existing visit when the patient already has an IN_PROGRESS row today', async () => {
+        const seed = await seedForSelf('10:30', 'in_progress');
         const res = await postDoctorNewForSelf();
         expect(res.status).toBe(201);
-        await expectRegularRow(res.body.visit.id);
+        await expectExistedRoute(seed.id, res.body);
       });
 
-      it("does not collapse 'completed' today into the gate — a follow-up visit is still a walk-in", async () => {
+      it("does not collapse 'completed' today into the gate — a follow-up visit is still allowed", async () => {
         // Patient finished this morning. Doctor sees them back this
         // afternoon and clicks "+ Vizitë e re". The completed row
         // doesn't count as active, so the pair-or-fallback runs; with
         // no other scheduled visit today the result is the standalone
-        // fallback (is_walk_in=false from the legacy POST shape).
-        await seedForSelf('09:00', 'completed');
+        // fallback (is_walk_in=false, fresh row).
+        const seed = await seedForSelf('09:00', 'completed');
         const res = await postDoctorNewForSelf();
         expect(res.status).toBe(201);
+        expect(res.body.existed).toBe(false);
+        expect(res.body.visit.id).not.toBe(seed.id);
         const row = await prisma.visit.findUnique({
           where: { id: res.body.visit.id },
         });
@@ -873,9 +896,11 @@ describe.skipIf(!ENABLED)('Visits integration', () => {
       });
 
       it("does not collapse 'no_show' today into the gate", async () => {
-        await seedForSelf('09:00', 'no_show');
+        const seed = await seedForSelf('09:00', 'no_show');
         const res = await postDoctorNewForSelf();
         expect(res.status).toBe(201);
+        expect(res.body.existed).toBe(false);
+        expect(res.body.visit.id).not.toBe(seed.id);
         const row = await prisma.visit.findUnique({
           where: { id: res.body.visit.id },
         });
@@ -884,9 +909,11 @@ describe.skipIf(!ENABLED)('Visits integration', () => {
       });
 
       it("does not collapse 'cancelled' today into the gate", async () => {
-        await seedForSelf('09:00', 'cancelled');
+        const seed = await seedForSelf('09:00', 'cancelled');
         const res = await postDoctorNewForSelf();
         expect(res.status).toBe(201);
+        expect(res.body.existed).toBe(false);
+        expect(res.body.visit.id).not.toBe(seed.id);
         const row = await prisma.visit.findUnique({
           where: { id: res.body.visit.id },
         });

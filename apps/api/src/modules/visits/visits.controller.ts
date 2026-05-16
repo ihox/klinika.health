@@ -24,6 +24,7 @@ import {
   DeleteVisitBodySchema,
   UpdateVisitSchema,
   VisitHistoryQuerySchema,
+  type DoctorNewVisitResult,
   type VisitDto,
   type VisitHistoryEntryDto,
 } from './visits.dto';
@@ -85,7 +86,7 @@ export class VisitsController {
   async createDoctorNew(
     @Body() body: unknown,
     @Ctx() ctx: RequestContext,
-  ): Promise<{ visit: VisitDto }> {
+  ): Promise<DoctorNewVisitResult> {
     const parsed = CreateVisitSchema.safeParse(body);
     if (!parsed.success) {
       throw new BadRequestException({
@@ -93,8 +94,12 @@ export class VisitsController {
         issues: parsed.error.flatten(),
       });
     }
-    const visit = await this.visits.createDoctorNew(ctx.clinicId!, parsed.data, ctx);
-    return { visit };
+    // The service returns `{ visit, existed }`. `existed=true` means
+    // the doctor's patient already had an active visit today and the
+    // server routed them to it (no new row created); the frontend
+    // toasts "Po hapet vizita ekzistuese" and navigates into the
+    // existing chart. See ADR-013 Scenario C.
+    return this.visits.createDoctorNew(ctx.clinicId!, parsed.data, ctx);
   }
 
   @Get(':id')

@@ -16,6 +16,7 @@ import type { AppRole } from '../../common/decorators/roles.decorator';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
   type CreateVisitInput,
+  type DoctorNewVisitResult,
   type UpdateVisitInput,
   type VisitDto,
   type VisitHistoryEntryDto,
@@ -143,7 +144,7 @@ export class VisitsService {
     clinicId: string,
     payload: CreateVisitInput,
     ctx: RequestContext,
-  ): Promise<VisitDto> {
+  ): Promise<DoctorNewVisitResult> {
     this.requireDoctorOrAdmin(ctx);
     if (!ctx.userId) {
       throw new ForbiddenException('Sesioni i pavlefshëm.');
@@ -156,17 +157,14 @@ export class VisitsService {
 
     const today = localDateToday();
 
-    // Gate (Phase 2b patch): if THIS patient already has an active
-    // visit today, the doctor is charting them as a follow-up of
-    // their own existing row — not as a walk-in companion of someone
-    // else. Short-circuit to the regular-visit path so the new row
-    // is `is_walk_in=false`, `scheduled_for=null`, `status='in_progress'`,
-    // no pairing — identical to the legacy `POST /api/visits` shape.
-    //
-    // Active = the three pre-finish statuses (scheduled / arrived /
-    // in_progress). Completed / no_show / cancelled today do NOT
-    // count: a patient who finished this morning and walks back in
-    // this afternoon is correctly a walk-in again.
+    // Same-patient-active-today guard (Slice B / ADR-013 Scenario C).
+    // If this patient already has an active visit today, do NOT create
+    // a parallel row — return the existing visit so the frontend can
+    // route the doctor into it. "Active" = pre-finish statuses
+    // (scheduled / arrived / in_progress). Completed / no_show /
+    // cancelled today do NOT trigger the guard — a morning-completed
+    // patient who walks back in this afternoon legitimately gets a
+    // fresh visit row.
     const activeVisitToday = await this.prisma.visit.findFirst({
       where: {
         clinicId,
@@ -175,10 +173,10 @@ export class VisitsService {
         visitDate: utcMidnight(today),
         status: { in: ['scheduled', 'arrived', 'in_progress'] },
       },
-      select: { id: true },
+      include: { diagnoses: { include: { code: true } } },
     });
     if (activeVisitToday) {
-      return this.create(clinicId, payload, ctx);
+      return { visit: toVisitDto(activeVisitToday), existed: true };
     }
 
     const pair = await this.calendar.findNextUnpairedScheduledVisit(clinicId, today);
@@ -186,7 +184,8 @@ export class VisitsService {
     if (pair == null) {
       // No scheduled visit to pair with → standalone chart entry,
       // identical to the legacy `POST /api/visits` shape.
-      return this.create(clinicId, payload, ctx);
+      const visit = await this.create(clinicId, payload, ctx);
+      return { visit, existed: false };
     }
 
     // Paired walk-in. Matches receptionist-initiated walk-in semantics
@@ -263,7 +262,7 @@ export class VisitsService {
       pairedWithVisitId: pair.id,
     });
 
-    return toVisitDto(created);
+    return { visit: toVisitDto(created), existed: false };
   }
 
   // -------------------------------------------------------------------------
