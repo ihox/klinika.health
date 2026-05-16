@@ -82,9 +82,12 @@ interface Props {
   me: MeResponse['user'] | null;
   /** Optional sibling rendered to the right of the brand (e.g. global search). */
   brandAdjacent?: React.ReactNode;
+  /** Optional sibling rendered between the menu items and the user menu
+   *  (e.g. the doctor's global patient search). */
+  rightAdjacent?: React.ReactNode;
 }
 
-export function ClinicTopNav({ me, brandAdjacent }: Props) {
+export function ClinicTopNav({ me, brandAdjacent, rightAdjacent }: Props) {
   const pathname = usePathname() ?? '';
   const roles: AuthRole[] = me?.roles ?? [];
 
@@ -127,6 +130,7 @@ export function ClinicTopNav({ me, brandAdjacent }: Props) {
           {brandAdjacent ? <div className="flex items-center">{brandAdjacent}</div> : null}
         </div>
         <div className="flex items-center gap-4">
+          {rightAdjacent}
           {me ? (
             <ClinicUserMenu user={me} />
           ) : (

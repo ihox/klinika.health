@@ -11,6 +11,7 @@ import {
 } from 'react';
 
 import { ClinicTopNav } from '@/components/clinic-top-nav';
+import { GlobalPatientSearch } from './global-patient-search';
 import { NotificationToast } from '@/components/notification-toast';
 import { Skeleton } from '@/components/skeleton';
 import { Button } from '@/components/ui/button';
@@ -332,9 +333,10 @@ function DashboardTopBar(): ReactElement {
   // Role-filtered top nav + user-menu dropdown (ADR-004). A user who
   // lands here while still loading `/me` sees the brand chrome with
   // empty menu items + avatar placeholder; everything re-renders
-  // once roles arrive.
+  // once roles arrive. The clinic-wide patient search renders to the
+  // right of the menu items; ⌘K / Ctrl+K focuses it from anywhere.
   const { me } = useMe();
-  return <ClinicTopNav me={me} />;
+  return <ClinicTopNav me={me} rightAdjacent={<GlobalPatientSearch />} />;
 }
 
 // =========================================================================
@@ -418,12 +420,13 @@ function AppointmentsPanel({
   const [filter, setFilter] = useState('');
   const filterInputRef = useRef<HTMLInputElement | null>(null);
 
-  // `/` or ⌘/Ctrl+K focuses the quick filter — same shortcut the
-  // receptionist's global search uses.
+  // `/` focuses the in-panel filter. ⌘K / Ctrl+K is reserved for the
+  // top-nav global patient search (see GlobalPatientSearch) so the two
+  // shortcuts don't collide.
   useEffect(() => {
     function onKey(e: KeyboardEvent): void {
       if (isEditableTarget(e.target)) return;
-      if (e.key === '/' || ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k')) {
+      if (e.key === '/') {
         e.preventDefault();
         filterInputRef.current?.focus();
         filterInputRef.current?.select();
@@ -465,7 +468,7 @@ function AppointmentsPanel({
             ref={filterInputRef}
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
-            placeholder="Kërko pacient ose diagnozë... ( / )"
+            placeholder="Kërko pacientin në listë"
             aria-label="Kërko në terminet e sotit"
             className="h-9 w-full rounded-md border border-line-strong bg-surface-elevated pl-8 pr-3 text-[13px] text-ink placeholder:text-ink-faint focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/25"
           />

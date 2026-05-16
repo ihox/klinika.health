@@ -221,7 +221,7 @@ test.describe('Doctor home dashboard', () => {
     await mockApi(page, snapshot);
     await page.goto('/doctor');
 
-    await page.getByPlaceholder(/Kërko pacient ose diagnozë/).fill('Mira');
+    await page.getByPlaceholder('Kërko pacientin në listë').fill('Mira');
     // Scope the assertions to the appointments panel — the next-patient
     // card on the right still shows other names, which is expected.
     const apptsPanel = page

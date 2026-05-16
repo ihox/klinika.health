@@ -37,8 +37,12 @@ export function DoctorPatientsView() {
   // fires for stale bookmarks; we forward to the chart/master-data
   // form so the saved URL keeps working.
   const initialPatientId = searchParams?.get('patientId') ?? null;
-  const [query, setQuery] = useState('');
-  const [debounced, setDebounced] = useState('');
+  // `?q=…` pre-fills the search box — used by the top-nav global
+  // patient search's "Shiko të gjithë pacientët →" overflow link so
+  // the doctor lands here mid-thought and continues filtering.
+  const initialQuery = searchParams?.get('q') ?? '';
+  const [query, setQuery] = useState(initialQuery);
+  const [debounced, setDebounced] = useState(initialQuery);
   const [results, setResults] = useState<PatientFullDto[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
