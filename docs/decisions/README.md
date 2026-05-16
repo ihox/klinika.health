@@ -50,6 +50,7 @@ Triggers that would justify reopening this decision.
 | 013 | [Standalone clinical visits](013-standalone-visits.md) | Accepted |
 | 014 | [Access reader uses mdb-json](014-access-reader-mdb-json.md) | Accepted |
 | 015 | [DOB orphan policy + swap recovery + PASS criteria](015-dob-orphan-policy.md) | Accepted |
+| 016 | [Payment-code mapping + Tjera preflight refinement](016-payment-code-and-preflight-refinement.md) | Accepted |
 
 ## Adding a new ADR
 

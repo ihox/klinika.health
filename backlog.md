@@ -21,3 +21,12 @@ original work that surfaced the need.
 - The canonical states are now: scheduled / arrived / in_progress / completed / no_show
 - **Effort:** ~30 min
 - **Priority:** low (internal docs, no user impact)
+
+## ui(payment-code): expand payment-code alphabet to include E (and U if clarified)
+
+- **Files:** any UI surface that renders `visits.payment_code` (chart, day-stats card, print templates); clinic seed `paymentCodes` JSON
+- **Scope:** Klinika UI/seed currently assume the alphabet `{A, B, C, D}`. ADR-016 migrates `E` as-is (22.32% of DonetaMED's visits, 14,184 rows). Add the label/colour for `E` in `clinics.payment_codes` and update any switch/lookup that defaults `E` to a fallback.
+- **Also:** the `U` code appears 52 times in the live source with unknown semantics — ask Dr. Taulant; if clarified, add it to `_KNOWN_PAYMENT_CODES` in `tools/migrate/klinika_migrate/visits.py` and drop the `payment_code_unknown_letter` warning for U specifically.
+- **Effort:** ~1-2h once the label/colour decisions are made
+- **Priority:** medium (E is visible on 22% of migrated visits; renders as "unknown code" without this fix)
+- **Reference:** ADR-016, slice 17 STEP 6 dry-run

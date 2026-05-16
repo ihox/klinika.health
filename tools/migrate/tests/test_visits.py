@@ -17,7 +17,6 @@ from klinika_migrate.reports import JsonlWriter, VisitImportReport
 from klinika_migrate.visits import (
     PATIENT_CARDINALITY_MAX,
     PATIENT_CARDINALITY_MIN,
-    PAYMENT_CARDINALITY_MAX,
     import_visits,
     run_preflight_checks,
 )
@@ -154,35 +153,66 @@ def test_alert_prefix_when_present(tmp_path: Path) -> None:
     assert p.other_notes == "ALERT: Alergji ndaj penicilinës"  # type: ignore[attr-defined]
 
 
-def test_payment_code_e_dropped(tmp_path: Path) -> None:
-    """ADR-012 carve-out: payment code 'E' has unknown semantics, so
-    it imports as NULL with a warning rather than as-is."""
+def test_payment_code_e_migrated_as_data(tmp_path: Path) -> None:
+    """ADR-016: 'E' is no longer NULL'd. STEP 6 found E is 22% of
+    visits in the live source — it's real signal, not noise."""
     db = CapturingDB()
     rows = [_row(ID=1, Tjera="E")]
     report, warnings, _ = _run(rows, db=db, tmp_path=tmp_path)
     assert report.imported == 1
     p = db.calls[0][2]
-    assert p.payment_code is None  # type: ignore[attr-defined]
-    assert any(w["code"] == "payment_code_e_dropped" for w in warnings)
+    assert p.payment_code == "E"  # type: ignore[attr-defined]
+    assert warnings == []
 
 
-def test_payment_code_unknown(tmp_path: Path) -> None:
+def test_payment_code_unknown_letter(tmp_path: Path) -> None:
+    """ADR-016: single letters outside {A,B,C,D,E} (e.g. 'U' which
+    appears 52 times in the live source) get NULL +
+    `payment_code_unknown_letter`, distinct from non-code multi-char
+    values."""
     db = CapturingDB()
-    rows = [_row(ID=1, Tjera="Q")]
+    rows = [_row(ID=1, Tjera="U")]
     report, warnings, _ = _run(rows, db=db, tmp_path=tmp_path)
     assert report.imported == 1
     p = db.calls[0][2]
     assert p.payment_code is None  # type: ignore[attr-defined]
-    assert any(w["code"] == "payment_code_unknown" for w in warnings)
+    assert any(w["code"] == "payment_code_unknown_letter" for w in warnings)
 
 
-def test_payment_code_known_letters_passthrough(tmp_path: Path) -> None:
+def test_payment_code_non_code(tmp_path: Path) -> None:
+    """ADR-016: multi-char Tjera values (date ranges, dashes, free
+    text) emit `payment_code_non_code` warnings — distinct from
+    unknown-letter so the report tells them apart."""
     db = CapturingDB()
-    rows = [_row(ID=i, Tjera=letter) for i, letter in enumerate("ABCD", start=1)]
+    rows = [_row(ID=1, Tjera="29-30.01.2025")]
+    report, warnings, _ = _run(rows, db=db, tmp_path=tmp_path)
+    assert report.imported == 1
+    p = db.calls[0][2]
+    assert p.payment_code is None  # type: ignore[attr-defined]
+    assert any(w["code"] == "payment_code_non_code" for w in warnings)
+
+
+def test_payment_code_case_folded(tmp_path: Path) -> None:
+    """ADR-016: lowercase typos are clearly the same code as the
+    uppercase letter. The audited file has 16 'b', 10 'e', 3 'c'."""
+    db = CapturingDB()
+    rows = [_row(ID=i, Tjera=letter) for i, letter in enumerate("abce", start=1)]
     report, warnings, _ = _run(rows, db=db, tmp_path=tmp_path)
     assert report.imported == 4
     codes = [call[2].payment_code for call in db.calls]  # type: ignore[attr-defined]
-    assert codes == ["A", "B", "C", "D"]
+    assert codes == ["A", "B", "C", "E"]
+    assert warnings == []
+
+
+def test_payment_code_known_letters_passthrough(tmp_path: Path) -> None:
+    """A/B/C/D/E all migrate as-is. D doesn't appear in the audited
+    file but stays in the alphabet for forward-compat."""
+    db = CapturingDB()
+    rows = [_row(ID=i, Tjera=letter) for i, letter in enumerate("ABCDE", start=1)]
+    report, warnings, _ = _run(rows, db=db, tmp_path=tmp_path)
+    assert report.imported == 5
+    codes = [call[2].payment_code for call in db.calls]  # type: ignore[attr-defined]
+    assert codes == ["A", "B", "C", "D", "E"]
     assert warnings == []
 
 
@@ -249,22 +279,43 @@ def test_dry_run_skips_db_writes(tmp_path: Path) -> None:
 
 def test_preflight_passes_with_valid_distribution() -> None:
     """A synthetic Vizitat with patient cardinality and payment
-    cardinality inside the bounds should pass without raising."""
+    cardinality inside the bounds should pass without raising. The
+    coverage-based Tjera rule (ADR-016) accepts 4 distinct codes
+    covering 100% of rows."""
     rows = [
         {"x": f"Patient {i:05d}", "Tjera": "ABCD"[i % 4]}
         for i in range(PATIENT_CARDINALITY_MIN + 100)
     ]
     reader = StubReader({"Vizitat": rows})
-    # If preflight passes, the call returns None.
     log = logging.getLogger("test")
     run_preflight_checks(reader, log)
 
 
-def test_preflight_aborts_on_payment_cardinality_explosion() -> None:
-    """Too many distinct Tjera values => ADR-012 says abort.
-    Catches a future re-audit where the column moved."""
+def test_preflight_passes_with_long_tail_noise() -> None:
+    """ADR-016: a small alphabet plus a long thin tail of noise
+    should PASS as long as the top-10 covers >= 99% of rows. This
+    is the actual shape of the audited file (93 distinct values,
+    top 5 cover 99.72%)."""
+    rows = []
+    # 99.5% dominated by a 5-code alphabet
+    for i in range(PATIENT_CARDINALITY_MIN + 100):
+        rows.append({"x": f"Patient {i:05d}", "Tjera": "ABCDE"[i % 5]})
+    # 0.5% noise: each row a unique date-range string
+    noise_count = int(len(rows) * 0.005)
+    for j in range(noise_count):
+        rows.append({"x": f"NoisePatient {j:05d}", "Tjera": f"2025-01-{j:02d}"})
+    reader = StubReader({"Vizitat": rows})
+    log = logging.getLogger("test")
+    run_preflight_checks(reader, log)  # should not raise
+
+
+def test_preflight_aborts_when_payment_column_is_free_text() -> None:
+    """ADR-016: a free-text or mis-mapped column has no dominant
+    values — the top 10 cover only a tiny fraction of rows. This is
+    what would happen if a future tenant's Tjera-equivalent column
+    actually holds memo text."""
     rows = [
-        {"x": f"Patient {i:05d}", "Tjera": f"code-{i}"}
+        {"x": f"Patient {i:05d}", "Tjera": f"unique-note-{i}"}
         for i in range(PATIENT_CARDINALITY_MIN + 50)
     ]
     reader = StubReader({"Vizitat": rows})
