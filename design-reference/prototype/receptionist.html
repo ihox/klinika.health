@@ -133,9 +133,10 @@
   }
 
   /* ---- Calendar ---- */
-  /* cal-card: overflow set to visible so .appt-tip hover overlays
-     can escape above/below the time grid without being clipped. The
-     card chrome (borders/radius) renders fine without overflow:hidden
+  /* cal-card: overflow set to visible so a hovered .appt that expands
+     horizontally past its column (to reveal the inline time on the
+     right) is not clipped at the column boundary. Card chrome
+     (borders/radius) still renders fine without overflow:hidden
      because no child of the grid genuinely needs to be clipped. */
   .cal-card { background: var(--bg-elevated); border: 1px solid var(--border); border-radius: var(--r-lg); overflow: visible; box-shadow: var(--shadow-xs); }
 
@@ -348,6 +349,42 @@
        calendar uses ONLY the status color logic above.
      =========================================================== */
 
+  /* ===========================================================
+     CALENDAR CARD — expand-on-hover affordance
+     -----------------------------------------------------------
+     Default: card shows the patient's first + last name only,
+     fitted to its time-grid column (or half-column when the day
+     is two-lane).
+
+     Hover / focus: the card itself EXPANDS HORIZONTALLY in place
+     and reveals the scheduled time inline on the right side of
+     the name, separated by a thin vertical rule. The card IS the
+     affordance — there is no floating tooltip, no popover, no
+     glass overlay. Reads as one continuous element rather than
+     "card + popover".
+
+     Expansion mechanics:
+       · The card switches from column-fitted (left:6 + right:6)
+         to content-sized (width: max-content) on hover, so the
+         time sits tight against the name rather than at the
+         opposite edge of an over-stretched card.
+       · If name + time fits the column, the card barely grows;
+         if not, it expands past the column boundary.
+       · A hidden `.time` child fades in (max-width 0 → 60px) so
+         the time appears smoothly with a · separator after name.
+       · z-index lifts the hovered card above its neighbors so
+         any overlap reads cleanly.
+
+     Status colors are NOT changed by the hover state — the
+     canonical status palette stays put across both states. The
+     only visual delta is geometry + a slightly stronger shadow.
+
+     Accessibility:
+       · Keyboard tab focus triggers the same expand (focus-visible).
+       · prefers-reduced-motion: instant expand, no width animation.
+       · aria-label carries name + time + status for screen readers.
+     =========================================================== */
+
   /* ---- Calendar appointment card — baseline = scheduled ---- */
   .appt {
     position: absolute;
@@ -360,12 +397,112 @@
     padding: 3px 8px;
     box-shadow: var(--shadow-xs);
     cursor: pointer;
-    transition: transform 120ms ease, box-shadow 120ms ease, opacity 120ms ease;
+    transition:
+      transform 120ms ease,
+      box-shadow 160ms ease,
+      opacity 120ms ease,
+      right 180ms ease,
+      left 180ms ease;
     display: flex;
     align-items: center;
     user-select: none;
   }
-  .appt:hover { transform: translateY(-1px); box-shadow: var(--shadow-sm); z-index: 5; }
+  .appt:hover,
+  .appt:focus-visible,
+  .appt.hover-state {
+    box-shadow: var(--shadow-sm);
+    z-index: 5;
+    outline: none;
+  }
+  /* Subtle keyboard focus indicator — visible only when reached
+     via tab, not on mouse hover. */
+  .appt:focus-visible {
+    box-shadow: var(--shadow-sm), 0 0 0 2px rgba(13,148,136,0.35);
+  }
+
+  /* ===========================================================
+     Inline-expand on hover / focus.
+     -----------------------------------------------------------
+     The card sizes to its CONTENT on hover (width: max-content),
+     not to a fixed delta — so the time appears tight against the
+     name ("Egzona Vata · 14:00") rather than floating at the right
+     edge of an over-sized card. If name+time fits the column's
+     natural width, the card barely changes size; if it doesn't,
+     the card grows past the column boundary to fit.
+
+     Left-lane (scheduled) cards anchor to left:6 and grow right.
+     Right-lane (walk-in) cards anchor to right:6 and grow left,
+     overlapping into the booked-lane on hover.
+     =========================================================== */
+  /* Hover override needs higher specificity than the two-lane
+     `.day-col.today .appt:not(.walkin)` base rule that pins
+     right: calc(50% + 2px) on scheduled cards in today/has-walkins
+     columns. Scope it under .day-col so it wins. */
+  .day-col .appt:hover,
+  .day-col .appt:focus-visible,
+  .day-col .appt.hover-state {
+    right: auto;
+    width: max-content;
+    max-width: 280px;
+  }
+  /* Walk-in cards (right lane): anchor on right, grow leftward.
+     Override the `.appt.walkin { left: calc(50% + 2px) }` base. */
+  .day-col .appt.walkin:hover,
+  .day-col .appt.walkin:focus-visible,
+  .day-col .appt.walkin.hover-state {
+    left: auto;
+    right: 6px;
+    width: max-content;
+    max-width: 280px;
+  }
+
+  /* Inline time element — present in every card, hidden by default,
+     revealed on hover/focus. Sits immediately after .name with a
+     small middle-dot separator, so the card reads as one phrase
+     ("Egzona Vata · 14:00") rather than "label + chip". */
+  .appt .time {
+    flex: 0 0 auto;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+    color: inherit;
+    letter-spacing: 0.01em;
+    white-space: nowrap;
+    opacity: 0;
+    max-width: 0;
+    overflow: hidden;
+    margin-left: 0;
+    transition:
+      opacity 80ms ease,
+      max-width 180ms ease,
+      margin-left 180ms ease;
+  }
+  .appt .time::before {
+    content: '·';
+    margin-right: 5px;
+    opacity: 0.5;
+    font-family: var(--font-ui);
+  }
+  .appt:hover .time,
+  .appt:focus-visible .time,
+  .appt.hover-state .time {
+    opacity: 0.78;
+    max-width: 60px;
+    margin-left: 6px;
+    transition:
+      opacity 90ms ease 50ms,
+      max-width 180ms ease,
+      margin-left 180ms ease;
+  }
+
+  /* Reduced motion: instant reveal, no width/opacity animation. */
+  @media (prefers-reduced-motion: reduce) {
+    .appt,
+    .appt .time {
+      transition: none !important;
+    }
+  }
   /* Future appts are draggable */
   .appt:not(.completed):not(.noshow):not(.cancelled) { cursor: grab; }
   .appt:not(.completed):not(.noshow):not(.cancelled):active { cursor: grabbing; }
@@ -404,7 +541,7 @@
      The .name color is the status fg-token so the text reads
      legibly on the card bg without an explicit color rule. */
   .appt .name {
-    flex: 1 1 auto;
+    flex: 0 1 auto;
     min-width: 0;
     font-size: 12px;
     font-weight: 600;
@@ -420,59 +557,9 @@
      from data-time + data-name to compose its content. */
   .appt .meta { display: none !important; }
 
-  /* ---- Hover/focus overlay — name + time, solid bg, no glass ----
-     EXACTLY two pieces of content: full name + scheduled time.
-     No date (calendar already shows day). No DOB/age/sex/status.
-     Solid bg, subtle drop shadow, clean typography. */
-  .appt-tip {
-    position: absolute;
-    left: 50%;
-    bottom: calc(100% + 6px);
-    transform: translateX(-50%);
-    background: var(--bg-elevated);
-    color: var(--text-strong);
-    border: 1px solid var(--border);
-    border-radius: var(--r-md);
-    box-shadow: 0 10px 24px rgba(28,25,23,0.16), 0 2px 6px rgba(28,25,23,0.08);
-    padding: 8px 12px;
-    min-width: 140px;
-    white-space: nowrap;
-    z-index: 30;
-    display: none;
-    flex-direction: column;
-    gap: 2px;
-    pointer-events: none;
-  }
-  .appt-tip .tip-name {
-    font-family: var(--font-display);
-    font-size: 13px;
-    font-weight: 600;
-    color: var(--text-strong);
-    letter-spacing: -0.005em;
-  }
-  .appt-tip .tip-time {
-    font-family: var(--font-mono);
-    font-size: 11.5px;
-    font-weight: 500;
-    color: var(--text-muted);
-    font-variant-numeric: tabular-nums;
-    letter-spacing: 0.01em;
-  }
-  /* Little notch pointing down at the card */
-  .appt-tip::after {
-    content: '';
-    position: absolute;
-    left: 50%;
-    bottom: -5px;
-    transform: translateX(-50%) rotate(45deg);
-    width: 8px; height: 8px;
-    background: var(--bg-elevated);
-    border-right: 1px solid var(--border);
-    border-bottom: 1px solid var(--border);
-  }
-  .appt:hover .appt-tip,
-  .appt:focus-visible .appt-tip,
-  .appt:focus-within .appt-tip { display: flex; }
+  /* ---- Hover/focus reveal — see expand-on-hover block above ----
+     The card itself expands horizontally to reveal time inline.
+     No floating tooltip or overlay; the card body is the affordance. */
 
   /* ===== STATUS VARIANTS — each one applies the matching token set ===== */
 
@@ -1487,10 +1574,11 @@
     text-decoration-thickness: 1px;
   }
 
-  /* Pinned-hover demo class — forces the tooltip to render even
-     without a real hover. Used for one card in the demo so the
-     hover content is visible in static screenshots. NEVER on prod. */
-  .appt.show-tip .appt-tip { display: flex; }
+  /* Demo: pinned hover state — forces a single card into the
+     expanded state without a real hover so reviewers see the
+     pattern in static screenshots. Production: only :hover and
+     :focus-visible trigger the expansion. */
+  .appt.hover-state { /* see expand-on-hover block above */ }
 
   /* Lane indicator in the day-column header — visible whenever the
      day is two-lane (today always, plus any day with walk-ins). */
@@ -2023,7 +2111,7 @@
     <div class="user-menu" role="menu">
       <div class="um-head">
         <div class="name">Erëblirë Krasniqi</div>
-        <div class="email">ereblire@donetamed.com</div>
+        <div class="email"><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="bfdacddaddd3d6cddaffdbd0d1dacbded2dadb91dcd0d2">[email&#160;protected]</a></div>
         <div class="roles">
           <span class="chip-role reception">Recepsioniste</span>
         </div>
@@ -2305,10 +2393,14 @@
           <div class="name">Endi Krasniqi</div>
           <div class="meta">15:30</div>
         </div>
-        <!-- HOVER STATE DEMO: pinned .show-tip so reviewers see the
-             tooltip without having to mouse over. Production: the tip
-             only appears on :hover / :focus-visible. -->
-        <div class="appt show-tip" style="top: 780px; height: 30px;" data-time="16:30">
+        <!-- HOVER STATE DEMO: pinned .hover-state so reviewers see the
+             expanded card without having to mouse over. The card grows
+             horizontally past its column to reveal the scheduled time
+             inline on the right, separated by a thin vertical rule.
+             Production: the expansion only triggers on :hover and
+             :focus-visible. The card is the affordance — there is no
+             floating tooltip. -->
+        <div class="appt hover-state" style="top: 780px; height: 30px;" data-time="16:30">
           <div class="name">Mira Hoxhaj</div>
           <div class="meta">16:30 · 15 min</div>
         </div>
@@ -2672,7 +2764,7 @@
   </button>
 </div>
 
-<script>
+<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
   // ============================================================
   // Sample patient list (the only patients in this prototype)
   // ============================================================
@@ -2720,16 +2812,17 @@
       const col = el.closest('.day-col');
       if (col) el.dataset.fromIso = col.dataset.iso;
     });
-    // Inject the hover tooltip overlay into every appt card.
-    // Tooltip content = name + scheduled-or-arrival time ONLY.
-    // No date, no DOB, no age, no sex, no status, no metadata.
-    // Source: data-time / data-arr / .meta text (fallbacks).
-    document.querySelectorAll('.appt').forEach(buildApptTip);
+    // Inject the inline .time element into every appt card. The card
+    // body shows the name in default state and the time appears inline
+    // on hover/focus via CSS (see .appt .time / .appt:hover .time).
+    // Source for the time string: data-time → data-arr → first HH:MM
+    // in .meta (fallback). NO other metadata is rendered on the card.
+    document.querySelectorAll('.appt').forEach(buildApptTime);
   });
 
-  // Extract the canonical "name · time" tooltip values from a card.
-  function buildApptTip(el) {
-    if (el.querySelector(':scope > .appt-tip')) return;
+  // Extract the canonical name + time and inject the inline time chip.
+  function buildApptTime(el) {
+    if (el.querySelector(':scope > .time')) return;
     const nameEl = el.querySelector('.name');
     const metaEl = el.querySelector('.meta');
     const name = (el.dataset.name || (nameEl ? nameEl.textContent.trim() : '')) || '—';
@@ -2740,15 +2833,13 @@
       if (m) time = m[1];
     }
     if (!time) time = '—';
-    const tip = document.createElement('div');
-    tip.className = 'appt-tip';
-    tip.setAttribute('aria-hidden', 'true');
-    tip.innerHTML =
-      '<span class="tip-name"></span>' +
-      '<span class="tip-time"></span>';
-    tip.querySelector('.tip-name').textContent = name;
-    tip.querySelector('.tip-time').textContent = time;
-    el.appendChild(tip);
+    const timeEl = document.createElement('span');
+    timeEl.className = 'time';
+    // The time is already conveyed in the aria-label; hide it from
+    // assistive tech to avoid a duplicate read on focus.
+    timeEl.setAttribute('aria-hidden', 'true');
+    timeEl.textContent = time;
+    el.appendChild(timeEl);
     // Accessibility: status is conveyed by color visually; expose it
     // semantically too via aria-label so SR users get the full picture.
     const statusFromClass = el.classList.contains('completed')   ? 'Kryer'
@@ -3482,12 +3573,12 @@
         if (wasNewPatient) txt += ' · pacient i ri';
         metaEl.appendChild(document.createTextNode(txt));
       }
-      // Sync data-time + rebuild the hover tooltip so the new time
-      // appears in the overlay on next hover.
+      // Sync data-time + rebuild the inline .time chip so the new
+      // time appears on the card after the move.
       dragState.apptEl.dataset.time = newTime;
-      const oldTip = dragState.apptEl.querySelector(':scope > .appt-tip');
-      if (oldTip) oldTip.remove();
-      buildApptTip(dragState.apptEl);
+      const oldTime = dragState.apptEl.querySelector(':scope > .time');
+      if (oldTime) oldTime.remove();
+      buildApptTime(dragState.apptEl);
 
       // Refresh busy map so subsequent drags use the new position
       BUSY_BY_DAY = buildBusyMap();
