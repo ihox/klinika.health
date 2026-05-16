@@ -5,7 +5,31 @@
 <title>Klinika — Vërtetim</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="stylesheet" href="styles.css">
-<link rel="stylesheet" href="print-visit.html" disabled>
+<!--
+  ============================================================
+  print-certificate.html — design pass · 16.05.2026
+  ============================================================
+  Changes in this pass:
+
+  · "VENDI I VULËS" REMOVED. Klinika operates digitally; no
+    physical stamps. Footer reflows to single-column signature
+    with a small issue-metadata block on the right.
+
+  · SERIAL MADE PROMINENT. Number bar promoted into a labeled
+    serial badge (top-right beneath the centered letterhead)
+    using the VM-YYYY-NNNN scheme — VM = Vërtetim Mjekësor,
+    year, four-digit running counter. Chosen for parity with
+    the visit ("V-YYYY-NNNN") and history ("PT-NNNNN") serial
+    schemes already in use elsewhere in the prototype.
+
+  · PAGE SIZE A5 (kept). 16mm margins. Body 11pt for
+    legibility; title remains 26pt display.
+
+  · Centered letterhead retained — kept on user preference;
+    the formal-document feel works for an institution-issued
+    attestation in a way the left/right header would not.
+  ============================================================
+-->
 <style>
   body { background: #E7E5E4; min-height: 100vh; }
 
@@ -42,30 +66,50 @@
     position: relative;
   }
 
-  /* Centered letterhead */
+  /* Letterhead: clinic info left, serial top-right (subtle stamp tag) */
   .cert-letterhead {
-    text-align: center;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 12mm;
+    align-items: start;
     padding-bottom: 6mm;
     border-bottom: 2px solid #0F766E;
-    margin-bottom: 10mm;
+    margin-bottom: 8mm;
   }
-  .cert-letterhead .mark {
-    display: inline-block;
-    margin-bottom: 3mm;
-    color: #0F766E;
+  .cert-letterhead .lh-info {
+    text-align: left;
+    min-width: 0;
   }
   .cert-letterhead .name {
     font-family: 'Inter Tight', sans-serif;
-    font-size: 13pt;
+    font-size: 14pt;
     font-weight: 700;
     letter-spacing: -0.005em;
     color: #0F766E;
+    line-height: 1;
+  }
+  .cert-letterhead .formal {
+    display: block;
+    font-size: 7.5pt;
+    font-weight: 500;
+    letter-spacing: 0.04em;
+    color: #57534E;
+    text-transform: uppercase;
+    margin-bottom: 1.5mm;
   }
   .cert-letterhead .meta {
     font-size: 8pt;
     color: #57534E;
-    margin-top: 2mm;
+    margin-top: 2.5mm;
+    line-height: 1.55;
     font-variant-numeric: tabular-nums;
+  }
+  .cert-letterhead .meta .lic {
+    color: #78716C;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 7.5pt;
+    margin-top: 1mm;
+    display: inline-block;
   }
 
   .cert-title {
@@ -75,32 +119,53 @@
     font-weight: 700;
     letter-spacing: 0.15em;
     color: #0F766E;
-    margin: 8mm 0 12mm;
+    margin: 6mm 0 8mm;
     position: relative;
   }
   .cert-title::before, .cert-title::after {
     content: '';
     position: absolute;
     top: 50%;
-    width: 25mm;
+    width: 14mm;
     height: 1px;
     background: #D6D3D1;
   }
-  .cert-title::before { left: 8mm; }
-  .cert-title::after { right: 8mm; }
+  .cert-title::before { left: 0; }
+  .cert-title::after { right: 0; }
 
-  .cert-num {
-    display: flex;
-    justify-content: space-between;
-    font-size: 8.5pt;
-    color: #57534E;
-    margin-bottom: 8mm;
+  /* Serial — small monospace tag in top-right of letterhead. Reads
+     vertically: tiny kicker label above, big monospace number below. */
+  .cert-serial-tag {
+    text-align: right;
+    line-height: 1;
+    padding-left: 8mm;
+    border-left: 1px solid #E7E5E4;
   }
-  .cert-num strong { color: #1c1917; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .cert-serial-tag .kicker {
+    display: block;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 6.3pt;
+    color: #A8A29E;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    font-weight: 500;
+    margin-bottom: 2mm;
+  }
+  .cert-serial-tag .num {
+    display: block;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12pt;
+    font-weight: 700;
+    color: #0F766E;
+    letter-spacing: 0.04em;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* (cert-num bar removed — serial moved into letterhead tag.) */
 
   .cert-body {
     font-size: 11pt;
-    line-height: 1.7;
+    line-height: 1.75;
     text-align: justify;
     text-justify: inter-word;
     color: #1c1917;
@@ -143,38 +208,47 @@
   .cert-period {
     text-align: center;
     margin-top: 6mm;
-    font-size: 10pt;
+    font-size: 10.5pt;
   }
   .cert-period strong { font-weight: 600; font-variant-numeric: tabular-nums; }
 
+  /* Footer — same pattern as print-visit.html */
   .doc-footer {
     margin-top: auto;
-    padding-top: 12mm;
-    display: grid;
-    grid-template-columns: 1fr 50mm;
-    gap: 10mm;
+    padding-top: 10mm;
+    display: flex;
+    justify-content: space-between;
     align-items: flex-end;
+    gap: 10mm;
   }
-  .sig-col { font-size: 8.5pt; }
-  .sig-col .sig-img { height: 16mm; margin-bottom: 2mm; color: #1c1917; }
-  .sig-col .sig-line { border-top: 1px solid #1c1917; padding-top: 1.5mm; width: 60mm; }
-  .sig-col .name { font-weight: 600; font-size: 9.5pt; }
-  .sig-col .cred { color: #57534E; font-size: 8pt; }
-  .sig-col .date { color: #57534E; font-size: 8pt; margin-top: 5mm; font-variant-numeric: tabular-nums; }
+  .sig-col { font-size: 8.5pt; min-width: 60mm; text-align: right; }
+  .sig-col .sig-img { height: 14mm; margin-bottom: 1mm; color: #1c1917; }
+  .sig-col .sig-line { border-top: 1px solid #1c1917; padding-top: 1.5mm; width: 60mm; margin-left: auto; }
+  .sig-col .name { font-weight: 600; font-size: 9pt; font-family: 'Inter Tight', sans-serif; }
+  .sig-col .cred { color: #57534E; font-size: 7.5pt; }
 
-  .stamp-area {
-    height: 50mm;
-    border: 1px dashed #D6D3D1;
-    border-radius: 3px;
-    display: grid;
-    place-items: center;
-    color: #A8A29E;
+  .doc-footer .issue {
+    text-align: left;
     font-size: 8pt;
-    text-align: center;
-    background: repeating-linear-gradient(45deg, transparent 0, transparent 8px, rgba(28,25,23,0.015) 8px, rgba(28,25,23,0.015) 9px);
+    color: #57534E;
+    line-height: 1.5;
+    font-variant-numeric: tabular-nums;
+    align-self: flex-end;
   }
-  .stamp-area .lab { text-transform: uppercase; letter-spacing: 0.1em; font-weight: 500; }
-  .stamp-area .sub { font-size: 7pt; color: #C4C0BC; margin-top: 2mm; font-style: italic; }
+  .doc-footer .issue .issue-when {
+    color: #1c1917;
+    font-weight: 600;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 8.5pt;
+    letter-spacing: 0.01em;
+  }
+  .doc-footer .issue .issue-place {
+    margin-top: 1mm;
+    font-size: 8pt;
+    color: #57534E;
+    font-family: 'Inter', sans-serif;
+    font-weight: 500;
+  }
 
   @page { size: A5 portrait; margin: 0; }
   @media print {
@@ -182,8 +256,6 @@
     .preview-bar { display: none; }
     .paper-area { padding: 0; }
     .paper { box-shadow: none; margin: 0; }
-    .stamp-area { border: none; background: none; }
-    .stamp-area .lab, .stamp-area .sub { display: none; }
   }
 </style>
 </head>
@@ -203,31 +275,30 @@
 <div class="paper-area">
   <article class="paper">
     <header class="cert-letterhead">
-      <div class="mark">
-        <svg width="26" height="26" viewBox="0 0 64 64" fill="none">
-          <path d="M32 54 C 12 40, 8 26, 18 18 C 24 14, 30 16, 32 22 C 34 16, 40 14, 46 18 C 56 26, 52 40, 32 54 Z" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
-          <path d="M10 34 L 22 34 L 26 28 L 30 40 L 34 30 L 38 36 L 54 36" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-          <circle cx="54" cy="36" r="2.6" fill="currentColor"/>
-        </svg>
+      <div class="lh-info">
+        <span class="formal">Ordinanca Specialistike Pediatrike</span>
+        <div class="name">DONETA-MED</div>
+        <div class="meta">
+          Rr. Adem Jashari, Prizren, Kosovë<br>
+          Tel: 045 83 00 83 · 043 543 123<br>
+          10:00 – 18:00<br>
+          <span class="lic">Lic. MSH-Nr. 1487-AM/24</span>
+        </div>
       </div>
-      <div class="name">OSP DONETA-MED</div>
-      <div class="meta">Ambulanca Specialistike Pediatrike · Prizren, Kosovë<br>
-        Tel: 045 83 00 83 · 043 543 123 · 10:00 – 18:00</div>
+      <div class="cert-serial-tag">
+        <span class="kicker">Nr. vërtetimi</span>
+        <span class="num" id="certSerial">VM-2026-0142</span>
+      </div>
     </header>
 
     <h1 class="cert-title">VËRTETIM</h1>
 
-    <div class="cert-num">
-      <span>Nr. <strong>2026-0142</strong></span>
-      <span>Data: <strong>14.05.2026</strong></span>
-    </div>
-
     <div class="cert-body">
-      Me të cilin vërtetohet se nxënësja <strong>Era Krasniqi</strong>, e lindur më <strong>03.08.2023</strong> në <strong>Prizren</strong>, ka munguar në shkollë / kopsht për arsye shëndetësore.
+      Me të cilin vërtetohet se nxënësja <strong>Era Krasniqi</strong>, e lindur më <strong>03.08.2023</strong> në <strong>Prizren</strong>, ka munguar në shkollë për arsye shëndetësore.
 
       <div class="cert-dx-box">
         <div class="lab">Diagnoza</div>
-        <div class="dx"><span class="code">J03.9</span>Tonsillitis acuta</div>
+        <div class="dx">Tonsillitis acuta</div>
       </div>
 
       <div class="cert-period">
@@ -237,6 +308,10 @@
     </div>
 
     <footer class="doc-footer">
+      <div class="issue">
+        <div class="issue-when"><span class="when" id="printStamp">14.05.2026 · 14:32</span></div>
+        <div class="issue-place">Prizren</div>
+      </div>
       <div class="sig-col">
         <svg class="sig-img" viewBox="0 0 200 60" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
           <path d="M 8 42 Q 15 18 32 26 Q 42 32 36 42 Q 28 50 38 38 Q 50 24 64 36 Q 72 44 80 30 Q 90 14 100 28 Q 108 38 118 26 Q 130 12 144 30 Q 152 42 160 30 L 178 14"
@@ -244,21 +319,23 @@
         </svg>
         <div class="sig-line"></div>
         <div class="name">Dr. Taulant Shala</div>
-        <div class="cred">pediatër · DonetaMED</div>
-        <div class="date">14.05.2026 · Prizren</div>
-      </div>
-
-      <div class="stamp-area">
-        <div>
-          <div class="lab">Vendi i vulës</div>
-          <div class="sub">vendoset manualisht</div>
-        </div>
+        <div class="cred">specialist pediatër · DonetaMED</div>
       </div>
     </footer>
   </article>
 </div>
 
 <script>
+  // Stamp the current print time at render.
+  (function () {
+    const el = document.getElementById('printStamp');
+    if (el) {
+      const d = new Date();
+      const pad = n => String(n).padStart(2, '0');
+      el.textContent = pad(d.getDate()) + '.' + pad(d.getMonth() + 1) + '.' + d.getFullYear()
+        + ' · ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+    }
+  })();
   // Parse ?from=YYYY-MM-DD&to=YYYY-MM-DD and inject into the certificate.
   // Also auto-print when ?print=1 is present.
   (function () {

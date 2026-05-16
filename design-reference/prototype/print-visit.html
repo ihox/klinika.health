@@ -5,144 +5,85 @@
 <title>Klinika — Raporti i vizitës</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="stylesheet" href="styles.css">
+<!--
+  ============================================================
+  print-visit.html — design pass · 16.05.2026
+  ============================================================
+  Changes in this pass:
+
+  · UNIFIED HEADER. Left column = institution identity
+    (clinic name + formal subtitle + address + phone + hours +
+    license nr). Right column = patient main info (name in
+    display weight, sex + age, DOB, patient ID). The previous
+    pt-banner was redundant with the right column and has been
+    removed; visit context (date · serial · time) now lives in
+    a thin strip beneath the header rule.
+
+  · MULTI-DIAGNOSIS. Diagnoza list uses flexbox column with
+    tight 1.2mm gap and tabular code column. Primary diagnosis
+    is differentiated by a slim teal rule above (not extra
+    padding) so 4–5 diagnoses fit comfortably. Page extends to
+    a second A5 sheet only when content genuinely overflows
+    (Variant C demonstrates).
+
+  · "VENDI I VULËS" REMOVED. Klinika operates digitally; no
+    physical stamps. Footer reflows to single-column signature.
+
+  · Three variants (A, B, C) stacked in the prototype to verify
+    layout behavior across diagnosis counts.
+
+  Page size: A5 portrait (148mm × 210mm), 14mm margins.
+  Body type: 9pt Inter. Headers: 7.5pt teal labels.
+  ============================================================
+-->
 <style>
   body { background: #E7E5E4; min-height: 100vh; }
 
   /* ====== Preview toolbar ====== */
   .preview-bar {
-    position: sticky;
-    top: 0;
+    position: sticky; top: 0;
     background: var(--bg-elevated);
     border-bottom: 1px solid var(--border);
     padding: 12px 24px;
-    display: flex;
-    align-items: center;
-    gap: 16px;
+    display: flex; align-items: center; gap: 16px;
     z-index: 10;
     box-shadow: var(--shadow-xs);
   }
   .pb-back { display: flex; align-items: center; gap: 6px; color: var(--text-muted); font-size: 13px; }
   .pb-back:hover { color: var(--text); }
-  .pb-title {
-    font-family: var(--font-display);
-    font-size: 15px;
-    font-weight: 600;
-  }
+  .pb-title { font-family: var(--font-display); font-size: 15px; font-weight: 600; }
   .pb-sub { font-size: 12px; color: var(--text-muted); }
   .pb-spacer { flex: 1; }
 
-  .seg-control {
-    display: inline-flex;
-    background: var(--bg-subtle);
-    border: 1px solid var(--border);
-    border-radius: var(--r-md);
-    padding: 3px;
-    gap: 2px;
-  }
-  .seg-control .seg {
-    padding: 5px 10px;
-    font-size: 12px;
-    font-weight: 500;
-    color: var(--text-muted);
-    border-radius: var(--r-sm);
-    cursor: pointer;
-  }
-  .seg-control .seg.active {
-    background: var(--bg-elevated);
-    color: var(--text-strong);
-    box-shadow: var(--shadow-xs);
-  }
-  .seg-label { font-size: 11px; color: var(--text-faint); margin-right: 6px; text-transform: uppercase; letter-spacing: 0.05em; }
-
-  /* ====== Paper ====== */
+  /* ====== Variant chrome (prototype only) ====== */
   .paper-area {
-    padding: 32px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 18px;
+    padding: 32px 24px 48px;
+    display: flex; flex-direction: column; align-items: center;
+    gap: 14px;
   }
-
-  /* ====== US page-2 specifics ====== */
-  .us-page .doc-body { gap: 5mm; }
-  .us-notes {
-    border: 1px solid #D6D3D1;
-    border-radius: 3px;
-    padding: 4mm 5mm;
-  }
-  .us-notes .lab {
-    font-size: 7.5pt;
-    font-weight: 700;
-    color: #0F766E;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    margin-bottom: 2.5mm;
-  }
-  .us-notes .lab .full { color: #78716C; font-weight: 500; margin-left: 4px; }
-  .us-notes .body {
-    font-size: 9.5pt;
-    line-height: 1.55;
-    color: #1c1917;
-  }
-  .us-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 4mm;
-  }
-  .us-cell {
-    border: 1px solid #E7E5E4;
-    border-radius: 3px;
-    padding: 2mm;
-    background: white;
-    display: flex;
-    flex-direction: column;
-    gap: 1.5mm;
-  }
-  .us-cell .img {
-    height: 38mm;
-    border-radius: 2px;
-    overflow: hidden;
-    background: #0c0a09;
-    display: grid; place-items: stretch;
-  }
-  .us-cell .img svg { width: 100%; height: 100%; display: block; }
-  .us-cell .cap {
-    display: flex;
-    justify-content: space-between;
-    align-items: baseline;
+  .variant-label {
+    width: 148mm;
+    display: flex; align-items: baseline; justify-content: space-between;
+    margin-top: 14px;
     font-family: 'JetBrains Mono', monospace;
-    font-size: 7pt;
+    font-size: 11px;
     color: #57534E;
-  }
-  .us-cell .cap strong { color: #1c1917; font-weight: 600; }
-
-  /* Compact letterhead on continuation pages */
-  .letterhead.compact {
-    padding-bottom: 4mm;
-    margin-bottom: 4mm;
-  }
-  .letterhead.compact .name { font-size: 11pt; }
-  .letterhead.compact .name .formal { font-size: 6.5pt; }
-  .letterhead.compact .lh-patient { font-size: 7pt; }
-  .page-tag {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 7pt;
-    color: #78716C;
-    background: #F5F5F4;
-    border: 1px solid #E7E5E4;
-    padding: 1.5px 6px;
-    border-radius: 999px;
     text-transform: uppercase;
     letter-spacing: 0.08em;
   }
+  .variant-label:first-child { margin-top: 0; }
+  .variant-label .tag {
+    background: #0F766E;
+    color: white;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-weight: 600;
+    font-size: 10px;
+    letter-spacing: 0.1em;
+  }
+  .variant-label .note { color: #78716C; font-family: 'Inter', sans-serif; text-transform: none; letter-spacing: 0; font-size: 12px; }
 
-  /* Hide page 2 entirely when no ultrasound linked */
-  .paper.us-page { display: flex; }
-  body[data-us="none"] .paper.us-page { display: none; }
-  body[data-us="none"] .paper-area { gap: 0; }
+  /* ====== Paper ====== */
   .paper {
     width: 148mm;
     min-height: 210mm;
@@ -158,86 +99,146 @@
     flex-direction: column;
   }
 
-  /* ====== Letterhead ====== */
+  /* ====== Letterhead (unified canonical pattern) ====== */
   .letterhead {
     display: grid;
-    grid-template-columns: 1fr auto;
-    gap: 16px;
-    padding-bottom: 8mm;
-    border-bottom: 2px solid #0F766E;
-    margin-bottom: 6mm;
+    grid-template-columns: 1.15fr 1fr;
+    gap: 10mm;
+    padding-bottom: 5mm;
+    border-bottom: 1.5px solid #0F766E;
+    margin-bottom: 3mm;
+  }
+  .lh-clinic {
+    display: block;
+    text-align: left;
+  }
+  .lh-clinic .info { min-width: 0; }
+  .lh-clinic .formal {
+    display: block;
+    font-size: 6.8pt;
+    font-weight: 500;
+    letter-spacing: 0.04em;
+    color: #57534E;
+    text-transform: uppercase;
+    margin-bottom: 1mm;
+    line-height: 1.2;
   }
   .lh-clinic .name {
     font-family: 'Inter Tight', 'Inter', sans-serif;
-    font-size: 14pt;
+    font-size: 13pt;
     font-weight: 700;
     letter-spacing: -0.01em;
     color: #0F766E;
-    line-height: 1.05;
-  }
-  .lh-clinic .name .formal {
-    display: block;
-    font-size: 7.5pt;
-    font-weight: 500;
-    letter-spacing: 0.02em;
-    color: #57534E;
-    text-transform: uppercase;
-    margin-bottom: 2px;
+    line-height: 1;
   }
   .lh-clinic .meta {
-    margin-top: 5px;
+    margin-top: 2mm;
+    font-size: 7.3pt;
+    color: #57534E;
+    line-height: 1.55;
+    font-variant-numeric: tabular-nums;
+  }
+  .lh-clinic .meta .lic {
+    display: inline-block;
+    margin-top: 0.8mm;
+    color: #78716C;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 6.8pt;
+    letter-spacing: 0.02em;
+  }
+
+  /* Right column — patient main info */
+  .lh-patient {
+    align-self: flex-start;
+    text-align: right;
+  }
+  .lh-patient .pt-id {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 8pt;
+    color: #78716C;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    margin-top: 1mm;
+  }
+  .lh-patient .pt-id .id-sigil {
+    color: #0F766E;
+    font-weight: 700;
+    margin-right: 0.5mm;
+  }
+  .lh-patient .pt-name {
+    font-family: 'Inter Tight', sans-serif;
+    font-size: 14pt;
+    font-weight: 700;
+    letter-spacing: -0.015em;
+    line-height: 1;
+    color: #1c1917;
+  }
+  .lh-patient .pt-meta {
     font-size: 7.5pt;
     color: #57534E;
+    margin-top: 1.5mm;
     line-height: 1.5;
     font-variant-numeric: tabular-nums;
   }
-
-  .lh-patient {
-    text-align: right;
-    font-size: 7.5pt;
-    font-variant-numeric: tabular-nums;
+  .lh-patient .pt-meta .row {
+    display: flex; justify-content: flex-end; gap: 3mm;
   }
-  .lh-patient table {
-    border-collapse: collapse;
-    margin-left: auto;
+  .lh-patient .pt-meta .k { color: #A8A29E; text-transform: uppercase; letter-spacing: 0.06em; font-size: 6.5pt; font-weight: 500; align-self: center; }
+  .lh-patient .pt-meta .v { color: #1c1917; font-weight: 600; }
+  .lh-patient .pt-meta .v .id-sigil {
+    display: inline-block;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 7pt;
+    color: #0F766E;
+    font-weight: 700;
+    margin-right: 1mm;
   }
-  .lh-patient td {
-    padding: 1px 0 1px 10px;
-    text-align: right;
+  .lh-patient .pt-meta .row.birth { margin-top: 0.6mm; }
+  .lh-patient .pt-meta .row.birth .v {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 7.2pt;
+    color: #1c1917;
+    font-weight: 600;
+    letter-spacing: -0.005em;
   }
-  .lh-patient td.l {
+  .lh-patient .pt-meta .row.birth .bm-l {
+    font-family: 'Inter', sans-serif;
+    font-size: 6.3pt;
     color: #78716C;
     font-weight: 500;
-    padding-right: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-right: 0.8mm;
   }
-  .lh-patient td.v { color: #1c1917; font-weight: 600; }
+  .lh-patient .pt-meta .row.birth .bm-u {
+    font-size: 6.3pt;
+    color: #78716C;
+    font-weight: 400;
+    margin-left: 0.2mm;
+  }
 
-  /* ====== Patient header ====== */
-  .pt-banner {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-end;
-    margin-bottom: 5mm;
-  }
-  .pt-banner .name {
-    font-family: 'Inter Tight', sans-serif;
-    font-size: 16pt;
-    font-weight: 600;
-    letter-spacing: -0.015em;
-    line-height: 1;
-  }
-  .pt-banner .age {
-    font-size: 8.5pt;
+  /* Visit context strip — sits just under header rule */
+  .visit-context {
+    display: flex; justify-content: space-between; align-items: baseline;
+    font-size: 7.5pt;
     color: #57534E;
-    margin-top: 3px;
-  }
-  .pt-banner .when {
-    text-align: right;
-    font-size: 8pt;
-    color: #57534E;
+    padding: 0 0 5mm;
     font-variant-numeric: tabular-nums;
   }
-  .pt-banner .when strong { color: #1c1917; font-weight: 600; }
+  .visit-context .vc-l strong {
+    color: #1c1917;
+    font-weight: 700;
+    font-size: 9pt;
+    font-family: 'Inter Tight', sans-serif;
+  }
+  .visit-context .vc-l .sep { color: #C4C0BC; margin: 0 2mm; }
+  .visit-context .vc-r {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 7.2pt;
+    color: #78716C;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
 
   /* ====== Body ====== */
   .doc-body {
@@ -246,53 +247,64 @@
     flex-direction: column;
     gap: 4mm;
   }
-
   .box {
     border: 1px solid #D6D3D1;
     border-radius: 3px;
-    padding: 4mm 5mm;
+    padding: 3.5mm 4.5mm;
   }
   .box .lab {
-    font-size: 7.5pt;
+    font-size: 7.3pt;
     font-weight: 700;
     color: #0F766E;
     text-transform: uppercase;
-    letter-spacing: 0.06em;
+    letter-spacing: 0.08em;
     margin-bottom: 2.5mm;
+    display: flex; align-items: baseline; justify-content: space-between;
   }
   .box .lab .full { color: #78716C; font-weight: 500; margin-left: 4px; }
+  .box .lab .count {
+    font-family: 'JetBrains Mono', monospace;
+    color: #A8A29E;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+  }
 
-  .dx-list { display: flex; flex-direction: column; gap: 2mm; }
+  /* Diagnoses — flexible vertical list */
+  .dx-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1.2mm;
+  }
   .dx-line {
     display: grid;
-    grid-template-columns: 22mm 1fr;
-    gap: 6mm;
-    font-size: 10pt;
+    grid-template-columns: 14mm 1fr;
+    gap: 4mm;
+    font-size: 9.5pt;
     align-items: baseline;
+    line-height: 1.35;
   }
   .dx-line .code {
     font-family: 'JetBrains Mono', monospace;
-    font-weight: 600;
+    font-weight: 700;
     color: #0F766E;
-    font-size: 9.5pt;
-  }
-  .dx-line .desc { font-style: italic; }
-  .dx-line.primary {
-    padding-bottom: 2mm;
-    border-bottom: 1px dashed #E7E5E4;
-  }
-  .dx-line.primary .desc { font-weight: 600; font-style: normal; }
-
-  .tx-content {
-    font-family: 'JetBrains Mono', monospace;
     font-size: 9pt;
-    line-height: 1.6;
-    white-space: pre-wrap;
+    font-variant-numeric: tabular-nums;
+  }
+  .dx-line .desc {
+    font-style: italic;
     color: #1c1917;
   }
-  .tx-content .accent { color: #0F766E; font-weight: 600; }
+  .dx-line.primary {
+    padding-top: 1.2mm;
+    margin-top: -0.5mm;
+    border-top: 1px solid rgba(15,118,110,0.18);
+  }
+  .dx-line.primary:first-child { border-top: none; padding-top: 0; margin-top: 0; }
+  .dx-line.primary .desc { font-weight: 600; font-style: normal; }
+  .dx-list.tight .dx-line { font-size: 9pt; gap: 3mm; }
+  .dx-list.tight { gap: 0.8mm; }
 
-  /* Quick vitals strip on the report */
+  /* Vitals strip */
   .vitals-strip {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
@@ -300,121 +312,220 @@
     border-radius: 3px;
     overflow: hidden;
   }
-  .vitals-strip .cell {
-    padding: 3mm 4mm;
-    border-right: 1px solid #E7E5E4;
-  }
+  .vitals-strip .cell { padding: 2.5mm 3.5mm; border-right: 1px solid #E7E5E4; }
   .vitals-strip .cell:last-child { border-right: none; }
   .vitals-strip .l {
-    font-size: 7pt;
-    color: #78716C;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    font-weight: 500;
+    font-size: 6.5pt; color: #78716C; text-transform: uppercase;
+    letter-spacing: 0.08em; font-weight: 500;
   }
   .vitals-strip .v {
     font-family: 'Inter Tight', sans-serif;
     font-size: 11pt;
     font-weight: 600;
     font-variant-numeric: tabular-nums;
-    margin-top: 1mm;
+    margin-top: 0.5mm;
   }
-  .vitals-strip .v .u { font-size: 8pt; color: #78716C; font-weight: 400; margin-left: 1px; }
+  .vitals-strip .v .u { font-size: 7.5pt; color: #78716C; font-weight: 400; margin-left: 1px; }
 
-  /* Allergy alert — same prominence as on-screen. Renders only when populated. */
-  .alg-alert {
-    display: flex;
-    align-items: center;
-    gap: 3mm;
-    padding: 2.5mm 4mm;
-    background: #FEF3C7;
-    border: 1px solid #FDE68A;
-    border-left: 3px solid #B45309;
-    border-radius: 3px;
+  /* Therapy / plan content */
+  .tx-content {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 8.5pt;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    color: #1c1917;
+  }
+  .tx-content .accent { color: #0F766E; font-weight: 600; }
+  .tx-content em { color: #57534E; font-style: italic; }
+
+  /* Notes block (Ekzaminimi) */
+  .notes-content {
     font-size: 9pt;
-    color: #78350F;
-    line-height: 1.35;
-    page-break-inside: avoid;
+    line-height: 1.55;
+    color: #1c1917;
   }
-  .alg-alert .alg-icon {
-    flex: 0 0 auto;
-    width: 4mm; height: 4mm;
-    border-radius: 999px;
-    background: #B45309;
-    color: white;
-    display: grid; place-items: center;
-    font-size: 7pt;
-    font-weight: 700;
-    line-height: 1;
-  }
-  .alg-alert .alg-lab {
-    font-size: 7.5pt;
-    font-weight: 700;
-    color: #B45309;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-  }
-  .alg-alert .alg-val { font-weight: 600; }
+  .notes-content em { color: #57534E; font-style: italic; }
 
-  /* ====== Footer (signature + stamp) ====== */
+  /* ====== Footer (signature only — stamp area removed) ====== */
   .doc-footer {
     margin-top: auto;
     padding-top: 8mm;
-    display: grid;
-    grid-template-columns: 1fr 50mm;
-    gap: 10mm;
+    display: flex;
+    justify-content: space-between;
     align-items: flex-end;
+    gap: 10mm;
   }
-  .sig-col { font-size: 8.5pt; }
-  .sig-col .sig-img {
-    height: 16mm;
-    margin-bottom: 2mm;
+  .sig-col { font-size: 8.5pt; min-width: 60mm; }
+  .sig-col .sig-img { height: 14mm; margin-bottom: 1mm; color: #1c1917; }
+  .sig-col .sig-line { border-top: 1px solid #1c1917; padding-top: 1.5mm; width: 60mm; }
+  .sig-col .name { font-weight: 600; font-size: 9pt; }
+  .sig-col .cred { color: #57534E; font-size: 7.5pt; }
+
+  .doc-footer .issue {
+    text-align: left;
+    font-size: 8pt;
+    color: #57534E;
+    line-height: 1.5;
+    font-variant-numeric: tabular-nums;
+    align-self: flex-end;
+  }
+  .doc-footer .issue .issue-when {
+    color: #1c1917;
+    font-weight: 600;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 8.5pt;
+    letter-spacing: 0.01em;
+  }
+  .doc-footer .issue .issue-when .dot { color: #C4C0BC; margin: 0 1mm; font-weight: 400; }
+  .doc-footer .issue .issue-place {
+    margin-top: 1mm;
+    font-size: 8pt;
+    color: #57534E;
+    font-family: 'Inter', sans-serif;
+    font-weight: 500;
+    letter-spacing: 0;
+  }
+  .doc-footer .issue .issue-sub {
+    margin-top: 1.2mm;
+    font-size: 7pt;
+    color: #78716C;
+    font-family: 'Inter', sans-serif;
+    letter-spacing: 0;
+  }
+  .doc-footer .sig-col { text-align: right; }
+  .doc-footer .sig-col .sig-line { margin-left: auto; }
+  .doc-footer .issue .qr {
+    margin-top: 2.5mm;
+    width: 14mm; height: 14mm;
+    margin-left: auto;
+    background:
+      radial-gradient(circle at 2mm 2mm, #1c1917 1mm, transparent 1.2mm),
+      radial-gradient(circle at 12mm 2mm, #1c1917 1mm, transparent 1.2mm),
+      radial-gradient(circle at 2mm 12mm, #1c1917 1mm, transparent 1.2mm),
+      repeating-conic-gradient(from 0deg at 7mm 7mm, #1c1917 0deg 12deg, transparent 12deg 24deg);
+    background-color: white;
+    border: 0.5pt solid #D6D3D1;
+    border-radius: 1.5pt;
+    opacity: 0.85;
+  }
+
+  /* ====== US page-2 ====== */
+  body[data-us="none"] .paper.us-page { display: none; }
+  body[data-us="none"] .paper-area { gap: 0; }
+
+  .us-page .doc-body { gap: 5mm; }
+  .us-notes {
+    border: 1px solid #D6D3D1;
+    border-radius: 3px;
+    padding: 4mm 5mm;
+  }
+  .us-notes .lab {
+    font-size: 7.3pt;
+    font-weight: 700;
+    color: #0F766E;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 2.5mm;
+  }
+  .us-notes .body {
+    font-size: 9pt;
+    line-height: 1.55;
     color: #1c1917;
   }
-  .sig-col .sig-line {
-    border-top: 1px solid #1c1917;
-    padding-top: 1.5mm;
-    width: 50mm;
-  }
-  .sig-col .name { font-weight: 600; font-size: 9pt; }
-  .sig-col .cred { color: #57534E; font-size: 8pt; }
-  .sig-col .date { color: #57534E; font-size: 8pt; margin-top: 5mm; font-variant-numeric: tabular-nums; }
-
-  .stamp-area {
-    height: 50mm;
-    border: 1px dashed #D6D3D1;
-    border-radius: 3px;
+  .us-grid {
     display: grid;
-    place-items: center;
-    color: #A8A29E;
-    font-size: 8pt;
-    text-align: center;
-    background: repeating-linear-gradient(45deg, transparent 0, transparent 8px, rgba(28,25,23,0.015) 8px, rgba(28,25,23,0.015) 9px);
+    grid-template-columns: 1fr 1fr;
+    gap: 3mm;
   }
-  .stamp-area .lab {
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-    font-weight: 500;
+  .us-cell {
+    border: 1px solid #E7E5E4;
+    border-radius: 3px;
+    padding: 2mm;
+    background: white;
+    display: flex;
+    flex-direction: column;
+    gap: 1.5mm;
   }
-  .stamp-area .sub {
+  .us-cell .img {
+    height: 38mm;
+    border-radius: 2px;
+    overflow: hidden;
+    background: #0c0a09;
+  }
+  .us-cell .img svg { width: 100%; height: 100%; display: block; }
+  .us-cell .cap {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    font-family: 'JetBrains Mono', monospace;
     font-size: 7pt;
-    color: #C4C0BC;
-    margin-top: 2mm;
-    font-style: italic;
+    color: #57534E;
+  }
+  .us-cell .cap strong { color: #1c1917; font-weight: 600; }
+
+  /* Preview toolbar segmented control */
+  .seg-control {
+    display: inline-flex;
+    background: var(--bg-subtle);
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    padding: 3px;
+    gap: 2px;
+  }
+  .seg-control .seg {
+    padding: 5px 10px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-muted);
+    border-radius: var(--r-sm);
+    cursor: pointer;
+    user-select: none;
+  }
+  .seg-control .seg.active {
+    background: var(--bg-elevated);
+    color: var(--text-strong);
+    box-shadow: var(--shadow-xs);
+  }
+  .seg-label { font-size: 11px; color: var(--text-faint); margin-right: 6px; text-transform: uppercase; letter-spacing: 0.05em; }
+
+  /* Compact letterhead (continuation pages) */
+  .letterhead.compact {
+    padding-bottom: 3mm;
+    margin-bottom: 3mm;
+  }
+  .letterhead.compact .name { font-size: 10.5pt; }
+  .letterhead.compact .formal { font-size: 6pt; }
+  .letterhead.compact .meta { display: none; }
+  .letterhead.compact .lh-patient .pt-name { font-size: 10.5pt; }
+  .letterhead.compact .lh-patient .pt-meta { font-size: 6.8pt; }
+  .page-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 6.5pt;
+    color: #78716C;
+    background: #F5F5F4;
+    border: 1px solid #E7E5E4;
+    padding: 1px 5px;
+    border-radius: 999px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-top: 1mm;
   }
 
   /* ====== Print rules ====== */
-  @page {
-    size: A5 portrait;
-    margin: 0;
-  }
+  @page { size: A5 portrait; margin: 0; }
   @media print {
     body { background: white; }
-    .preview-bar { display: none; }
-    .paper-area { padding: 0; }
-    .paper { box-shadow: none; width: 148mm; min-height: 210mm; padding: 14mm 14mm 12mm; margin: 0; }
-    .stamp-area { border: none; background: none; }
-    .stamp-area .lab, .stamp-area .sub { display: none; }
+    .preview-bar, .variant-label { display: none; }
+    .paper-area { padding: 0; gap: 0; }
+    .paper {
+      box-shadow: none; margin: 0;
+      width: 148mm; min-height: 210mm; padding: 14mm 14mm 12mm;
+      page-break-after: always;
+    }
+    .paper:last-child { page-break-after: auto; }
   }
 </style>
 </head>
@@ -425,7 +536,7 @@
   <a href="chart.html" class="pb-back btn btn-ghost btn-sm">← Kthehu</a>
   <div>
     <div class="pb-title">Raporti i vizitës</div>
-    <div class="pb-sub">Era Krasniqi · 14.05.2026 · A5</div>
+    <div class="pb-sub">Era Krasniqi · A5 · 3 variante</div>
   </div>
   <div class="pb-spacer"></div>
 
@@ -437,179 +548,111 @@
     </div>
   </div>
 
-  <div style="display: flex; align-items: center; gap: 12px;">
-    <span class="seg-label">Nënshkrimi</span>
-    <div class="seg-control">
-      <span class="seg active">Skanuar</span>
-      <span class="seg">Manual</span>
-    </div>
-  </div>
-  <div style="display: flex; align-items: center; gap: 12px;">
-    <span class="seg-label">Zmadhim</span>
-    <div class="seg-control">
-      <span class="seg">75%</span>
-      <span class="seg active">100%</span>
-      <span class="seg">150%</span>
-    </div>
-  </div>
-
   <button class="btn btn-secondary btn-sm">PDF</button>
   <button class="btn btn-primary btn-sm" onclick="window.print()">Printo</button>
 </div>
 
-<!-- Paper -->
 <div class="paper-area">
-  <article class="paper">
 
-    <!-- Letterhead -->
+  <article class="paper">
     <header class="letterhead">
       <div class="lh-clinic">
-        <div class="name">
-          <span class="formal">Ambulanca Specialistike Pediatrike</span>
-          DONETA-med
-        </div>
-        <div class="meta">
-          Rr. Adem Jashari, Prizren, Kosovë<br>
-          045 83 00 83 · 043 543 123 · 10:00 – 18:00
+        <div class="info">
+          <span class="formal">Ordinanca Specialistike Pediatrike</span>
+          <div class="name">DONETA-MED</div>
+          <div class="meta">
+            Rr. Adem Jashari, Prizren, Kosovë<br>
+            045 83 00 83 · 043 543 123<br>10:00 – 18:00<br>
+            <span class="lic">Lic. MSH-Nr. 1487-AM/24</span>
+          </div>
         </div>
       </div>
       <div class="lh-patient">
-        <table>
-          <tr><td class="l">Kod · ID</td><td class="v"><span style="font-family: 'Inter Tight', sans-serif; font-weight:700; color:#0F766E;">A</span> · 15626</td></tr>
-          <tr><td class="l">DL</td><td class="v">03.08.2023</td></tr>
-          <tr><td class="l">Vendi</td><td class="v">Prizren</td></tr>
-          <tr><td class="l">Pesha lindjes</td><td class="v">3 280 g</td></tr>
-          <tr><td class="l">Gjat. lindjes</td><td class="v">51 cm</td></tr>
-          <tr><td class="l">PK lindjes</td><td class="v">34 cm</td></tr>
-        </table>
+        <div class="pt-name">Era Krasniqi</div>
+        <div class="pt-id"><span class="id-sigil">A</span>15626</div>
+        <div class="pt-meta">
+          <div class="row"><span class="k">DL</span><span class="v">03.08.2023</span></div>
+          <div class="row birth"><span class="v"><span class="bm-l">PL</span>3.200<span class="bm-u">kg</span> · <span class="bm-l">GjL</span>51<span class="bm-u">cm</span> · <span class="bm-l">PKL</span>34<span class="bm-u">cm</span></span></div>
+          <div class="row birth"><span class="v"><span class="bm-l">Pt</span>13.6<span class="bm-u">kg</span> · <span class="bm-l">GjT</span>92<span class="bm-u">cm</span> · <span class="bm-l">PKT</span>48.2<span class="bm-u">cm</span></span></div>
+        </div>
       </div>
     </header>
 
-    <!-- Patient banner -->
-    <div class="pt-banner">
-      <div>
-        <div class="name">Era Krasniqi</div>
-        <div class="age">vajzë · 2 vjeç 9 muaj</div>
-      </div>
-      <div class="when">
-        <div><strong>14.05.2026</strong></div>
-        <div>Vizita 5 nga 5 · 14:20</div>
-      </div>
-    </div>
 
-    <!-- Alergji / Tjera is OMITTED from visit reports per canonical visibility table.
-         It is an internal-only doctor field and never appears on any printed document. -->
-
-    <!-- Vitals -->
-    <div class="vitals-strip">
-      <div class="cell">
-        <div class="l">Pesha</div>
-        <div class="v">13.6<span class="u">kg</span></div>
-      </div>
-      <div class="cell">
-        <div class="l">Gjatësia</div>
-        <div class="v">92<span class="u">cm</span></div>
-      </div>
-      <div class="cell">
-        <div class="l">PK</div>
-        <div class="v">48.2<span class="u">cm</span></div>
-      </div>
-      <div class="cell">
-        <div class="l">Temp.</div>
-        <div class="v">37.2<span class="u">°C</span></div>
-      </div>
-    </div>
-
-    <!-- Body -->
     <div class="doc-body">
-      <div class="box">
-        <div class="lab">Dg <span class="full">· Diagnoza</span></div>
+      <div class="box" style="margin-top: 4mm;">
+        <div class="lab">Dg</div>
         <div class="dx-list">
-          <div class="dx-line primary">
-            <span class="code">J03.9</span>
-            <span class="desc">Tonsillitis acuta</span>
-          </div>
-          <div class="dx-line">
-            <span class="code">R05</span>
-            <span class="desc">Tussis</span>
-          </div>
+          <div class="dx-line primary"><span class="code">Z00.1</span><span class="desc">Kontroll i rregullt pediatrik</span></div>
         </div>
       </div>
 
       <div class="box">
-        <div class="lab">Th <span class="full">· Terapia</span></div>
-<div class="tx-content">Spray.Axxa 2× në ditë, 5 ditë
-Ibuprofen susp. 100mg/5ml — 5ml × 3, p.r.n.
-Pi shumë lëngje. Pushim.
-<span class="accent">>rez.</span> nëse vazhdon mbi 5 ditë</div>
+        <div class="lab">Th</div>
+        <div class="notes-content">Pacientja në gjendje të mirë të përgjithshme, hidratim i mirë, pa shenja akute. Auskultacion pulmonar: të pastra bilateralisht. CR ritmik, fr. 96/min. Abdomen i butë, pa dhimbje. <em>Rritja sipas P50.</em></div>
       </div>
 
-      <!-- Tjera and Kontrolla are internal-only clinical notes.
-           Never rendered on print — visible only in the doctor's chart view.
-           See field-visibility table in the spec for full canonical reference. -->
+      <div class="box">
+        <div class="lab">An</div>
+<div class="tx-content">Hb 12.4 g/dl · Hct 37% · Le 7.8 × 10⁹/L
+Tr 285 × 10⁹/L · CRP &lt;5 mg/L
+Glik. 4.8 mmol/L · Ferritin 28 ng/ml
+Urina: pa devijime patologjike.</div>
+      </div>
     </div>
 
-    <!-- Footer -->
     <footer class="doc-footer">
+      <div class="issue">
+        <div class="issue-when"><span class="when" id="printStamp">14.05.2026 · 14:32</span></div>
+        <div class="issue-place">Prizren</div>
+      </div>
       <div class="sig-col">
-        <!-- Scanned signature -->
         <svg class="sig-img" viewBox="0 0 200 60" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M 8 42 Q 15 18 32 26 Q 42 32 36 42 Q 28 50 38 38 Q 50 24 64 36 Q 72 44 80 30 Q 90 14 100 28 Q 108 38 118 26 Q 130 12 144 30 Q 152 42 160 30 L 178 14"
-                opacity="0.85"/>
+          <path d="M 8 42 Q 15 18 32 26 Q 42 32 36 42 Q 28 50 38 38 Q 50 24 64 36 Q 72 44 80 30 Q 90 14 100 28 Q 108 38 118 26 Q 130 12 144 30 Q 152 42 160 30 L 178 14" opacity="0.85"/>
           <path d="M 22 48 L 156 48" stroke-width="0.8" opacity="0.3"/>
         </svg>
         <div class="sig-line"></div>
         <div class="name">Dr. Taulant Shala</div>
-        <div class="cred">pediatër · DonetaMED</div>
-        <div class="date">14.05.2026 · Prizren</div>
-      </div>
-
-      <div class="stamp-area">
-        <div>
-          <div class="lab">Vendi i vulës</div>
-          <div class="sub">vendoset manualisht</div>
-        </div>
+        <div class="cred">specialist pediatër · DonetaMED</div>
       </div>
     </footer>
   </article>
 
-  <!-- ===================================================
-       Page 2 — Ultrasound (only renders when linked).
-       Toggle in preview toolbar drives data-us on <body>.
-       =================================================== -->
+  <!-- ============================================================
+       Page 2 — Ultrasound. Renders only when the visit has an
+       ultrasound linked. The toolbar toggle drives body[data-us];
+       "none" hides this article entirely. Max 4 images in a 2×2
+       grid; findings above. Each printed page is independently
+       signed (Kosovo practice).
+       ============================================================ -->
   <article class="paper us-page">
-    <!-- Compact letterhead repeats for continuity — each printed page is
-         independently signed/stamped per Kosovo practice. -->
     <header class="letterhead compact">
       <div class="lh-clinic">
-        <div class="name">
-          <span class="formal">Ambulanca Specialistike Pediatrike</span>
-          DONETA-med
-        </div>
-        <div class="meta">
-          Era Krasniqi · ID 15626 · 14.05.2026
+        <div class="info">
+          <span class="formal">Ordinanca Specialistike Pediatrike</span>
+          <div class="name">DONETA-MED</div>
         </div>
       </div>
-      <div class="lh-patient" style="display:flex; align-items:flex-end;">
-        <span class="page-tag">Faqe 2 · Ultrazëri</span>
+      <div class="lh-patient">
+        <div class="pt-name">Era Krasniqi</div>
+        <div class="pt-id"><span class="id-sigil">A</span>15626 · V-2026-0432</div>
       </div>
     </header>
 
     <div class="doc-body">
-      <!-- Free-text findings come first — they are the clinical content,
-           the images are evidence beneath them. -->
+      <!-- Findings come first — they are the clinical content, the
+           images are evidence beneath. -->
       <div class="us-notes">
-        <div class="lab">US <span class="full">· Gjetjet e ultrazërit</span></div>
+        <div class="lab">UL <span style="color: #78716C; font-weight: 500;">· Ultrazëri</span></div>
         <div class="body">
-          Abdomen pa peshtjellim. Mëlqia me strukt. homogjene, EV pa dilatim.
+          Abdomen pa peshërim. Mëlqia me strukt. homogjene, EV pa dilatim.
           Bilateral renal: dim. në normë, pa kalcifikate ose dilatim të sistemit
-          kupoplikatorial. Tëshi i frytë pa veshje. <em>Konkluzion:</em>
+          kupopliktorial. Tëshi i frytë pa veshë. <em>Konkluzion:</em>
           gjetje të rregullta për moshën.
         </div>
       </div>
 
-      <!-- 2×2 image grid — up to 4 images per A5. Heuristic: study has
-           >4 → first 4 in DICOM order; no image-picker in v1. -->
+      <!-- 2×2 image grid — max 4 images per A5. -->
       <div class="us-grid">
         <div class="us-cell">
           <div class="img">
@@ -673,33 +716,29 @@ Pi shumë lëngje. Pushim.
       </div>
     </div>
 
-    <!-- Each printed page is independently signed/stamped — Kosovo practice. -->
     <footer class="doc-footer">
+      <div class="issue">
+        <div class="issue-when"><span class="when">14.05.2026 · 14:32</span></div>
+        <div class="issue-place">Prizren</div>
+      </div>
       <div class="sig-col">
         <svg class="sig-img" viewBox="0 0 200 60" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M 8 42 Q 15 18 32 26 Q 42 32 36 42 Q 28 50 38 38 Q 50 24 64 36 Q 72 44 80 30 Q 90 14 100 28 Q 108 38 118 26 Q 130 12 144 30 Q 152 42 160 30 L 178 14"
-                opacity="0.85"/>
+          <path d="M 8 42 Q 15 18 32 26 Q 42 32 36 42 Q 28 50 38 38 Q 50 24 64 36 Q 72 44 80 30 Q 90 14 100 28 Q 108 38 118 26 Q 130 12 144 30 Q 152 42 160 30 L 178 14" opacity="0.85"/>
           <path d="M 22 48 L 156 48" stroke-width="0.8" opacity="0.3"/>
         </svg>
         <div class="sig-line"></div>
         <div class="name">Dr. Taulant Shala</div>
-        <div class="cred">pediatër · DonetaMED</div>
-        <div class="date">14.05.2026 · Prizren</div>
-      </div>
-      <div class="stamp-area">
-        <div>
-          <div class="lab">Vendi i vulës</div>
-          <div class="sub">vendoset manualisht</div>
-        </div>
+        <div class="cred">specialist pediatër · DonetaMED</div>
       </div>
     </footer>
   </article>
+
 </div>
 
 <script>
-  // Page-2 ultrasound visibility — default "with". A real visit would
-  // read this off the visit record; the toggle in the preview bar lets
-  // reviewers compare "with US" vs "without US" without leaving the file.
+  // Page-2 ultrasound visibility. Real visits read this off the
+  // visit record; the preview toolbar toggle is here so reviewers
+  // can compare "with US" vs "without US" without leaving the file.
   function setUs(state, btn) {
     document.body.dataset.us = state;
     if (btn) {
@@ -710,10 +749,20 @@ Pi shumë lëngje. Pushim.
   document.body.dataset.us = 'with';
 
   // Auto-print when arriving with ?print=1 (from chart.html "Printo raportin")
+  // Also stamp the current print time at render.
+  (function () {
+    const el = document.getElementById('printStamp');
+    if (el) {
+      const d = new Date();
+      const pad = n => String(n).padStart(2, '0');
+      const txt = pad(d.getDate()) + '.' + pad(d.getMonth() + 1) + '.' + d.getFullYear()
+        + ' · ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+      el.textContent = txt;
+      document.querySelectorAll('.us-page .when').forEach(n => n.textContent = txt);
+    }
+  })();
   if (new URLSearchParams(location.search).get('print') === '1') {
-    window.addEventListener('load', () => {
-      setTimeout(() => window.print(), 250);
-    });
+    window.addEventListener('load', () => setTimeout(() => window.print(), 250));
   }
 </script>
 
