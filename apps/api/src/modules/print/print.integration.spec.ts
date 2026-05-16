@@ -7,6 +7,30 @@
 // visibility.
 //
 // Skips automatically when DATABASE_URL or seed passwords are unset.
+//
+// ⚠️ Not yet wired into CI. The print 500 regression of 2026-05-16
+// (visit/vertetim/history → 500 after `make stop && make dev` because
+// the `clinics.license_number` migration hadn't run) would have been
+// caught by this suite, but two problems block CI activation:
+//
+//   1. The vitest config uses esbuild for transpilation, which does
+//      not emit decorator metadata. NestJS DI on parameter-property
+//      constructors (`constructor(private readonly boss: PgBossService)`)
+//      then injects `undefined` and `TelemetryService.onApplicationBootstrap`
+//      crashes with `Cannot read properties of undefined (reading
+//      'isReady')`. Fix: add `unplugin-swc` (or rollup-plugin-swc) to
+//      `apps/api/vitest.config.ts` so decorator metadata survives the
+//      transpile.
+//   2. Once (1) is fixed, add a `integration` job to
+//      `.github/workflows/ci.yml` that boots a postgres service,
+//      applies migrations, runs `prisma/sql/*.sql`, seeds with
+//      hard-coded test passwords, and runs `pnpm test`. The DATABASE_URL
+//      already needs its `?schema=public` stripped before being passed
+//      to psql (handled below in `beforeAll`).
+//
+// Until then, container-start `prisma migrate deploy` (Dockerfile.api)
+// and `/health/schema` are the layers that catch this class of bug
+// — see also docs/runbook.md.
 
 import { execSync } from 'node:child_process';
 import { resolve } from 'node:path';
@@ -62,6 +86,11 @@ describe.skipIf(!ENABLED)('Print integration', () => {
   beforeAll(async () => {
     const apiDir = resolve(__dirname, '..', '..', '..');
     execSync('pnpm exec prisma migrate deploy', { cwd: apiDir, stdio: 'inherit' });
+    // Prisma URLs carry a `?schema=public` query param that libpq
+    // doesn't understand ("invalid URI query parameter: schema"). Strip
+    // it before handing the URL to psql — Postgres uses the default
+    // search_path which already starts with `public` anyway.
+    const psqlUrl = (DATABASE_URL ?? '').replace(/\?.*$/, '');
     for (const f of [
       '001_rls_indexes_triggers.sql',
       '002_auth_rls.sql',
@@ -69,7 +98,7 @@ describe.skipIf(!ENABLED)('Print integration', () => {
       '004_patients_search.sql',
     ]) {
       execSync(
-        `psql "${DATABASE_URL ?? ''}" -v ON_ERROR_STOP=1 -f prisma/sql/${f}`,
+        `psql "${psqlUrl}" -v ON_ERROR_STOP=1 -f prisma/sql/${f}`,
         { cwd: apiDir, stdio: 'inherit' },
       );
     }
