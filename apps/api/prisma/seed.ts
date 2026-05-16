@@ -50,18 +50,27 @@ async function hashPassword(plain: string): Promise<string> {
 }
 
 async function seedClinic(): Promise<string> {
-  // DonetaMED — first customer per CLAUDE.md §14.
+  // DonetaMED — first customer per CLAUDE.md §14. Canonical identity
+  // strings (DONETA-MED with hyphen, "Ordinanca Specialistike
+  // Pediatrike", "Rr. Adem Jashari") match the approved print design
+  // and are what we render on every clinical document.
   const clinic = await prisma.clinic.upsert({
     where: { subdomain: 'donetamed' },
-    update: {},
+    update: {
+      name: 'Ordinanca Specialistike Pediatrike',
+      shortName: 'DONETA-MED',
+      address: 'Rr. Adem Jashari',
+      licenseNumber: 'Lic. MSH-Nr. 1487-AM/24',
+    },
     create: {
       subdomain: 'donetamed',
-      name: 'DonetaMED — Ordinanca Pediatrike',
-      shortName: 'DonetaMED',
-      address: 'Rruga Adem Jashari, p.n.',
+      name: 'Ordinanca Specialistike Pediatrike',
+      shortName: 'DONETA-MED',
+      address: 'Rr. Adem Jashari',
       city: 'Prizren',
       phones: ['045 83 00 83', '043 543 123'],
       email: 'info@donetamed.health',
+      licenseNumber: 'Lic. MSH-Nr. 1487-AM/24',
       hoursConfig: {
         timezone: 'Europe/Belgrade',
         days: {

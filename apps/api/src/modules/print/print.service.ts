@@ -360,7 +360,8 @@ export class PrintService {
     const title = user.title?.trim() || 'Dr.';
     const fullName = `${title} ${user.firstName} ${user.lastName}`;
     const credential = `${user.credential ?? 'pediatër'} · ${clinic.shortName}`;
-    // Belgrade calendar date for the issued-at line on the footer.
+    // Belgrade calendar date+time for the issue-block on the footer.
+    // Generated at render time — never stored, never persisted.
     const dateIso = formatBelgradeDateIso(at);
     return {
       fullName,
@@ -371,7 +372,8 @@ export class PrintService {
       // signature-upload pipeline; for now we always pass null so the
       // template prints a blank line + handwritten signature space.
       signatureDataUri: null,
-      dateAndPlace: `${formatIsoDateDdMmYyyy(dateIso)} · ${clinic.city}`,
+      issuedAtDateTime: `${formatIsoDateDdMmYyyy(dateIso)} · ${formatBelgradeTimeHhMm(at)}`,
+      issuedPlace: clinic.city,
     };
   }
 
@@ -407,6 +409,7 @@ export function clinicLetterhead(clinic: {
   city: string;
   phones: string[];
   hoursConfig: unknown;
+  licenseNumber: string | null;
 }): ClinicLetterhead {
   return {
     formalName: clinic.name,
@@ -415,6 +418,7 @@ export function clinicLetterhead(clinic: {
     city: clinic.city,
     phones: clinic.phones,
     hoursLine: hoursLineFromConfig(clinic.hoursConfig),
+    licenseNumber: clinic.licenseNumber,
   };
 }
 
@@ -470,4 +474,14 @@ function formatBelgradeDateIso(d: Date): string {
   // Stable ISO date string in Europe/Belgrade locale, regardless of
   // host timezone — Sweden's date locale gives yyyy-mm-dd output.
   return d.toLocaleDateString('sv-SE', { timeZone: 'Europe/Belgrade' });
+}
+
+function formatBelgradeTimeHhMm(d: Date): string {
+  // 24h clock in Europe/Belgrade — "14:32". Sweden's locale gives
+  // HH:mm without seconds.
+  return d.toLocaleTimeString('sv-SE', {
+    timeZone: 'Europe/Belgrade',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 }

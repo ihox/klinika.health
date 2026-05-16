@@ -28,12 +28,13 @@ import { renderVertetim } from './templates/vertetim.template';
 import { renderVisitReport } from './templates/visit-report.template';
 
 const CLINIC = {
-  formalName: 'Ambulanca Specialistike Pediatrike',
-  shortName: 'DonetaMED',
-  address: 'Rruga Adem Jashari',
+  formalName: 'Ordinanca Specialistike Pediatrike',
+  shortName: 'DONETA-MED',
+  address: 'Rr. Adem Jashari',
   city: 'Prizren',
   phones: ['045 83 00 83', '043 543 123'],
   hoursLine: '10:00 – 18:00',
+  licenseNumber: 'Lic. MSH-Nr. 1487-AM/24',
 };
 
 const PATIENT = {
@@ -50,9 +51,10 @@ const PATIENT = {
 
 const SIGNATURE = {
   fullName: 'Dr. Taulant Shala',
-  credential: 'pediatër · DonetaMED',
+  credential: 'pediatër · DONETA-MED',
   signatureDataUri: null,
-  dateAndPlace: '14.05.2026 · Prizren',
+  issuedAtDateTime: '14.05.2026 · 14:32',
+  issuedPlace: 'Prizren',
 };
 
 const VISIT_BASE: VisitReportTemplateData = {
@@ -89,20 +91,33 @@ const OTHER_SENTINEL = 'TJERA-SENTINEL-TTT';
 describe('visit-report template', () => {
   it('renders clinic letterhead + payment code + DOB', () => {
     const html = renderVisitReport(VISIT_BASE);
-    expect(html).toContain('DonetaMED');
-    expect(html).toContain('Ambulanca Specialistike Pediatrike');
-    // Payment letter + legacy id pair (per spec: "A · 15626")
+    expect(html).toContain('DONETA-MED');
+    expect(html).toContain('Ordinanca Specialistike Pediatrike');
+    expect(html).toContain('Lic. MSH-Nr. 1487-AM/24');
+    // Payment letter + legacy id pair, rendered as teal-sigil + mono id.
     expect(html).toContain('15626');
-    expect(html).toMatch(/<span class="pay-letter">A<\/span>/);
+    expect(html).toMatch(/<span class="id-sigil">A<\/span>/);
     expect(html).toContain('03.08.2023');
   });
 
-  it('renders all vitals when populated', () => {
+  it('renders today + birth measurements in the right header', () => {
     const html = renderVisitReport(VISIT_BASE);
-    expect(html).toContain('13.6 kg');
-    expect(html).toContain('92 cm');
-    expect(html).toContain('48.2 cm');
-    expect(html).toContain('37.2 °C');
+    // Birth row — PL/GjL/PKL labels carry the values with the units
+    // emitted as adjacent spans (so a contiguous "3.280kg" string
+    // doesn't necessarily appear). Assert label + value separately.
+    expect(html).toContain('PL');
+    expect(html).toContain('3.280');
+    expect(html).toContain('GjL');
+    expect(html).toContain('51');
+    expect(html).toContain('PKL');
+    expect(html).toContain('34');
+    // Today row — Pt/GjT/PKT from visit.vitals
+    expect(html).toContain('Pt');
+    expect(html).toContain('13.6');
+    expect(html).toContain('GjT');
+    expect(html).toContain('92');
+    expect(html).toContain('PKT');
+    expect(html).toContain('48.2');
   });
 
   it('renders structured Dg + free-text Th', () => {
@@ -110,6 +125,24 @@ describe('visit-report template', () => {
     expect(html).toContain('J03.9');
     expect(html).toContain('Tonsillitis acuta');
     expect(html).toContain('Spray.Axxa');
+  });
+
+  it('renders only Dg + Th labels (NO "· Diagnoza" / "· Terapia" suffixes)', () => {
+    const html = renderVisitReport(VISIT_BASE);
+    expect(html).toContain('>Dg<');
+    expect(html).toContain('>Th<');
+    expect(html).not.toContain('· Diagnoza');
+    expect(html).not.toContain('· Terapia');
+    expect(html).not.toContain('· DIAGNOZA');
+    expect(html).not.toContain('· TERAPIA');
+  });
+
+  it('renders the issue block (date+time, place) on the footer left', () => {
+    const html = renderVisitReport(VISIT_BASE);
+    expect(html).toContain('14.05.2026');
+    expect(html).toContain('14:32');
+    expect(html).toContain('Prizren');
+    expect(html).toMatch(/class="issue-block"/);
   });
 
   it('NEVER renders Alergji / Ankesa / Ushqimi / Ekzaminime / Kontrolla / Tjera', () => {
@@ -141,27 +174,32 @@ describe('visit-report template', () => {
       ...VISIT_BASE,
       ultrasoundNotes: 'Abdomen pa peshtjellim',
     });
-    expect(withUs).toContain('Faqe 2 · Ultrazëri');
+    // Compact letterhead + UL section appear on page 2.
+    expect(withUs).toMatch(/class="lh compact"/);
+    expect(withUs).toContain('>UL<');
     expect(withUs).toContain('Abdomen pa peshtjellim');
+    // Two <article class="paper"> blocks = two pages.
+    const articles = withUs.match(/<article class="paper">/g);
+    expect(articles?.length ?? 0).toBe(2);
   });
 
   it('omits page 2 when no ultrasound data', () => {
     const html = renderVisitReport(VISIT_BASE);
-    expect(html).not.toContain('Faqe 2 · Ultrazëri');
+    expect(html).not.toMatch(/class="lh compact"/);
+    const articles = html.match(/<article class="paper">/g);
+    expect(articles?.length ?? 0).toBe(1);
   });
 
-  it('reserves a blank stamp area on every page', () => {
+  it('does NOT render a digital stamp slot anywhere', () => {
     const html = renderVisitReport({
       ...VISIT_BASE,
       ultrasoundNotes: 'Some notes',
     });
-    // Each page has a stamp-area block. The screen-only "Vendi i
-    // vulës" label is included in the HTML (it's hidden via
-    // @media print). The dashed border is also defined in shared
-    // CSS so it can be hidden in print.
-    const matches = html.match(/class="stamp-area"/g);
-    expect(matches?.length ?? 0).toBeGreaterThanOrEqual(2);
-    expect(html).toContain('Vendi i vulës');
+    // The Kosovo physical ink stamp is placed by hand; the template
+    // reserves no placeholder rectangle and emits no "Vendi i vulës"
+    // label. Cf. CLAUDE.md §1.1 (no digital stamps).
+    expect(html).not.toContain('Vendi i vulës');
+    expect(html).not.toMatch(/class="stamp-area"/);
   });
 });
 
@@ -185,7 +223,7 @@ const VERTETIM_BASE: VertetimTemplateData = {
 describe('vërtetim template', () => {
   it('renders header, patient name + dob + place, diagnosis and period', () => {
     const html = renderVertetim(VERTETIM_BASE);
-    expect(html).toContain('DonetaMED');
+    expect(html).toContain('DONETA-MED');
     expect(html).toContain('VËRTETIM');
     expect(html).toContain('Era Krasniqi');
     expect(html).toContain('03.08.2023');
@@ -219,10 +257,12 @@ describe('vërtetim template', () => {
     expect(html).not.toContain('Pesha lindjes');
   });
 
-  it('reserves a blank stamp area', () => {
+  it('does NOT render a digital stamp slot', () => {
     const html = renderVertetim(VERTETIM_BASE);
-    expect(html).toContain('Vendi i vulës');
-    expect(html).toMatch(/class="stamp-area"/);
+    // No placeholder rectangle, no "Vendi i vulës" label — Kosovo ink
+    // stamp is placed by hand. CLAUDE.md §1.1.
+    expect(html).not.toContain('Vendi i vulës');
+    expect(html).not.toMatch(/class="stamp-area"/);
   });
 });
 
@@ -289,9 +329,10 @@ describe('history template', () => {
     expect(html).not.toMatch(/Ekzaminim/);
   });
 
-  it('reserves a blank stamp area on the last page only', () => {
+  it('does NOT render a digital stamp slot', () => {
     const html = renderHistory(HISTORY_BASE);
-    expect(html).toContain('Vendi i vulës');
+    expect(html).not.toContain('Vendi i vulës');
+    expect(html).not.toMatch(/class="stamp-area"/);
   });
 
   it('paginates when more than 12 visits', () => {

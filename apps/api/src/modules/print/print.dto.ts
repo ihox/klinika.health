@@ -55,6 +55,8 @@ export interface ClinicLetterhead {
   city: string;
   phones: string[];
   hoursLine: string;
+  /** "Lic. MSH-Nr. 1487-AM/24" — null hides the line. */
+  licenseNumber: string | null;
 }
 
 export interface DoctorSignature {
@@ -62,8 +64,11 @@ export interface DoctorSignature {
   credential: string;
   /** Base64 data URI for the scanned signature image. Null = blank line. */
   signatureDataUri: string | null;
-  /** "14.05.2026 · Prizren" — assembled by the service. */
-  dateAndPlace: string;
+  /** "16.05.2026 · 14:32" — dd.MM.yyyy · HH:mm in Europe/Belgrade.
+   *  Rendered in the footer's issue-block (left of the signature). */
+  issuedAtDateTime: string;
+  /** "Prizren" — clinic city. */
+  issuedPlace: string;
 }
 
 export interface PatientHeaderForPrint {

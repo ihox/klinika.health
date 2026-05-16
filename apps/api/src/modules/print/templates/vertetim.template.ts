@@ -16,8 +16,8 @@ import {
 } from '../print.format';
 import type { VertetimTemplateData } from '../print.dto';
 import {
+  renderIssueBlock,
   renderSignatureColumn,
-  renderStampArea,
   wrapDocument,
 } from './shared-styles';
 
@@ -145,8 +145,8 @@ function renderBody(data: VertetimTemplateData): string {
       </div>
 
       <footer class="doc-footer">
+        ${renderIssueBlock(data.signature)}
         ${renderSignatureColumn(data.signature)}
-        ${renderStampArea()}
       </footer>
     </article>
   `;

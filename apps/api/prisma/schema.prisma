@@ -81,6 +81,11 @@ model Clinic {
   walkinDurationMinutes Int          @default(5) @map("walkin_duration_minutes")
   logoUrl               String       @map("logo_url")
   signatureUrl          String       @map("signature_url")
+  /// MSH licence string printed in the document letterhead, e.g.
+  /// "Lic. MSH-Nr. 1487-AM/24". Optional so test fixtures / new
+  /// clinics can boot without it; the print template hides the line
+  /// when absent.
+  licenseNumber         String?      @map("license_number")
   smtpConfig            Json?        @map("smtp_config")
   status                ClinicStatus @default(active)
   createdAt             DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)

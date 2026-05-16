@@ -22,8 +22,8 @@ import {
 } from '../print.format';
 import type { HistoryTemplateData, HistoryVisitRow } from '../print.dto';
 import {
+  renderIssueBlock,
   renderSignatureColumn,
-  renderStampArea,
   wrapDocument,
 } from './shared-styles';
 
@@ -131,7 +131,7 @@ function renderHeader(data: HistoryTemplateData, page: number): string {
       </div>
       <div class="h-meta">
         <div class="h-pt-id">${escapeHtml(data.patientIdLabel)}</div>
-        ${page === 1 ? `<div>E lëshuar ${escapeHtml(data.signature.dateAndPlace)}</div>` : '<div>Vazhdim</div>'}
+        ${page === 1 ? `<div>E lëshuar ${escapeHtml(data.signature.issuedAtDateTime)} · ${escapeHtml(data.signature.issuedPlace)}</div>` : '<div>Vazhdim</div>'}
       </div>
     </header>
   `;
@@ -255,8 +255,8 @@ function renderVisitRow(v: HistoryVisitRow): string {
 function renderFooter(data: HistoryTemplateData): string {
   return `
     <footer class="doc-footer">
+      ${renderIssueBlock(data.signature)}
       ${renderSignatureColumn(data.signature)}
-      ${renderStampArea()}
     </footer>
   `;
 }
@@ -378,9 +378,8 @@ function pageStyles(): string {
 
     .doc-footer {
       margin-top: auto; padding-top: 6mm;
-      display: grid; grid-template-columns: 1fr 45mm; gap: 6mm; align-items: flex-end;
+      display: flex; justify-content: space-between; align-items: flex-end; gap: 6mm;
     }
-    .doc-footer .stamp-area { height: 38mm; }
 
     .us-grid {
       display: grid; grid-template-columns: 1fr 1fr; gap: 4mm; margin-bottom: 6mm;
