@@ -248,7 +248,11 @@ export class PrintService {
 
     const visitRows: HistoryVisitRow[] = visits.map((v) => ({
       visitDate: dateToIso(v.visitDate),
+      visitTime: formatBelgradeTimeHhMm(v.createdAt),
       weightKg: v.weightG != null ? v.weightG / 1000 : null,
+      heightCm: decimalToNumber(v.heightCm),
+      headCircumferenceCm: decimalToNumber(v.headCircumferenceCm),
+      temperatureC: decimalToNumber(v.temperatureC),
       diagnoses: v.diagnoses.map((d, idx) => ({
         code: d.icd10Code,
         latinDescription: d.code.latinDescription,
@@ -258,13 +262,15 @@ export class PrintService {
       prescription: v.prescription,
     }));
 
-    // Today summary = most recent visit's weight + height, used in
-    // the master block. `visits` is already sorted newest-first.
+    // Today summary = most recent visit's weight + height + head circ,
+    // shown in the right-header today row. `visits` is already sorted
+    // newest-first.
     const latest = visits[0];
     const todaySummary = latest
       ? {
           weightKg: latest.weightG != null ? latest.weightG / 1000 : null,
           heightCm: decimalToNumber(latest.heightCm),
+          headCircumferenceCm: decimalToNumber(latest.headCircumferenceCm),
         }
       : null;
 
@@ -276,14 +282,37 @@ export class PrintService {
           }
         : null;
 
+    // Growth series oldest-first so the chart sweeps left-to-right.
+    // Only emit points where the underlying measurement is non-null.
+    const oldestFirst = [...visits].reverse();
+    const growthSeries = {
+      weight: oldestFirst
+        .filter((v) => v.weightG != null)
+        .map((v) => ({ visitDate: dateToIso(v.visitDate), value: v.weightG! / 1000 })),
+      height: oldestFirst
+        .filter((v) => v.heightCm != null)
+        .map((v) => ({
+          visitDate: dateToIso(v.visitDate),
+          value: decimalToNumber(v.heightCm)!,
+        })),
+      headCircumference: oldestFirst
+        .filter((v) => v.headCircumferenceCm != null)
+        .map((v) => ({
+          visitDate: dateToIso(v.visitDate),
+          value: decimalToNumber(v.headCircumferenceCm)!,
+        })),
+    };
+
     const data: HistoryTemplateData = {
       clinic: clinicLetterhead(clinic),
       patient: patientHeader(patient, null),
+      patientSex: patient.sex,
       patientIdLabel: formatPatientIdLabel(patient.legacyId, patient.id),
       visits: visitRows,
       visitCount: visits.length,
       visitDateRange: dateRange,
       todaySummary,
+      growthSeries,
       signature: this.doctorSignature(clinic, doctor, new Date()),
       includeUltrasound,
       // Ultrasound appendix wiring lands in the DICOM slice; for v1

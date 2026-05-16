@@ -299,7 +299,9 @@ describe.skipIf(!ENABLED)('Print integration', () => {
       expect(res.status).toBe(200);
       expect(res.headers['content-type']).toMatch(/application\/pdf/);
       expect(renderer.lastHtml).toContain('Era Krasniqi');
-      expect(renderer.lastHtml).toContain('HISTORIA E PACIENTIT');
+      // Lowercase context strip — the all-caps "HISTORIA E PACIENTIT"
+      // hero from v1 was retired in the approved design.
+      expect(renderer.lastHtml).toContain('Historia e pacientit');
       expect(renderer.lastHtml).toContain('14.05.2026');
       // Audit
       const audit = await prisma.auditLog.findFirst({

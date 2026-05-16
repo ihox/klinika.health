@@ -269,11 +269,16 @@ describe('vërtetim template', () => {
 const HISTORY_BASE: HistoryTemplateData = {
   clinic: CLINIC,
   patient: PATIENT,
+  patientSex: 'f',
   patientIdLabel: 'PT-04829',
   visits: [
     {
       visitDate: '2026-05-14',
+      visitTime: '14:20',
       weightKg: 13.6,
+      heightCm: 92,
+      headCircumferenceCm: 48.2,
+      temperatureC: 37.2,
       diagnoses: [
         { code: 'J03.9', latinDescription: 'Tonsillitis acuta', isPrimary: true },
       ],
@@ -282,7 +287,11 @@ const HISTORY_BASE: HistoryTemplateData = {
     },
     {
       visitDate: '2026-04-01',
+      visitTime: '11:05',
       weightKg: 13.2,
+      heightCm: 91,
+      headCircumferenceCm: 48.0,
+      temperatureC: 38.1,
       diagnoses: [],
       legacyDiagnosis: 'Tonsillitis acuta (legjend)',
       prescription: 'Amoksicilinë',
@@ -290,35 +299,100 @@ const HISTORY_BASE: HistoryTemplateData = {
   ],
   visitCount: 2,
   visitDateRange: { from: '2026-04-01', to: '2026-05-14' },
-  todaySummary: { weightKg: 13.6, heightCm: 92 },
+  todaySummary: { weightKg: 13.6, heightCm: 92, headCircumferenceCm: 48.2 },
+  growthSeries: {
+    weight: [
+      { visitDate: '2026-04-01', value: 13.2 },
+      { visitDate: '2026-05-14', value: 13.6 },
+    ],
+    height: [
+      { visitDate: '2026-04-01', value: 91 },
+      { visitDate: '2026-05-14', value: 92 },
+    ],
+    headCircumference: [
+      { visitDate: '2026-04-01', value: 48.0 },
+      { visitDate: '2026-05-14', value: 48.2 },
+    ],
+  },
   signature: SIGNATURE,
   includeUltrasound: false,
   ultrasoundAppendix: [],
 };
 
 describe('history template', () => {
-  it('renders master block + table columns', () => {
+  it('renders the unified letterhead + context strip + table columns', () => {
     const html = renderHistory(HISTORY_BASE);
-    expect(html).toContain('HISTORIA E PACIENTIT');
-    expect(html).toContain('PT-04829');
+    // Context strip uses lowercase "Historia e pacientit", NOT the
+    // old all-caps "HISTORIA E PACIENTIT" hero title.
+    expect(html).toContain('Historia e pacientit');
+    expect(html).not.toContain('HISTORIA E PACIENTIT');
     expect(html).toContain('Era Krasniqi');
-    expect(html).toContain('Data');
-    expect(html).toContain('Pesha');
+    expect(html).toContain('DONETA-MED');
+    // Table headers
+    expect(html).toContain('Data / matjet');
     expect(html).toContain('Diagnoza');
-    expect(html).toContain('Terapia');
+    expect(html).toContain('Terapia / Analizat');
   });
 
-  it('sorts visits newest-first (input order preserved)', () => {
+  it('renders date + time + vitals (P/GJ/PK/T) for each visit', () => {
     const html = renderHistory(HISTORY_BASE);
-    const newer = html.indexOf('14.05.2026');
-    const older = html.indexOf('01.04.2026');
+    expect(html).toContain('14.05.2026');
+    expect(html).toContain('14:20');
+    // Vitals tokens emit as separate spans (.lbl + .num + .u) so a
+    // continguous "13.6 kg" doesn't appear — assert pieces.
+    expect(html).toContain('>P<');
+    expect(html).toContain('13.6');
+    expect(html).toContain('>GJ<');
+    expect(html).toContain('92');
+    expect(html).toContain('>PK<');
+    expect(html).toContain('48.2');
+    expect(html).toContain('>T<');
+    expect(html).toContain('37.2');
+  });
+
+  it('renders three growth chart cards on the chart page', () => {
+    const html = renderHistory(HISTORY_BASE);
+    expect(html).toContain('Pesha · P50');
+    expect(html).toContain('Gjatësia · P50');
+    expect(html).toContain('Perimetri kraniometrik · P50');
+    expect(html).toContain('Diagrami i rritjes · WHO');
+  });
+
+  it('tints the clinical line per patient sex (female = E8728E)', () => {
+    const html = renderHistory(HISTORY_BASE);
+    // Sex is "f" in the fixture, so the line / dots use the female
+    // canonical chart token.
+    expect(html).toContain('#E8728E');
+    expect(html).not.toContain('#4A90D9');
+  });
+
+  it('tints male as #4A90D9 and unknown sex as teal #0F766E', () => {
+    const male = renderHistory({ ...HISTORY_BASE, patientSex: 'm' });
+    expect(male).toContain('#4A90D9');
+    const unknown = renderHistory({ ...HISTORY_BASE, patientSex: null });
+    expect(unknown).toContain('#0F766E');
+  });
+
+  it('sorts visits newest-first within the table body', () => {
+    const html = renderHistory(HISTORY_BASE);
+    // The context strip carries the chronological range string
+    // ("01.04.2026 – 14.05.2026"), so the order check must scope to
+    // the table body — that's where the newest-first invariant lives.
+    const tableStart = html.indexOf('<tbody>');
+    expect(tableStart).toBeGreaterThan(0);
+    const body = html.slice(tableStart);
+    const newer = body.indexOf('14.05.2026');
+    const older = body.indexOf('01.04.2026');
     expect(newer).toBeGreaterThan(0);
     expect(older).toBeGreaterThan(newer);
   });
 
-  it('shows page numbering on each page', () => {
+  it('shows page numbering (visits + always-present chart page)', () => {
     const html = renderHistory(HISTORY_BASE);
-    expect(html).toMatch(/Faqe 1\/1/);
+    // 2 fixture visits ≤ ROWS_PER_PAGE → 1 visit-table page + 1 chart
+    // page = 2 pages total. Both kickers appear.
+    expect(html).toMatch(/Faqe 1 \/ 2/);
+    expect(html).toMatch(/Faqe 2 \/ 2/);
   });
 
   it('NEVER renders Alergji / Ankesa / Ushqimi / Ekzaminime / Tjera', () => {
@@ -335,21 +409,27 @@ describe('history template', () => {
     expect(html).not.toMatch(/class="stamp-area"/);
   });
 
-  it('paginates when more than 12 visits', () => {
+  it('paginates the visits table + appends one chart page at the end', () => {
     const longList: HistoryTemplateData = {
       ...HISTORY_BASE,
-      visits: Array.from({ length: 25 }, (_, i) => ({
+      visits: Array.from({ length: 20 }, (_, i) => ({
         visitDate: `2026-${String((i % 12) + 1).padStart(2, '0')}-01`,
+        visitTime: '10:00',
         weightKg: 13.6,
+        heightCm: 92,
+        headCircumferenceCm: 48.2,
+        temperatureC: 37.0,
         diagnoses: [],
         legacyDiagnosis: 'Kontroll i rregullt',
         prescription: 'Pa terapi',
       })),
-      visitCount: 25,
+      visitCount: 20,
     };
     const html = renderHistory(longList);
-    expect(html).toMatch(/Faqe 1\/3/);
-    expect(html).toMatch(/Faqe 2\/3/);
-    expect(html).toMatch(/Faqe 3\/3/);
+    // 20 visits / 8 per page = 3 visit-table pages + 1 chart page.
+    expect(html).toMatch(/Faqe 1 \/ 4/);
+    expect(html).toMatch(/Faqe 2 \/ 4/);
+    expect(html).toMatch(/Faqe 3 \/ 4/);
+    expect(html).toMatch(/Faqe 4 \/ 4/);
   });
 });

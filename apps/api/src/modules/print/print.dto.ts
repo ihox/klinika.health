@@ -145,22 +145,50 @@ export interface VertetimTemplateData {
 
 export interface HistoryVisitRow {
   visitDate: string; // ISO yyyy-mm-dd
+  /** "HH:MM" in Europe/Belgrade, from visit.createdAt. Null when the
+   *  legacy migration didn't carry a time. */
+  visitTime: string | null;
   weightKg: number | null;
+  heightCm: number | null;
+  headCircumferenceCm: number | null;
+  temperatureC: number | null;
   diagnoses: VisitDiagnosisForPrint[];
   legacyDiagnosis: string | null;
   prescription: string | null;
 }
 
+export interface GrowthSeriesPoint {
+  visitDate: string; // ISO yyyy-mm-dd
+  value: number;
+}
+
 export interface HistoryTemplateData {
   clinic: ClinicLetterhead;
   patient: PatientHeaderForPrint;
+  /** Patient sex, kept distinct from `patient.ageLine` so the growth
+   *  charts can tint the clinical line male/female (or fall back to
+   *  the neutral teal when unknown). */
+  patientSex: 'm' | 'f' | null;
   /** "PT-04829" — assembled from legacyId or UUID short form. */
   patientIdLabel: string;
   visits: HistoryVisitRow[];
   visitCount: number;
   visitDateRange: { from: string; to: string } | null;
-  /** Latest weight + height for the master summary block. */
-  todaySummary: { weightKg: number | null; heightCm: number | null } | null;
+  /** Latest weight + height + head circ for the right-header today
+   *  measurements row. */
+  todaySummary: {
+    weightKg: number | null;
+    heightCm: number | null;
+    headCircumferenceCm: number | null;
+  } | null;
+  /** Per-metric time series — oldest-first so the chart x-axis goes
+   *  left-to-right in chronological order. Only points where the
+   *  measurement is non-null. */
+  growthSeries: {
+    weight: GrowthSeriesPoint[];
+    height: GrowthSeriesPoint[];
+    headCircumference: GrowthSeriesPoint[];
+  };
   signature: DoctorSignature;
   includeUltrasound: boolean;
   ultrasoundAppendix: UltrasoundImageForPrint[];
