@@ -182,6 +182,8 @@ export class PrintService {
     const data: VertetimTemplateData = {
       clinic: clinicLetterhead(clinic),
       patient: patientHeader(cert.patient, null),
+      patientSex: cert.patient.sex,
+      patientIdLabel: formatPatientIdLabel(cert.patient.legacyId, cert.patient.id),
       diagnosis,
       diagnosisSnapshot: cert.diagnosisSnapshot,
       certificateNumber: formatCertificateNumber(cert.issuedAt, sequence),

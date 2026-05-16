@@ -132,9 +132,17 @@ export interface VisitReportTemplateData {
 export interface VertetimTemplateData {
   clinic: ClinicLetterhead;
   patient: PatientHeaderForPrint;
+  /** Patient sex, kept distinct from `patient.ageLine` so the subject
+   *  identification block can show "Gjinia · Mosha" as discrete
+   *  fields. */
+  patientSex: 'm' | 'f' | null;
+  /** "PT-04829" — the same patient identifier shown on the history
+   *  printout, surfaced in the subject identification block. */
+  patientIdLabel: string;
   diagnosis: VisitDiagnosisForPrint | null;
   /** Frozen at issue — never recomputed from the live visit. */
   diagnosisSnapshot: string;
+  /** Full serial as it renders on paper: "VM-YYYY-NNNN". */
   certificateNumber: string;
   issuedAtIso: string;
   absenceFrom: string; // ISO yyyy-mm-dd

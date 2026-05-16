@@ -140,8 +140,11 @@ describe('formatPatientIdLabel', () => {
 });
 
 describe('formatCertificateNumber', () => {
-  it('formats year-NNNN', () => {
-    expect(formatCertificateNumber(new Date('2026-05-14T11:00:00Z'), 142)).toBe('2026-0142');
+  it('emits the VM- prefix + year + four-digit counter', () => {
+    expect(formatCertificateNumber(new Date('2026-05-14T11:00:00Z'), 142)).toBe('VM-2026-0142');
+  });
+  it('zero-pads single-digit counters', () => {
+    expect(formatCertificateNumber(new Date('2026-01-01T00:00:00Z'), 1)).toBe('VM-2026-0001');
   });
 });
 

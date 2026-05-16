@@ -206,13 +206,15 @@ describe('visit-report template', () => {
 const VERTETIM_BASE: VertetimTemplateData = {
   clinic: CLINIC,
   patient: PATIENT,
+  patientSex: 'f',
+  patientIdLabel: 'PT-15626',
   diagnosis: {
     code: 'J03.9',
     latinDescription: 'Tonsillitis acuta',
     isPrimary: true,
   },
   diagnosisSnapshot: 'J03.9 — Tonsillitis acuta',
-  certificateNumber: '2026-0142',
+  certificateNumber: 'VM-2026-0142',
   issuedAtIso: '2026-05-14T10:30:00.000Z',
   absenceFrom: '2026-05-14',
   absenceTo: '2026-05-18',
@@ -221,27 +223,76 @@ const VERTETIM_BASE: VertetimTemplateData = {
 };
 
 describe('vërtetim template', () => {
-  it('renders header, patient name + dob + place, diagnosis and period', () => {
+  it('renders letterhead with VM- serial tag in the top-right', () => {
     const html = renderVertetim(VERTETIM_BASE);
     expect(html).toContain('DONETA-MED');
-    expect(html).toContain('VËRTETIM');
-    expect(html).toContain('Era Krasniqi');
-    expect(html).toContain('03.08.2023');
-    expect(html).toContain('Prizren');
-    expect(html).toContain('J03.9');
-    expect(html).toContain('Tonsillitis acuta');
-    expect(html).toContain('14.05.2026 – 18.05.2026');
-    expect(html).toContain('Nr.');
-    expect(html).toContain('2026-0142');
+    expect(html).toContain('Ordinanca Specialistike Pediatrike');
+    expect(html).toContain('Lic. MSH-Nr. 1487-AM/24');
+    // Serial tag — kicker label + VM-YYYY-NNNN number
+    expect(html).toContain('Nr. vërtetimi');
+    expect(html).toContain('VM-2026-0142');
+    expect(html).toMatch(/class="cert-serial-tag"/);
   });
 
-  it('renders the frozen snapshot even when no structured diagnosis is available', () => {
+  it('places the VËRTETIM hero title near the top (after letterhead)', () => {
+    const html = renderVertetim(VERTETIM_BASE);
+    expect(html).toContain('VËRTETIM');
+    const lhEnd = html.indexOf('</header>');
+    const titleAt = html.indexOf('VËRTETIM</h1>');
+    const footerAt = html.indexOf('<footer');
+    expect(lhEnd).toBeGreaterThan(0);
+    expect(titleAt).toBeGreaterThan(lhEnd);
+    expect(titleAt).toBeLessThan(footerAt);
+  });
+
+  it('renders the subject identification block (name, DOB·place, sex·age, ID)', () => {
+    const html = renderVertetim(VERTETIM_BASE);
+    expect(html).toMatch(/class="subject-block"/);
+    expect(html).toContain('Era Krasniqi');
+    expect(html).toContain('Datëlindja · Vendi');
+    expect(html).toContain('03.08.2023');
+    expect(html).toContain('Prizren');
+    expect(html).toContain('Gjinia · Mosha');
+    expect(html).toContain('Vajzë');
+    expect(html).toContain('ID në klinikë');
+    expect(html).toContain('PT-15626');
+  });
+
+  it('attestation prose uses "në shkollë" only (NOT "kopsht")', () => {
+    const html = renderVertetim(VERTETIM_BASE);
+    expect(html).toContain('ka munguar në shkollë');
+    expect(html).not.toMatch(/kopsht/i);
+    expect(html).not.toContain('shkollë / kopsht');
+  });
+
+  it('diagnosis card shows latinized name only — NO ICD code, NO "· ICD-10"', () => {
+    const html = renderVertetim(VERTETIM_BASE);
+    expect(html).toMatch(/class="cert-dx-card"/);
+    expect(html).toContain('Tonsillitis acuta');
+    // ICD code is intentionally omitted from the printed cert.
+    expect(html).not.toMatch(/<span class="code">J03\.9<\/span>/);
+    expect(html).not.toContain('· ICD-10');
+  });
+
+  it('falls back to the snapshot (with ICD stripped) when no structured diagnosis', () => {
     const html = renderVertetim({
       ...VERTETIM_BASE,
       diagnosis: null,
-      diagnosisSnapshot: 'Tonsillopharyngitis acuta (snapshot)',
+      diagnosisSnapshot: 'J03.9 — Tonsillopharyngitis acuta',
     });
-    expect(html).toContain('Tonsillopharyngitis acuta (snapshot)');
+    expect(html).toContain('Tonsillopharyngitis acuta');
+    expect(html).not.toContain('J03.9 — Tonsillopharyngitis acuta');
+  });
+
+  it('renders the period card with date range + big day count + policy note', () => {
+    const html = renderVertetim(VERTETIM_BASE);
+    expect(html).toMatch(/class="cert-period-card"/);
+    expect(html).toContain('Periudha e arsyetuar');
+    expect(html).toContain('14.05.2026 – 18.05.2026');
+    // Day count rendered large in the right column + "ditë" unit.
+    expect(html).toMatch(/<div class="period-days">5<\/div>/);
+    expect(html).toMatch(/<div class="period-unit">ditë<\/div>/);
+    expect(html).toContain('Kthim në aktivitete normale');
   });
 
   it('NEVER renders vitals, payment code, prescription, allergies, exams', () => {
@@ -249,11 +300,10 @@ describe('vërtetim template', () => {
     // Vitals omitted by template
     expect(html).not.toContain('13.6 kg');
     expect(html).not.toContain('Kod · ID');
-    // Therapy label (Th · Terapia) and prescription content never
-    // appear on a vërtetim.
-    expect(html).not.toContain('· Terapia');
+    // Therapy and prescription content never appear on a vërtetim.
     expect(html).not.toContain('Spray.Axxa');
-    // Patient header has DOB + place only, NO birth weight column
+    // Patient header has DOB + place + sex + age + ID only, NO birth
+    // weight column.
     expect(html).not.toContain('Pesha lindjes');
   });
 

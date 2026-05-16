@@ -1,18 +1,31 @@
-// Vërtetim template — A5 portrait, single page.
+// Vërtetim (medical certificate) template — A5 portrait, single page.
 //
-// Translated from `design-reference/prototype/print-certificate.html`.
-// Field visibility per the canonical table:
-//   master data — name + DOB + place only (no allergies, no payment code)
-//   date — issue date
-//   diagnosis — from frozen `diagnosis_snapshot` (NOT live visit)
-//   period — from absence_from / absence_to
+// Translated from `design-reference/prototype/print-certificate.html`
+// with the approved-design tweaks layered on top:
+//   * Serial moved into a top-right tag in the letterhead (kicker
+//     label "Nr. vërtetimi" above the VM-YYYY-NNNN number).
+//   * Title "VËRTETIM" sits near the top, immediately under the
+//     letterhead — never at the bottom.
+//   * Body order: subject identification block, attestation prose,
+//     diagnosis card (latinized text only, no ICD code), period
+//     card with big day count on the right.
+//   * Attestation prose uses "në shkollë" only (the "/ kopsht"
+//     pairing from v1 is retired — kindergartens use a different
+//     receipt form).
+//   * Footer: issue block left, signature right; no stamp slot.
 //
-// No allergies, no vitals, no therapy, no examinations.
+// Field visibility (canonical):
+//   master data — name + DOB + place + sex + age + clinic ID
+//   diagnosis — frozen `diagnosisSnapshot` (with structured fallback)
+//   period — absence_from / absence_to
+//   excluded: vitals, allergies, prescription, exams, follow-ups.
 
 import {
+  ageLabelLong,
   escapeHtml,
   formatIsoDateDdMmYyyy,
   hasText,
+  sexLabel,
 } from '../print.format';
 import type { VertetimTemplateData } from '../print.dto';
 import {
@@ -26,124 +39,15 @@ export function renderVertetim(data: VertetimTemplateData): string {
 }
 
 function renderBody(data: VertetimTemplateData): string {
-  const { clinic, patient } = data;
-  const diagnosisBox = renderDiagnosisBox(data);
-  const dobLine = patient.dateOfBirth
-    ? `e lindur më <strong>${escapeHtml(formatIsoDateDdMmYyyy(patient.dateOfBirth))}</strong>`
-    : '';
-  const placeLine = patient.placeOfBirth
-    ? ` në <strong>${escapeHtml(patient.placeOfBirth)}</strong>`
-    : '';
   return `
-    <style>
-      .paper { padding: 16mm 16mm 12mm; font-size: 10pt; line-height: 1.5; }
-      .cert-lh {
-        text-align: center;
-        padding-bottom: 6mm;
-        border-bottom: 2px solid #0F766E;
-        margin-bottom: 10mm;
-      }
-      .cert-lh .mark {
-        display: inline-block;
-        margin-bottom: 3mm;
-        color: #0F766E;
-      }
-      .cert-lh .cert-name {
-        font-family: 'Inter Tight', 'Inter Display', 'Inter', sans-serif;
-        font-size: 13pt; font-weight: 700;
-        letter-spacing: -0.005em; color: #0F766E;
-      }
-      .cert-lh .cert-meta {
-        font-size: 8pt; color: #57534E;
-        margin-top: 2mm; font-variant-numeric: tabular-nums;
-      }
-      .cert-title {
-        text-align: center;
-        font-family: 'Inter Tight', 'Inter Display', 'Inter', sans-serif;
-        font-size: 26pt; font-weight: 700; letter-spacing: 0.15em;
-        color: #0F766E;
-        margin: 8mm 0 12mm;
-        position: relative;
-      }
-      .cert-title::before, .cert-title::after {
-        content: ''; position: absolute; top: 50%;
-        width: 25mm; height: 1px; background: #D6D3D1;
-      }
-      .cert-title::before { left: 8mm; }
-      .cert-title::after { right: 8mm; }
-      .cert-num {
-        display: flex; justify-content: space-between;
-        font-size: 8.5pt; color: #57534E;
-        margin-bottom: 8mm;
-      }
-      .cert-num strong { color: #1c1917; font-weight: 600; font-variant-numeric: tabular-nums; }
-      .cert-body { font-size: 11pt; line-height: 1.7; text-align: justify; color: #1c1917; }
-      .cert-body strong { font-weight: 600; }
-      .cert-dx-box {
-        margin: 8mm auto;
-        padding: 5mm 8mm;
-        border: 1.5px solid #0F766E;
-        border-radius: 3px;
-        text-align: center;
-        max-width: 100mm;
-        background: rgba(204,251,241,0.18);
-      }
-      .cert-dx-box .lab {
-        font-size: 7.5pt; color: #0F766E;
-        text-transform: uppercase; letter-spacing: 0.1em;
-        font-weight: 700; margin-bottom: 2mm;
-      }
-      .cert-dx-box .dx {
-        font-family: 'Inter Tight', 'Inter Display', 'Inter', sans-serif;
-        font-size: 12pt; font-style: italic; font-weight: 600;
-        color: #1c1917;
-      }
-      .cert-dx-box .code {
-        font-family: 'JetBrains Mono', ui-monospace, monospace;
-        font-size: 9pt; color: #0F766E; font-style: normal;
-        font-weight: 700; margin-right: 5mm;
-      }
-      .cert-period {
-        text-align: center; margin-top: 6mm; font-size: 10pt;
-      }
-      .cert-period strong { font-weight: 600; font-variant-numeric: tabular-nums; }
-      .doc-footer { padding-top: 12mm; }
-    </style>
-
+    <style>${vertetimStyles()}</style>
     <article class="paper">
-      <header class="cert-lh">
-        <div class="mark">
-          <svg width="26" height="26" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M32 54 C 12 40, 8 26, 18 18 C 24 14, 30 16, 32 22 C 34 16, 40 14, 46 18 C 56 26, 52 40, 32 54 Z" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
-            <path d="M10 34 L 22 34 L 26 28 L 30 40 L 34 30 L 38 36 L 54 36" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-            <circle cx="54" cy="36" r="2.6" fill="currentColor"/>
-          </svg>
-        </div>
-        <div class="cert-name">${escapeHtml(clinic.shortName)}</div>
-        <div class="cert-meta">${escapeHtml(clinic.formalName)} · ${escapeHtml(clinic.city)}, Kosovë<br>
-          Tel: ${clinic.phones.map((p) => escapeHtml(p)).join(' · ')} · ${escapeHtml(clinic.hoursLine)}
-        </div>
-      </header>
-
+      ${renderLetterhead(data)}
       <h1 class="cert-title">VËRTETIM</h1>
-
-      <div class="cert-num">
-        <span>Nr. <strong>${escapeHtml(data.certificateNumber)}</strong></span>
-        <span>Data: <strong>${escapeHtml(formatIsoDateDdMmYyyy(data.issuedAtIso.slice(0, 10)))}</strong></span>
-      </div>
-
-      <div class="cert-body">
-        Me të cilin vërtetohet se <strong>${escapeHtml(patient.fullName)}</strong>${dobLine ? ', ' + dobLine : ''}${placeLine}, ka munguar në shkollë / kopsht për arsye shëndetësore.
-
-        ${diagnosisBox}
-
-        <div class="cert-period">
-          Ky vërtetim i lëshohet për të arsyetuar mungesat<br>
-          për periudhën <strong>${escapeHtml(formatIsoDateDdMmYyyy(data.absenceFrom))} – ${escapeHtml(formatIsoDateDdMmYyyy(data.absenceTo))}</strong>
-          (<strong>${data.durationDays}</strong> ${data.durationDays === 1 ? 'ditë' : 'ditë'}).
-        </div>
-      </div>
-
+      ${renderSubjectBlock(data)}
+      ${renderAttestationProse(data)}
+      ${renderDiagnosisCard(data)}
+      ${renderPeriodCard(data)}
       <footer class="doc-footer">
         ${renderIssueBlock(data.signature)}
         ${renderSignatureColumn(data.signature)}
@@ -152,27 +56,359 @@ function renderBody(data: VertetimTemplateData): string {
   `;
 }
 
-function renderDiagnosisBox(data: VertetimTemplateData): string {
-  // Always use the snapshot — never the live diagnosis. If the
-  // structured diagnosis happened to be available at issue time we
-  // render the code + description; otherwise the snapshot string is
-  // shown as-is (covers legacy migrated visits with text diagnoses).
-  const dx = data.diagnosis;
-  if (dx) {
-    return `
-      <div class="cert-dx-box">
-        <div class="lab">Diagnoza</div>
-        <div class="dx"><span class="code">${escapeHtml(dx.code)}</span>${escapeHtml(dx.latinDescription)}</div>
+function renderLetterhead(data: VertetimTemplateData): string {
+  const { clinic } = data;
+  const phonesLine = clinic.phones.map((p) => escapeHtml(p)).join(' · ');
+  const licenseLine = clinic.licenseNumber
+    ? `<br><span class="lic">${escapeHtml(clinic.licenseNumber)}</span>`
+    : '';
+  return `
+    <header class="cert-letterhead">
+      <div class="lh-info">
+        <span class="formal">${escapeHtml(clinic.formalName)}</span>
+        <div class="name">${escapeHtml(clinic.shortName)}</div>
+        <div class="meta">
+          ${escapeHtml(clinic.address)}, ${escapeHtml(clinic.city)}, Kosovë<br>
+          Tel: ${phonesLine}<br>
+          ${escapeHtml(clinic.hoursLine)}${licenseLine}
+        </div>
       </div>
-    `;
-  }
-  if (hasText(data.diagnosisSnapshot)) {
-    return `
-      <div class="cert-dx-box">
-        <div class="lab">Diagnoza</div>
-        <div class="dx">${escapeHtml(data.diagnosisSnapshot)}</div>
+      <div class="cert-serial-tag">
+        <span class="kicker">Nr. vërtetimi</span>
+        <span class="num">${escapeHtml(data.certificateNumber)}</span>
       </div>
-    `;
-  }
-  return '';
+    </header>
+  `;
 }
+
+function renderSubjectBlock(data: VertetimTemplateData): string {
+  const { patient } = data;
+  const dobIso = patient.dateOfBirth;
+  const ageStr = dobIso
+    ? ageLabelLong(dobIso, data.issuedAtIso.slice(0, 10))
+    : '';
+  const sexStr = sexLabel(data.patientSex);
+  const dobLine = dobIso
+    ? escapeHtml(formatIsoDateDdMmYyyy(dobIso))
+    : '—';
+  const placeLine = patient.placeOfBirth
+    ? escapeHtml(patient.placeOfBirth)
+    : '—';
+  const sexAgeParts: string[] = [];
+  if (sexStr) sexAgeParts.push(sexStr.charAt(0).toUpperCase() + sexStr.slice(1));
+  if (ageStr) sexAgeParts.push(ageStr);
+  const sexAge = sexAgeParts.length > 0 ? sexAgeParts.join(' · ') : '—';
+  return `
+    <div class="subject-block">
+      <div class="subject-name">${escapeHtml(patient.fullName)}</div>
+      <div class="subject-grid">
+        <div class="subject-cell">
+          <div class="l">Datëlindja · Vendi</div>
+          <div class="v">${dobLine} · ${placeLine}</div>
+        </div>
+        <div class="subject-cell">
+          <div class="l">Gjinia · Mosha</div>
+          <div class="v">${escapeHtml(sexAge)}</div>
+        </div>
+        <div class="subject-cell">
+          <div class="l">ID në klinikë</div>
+          <div class="v">${escapeHtml(data.patientIdLabel)}</div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderAttestationProse(data: VertetimTemplateData): string {
+  const { patient, clinic } = data;
+  const dobBold = patient.dateOfBirth
+    ? `, e lindur më <strong>${escapeHtml(formatIsoDateDdMmYyyy(patient.dateOfBirth))}</strong>`
+    : '';
+  const placeBold = patient.placeOfBirth
+    ? ` në <strong>${escapeHtml(patient.placeOfBirth)}</strong>`
+    : '';
+  // Note: "në shkollë" only — the legacy "/ kopsht" pairing is
+  // retired per the approved design. Kindergarten absences use a
+  // separate form.
+  return `
+    <div class="cert-prose">
+      Me anë të këtij dokumenti vërtetohet se <strong>${escapeHtml(patient.fullName)}</strong>${dobBold}${placeBold}, ka munguar në shkollë për arsye shëndetësore, vërtetuar nga <strong>${escapeHtml(clinic.shortName)}</strong>.
+    </div>
+  `;
+}
+
+function renderDiagnosisCard(data: VertetimTemplateData): string {
+  // Always render the latinized text only — the ICD code stays out
+  // of the printed cert per the approved design. Snapshot wins when
+  // a structured diagnosis isn't available (covers legacy migrated
+  // visits with text diagnoses).
+  const dxText = data.diagnosis
+    ? data.diagnosis.latinDescription
+    : hasText(data.diagnosisSnapshot)
+      ? stripIcdCodeFromSnapshot(data.diagnosisSnapshot)
+      : '';
+  if (!dxText) return '';
+  return `
+    <div class="cert-dx-card">
+      <div class="lab">Diagnoza</div>
+      <div class="dx">${escapeHtml(dxText)}</div>
+    </div>
+  `;
+}
+
+function stripIcdCodeFromSnapshot(snapshot: string): string {
+  // The snapshot text is formatted "J03.9 — Tonsillitis acuta" when
+  // created from a structured diagnosis. Strip the leading code so
+  // the cert shows the latinized name only.
+  const m = snapshot.match(/^[A-Z]\d+(?:\.\d+)?\s*[—–-]\s*(.+)$/);
+  return m && m[1] ? m[1].trim() : snapshot.trim();
+}
+
+function renderPeriodCard(data: VertetimTemplateData): string {
+  const dateRange = `${formatIsoDateDdMmYyyy(data.absenceFrom)} – ${formatIsoDateDdMmYyyy(data.absenceTo)}`;
+  // CLAUDE.md §1.5: Albanian only. "ditë" used for both 1-day and
+  // multi-day periods (Albanian doesn't decline the noun here).
+  return `
+    <div class="cert-period-card">
+      <div class="period-left">
+        <div class="period-label">Periudha e arsyetuar</div>
+        <div class="period-range">${escapeHtml(dateRange)}</div>
+        <div class="period-note">
+          Kthim në aktivitete normale i lejohet vetëm pas vlerësimit klinik.
+        </div>
+      </div>
+      <div class="period-right">
+        <div class="period-days">${data.durationDays}</div>
+        <div class="period-unit">ditë</div>
+      </div>
+    </div>
+  `;
+}
+
+function vertetimStyles(): string {
+  return `
+    .paper { padding: 14mm 14mm 12mm; font-size: 10pt; line-height: 1.5; }
+
+    /* Letterhead — clinic identity left, serial tag top-right. */
+    .cert-letterhead {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 12mm;
+      align-items: start;
+      padding-bottom: 5mm;
+      border-bottom: 1.5px solid #0F766E;
+      margin-bottom: 6mm;
+    }
+    .cert-letterhead .lh-info { text-align: left; min-width: 0; }
+    .cert-letterhead .formal {
+      display: block;
+      font-size: 7pt;
+      font-weight: 500;
+      letter-spacing: 0.04em;
+      color: #57534E;
+      text-transform: uppercase;
+      margin-bottom: 1.5mm;
+    }
+    .cert-letterhead .name {
+      font-family: 'Inter Tight', 'Inter Display', 'Inter', sans-serif;
+      font-size: 14pt;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+      color: #0F766E;
+      line-height: 1;
+    }
+    .cert-letterhead .meta {
+      font-size: 7.5pt;
+      color: #57534E;
+      margin-top: 2.5mm;
+      line-height: 1.55;
+      font-variant-numeric: tabular-nums;
+    }
+    .cert-letterhead .meta .lic {
+      color: #78716C;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-size: 7pt;
+      margin-top: 1mm;
+      display: inline-block;
+      letter-spacing: 0.02em;
+    }
+    .cert-serial-tag {
+      text-align: right;
+      line-height: 1;
+      padding-left: 8mm;
+      border-left: 1px solid #E7E5E4;
+    }
+    .cert-serial-tag .kicker {
+      display: block;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-size: 6.3pt;
+      color: #A8A29E;
+      text-transform: uppercase;
+      letter-spacing: 0.14em;
+      font-weight: 500;
+      margin-bottom: 2mm;
+    }
+    .cert-serial-tag .num {
+      display: block;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-size: 12pt;
+      font-weight: 700;
+      color: #0F766E;
+      letter-spacing: 0.04em;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .cert-title {
+      text-align: center;
+      font-family: 'Inter Tight', 'Inter Display', 'Inter', sans-serif;
+      font-size: 26pt;
+      font-weight: 700;
+      letter-spacing: 0.15em;
+      color: #0F766E;
+      margin: 4mm 0 8mm;
+      position: relative;
+    }
+    .cert-title::before, .cert-title::after {
+      content: '';
+      position: absolute;
+      top: 50%;
+      width: 14mm;
+      height: 1px;
+      background: #D6D3D1;
+    }
+    .cert-title::before { left: 0; }
+    .cert-title::after { right: 0; }
+
+    /* Subject identification block — faded panel, teal left border. */
+    .subject-block {
+      background: #FAFAF9;
+      border-left: 3px solid #0F766E;
+      padding: 4mm 6mm 4mm 6mm;
+      margin-bottom: 7mm;
+      border-radius: 0 2px 2px 0;
+    }
+    .subject-name {
+      font-family: 'Inter Tight', 'Inter Display', 'Inter', sans-serif;
+      font-size: 12pt;
+      font-weight: 700;
+      color: #1c1917;
+      margin-bottom: 3mm;
+      letter-spacing: -0.005em;
+    }
+    .subject-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 3mm 6mm;
+    }
+    .subject-cell .l {
+      font-size: 6.3pt;
+      font-weight: 500;
+      letter-spacing: 0.06em;
+      color: #78716C;
+      text-transform: uppercase;
+      margin-bottom: 0.5mm;
+    }
+    .subject-cell .v {
+      font-size: 9pt;
+      color: #1c1917;
+      font-variant-numeric: tabular-nums;
+      font-weight: 500;
+    }
+
+    .cert-prose {
+      font-size: 11pt;
+      line-height: 1.75;
+      text-align: justify;
+      text-justify: inter-word;
+      color: #1c1917;
+      margin-bottom: 6mm;
+    }
+    .cert-prose strong { font-weight: 600; }
+
+    /* Diagnosis card — single line, latinized only, no ICD code. */
+    .cert-dx-card {
+      margin: 0 auto 6mm;
+      padding: 4mm 8mm;
+      border: 1px solid #0F766E;
+      border-radius: 3px;
+      text-align: center;
+      max-width: 110mm;
+      background: rgba(204, 251, 241, 0.18);
+    }
+    .cert-dx-card .lab {
+      font-size: 7pt;
+      color: #0F766E;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      font-weight: 700;
+      margin-bottom: 1.5mm;
+    }
+    .cert-dx-card .dx {
+      font-family: 'Inter Tight', 'Inter Display', 'Inter', sans-serif;
+      font-size: 12pt;
+      font-style: italic;
+      font-weight: 600;
+      color: #1c1917;
+    }
+
+    /* Period card — 2-col: label/dates left, big day count right. */
+    .cert-period-card {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 8mm;
+      align-items: center;
+      padding: 5mm 6mm;
+      border: 1px solid #D6D3D1;
+      border-radius: 3px;
+      background: white;
+    }
+    .period-left .period-label {
+      font-size: 7pt;
+      color: #0F766E;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      margin-bottom: 1.5mm;
+    }
+    .period-left .period-range {
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-size: 11pt;
+      font-weight: 700;
+      color: #1c1917;
+      letter-spacing: 0.01em;
+      font-variant-numeric: tabular-nums;
+      margin-bottom: 2mm;
+    }
+    .period-left .period-note {
+      font-size: 8pt;
+      color: #57534E;
+      line-height: 1.45;
+      font-style: italic;
+    }
+    .period-right {
+      text-align: center;
+      padding-left: 6mm;
+      border-left: 1px solid #E7E5E4;
+      min-width: 24mm;
+    }
+    .period-right .period-days {
+      font-family: 'Inter Tight', 'Inter Display', 'Inter', sans-serif;
+      font-size: 24pt;
+      font-weight: 700;
+      color: #0F766E;
+      line-height: 1;
+      font-variant-numeric: tabular-nums;
+    }
+    .period-right .period-unit {
+      font-size: 8pt;
+      color: #57534E;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      margin-top: 1.5mm;
+      font-weight: 600;
+    }
+
+    .doc-footer { padding-top: 10mm; }
+  `;
+}
+

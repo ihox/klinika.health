@@ -135,8 +135,12 @@ export function formatPatientIdLabel(legacyId: number | null, uuid: string): str
 }
 
 export function formatCertificateNumber(issuedAt: Date, sequenceWithinYear: number): string {
+  // VM = Vërtetim Mjekësor. Format parallels V-YYYY-NNNN (visit) and
+  // PT-NNNNN (patient) so the three serial schemes read as one
+  // family of paper records. Year anchored on UTC for stability
+  // across DST transitions in Europe/Belgrade.
   const year = issuedAt.getUTCFullYear();
-  return `${year}-${String(sequenceWithinYear).padStart(4, '0')}`;
+  return `VM-${year}-${String(sequenceWithinYear).padStart(4, '0')}`;
 }
 
 function insertThousands(n: number): string {
