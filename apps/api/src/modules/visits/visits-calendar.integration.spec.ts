@@ -786,6 +786,102 @@ describe.skipIf(!ENABLED)('Visits calendar integration', () => {
     // walk-ins = 10 calendar-anchored rows surface in `appointments[]`;
     // the 3 standalones do not.
     expect(docRes.body.appointments.length).toBe(10);
+
+    // Cross-view "në pritje" parity (the in_progress+waiting chip fix).
+    // Both views collapse scheduled+arrived into a single "waiting"
+    // count: receptionist reads stats.scheduled + stats.arrived;
+    // doctor derives it by filtering `appointments[]` by status. They
+    // must agree row-for-row over the calendar-scope rows; standalones
+    // never carry scheduled/arrived in practice, so the clinical vs.
+    // calendar scope difference is moot here.
+    const recWaiting = recRes.body.scheduled + recRes.body.arrived;
+    const docWaiting = (docRes.body.appointments as Array<{ status: string }>)
+      .filter((a) => a.status === 'scheduled' || a.status === 'arrived').length;
+    // Seed: 2 scheduled bookings stay 'scheduled', 0 arrived bookings,
+    // 0 walk-ins at 'arrived' → 2 + 0 = 2.
+    expect(recWaiting).toBe(2);
+    expect(docWaiting).toBe(2);
+    expect(recWaiting).toBe(docWaiting);
+
+    // In-progress parity: receptionist surfaces the count as its own
+    // chip ("X në vijim"); doctor derives the same count from
+    // `appointments[]`. 1 scheduled-booking + 1 walk-in + 1 standalone
+    // = 3 in_progress total; receptionist sees all 3 (clinical scope),
+    // doctor sees 2 from appointments (calendar scope — standalones
+    // don't appear in the appointment list).
+    expect(recRes.body.inProgress).toBe(3);
+    const docInProgressFromAppts = (
+      docRes.body.appointments as Array<{ status: string }>
+    ).filter((a) => a.status === 'in_progress').length;
+    expect(docInProgressFromAppts).toBe(2);
+
+    // Chip math invariant — receptionist's stat-foot chips must sum to
+    // total minus cancelled. The chip set is:
+    //   completed + inProgress + (scheduled + arrived) + noShow.
+    // Cancelled is intentionally excluded; it's a different category
+    // (the patient didn't show up and won't). The seed has 1 cancelled
+    // scheduled + 1 cancelled standalone = 2 cancelled.
+    const chipSum =
+      recRes.body.completed +
+      recRes.body.inProgress +
+      recRes.body.scheduled +
+      recRes.body.arrived +
+      recRes.body.noShow;
+    expect(chipSum).toBe(recRes.body.total - recRes.body.cancelled);
+    expect(recRes.body.cancelled).toBe(2);
+  });
+
+  // Walk-ins-only edge case for the "në pritje" collapse. When the day
+  // is entirely walk-ins sitting at status='arrived' (the scenario
+  // that broke the original chip — 5 walk-ins were invisible because
+  // the chip read stats.scheduled, missing arrived), the receptionist's
+  // combined waiting count must equal the walk-in count, not zero.
+  it('stats: walk-ins-only day reports waiting = arrived count (cross-view)', async () => {
+    const doctorCookie = await loginAs(DOCTOR_EMAIL, SEED_DOCTOR_PASSWORD!);
+    const recCookie = await loginAs(RECEPTIONIST_EMAIL, SEED_RECEPTIONIST_PASSWORD!);
+    const creator = await prisma.user.findFirstOrThrow({ where: { clinicId } });
+    const today = todayBelgradeIso();
+    const todayDate = new Date(`${today}T00:00:00Z`);
+    const at = (hhmm: string): Date => new Date(`${today}T${hhmm}:00Z`);
+
+    for (const hhmm of ['09:00', '09:15', '09:30', '09:45', '10:00']) {
+      await prisma.visit.create({
+        data: {
+          clinicId,
+          patientId,
+          visitDate: todayDate,
+          arrivedAt: at(hhmm),
+          isWalkIn: true,
+          durationMinutes: 5,
+          status: 'arrived',
+          createdBy: creator.id,
+          updatedBy: creator.id,
+        },
+      });
+    }
+
+    const recRes = await req()
+      .get(`/api/visits/calendar/stats?date=${today}`)
+      .set('host', TENANT_HOST)
+      .set('Cookie', recCookie);
+    expect(recRes.status).toBe(200);
+    expect(recRes.body.total).toBe(5);
+    expect(recRes.body.scheduled).toBe(0);
+    expect(recRes.body.arrived).toBe(5);
+    // The fix: combined waiting (scheduled + arrived) must be 5.
+    // Pre-fix the UI read only `scheduled` and showed 0.
+    expect(recRes.body.scheduled + recRes.body.arrived).toBe(5);
+
+    const docRes = await req()
+      .get(`/api/doctor/dashboard?date=${today}`)
+      .set('host', TENANT_HOST)
+      .set('Cookie', doctorCookie);
+    expect(docRes.status).toBe(200);
+    expect(docRes.body.stats.appointmentsTotal).toBe(5);
+    const docWaiting = (docRes.body.appointments as Array<{ status: string }>)
+      .filter((a) => a.status === 'scheduled' || a.status === 'arrived').length;
+    expect(docWaiting).toBe(5);
+    expect(docWaiting).toBe(recRes.body.scheduled + recRes.body.arrived);
   });
 
   // Today's Belgrade-local date string. Matches the canonical helper

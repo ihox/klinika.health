@@ -19,15 +19,15 @@
   stream event names (visit.created / visit.updated / visit.status_changed
   / visit.deleted / visit.restored). doctor-home.spec.ts was already
   updated in commit 34fad6b; these two are the remaining stragglers.
-- ui: surface in_progress count across dashboard surfaces — both
-  doctor's DayStats tile ("X / Y Vizita") and receptionist's status
-  chips ("të kryera · mungesë · në pritje") were designed when
-  in_progress was transient. Now that visits-start-in-progress landed
-  and the state is sustained, in-progress visits don't appear on either
-  surface, making numbers look inconsistent (3 total but 0 in every
-  bucket). Fix: add "X në vijim" indicator to doctor's tile +
-  receptionist's chips. ~45-60 min combined. Pre-existing gap surfaced
-  by the new state model.
+- ~~ui: surface in_progress count across dashboard surfaces~~ —
+  RESOLVED by `fix(stats): cross-view parity for "në pritje" (scheduled
+  + arrived)` (2026-05-16). Doctor's DayStats tile gained the
+  `X në vijim · Y në pritje` breakdown earlier the same day; the
+  follow-up collapsed receptionist's `scheduled` chip into
+  `scheduled + arrived` so its chip math sums to `total - cancelled`
+  even when walk-ins are sitting at `arrived`. Both surfaces now use
+  the same definition of "në pritje" = scheduled + arrived; granular
+  calendar-filter pills remain per-status.
 
 ## v2 candidates
 - DICOM MWL (auto study-patient linkage)

@@ -1074,8 +1074,17 @@ function StatsRow({ stats, now }: StatsRowProps): ReactElement {
             <strong className="font-semibold tabular-nums">{stats.inProgress}</strong>{' '}
             në vijim
           </span>
-          <span>
-            <strong className="text-ink font-semibold">{stats.scheduled}</strong> në pritje
+          {/* "Në pritje" = scheduled + arrived. Both states are
+              semantically "waiting" (scheduled = waiting for their
+              slot; arrived = waiting in the waiting room). Card-level
+              differentiation is preserved via canonical colors —
+              indigo for scheduled, cyan for arrived — but the summary
+              stat collapses them so chip math sums to total minus
+              cancelled across every visit-shape mix. Matches the
+              doctor's DayStats "X në pritje" by construction. */}
+          <span data-testid="stat-foot-waiting">
+            <strong className="text-ink font-semibold">{stats.scheduled + stats.arrived}</strong>{' '}
+            në pritje
           </span>
           <span>
             <strong className="text-ink font-semibold">{stats.noShow}</strong> mungesë
