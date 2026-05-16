@@ -108,6 +108,83 @@ class Database:
             )
         return str(row["id"])
 
+    def count_migrated_patients(self, clinic_id: str) -> int:
+        with self._conn.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT COUNT(*) AS n FROM patients
+                WHERE clinic_id = %s
+                  AND legacy_id IS NOT NULL
+                  AND deleted_at IS NULL
+                """,
+                (clinic_id,),
+            )
+            row = cursor.fetchone()
+        return int(row["n"]) if row else 0
+
+    def count_duplicate_name_patients(self, clinic_id: str) -> int:
+        with self._conn.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT COUNT(*) AS n FROM patients
+                WHERE clinic_id = %s
+                  AND has_name_duplicate = true
+                  AND legacy_id IS NOT NULL
+                  AND deleted_at IS NULL
+                """,
+                (clinic_id,),
+            )
+            row = cursor.fetchone()
+        return int(row["n"]) if row else 0
+
+    def count_migrated_visits(self, clinic_id: str) -> int:
+        with self._conn.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT COUNT(*) AS n FROM visits
+                WHERE clinic_id = %s
+                  AND legacy_id IS NOT NULL
+                  AND deleted_at IS NULL
+                """,
+                (clinic_id,),
+            )
+            row = cursor.fetchone()
+        return int(row["n"]) if row else 0
+
+    def visit_date_range(self, clinic_id: str) -> tuple[Any, Any]:
+        with self._conn.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT MIN(visit_date) AS min_d, MAX(visit_date) AS max_d
+                FROM visits
+                WHERE clinic_id = %s
+                  AND legacy_id IS NOT NULL
+                  AND deleted_at IS NULL
+                """,
+                (clinic_id,),
+            )
+            row = cursor.fetchone()
+        if not row:
+            return (None, None)
+        return (row["min_d"], row["max_d"])
+
+    def payment_code_histogram(self, clinic_id: str) -> dict[str, int]:
+        with self._conn.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT COALESCE(payment_code, '∅') AS code, COUNT(*) AS n
+                FROM visits
+                WHERE clinic_id = %s
+                  AND legacy_id IS NOT NULL
+                  AND deleted_at IS NULL
+                GROUP BY 1
+                ORDER BY 1
+                """,
+                (clinic_id,),
+            )
+            rows = cursor.fetchall()
+        return {row["code"]: int(row["n"]) for row in rows}
+
     def load_patient_lookup(self, clinic_id: str) -> dict[str, str]:
         """Build {legacy_display_name: patient_id} for one clinic.
 

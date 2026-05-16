@@ -21,6 +21,7 @@ from .config import load_config
 from .db import Database
 from .logger import get_logger
 from .patients import import_patients
+from .reconciliation import reconcile
 from .reports import JsonlWriter, write_summary_report
 from .visits import import_visits, run_preflight_checks
 
@@ -55,9 +56,19 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Skip the ADR-012 cardinality probes (only safe on confirmed re-runs)",
     )
 
-    report = sub.add_parser("report", help="Re-emit reconciliation report (STEP 4, not yet implemented)")
-    report.add_argument("--config", required=True, type=Path)
-    report.add_argument("--output", required=True, type=Path)
+    report = sub.add_parser("report", help="Generate cross-phase reconciliation report")
+    report.add_argument(
+        "--config",
+        required=True,
+        type=Path,
+        help="Path to config.yaml (see config.example.yaml)",
+    )
+    report.add_argument(
+        "--output",
+        type=Path,
+        default=None,
+        help="Output path. Defaults to <log_dir>/migration-report.json",
+    )
 
     return parser
 
@@ -95,7 +106,7 @@ def cmd_patients(args: argparse.Namespace) -> int:
                     orphans_writer=orphans,
                 )
         write_summary_report(
-            log_dir / "migration-report.json",
+            log_dir / "migration-report-patients.json",
             phase="patients",
             dry_run=dry_run,
             patients=report,
@@ -179,9 +190,32 @@ def cmd_visits(args: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_report(_args: argparse.Namespace) -> int:
-    print("report — implemented in STEP 4", file=sys.stderr)
-    return 2
+def cmd_report(args: argparse.Namespace) -> int:
+    cfg = load_config(args.config)
+    log_dir = cfg.options.log_dir
+    output_path = args.output if args.output else log_dir / "migration-report.json"
+    logger = get_logger(log_dir)
+    logger.info(
+        "cli.report",
+        extra={"output": str(output_path), "clinic": cfg.target.clinic_subdomain},
+    )
+
+    # The reconciliation step is read-only against the DB. We still
+    # open the connection in dry-run mode so any accidental write in
+    # this code path would roll back rather than land.
+    with Database.open(cfg.target.dsn, dry_run=True) as db:
+        clinic_id = db.resolve_clinic_id(cfg.target.clinic_subdomain)
+        payload = reconcile(log_dir=log_dir, db=db, clinic_id=clinic_id, output_path=output_path)
+
+    verdict = payload["verdict"]
+    reasons: list[str] = payload["verdict_reasons"]
+    print(f"\nVERDICT: {verdict}")
+    if reasons:
+        for reason in reasons:
+            print(f"  - {reason}")
+    print(f"\nReport: {output_path}")
+    # Exit code mirrors the verdict so CI / runbooks can branch on it.
+    return 0 if verdict == "PASS" else 1
 
 
 def main(argv: list[str] | None = None) -> int:
