@@ -601,11 +601,13 @@ describe.skipIf(!ENABLED)('Patients integration', () => {
     // module's invariant in appointments.integration.spec.ts). After
     // the visits-merge (ADR-011) scheduled appointments live in the
     // same `visits` table as completed clinical visits. The chart's
-    // history list must only show rows the doctor has touched —
-    // i.e. `status IN ('completed', 'in_progress')`. Scheduled /
-    // arrived / no_show / cancelled rows are receptionist-controlled
-    // lifecycle states and stay out of the clinical timeline.
-    it('chart history excludes scheduled appointments (status != completed/in_progress)', async () => {
+    // history list shows rows the doctor has touched —
+    // `status IN ('completed', 'in_progress')` — PLUS today's active
+    // bookings (`scheduled`/`arrived` with `visit_date = today`) so
+    // the doctor's chart surfaces a receptionist-booked patient
+    // without forcing a misclick on "+ Vizitë e re". Future-dated or
+    // past-dated scheduled rows stay receptionist-only.
+    it('chart history excludes future-dated scheduled appointments', async () => {
       const cookie = await loginAs(DOCTOR_EMAIL, SEED_DOCTOR_PASSWORD!);
       const era = await prisma.patient.findFirstOrThrow({
         where: { clinicId, firstName: 'Era' },
@@ -631,15 +633,15 @@ describe.skipIf(!ENABLED)('Patients integration', () => {
         },
       });
 
-      // 1 scheduled appointment (still in the receptionist's
-      // calendar). Must NOT appear in the chart's history list.
-      const scheduledFor = new Date('2026-05-20T08:00:00Z');
+      // 1 scheduled appointment dated FAR in the future so it never
+      // collides with "today" on the test machine. Must NOT appear in
+      // the chart's history list.
       const scheduled = await prisma.visit.create({
         data: {
           clinicId,
           patientId: era.id,
-          visitDate: new Date('2026-05-20'),
-          scheduledFor,
+          visitDate: new Date('2099-01-15'),
+          scheduledFor: new Date('2099-01-15T08:00:00Z'),
           durationMinutes: 15,
           status: 'scheduled',
           createdBy: receptionist.id,
@@ -656,6 +658,60 @@ describe.skipIf(!ENABLED)('Patients integration', () => {
       expect(ids).toContain(completed.id);
       expect(ids).not.toContain(scheduled.id);
       expect(res.body.visitCount).toBe(1);
+    });
+
+    // Slice A of the "Hap kartelen + Vizitë e re" fix: today's
+    // scheduled or arrived rows ride the chart bundle so the doctor's
+    // form mounts on the editable visit instead of an empty shell.
+    // Without this the doctor reaches for "+ Vizitë e re" and trips
+    // the same-patient guard in ADR-013 §C.
+    it('chart bundle surfaces today\'s scheduled visit as an editable row', async () => {
+      const cookie = await loginAs(DOCTOR_EMAIL, SEED_DOCTOR_PASSWORD!);
+      const era = await prisma.patient.findFirstOrThrow({
+        where: { clinicId, firstName: 'Era' },
+      });
+      const receptionist = await prisma.user.findFirstOrThrow({
+        where: { clinicId, email: RECEPTIONIST_EMAIL },
+      });
+
+      // Use the host's view of today (Belgrade is UTC+1/+2; the
+      // service uses `localDateToday()` which derives the same value
+      // from `Intl.DateTimeFormat`). visitDate is stored as a DATE,
+      // so the clock-time portion of `today` is irrelevant here.
+      const today = new Date(
+        `${new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Belgrade' })}T00:00:00Z`,
+      );
+
+      const scheduledToday = await prisma.visit.create({
+        data: {
+          clinicId,
+          patientId: era.id,
+          visitDate: today,
+          scheduledFor: new Date(today.getTime() + 8 * 60 * 60 * 1000), // 08:00 UTC
+          durationMinutes: 15,
+          status: 'scheduled',
+          createdBy: receptionist.id,
+          updatedBy: receptionist.id,
+        },
+      });
+
+      const res = await req()
+        .get(`/api/patients/${era.id}/chart`)
+        .set('host', TENANT_HOST)
+        .set('Cookie', cookie);
+      expect(res.status).toBe(200);
+      const visits = res.body.visits as Array<{
+        id: string;
+        status: string;
+        visitDate: string;
+      }>;
+      const match = visits.find((v) => v.id === scheduledToday.id);
+      expect(match).toBeDefined();
+      expect(match?.status).toBe('scheduled');
+      // The status field travels with each visit so the chart shell
+      // can identify today's active row and gate the "+ Vizitë e re"
+      // affordance off it.
+      expect(visits.every((v) => typeof v.status === 'string')).toBe(true);
     });
 
     it('doctor GET :id/chart on a patient without visits returns empty arrays', async () => {
