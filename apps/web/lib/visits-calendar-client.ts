@@ -146,6 +146,11 @@ export interface CalendarStatsResponse {
   total: number;
   scheduled: number;
   walkIn: number;
+  /**
+   * Standalone visits today (ADR-013) — invisible to the calendar
+   * feed but contributing to `completed`/`paymentTotalCents`.
+   */
+  standaloneCount: number;
   completed: number;
   noShow: number;
   cancelled: number;

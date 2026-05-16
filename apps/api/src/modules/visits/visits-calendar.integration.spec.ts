@@ -515,7 +515,144 @@ describe.skipIf(!ENABLED)('Visits calendar integration', () => {
     expect(res.body.scheduled + res.body.completed + res.body.arrived).toBeGreaterThanOrEqual(2);
     // Receptionist sees the aggregate; A is 1500 cents in the seed.
     expect(typeof res.body.paymentTotalCents).toBe('number');
+    // Slice F — the standalone counter ships on every stats response;
+    // no standalone seeded here so the count is 0.
+    expect(res.body.standaloneCount).toBe(0);
   });
+
+  // Slice F — a completed standalone visit (no scheduled_for, no
+  // is_walk_in) must contribute to the receptionist's `completed`
+  // count and `paymentTotalCents`, matching the doctor's dashboard.
+  // Pre-Slice F the anchor-based query silently dropped this row.
+  it('stats: completed standalone visits contribute to completed + paymentTotalCents', async () => {
+    const cookie = await loginAs(RECEPTIONIST_EMAIL, SEED_RECEPTIONIST_PASSWORD!);
+    const creator = await prisma.user.findFirstOrThrow({ where: { clinicId } });
+    const today = todayBelgradeIso();
+    await prisma.visit.create({
+      data: {
+        clinicId,
+        patientId,
+        visitDate: new Date(`${today}T00:00:00Z`),
+        // Standalone shape — neither anchor column set.
+        scheduledFor: null,
+        arrivedAt: null,
+        isWalkIn: false,
+        status: 'completed',
+        paymentCode: 'A',
+        complaint: 'kontroll i shkurtër',
+        createdBy: creator.id,
+        updatedBy: creator.id,
+      },
+    });
+
+    const res = await req()
+      .get(`/api/visits/calendar/stats?date=${today}`)
+      .set('host', TENANT_HOST)
+      .set('Cookie', cookie);
+    expect(res.status).toBe(200);
+    expect(res.body.standaloneCount).toBe(1);
+    expect(res.body.completed).toBe(1);
+    // Seed config: A = 1500 cents. The standalone visit pays full
+    // money into the receptionist's day total now.
+    expect(res.body.paymentTotalCents).toBe(1500);
+  });
+
+  // Slice F lock — receptionist stats and doctor dashboard must agree
+  // on `completed` count and revenue by construction. Both endpoints
+  // hit the same DB; if they ever drift again (different filters,
+  // different anchors) this test catches it.
+  it('stats: receptionist totals match doctor dashboard for the same day', async () => {
+    const doctorCookie = await loginAs(DOCTOR_EMAIL, SEED_DOCTOR_PASSWORD!);
+    const recCookie = await loginAs(RECEPTIONIST_EMAIL, SEED_RECEPTIONIST_PASSWORD!);
+    const creator = await prisma.user.findFirstOrThrow({ where: { clinicId } });
+    const today = todayBelgradeIso();
+
+    // Seed a mix: one completed scheduled, one completed standalone,
+    // one completed walk-in. All three feed both endpoints; the totals
+    // must match.
+    await prisma.visit.create({
+      data: {
+        clinicId,
+        patientId,
+        visitDate: new Date(`${today}T00:00:00Z`),
+        scheduledFor: new Date(`${today}T08:00:00Z`),
+        durationMinutes: 15,
+        isWalkIn: false,
+        status: 'completed',
+        paymentCode: 'A',
+        complaint: 'kontroll',
+        createdBy: creator.id,
+        updatedBy: creator.id,
+      },
+    });
+    await prisma.visit.create({
+      data: {
+        clinicId,
+        patientId,
+        visitDate: new Date(`${today}T00:00:00Z`),
+        scheduledFor: null,
+        arrivedAt: null,
+        isWalkIn: false,
+        status: 'completed',
+        paymentCode: 'B',
+        createdBy: creator.id,
+        updatedBy: creator.id,
+      },
+    });
+    const pair = await prisma.visit.create({
+      data: {
+        clinicId,
+        patientId,
+        visitDate: new Date(`${today}T00:00:00Z`),
+        scheduledFor: new Date(`${today}T09:00:00Z`),
+        durationMinutes: 15,
+        isWalkIn: false,
+        status: 'in_progress',
+        createdBy: creator.id,
+        updatedBy: creator.id,
+      },
+    });
+    await prisma.visit.create({
+      data: {
+        clinicId,
+        patientId,
+        visitDate: new Date(`${today}T00:00:00Z`),
+        arrivedAt: new Date(`${today}T09:30:00Z`),
+        isWalkIn: true,
+        durationMinutes: 5,
+        status: 'completed',
+        paymentCode: 'C',
+        pairedWithVisitId: pair.id,
+        createdBy: creator.id,
+        updatedBy: creator.id,
+      },
+    });
+
+    const recRes = await req()
+      .get(`/api/visits/calendar/stats?date=${today}`)
+      .set('host', TENANT_HOST)
+      .set('Cookie', recCookie);
+    expect(recRes.status).toBe(200);
+
+    const docRes = await req()
+      .get(`/api/doctor/dashboard?date=${today}`)
+      .set('host', TENANT_HOST)
+      .set('Cookie', doctorCookie);
+    expect(docRes.status).toBe(200);
+
+    expect(recRes.body.completed).toBe(docRes.body.stats.visitsCompleted);
+    expect(recRes.body.paymentTotalCents).toBe(docRes.body.stats.paymentsCents);
+  });
+
+  // Today's Belgrade-local date string. Matches the canonical helper
+  // used in service code (apps/api/src/common/datetime.ts §
+  // localDateToday) so seeded rows align with what the endpoints
+  // query.
+  function todayBelgradeIso(): string {
+    return new Date().toLocaleDateString('sv-SE', {
+      timeZone: 'Europe/Belgrade',
+    });
+  }
 
   // -----------------------------------------------------------------------
   // 8. Soft delete + restore round-trip

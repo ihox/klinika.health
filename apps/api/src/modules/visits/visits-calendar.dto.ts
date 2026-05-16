@@ -287,6 +287,16 @@ export interface CalendarStatsResponse {
   scheduled: number;
   /** Walk-ins today (is_walk_in=true, any status). */
   walkIn: number;
+  /**
+   * Standalone visits today — rows with `scheduled_for IS NULL` and
+   * `is_walk_in=false` (the off-schedule chart-entry shape; ADR-013).
+   * Counted from `visit_date=<day>` so completed standalones
+   * contribute to the day total even though they never appear on the
+   * calendar feed. Per-row visibility for the receptionist is a
+   * follow-up slice; this counter ships now so the UI can preview
+   * the count.
+   */
+  standaloneCount: number;
   completed: number;
   noShow: number;
   cancelled: number;

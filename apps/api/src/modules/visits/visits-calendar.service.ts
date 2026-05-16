@@ -147,27 +147,27 @@ export class VisitsCalendarService {
   // -------------------------------------------------------------------------
 
   async statsForDay(clinicId: string, dateIso: string): Promise<CalendarStatsResponse> {
-    const dayStartUtc = new Date(localClockToUtc(dateIso, '00:00').getTime() - 86_400_000);
-    const dayEndUtc = new Date(localClockToUtc(dateIso, '23:59').getTime() + 86_400_000);
-
-    const rows = await this.prisma.visit.findMany({
+    // Pre-Slice F the query anchored on `scheduled_for` OR
+    // `arrived_at` so standalone visits (no anchor on either column —
+    // see ADR-013) were silently excluded, leaving the receptionist's
+    // day total off vs. the doctor's dashboard. Slice F rebases on
+    // the `visit_date` DATE column so the same rows the doctor's
+    // dashboard counts (`status='completed' AND visit_date=today`)
+    // contribute to the receptionist's `completed` and
+    // `paymentTotalCents` totals. The list endpoint still anchors on
+    // `scheduled_for` / `arrived_at` — standalones remain invisible
+    // to the calendar feed (their per-row visibility is a follow-up
+    // slice, ADR-013).
+    const onDay = await this.prisma.visit.findMany({
       where: {
         clinicId,
         deletedAt: null,
-        OR: [
-          { scheduledFor: { gte: dayStartUtc, lte: dayEndUtc } },
-          { isWalkIn: true, arrivedAt: { gte: dayStartUtc, lte: dayEndUtc } },
-        ],
+        visitDate: utcMidnight(dateIso),
       },
       orderBy: [{ scheduledFor: 'asc' }, { arrivedAt: 'asc' }],
       include: {
         patient: { select: { firstName: true, lastName: true, dateOfBirth: true } },
       },
-    });
-    const onDay = rows.filter((r) => {
-      const anchor = r.scheduledFor ?? r.arrivedAt;
-      if (anchor == null) return false;
-      return utcToLocalParts(anchor).date === dateIso;
     });
 
     const counts: Record<VisitStatus, number> = {
@@ -179,6 +179,7 @@ export class VisitsCalendarService {
       cancelled: 0,
     };
     let walkInCount = 0;
+    let standaloneCount = 0;
     let firstStart: Date | null = null;
     let lastEnd: Date | null = null;
     let paymentTotalCents = 0;
@@ -189,6 +190,11 @@ export class VisitsCalendarService {
       const status = narrowToVisitStatus(r.status);
       counts[status] += 1;
       if (r.isWalkIn) walkInCount += 1;
+      // Standalone shape per ADR-013: no schedule, no walk-in flag.
+      // Surfaced as its own counter so the receptionist UI can render
+      // a "Vizita pa termin sot" badge in a follow-up slice. Mutually
+      // exclusive with `walkIn` and `scheduled_for IS NOT NULL`.
+      if (r.scheduledFor == null && !r.isWalkIn) standaloneCount += 1;
 
       const start = r.scheduledFor ?? r.arrivedAt;
       const duration = r.durationMinutes ?? 0;
@@ -217,6 +223,7 @@ export class VisitsCalendarService {
       total: onDay.length,
       scheduled: counts.scheduled,
       walkIn: walkInCount,
+      standaloneCount,
       arrived: counts.arrived,
       inProgress: counts.in_progress,
       completed: counts.completed,
