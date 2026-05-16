@@ -292,6 +292,12 @@ model Patient {
   dateOfBirth              DateTime    @map("date_of_birth") @db.Date
   placeOfBirth             String?     @map("place_of_birth")
   sex                      PatientSex? @map("sex")
+  /// True when `sex` was populated by the Slice 17.5 inference pass
+  /// (Claude-generated dictionary keyed on first_name). False when
+  /// the value was set manually (doctor edit, post-migration UI
+  /// creation). Only `sex_inferred=true` rows are eligible for
+  /// overwrite by a subsequent inference re-run.
+  sexInferred              Boolean     @default(false) @map("sex_inferred")
   birthWeightG             Int?        @map("birth_weight_g")
   birthHeadCircumferenceCm Decimal?    @map("birth_head_circumference_cm") @db.Decimal(5, 2)
   birthLengthCm            Decimal?    @map("birth_length_cm") @db.Decimal(5, 2)
