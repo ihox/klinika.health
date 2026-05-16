@@ -12,12 +12,53 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 import yaml
 
 
 # Matches `${VAR}` placeholders inside string config values.
 _ENV_REF = re.compile(r"\$\{([A-Z_][A-Z0-9_]*)\}")
+
+# Query parameters that appear in Prisma-style DATABASE_URLs but that
+# psycopg's libpq URI parser rejects with "invalid URI query
+# parameter". The same DATABASE_URL gets reused for the migration
+# tool (the operator copies it from .env), so strip these out
+# silently rather than fail on a hand-off. STEP 6 first hit this with
+# `?schema=public`.
+_PRISMA_ONLY_DSN_PARAMS = frozenset({
+    "schema",
+    "connection_limit",
+    "pool_timeout",
+    "pgbouncer",
+    "socket_timeout",
+})
+
+
+def strip_prisma_dsn_params(dsn: str) -> tuple[str, list[str]]:
+    """Return (cleaned_dsn, stripped_param_names).
+
+    Pure function — no logging, no side effects — so the CLI can decide
+    whether to log the stripped params (useful) or stay silent (in
+    tests). Called by `load_config` before the DSN reaches psycopg.
+    """
+    if not dsn or "?" not in dsn:
+        return dsn, []
+    parts = urlsplit(dsn)
+    if not parts.query:
+        return dsn, []
+    kept: list[tuple[str, str]] = []
+    stripped: list[str] = []
+    for key, value in parse_qsl(parts.query, keep_blank_values=True):
+        if key in _PRISMA_ONLY_DSN_PARAMS:
+            stripped.append(key)
+        else:
+            kept.append((key, value))
+    if not stripped:
+        return dsn, []
+    new_query = urlencode(kept)
+    cleaned = urlunsplit((parts.scheme, parts.netloc, parts.path, new_query, parts.fragment))
+    return cleaned, stripped
 
 
 @dataclass(frozen=True)
@@ -82,12 +123,14 @@ def load_config(path: Path) -> Config:
     source_path = Path(str(src.get("path", ""))).expanduser()
     log_dir = Path(str(opts.get("log_dir", "./migration-logs"))).expanduser()
 
+    dsn, _stripped = strip_prisma_dsn_params(str(tgt.get("dsn") or ""))
+
     return Config(
         source=SourceConfig(
             path=source_path,
         ),
         target=TargetConfig(
-            dsn=str(tgt.get("dsn") or ""),
+            dsn=dsn,
             clinic_subdomain=str(tgt.get("clinic_subdomain") or ""),
             migration_user_email=(str(tgt["migration_user_email"]) if tgt.get("migration_user_email") else None),
         ),

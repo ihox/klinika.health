@@ -49,9 +49,15 @@ class Database:
                     cursor.execute("SET ROLE platform_admin_role")
                 except psycopg.Error as err:
                     raise RuntimeError(
-                        "Could not SET ROLE platform_admin_role — the migration tool needs a "
-                        "BYPASSRLS role. Either connect as a superuser/dev owner or "
-                        "GRANT platform_admin_role to the connection role."
+                        "Could not SET ROLE platform_admin_role. Two known causes:\n"
+                        "  1. The role exists but has no table privileges. Run "
+                        "`make db-migrate` from the repo root to re-apply "
+                        "apps/api/prisma/sql/001_rls_indexes_triggers.sql (it's "
+                        "idempotent — safe to replay).\n"
+                        "  2. The connection role wasn't granted platform_admin_role. "
+                        "In dev the docker postgres superuser owns everything; in prod, "
+                        "GRANT platform_admin_role TO <migration_role>;\n"
+                        f"Original psycopg error: {err}"
                     ) from err
             yield cls(conn)
             if dry_run:

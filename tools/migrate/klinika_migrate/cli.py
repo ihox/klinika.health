@@ -2,6 +2,11 @@
 
 Subcommands:
 
+  check                 --config CFG
+                          Environment self-test (mdbtools, DB connect,
+                          role grants, clinic, migration user). Run
+                          this before every cutover to catch setup
+                          problems in isolation.
   patients              --config CFG [--dry-run|--commit]
   visits                --config CFG [--dry-run|--commit] [--skip-preflight]
   report                --config CFG [--output REPORT.json]
@@ -19,6 +24,7 @@ import sys
 from pathlib import Path
 
 from .access import AccessReader
+from .check import format_suite, run_all_checks
 from .config import load_config
 from .db import Database
 from .logger import get_logger
@@ -58,6 +64,12 @@ def _build_parser() -> argparse.ArgumentParser:
         description="Klinika Access -> Postgres migration (ADR-010).",
     )
     sub = parser.add_subparsers(dest="command", required=True)
+
+    check = sub.add_parser(
+        "check",
+        help="Environment self-test: mdbtools, DB connect, role grants, clinic seeded",
+    )
+    check.add_argument("--config", required=True, type=Path)
 
     patients = sub.add_parser("patients", help="Import Pacientet (STEP 2)")
     _add_common_args(patients)
@@ -262,6 +274,15 @@ def cmd_apply_sex_inference(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_check(args: argparse.Namespace) -> int:
+    """Environment self-test. Returns 0 only if every check passes."""
+    cfg = load_config(args.config)
+    print(f"\nklinika-migrate check — clinic={cfg.target.clinic_subdomain!r}\n")
+    suite = run_all_checks(cfg)
+    print(format_suite(suite))
+    return 0 if suite.all_ok else 1
+
+
 def cmd_report(args: argparse.Namespace) -> int:
     cfg = load_config(args.config)
     log_dir = cfg.options.log_dir
@@ -294,6 +315,8 @@ def main(argv: list[str] | None = None) -> int:
     parser = _build_parser()
     args = parser.parse_args(argv)
     match args.command:
+        case "check":
+            return cmd_check(args)
         case "patients":
             return cmd_patients(args)
         case "visits":
