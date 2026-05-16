@@ -399,10 +399,16 @@
             </div>
             <span class="chip">A · 15€</span>
           </div>
+          <!-- Mungesë row — uses CANONICAL no-show amber, not red.
+               The canonical status color system (see receptionist.html
+               + styles.css :root) marks no_show with amber. Red is
+               reserved for cancelled. Keeping these distinct across
+               every surface (calendar cards, doctor list, reports)
+               so the user learns the color language once. -->
           <div class="appt-row done" style="opacity: 0.6;">
-            <div class="time">12:10</div><div class="status-dot" style="background: var(--red);"></div>
+            <div class="time">12:10</div><div class="status-dot" style="background: var(--status-no-show-solid);"></div>
             <div><div class="name">Ben Krasniqi <span class="age">3v</span></div><div class="reason">Mungesë</div></div>
-            <span class="chip chip-red"><span class="dot"></span>MS</span>
+            <span class="chip chip-amber"><span class="dot"></span>MS</span>
           </div>
           <div class="appt-row done">
             <div class="time">12:50</div><div class="status-dot"></div>

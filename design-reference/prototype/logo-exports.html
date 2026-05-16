@@ -1,0 +1,497 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Klinika — Logo exports</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="../tokens/design-tokens.css">
+<style>
+  html, body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-ui);
+    font-size: var(--fs-md);
+    line-height: var(--lh-normal);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .page {
+    max-width: 920px;
+    margin: 0 auto;
+    padding: 56px 32px 96px;
+  }
+
+  /* ---------- Header ---------- */
+  .doc-header { margin-bottom: 40px; }
+  .eyebrow {
+    font-family: var(--font-mono);
+    font-size: var(--fs-xs);
+    color: var(--text-faint);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin: 0 0 12px;
+  }
+  h1 {
+    font-family: var(--font-display);
+    font-size: 36px;
+    line-height: 1.15;
+    font-weight: 600;
+    letter-spacing: var(--tracking-tight);
+    color: var(--text-strong);
+    margin: 0 0 12px;
+  }
+  .lede {
+    font-size: var(--fs-lg);
+    color: var(--text-muted);
+    max-width: 60ch;
+    margin: 0;
+  }
+
+  /* ---------- Token reference strip ---------- */
+  .tokens {
+    margin-top: 24px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .token {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px 6px 8px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: var(--r-pill);
+    font-family: var(--font-mono);
+    font-size: var(--fs-xs);
+    color: var(--text-muted);
+  }
+  .token .swatch {
+    width: 12px;
+    height: 12px;
+    border-radius: 999px;
+    border: 1px solid rgba(0,0,0,0.06);
+  }
+  .token b { color: var(--text-strong); font-weight: 600; }
+
+  /* ---------- Variant card ---------- */
+  .variant {
+    margin-top: 32px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: var(--r-lg);
+    overflow: hidden;
+  }
+  .variant + .variant { margin-top: 24px; }
+
+  .v-head {
+    display: flex;
+    align-items: baseline;
+    gap: 14px;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border-soft);
+  }
+  .v-name {
+    font-family: var(--font-mono);
+    font-size: var(--fs-md);
+    font-weight: 600;
+    color: var(--text-strong);
+  }
+  .v-use {
+    font-size: var(--fs-sm);
+    color: var(--text-muted);
+  }
+  .v-use::before {
+    content: '·';
+    margin: 0 8px;
+    color: var(--text-faint);
+  }
+
+  /* Preview surface — auto-switches background for white-on-dark */
+  .v-preview {
+    padding: 40px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background:
+      linear-gradient(var(--border-soft), var(--border-soft)) center/100% 1px no-repeat,
+      var(--bg-subtle);
+    min-height: 140px;
+  }
+  .v-preview.dark { background: #0C0A09; }
+  .v-preview.dark::before { display:none; }
+
+  /* Size strip — show in-context sizes */
+  .v-sizes {
+    display: flex;
+    align-items: center;
+    gap: 32px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  .v-size {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+  }
+  .v-size .label {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text-faint);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  .v-preview.dark .v-size .label { color: rgba(255,255,255,0.45); }
+
+  /* ---------- Code block ---------- */
+  .v-code {
+    position: relative;
+    background: #FAFAF9;
+    border-top: 1px solid var(--border-soft);
+  }
+  .v-code pre {
+    margin: 0;
+    padding: 16px 20px;
+    overflow-x: auto;
+    font-family: var(--font-mono);
+    font-size: var(--fs-sm);
+    line-height: 1.55;
+    color: var(--text);
+    white-space: pre;
+    tab-size: 2;
+  }
+  .v-code code { font-family: inherit; }
+
+  /* light syntax: tags / attrs / strings */
+  .v-code .tag    { color: #0F766E; }
+  .v-code .attr   { color: #B45309; }
+  .v-code .str    { color: #57534E; }
+  .v-code .punct  { color: var(--text-faint); }
+  .v-code .com    { color: var(--text-faint); font-style: italic; }
+
+  .copy-btn {
+    position: absolute;
+    top: 10px;
+    right: 12px;
+    appearance: none;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: var(--r-sm);
+    padding: 6px 10px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: var(--transition-ui);
+  }
+  .copy-btn:hover {
+    color: var(--text-strong);
+    border-color: var(--border-strong);
+  }
+  .copy-btn.done {
+    color: var(--green);
+    border-color: var(--green-soft);
+    background: var(--green-bg);
+  }
+
+  /* Footer note */
+  .foot {
+    margin-top: 48px;
+    padding-top: 20px;
+    border-top: 1px solid var(--border);
+    font-size: var(--fs-sm);
+    color: var(--text-faint);
+    font-family: var(--font-mono);
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <header class="doc-header">
+    <p class="eyebrow">klinika.health · brand assets</p>
+    <h1>Logo exports</h1>
+    <p class="lede">Six portable SVG variants of the klinika mark. Every file is self-contained, uses literal hex colors (no CSS variables), and includes a <code>viewBox</code> + intrinsic <code>width</code>/<code>height</code> so it scales cleanly. Copy any block straight into a component, email template, or print artwork.</p>
+
+    <div class="tokens" aria-label="Color reference">
+      <span class="token"><span class="swatch" style="background:#0D9488"></span><b>--primary</b> #0D9488</span>
+      <span class="token"><span class="swatch" style="background:#0C0A09"></span><b>--text-strong</b> #0C0A09</span>
+      <span class="token"><span class="swatch" style="background:#FFFFFF;border-color:var(--border-strong)"></span><b>white</b> #FFFFFF</span>
+      <span class="token"><span class="swatch" style="background:#000000"></span><b>print</b> #000000</span>
+    </div>
+  </header>
+
+
+  <!-- ============================================================ -->
+  <!-- 1. logo-primary                                              -->
+  <!-- ============================================================ -->
+  <section class="variant">
+    <div class="v-head">
+      <span class="v-name">logo-primary.svg</span>
+      <span class="v-use">Main horizontal lockup · app headers · default 22px height</span>
+    </div>
+    <div class="v-preview">
+      <div class="v-sizes">
+        <div class="v-size">
+          <!-- 22px (topbar size) -->
+          <svg xmlns="http://www.w3.org/2000/svg" width="76" height="22" viewBox="0 0 220 64" fill="none" role="img" aria-label="klinika">
+            <path d="M32 54 C 12 40, 8 26, 18 18 C 24 14, 30 16, 32 22 C 34 16, 40 14, 46 18 C 56 26, 52 40, 32 54 Z" fill="none" stroke="#0D9488" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M14 34 L 22 34 L 26 26 L 30 42 L 34 28 L 38 36 L 50 36" stroke="#0D9488" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+            <text x="76" y="46" font-family="'Inter Tight','Inter',system-ui,sans-serif" font-weight="600" font-size="46" letter-spacing="-0.7" fill="#0C0A09">klinika<tspan fill="#0D9488">.</tspan></text>
+          </svg>
+          <span class="label">22 px · in-app</span>
+        </div>
+        <div class="v-size">
+          <!-- 44px display -->
+          <svg xmlns="http://www.w3.org/2000/svg" width="151" height="44" viewBox="0 0 220 64" fill="none" role="img" aria-label="klinika">
+            <path d="M32 54 C 12 40, 8 26, 18 18 C 24 14, 30 16, 32 22 C 34 16, 40 14, 46 18 C 56 26, 52 40, 32 54 Z" fill="none" stroke="#0D9488" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M14 34 L 22 34 L 26 26 L 30 42 L 34 28 L 38 36 L 50 36" stroke="#0D9488" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+            <text x="76" y="46" font-family="'Inter Tight','Inter',system-ui,sans-serif" font-weight="600" font-size="46" letter-spacing="-0.7" fill="#0C0A09">klinika<tspan fill="#0D9488">.</tspan></text>
+          </svg>
+          <span class="label">44 px · display</span>
+        </div>
+      </div>
+    </div>
+    <div class="v-code">
+      <button class="copy-btn" data-copy="primary">Copy SVG</button>
+<pre data-svg="primary"><code><span class="punct">&lt;</span><span class="tag">svg</span> <span class="attr">xmlns</span>=<span class="str">"http://www.w3.org/2000/svg"</span> <span class="attr">width</span>=<span class="str">"76"</span> <span class="attr">height</span>=<span class="str">"22"</span> <span class="attr">viewBox</span>=<span class="str">"0 0 220 64"</span> <span class="attr">fill</span>=<span class="str">"none"</span> <span class="attr">role</span>=<span class="str">"img"</span> <span class="attr">aria-label</span>=<span class="str">"klinika"</span><span class="punct">&gt;</span>
+  <span class="punct">&lt;</span><span class="tag">path</span> <span class="attr">d</span>=<span class="str">"M32 54 C 12 40, 8 26, 18 18 C 24 14, 30 16, 32 22 C 34 16, 40 14, 46 18 C 56 26, 52 40, 32 54 Z"</span> <span class="attr">fill</span>=<span class="str">"none"</span> <span class="attr">stroke</span>=<span class="str">"#0D9488"</span> <span class="attr">stroke-width</span>=<span class="str">"4"</span> <span class="attr">stroke-linecap</span>=<span class="str">"round"</span> <span class="attr">stroke-linejoin</span>=<span class="str">"round"</span><span class="punct">/&gt;</span>
+  <span class="punct">&lt;</span><span class="tag">path</span> <span class="attr">d</span>=<span class="str">"M14 34 L 22 34 L 26 26 L 30 42 L 34 28 L 38 36 L 50 36"</span> <span class="attr">stroke</span>=<span class="str">"#0D9488"</span> <span class="attr">stroke-width</span>=<span class="str">"4"</span> <span class="attr">stroke-linecap</span>=<span class="str">"round"</span> <span class="attr">stroke-linejoin</span>=<span class="str">"round"</span> <span class="attr">fill</span>=<span class="str">"none"</span><span class="punct">/&gt;</span>
+  <span class="punct">&lt;</span><span class="tag">text</span> <span class="attr">x</span>=<span class="str">"76"</span> <span class="attr">y</span>=<span class="str">"46"</span> <span class="attr">font-family</span>=<span class="str">"'Inter Tight','Inter',system-ui,sans-serif"</span> <span class="attr">font-weight</span>=<span class="str">"600"</span> <span class="attr">font-size</span>=<span class="str">"46"</span> <span class="attr">letter-spacing</span>=<span class="str">"-0.7"</span> <span class="attr">fill</span>=<span class="str">"#0C0A09"</span><span class="punct">&gt;</span>klinika<span class="punct">&lt;</span><span class="tag">tspan</span> <span class="attr">fill</span>=<span class="str">"#0D9488"</span><span class="punct">&gt;</span>.<span class="punct">&lt;/</span><span class="tag">tspan</span><span class="punct">&gt;&lt;/</span><span class="tag">text</span><span class="punct">&gt;</span>
+<span class="punct">&lt;/</span><span class="tag">svg</span><span class="punct">&gt;</span></code></pre>
+    </div>
+  </section>
+
+
+  <!-- ============================================================ -->
+  <!-- 2. logo-mark                                                 -->
+  <!-- ============================================================ -->
+  <section class="variant">
+    <div class="v-head">
+      <span class="v-name">logo-mark.svg</span>
+      <span class="v-use">Icon only · favicons, app icons, tight spaces</span>
+    </div>
+    <div class="v-preview">
+      <div class="v-sizes">
+        <div class="v-size">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 64 64" fill="none" role="img" aria-label="klinika">
+            <path d="M32 54 C 12 40, 8 26, 18 18 C 24 14, 30 16, 32 22 C 34 16, 40 14, 46 18 C 56 26, 52 40, 32 54 Z" fill="none" stroke="#0D9488" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M14 34 L 22 34 L 26 26 L 30 42 L 34 28 L 38 36 L 50 36" stroke="#0D9488" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+          </svg>
+          <span class="label">16 px · favicon</span>
+        </div>
+        <div class="v-size">
+          <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 64 64" fill="none" role="img" aria-label="klinika">
+            <path d="M32 54 C 12 40, 8 26, 18 18 C 24 14, 30 16, 32 22 C 34 16, 40 14, 46 18 C 56 26, 52 40, 32 54 Z" fill="none" stroke="#0D9488" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M14 34 L 22 34 L 26 26 L 30 42 L 34 28 L 38 36 L 50 36" stroke="#0D9488" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+          </svg>
+          <span class="label">32 px</span>
+        </div>
+        <div class="v-size">
+          <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" fill="none" role="img" aria-label="klinika">
+            <path d="M32 54 C 12 40, 8 26, 18 18 C 24 14, 30 16, 32 22 C 34 16, 40 14, 46 18 C 56 26, 52 40, 32 54 Z" fill="none" stroke="#0D9488" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M14 34 L 22 34 L 26 26 L 30 42 L 34 28 L 38 36 L 50 36" stroke="#0D9488" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+          </svg>
+          <span class="label">64 px · 1×</span>
+        </div>
+      </div>
+    </div>
+    <div class="v-code">
+      <button class="copy-btn" data-copy="mark">Copy SVG</button>
+<pre data-svg="mark"><code><span class="punct">&lt;</span><span class="tag">svg</span> <span class="attr">xmlns</span>=<span class="str">"http://www.w3.org/2000/svg"</span> <span class="attr">width</span>=<span class="str">"64"</span> <span class="attr">height</span>=<span class="str">"64"</span> <span class="attr">viewBox</span>=<span class="str">"0 0 64 64"</span> <span class="attr">fill</span>=<span class="str">"none"</span> <span class="attr">role</span>=<span class="str">"img"</span> <span class="attr">aria-label</span>=<span class="str">"klinika"</span><span class="punct">&gt;</span>
+  <span class="punct">&lt;</span><span class="tag">path</span> <span class="attr">d</span>=<span class="str">"M32 54 C 12 40, 8 26, 18 18 C 24 14, 30 16, 32 22 C 34 16, 40 14, 46 18 C 56 26, 52 40, 32 54 Z"</span> <span class="attr">fill</span>=<span class="str">"none"</span> <span class="attr">stroke</span>=<span class="str">"#0D9488"</span> <span class="attr">stroke-width</span>=<span class="str">"4"</span> <span class="attr">stroke-linecap</span>=<span class="str">"round"</span> <span class="attr">stroke-linejoin</span>=<span class="str">"round"</span><span class="punct">/&gt;</span>
+  <span class="punct">&lt;</span><span class="tag">path</span> <span class="attr">d</span>=<span class="str">"M14 34 L 22 34 L 26 26 L 30 42 L 34 28 L 38 36 L 50 36"</span> <span class="attr">stroke</span>=<span class="str">"#0D9488"</span> <span class="attr">stroke-width</span>=<span class="str">"4"</span> <span class="attr">stroke-linecap</span>=<span class="str">"round"</span> <span class="attr">stroke-linejoin</span>=<span class="str">"round"</span> <span class="attr">fill</span>=<span class="str">"none"</span><span class="punct">/&gt;</span>
+<span class="punct">&lt;/</span><span class="tag">svg</span><span class="punct">&gt;</span></code></pre>
+    </div>
+  </section>
+
+
+  <!-- ============================================================ -->
+  <!-- 3. logo-mark-mono-dark                                       -->
+  <!-- ============================================================ -->
+  <section class="variant">
+    <div class="v-head">
+      <span class="v-name">logo-mark-mono-dark.svg</span>
+      <span class="v-use">Single-color black mark · print headers, dark-text contexts</span>
+    </div>
+    <div class="v-preview">
+      <div class="v-sizes">
+        <div class="v-size">
+          <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 64 64" fill="none" role="img" aria-label="klinika">
+            <path d="M32 54 C 12 40, 8 26, 18 18 C 24 14, 30 16, 32 22 C 34 16, 40 14, 46 18 C 56 26, 52 40, 32 54 Z" fill="none" stroke="#0C0A09" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M14 34 L 22 34 L 26 26 L 30 42 L 34 28 L 38 36 L 50 36" stroke="#0C0A09" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+          </svg>
+          <span class="label">32 px</span>
+        </div>
+        <div class="v-size">
+          <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" fill="none" role="img" aria-label="klinika">
+            <path d="M32 54 C 12 40, 8 26, 18 18 C 24 14, 30 16, 32 22 C 34 16, 40 14, 46 18 C 56 26, 52 40, 32 54 Z" fill="none" stroke="#0C0A09" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M14 34 L 22 34 L 26 26 L 30 42 L 34 28 L 38 36 L 50 36" stroke="#0C0A09" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+          </svg>
+          <span class="label">64 px · 1×</span>
+        </div>
+      </div>
+    </div>
+    <div class="v-code">
+      <button class="copy-btn" data-copy="mark-dark">Copy SVG</button>
+<pre data-svg="mark-dark"><code><span class="punct">&lt;</span><span class="tag">svg</span> <span class="attr">xmlns</span>=<span class="str">"http://www.w3.org/2000/svg"</span> <span class="attr">width</span>=<span class="str">"64"</span> <span class="attr">height</span>=<span class="str">"64"</span> <span class="attr">viewBox</span>=<span class="str">"0 0 64 64"</span> <span class="attr">fill</span>=<span class="str">"none"</span> <span class="attr">role</span>=<span class="str">"img"</span> <span class="attr">aria-label</span>=<span class="str">"klinika"</span><span class="punct">&gt;</span>
+  <span class="punct">&lt;</span><span class="tag">path</span> <span class="attr">d</span>=<span class="str">"M32 54 C 12 40, 8 26, 18 18 C 24 14, 30 16, 32 22 C 34 16, 40 14, 46 18 C 56 26, 52 40, 32 54 Z"</span> <span class="attr">fill</span>=<span class="str">"none"</span> <span class="attr">stroke</span>=<span class="str">"#0C0A09"</span> <span class="attr">stroke-width</span>=<span class="str">"4"</span> <span class="attr">stroke-linecap</span>=<span class="str">"round"</span> <span class="attr">stroke-linejoin</span>=<span class="str">"round"</span><span class="punct">/&gt;</span>
+  <span class="punct">&lt;</span><span class="tag">path</span> <span class="attr">d</span>=<span class="str">"M14 34 L 22 34 L 26 26 L 30 42 L 34 28 L 38 36 L 50 36"</span> <span class="attr">stroke</span>=<span class="str">"#0C0A09"</span> <span class="attr">stroke-width</span>=<span class="str">"4"</span> <span class="attr">stroke-linecap</span>=<span class="str">"round"</span> <span class="attr">stroke-linejoin</span>=<span class="str">"round"</span> <span class="attr">fill</span>=<span class="str">"none"</span><span class="punct">/&gt;</span>
+<span class="punct">&lt;/</span><span class="tag">svg</span><span class="punct">&gt;</span></code></pre>
+    </div>
+  </section>
+
+
+  <!-- ============================================================ -->
+  <!-- 4. logo-mark-mono-white                                      -->
+  <!-- ============================================================ -->
+  <section class="variant">
+    <div class="v-head">
+      <span class="v-name">logo-mark-mono-white.svg</span>
+      <span class="v-use">Single-color white mark · dark backgrounds, hero overlays</span>
+    </div>
+    <div class="v-preview dark">
+      <div class="v-sizes">
+        <div class="v-size">
+          <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 64 64" fill="none" role="img" aria-label="klinika">
+            <path d="M32 54 C 12 40, 8 26, 18 18 C 24 14, 30 16, 32 22 C 34 16, 40 14, 46 18 C 56 26, 52 40, 32 54 Z" fill="none" stroke="#FFFFFF" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M14 34 L 22 34 L 26 26 L 30 42 L 34 28 L 38 36 L 50 36" stroke="#FFFFFF" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+          </svg>
+          <span class="label">32 px</span>
+        </div>
+        <div class="v-size">
+          <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" fill="none" role="img" aria-label="klinika">
+            <path d="M32 54 C 12 40, 8 26, 18 18 C 24 14, 30 16, 32 22 C 34 16, 40 14, 46 18 C 56 26, 52 40, 32 54 Z" fill="none" stroke="#FFFFFF" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M14 34 L 22 34 L 26 26 L 30 42 L 34 28 L 38 36 L 50 36" stroke="#FFFFFF" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+          </svg>
+          <span class="label">64 px · 1×</span>
+        </div>
+      </div>
+    </div>
+    <div class="v-code">
+      <button class="copy-btn" data-copy="mark-white">Copy SVG</button>
+<pre data-svg="mark-white"><code><span class="punct">&lt;</span><span class="tag">svg</span> <span class="attr">xmlns</span>=<span class="str">"http://www.w3.org/2000/svg"</span> <span class="attr">width</span>=<span class="str">"64"</span> <span class="attr">height</span>=<span class="str">"64"</span> <span class="attr">viewBox</span>=<span class="str">"0 0 64 64"</span> <span class="attr">fill</span>=<span class="str">"none"</span> <span class="attr">role</span>=<span class="str">"img"</span> <span class="attr">aria-label</span>=<span class="str">"klinika"</span><span class="punct">&gt;</span>
+  <span class="punct">&lt;</span><span class="tag">path</span> <span class="attr">d</span>=<span class="str">"M32 54 C 12 40, 8 26, 18 18 C 24 14, 30 16, 32 22 C 34 16, 40 14, 46 18 C 56 26, 52 40, 32 54 Z"</span> <span class="attr">fill</span>=<span class="str">"none"</span> <span class="attr">stroke</span>=<span class="str">"#FFFFFF"</span> <span class="attr">stroke-width</span>=<span class="str">"4"</span> <span class="attr">stroke-linecap</span>=<span class="str">"round"</span> <span class="attr">stroke-linejoin</span>=<span class="str">"round"</span><span class="punct">/&gt;</span>
+  <span class="punct">&lt;</span><span class="tag">path</span> <span class="attr">d</span>=<span class="str">"M14 34 L 22 34 L 26 26 L 30 42 L 34 28 L 38 36 L 50 36"</span> <span class="attr">stroke</span>=<span class="str">"#FFFFFF"</span> <span class="attr">stroke-width</span>=<span class="str">"4"</span> <span class="attr">stroke-linecap</span>=<span class="str">"round"</span> <span class="attr">stroke-linejoin</span>=<span class="str">"round"</span> <span class="attr">fill</span>=<span class="str">"none"</span><span class="punct">/&gt;</span>
+<span class="punct">&lt;/</span><span class="tag">svg</span><span class="punct">&gt;</span></code></pre>
+    </div>
+  </section>
+
+
+  <!-- ============================================================ -->
+  <!-- 5. logo-print                                                -->
+  <!-- ============================================================ -->
+  <section class="variant">
+    <div class="v-head">
+      <span class="v-name">logo-print.svg</span>
+      <span class="v-use">Horizontal lockup, all-black · letterhead, B&amp;W print</span>
+    </div>
+    <div class="v-preview">
+      <div class="v-sizes">
+        <div class="v-size">
+          <svg xmlns="http://www.w3.org/2000/svg" width="220" height="64" viewBox="0 0 220 64" fill="none" role="img" aria-label="klinika">
+            <path d="M32 54 C 12 40, 8 26, 18 18 C 24 14, 30 16, 32 22 C 34 16, 40 14, 46 18 C 56 26, 52 40, 32 54 Z" fill="none" stroke="#000000" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M14 34 L 22 34 L 26 26 L 30 42 L 34 28 L 38 36 L 50 36" stroke="#000000" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+            <text x="76" y="46" font-family="'Inter Tight','Inter',system-ui,sans-serif" font-weight="600" font-size="46" letter-spacing="-0.7" fill="#000000">klinika<tspan fill="#000000">.</tspan></text>
+          </svg>
+          <span class="label">64 px · letterhead 1×</span>
+        </div>
+      </div>
+    </div>
+    <div class="v-code">
+      <button class="copy-btn" data-copy="print">Copy SVG</button>
+<pre data-svg="print"><code><span class="punct">&lt;</span><span class="tag">svg</span> <span class="attr">xmlns</span>=<span class="str">"http://www.w3.org/2000/svg"</span> <span class="attr">width</span>=<span class="str">"220"</span> <span class="attr">height</span>=<span class="str">"64"</span> <span class="attr">viewBox</span>=<span class="str">"0 0 220 64"</span> <span class="attr">fill</span>=<span class="str">"none"</span> <span class="attr">role</span>=<span class="str">"img"</span> <span class="attr">aria-label</span>=<span class="str">"klinika"</span><span class="punct">&gt;</span>
+  <span class="punct">&lt;</span><span class="tag">path</span> <span class="attr">d</span>=<span class="str">"M32 54 C 12 40, 8 26, 18 18 C 24 14, 30 16, 32 22 C 34 16, 40 14, 46 18 C 56 26, 52 40, 32 54 Z"</span> <span class="attr">fill</span>=<span class="str">"none"</span> <span class="attr">stroke</span>=<span class="str">"#000000"</span> <span class="attr">stroke-width</span>=<span class="str">"4"</span> <span class="attr">stroke-linecap</span>=<span class="str">"round"</span> <span class="attr">stroke-linejoin</span>=<span class="str">"round"</span><span class="punct">/&gt;</span>
+  <span class="punct">&lt;</span><span class="tag">path</span> <span class="attr">d</span>=<span class="str">"M14 34 L 22 34 L 26 26 L 30 42 L 34 28 L 38 36 L 50 36"</span> <span class="attr">stroke</span>=<span class="str">"#000000"</span> <span class="attr">stroke-width</span>=<span class="str">"4"</span> <span class="attr">stroke-linecap</span>=<span class="str">"round"</span> <span class="attr">stroke-linejoin</span>=<span class="str">"round"</span> <span class="attr">fill</span>=<span class="str">"none"</span><span class="punct">/&gt;</span>
+  <span class="punct">&lt;</span><span class="tag">text</span> <span class="attr">x</span>=<span class="str">"76"</span> <span class="attr">y</span>=<span class="str">"46"</span> <span class="attr">font-family</span>=<span class="str">"'Inter Tight','Inter',system-ui,sans-serif"</span> <span class="attr">font-weight</span>=<span class="str">"600"</span> <span class="attr">font-size</span>=<span class="str">"46"</span> <span class="attr">letter-spacing</span>=<span class="str">"-0.7"</span> <span class="attr">fill</span>=<span class="str">"#000000"</span><span class="punct">&gt;</span>klinika<span class="punct">&lt;</span><span class="tag">tspan</span> <span class="attr">fill</span>=<span class="str">"#000000"</span><span class="punct">&gt;</span>.<span class="punct">&lt;/</span><span class="tag">tspan</span><span class="punct">&gt;&lt;/</span><span class="tag">text</span><span class="punct">&gt;</span>
+<span class="punct">&lt;/</span><span class="tag">svg</span><span class="punct">&gt;</span></code></pre>
+    </div>
+  </section>
+
+
+  <!-- ============================================================ -->
+  <!-- 6. logo-stacked                                              -->
+  <!-- ============================================================ -->
+  <section class="variant">
+    <div class="v-head">
+      <span class="v-name">logo-stacked.svg</span>
+      <span class="v-use">Vertical lockup, in color · square spaces, loading screens, error pages</span>
+    </div>
+    <div class="v-preview">
+      <div class="v-sizes">
+        <div class="v-size">
+          <svg xmlns="http://www.w3.org/2000/svg" width="160" height="160" viewBox="0 0 200 200" fill="none" role="img" aria-label="klinika">
+            <!-- Icon centered on top: viewBox 64 -> drawn at offset (68, 24) scale 1 -->
+            <g transform="translate(68 24)">
+              <path d="M32 54 C 12 40, 8 26, 18 18 C 24 14, 30 16, 32 22 C 34 16, 40 14, 46 18 C 56 26, 52 40, 32 54 Z" fill="none" stroke="#0D9488" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M14 34 L 22 34 L 26 26 L 30 42 L 34 28 L 38 36 L 50 36" stroke="#0D9488" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+            </g>
+            <!-- Wordmark centered below -->
+            <text x="100" y="148" text-anchor="middle" font-family="'Inter Tight','Inter',system-ui,sans-serif" font-weight="600" font-size="38" letter-spacing="-0.5" fill="#0C0A09">klinika<tspan fill="#0D9488">.</tspan></text>
+          </svg>
+          <span class="label">160 px · 1×</span>
+        </div>
+      </div>
+    </div>
+    <div class="v-code">
+      <button class="copy-btn" data-copy="stacked">Copy SVG</button>
+<pre data-svg="stacked"><code><span class="punct">&lt;</span><span class="tag">svg</span> <span class="attr">xmlns</span>=<span class="str">"http://www.w3.org/2000/svg"</span> <span class="attr">width</span>=<span class="str">"160"</span> <span class="attr">height</span>=<span class="str">"160"</span> <span class="attr">viewBox</span>=<span class="str">"0 0 200 200"</span> <span class="attr">fill</span>=<span class="str">"none"</span> <span class="attr">role</span>=<span class="str">"img"</span> <span class="attr">aria-label</span>=<span class="str">"klinika"</span><span class="punct">&gt;</span>
+  <span class="punct">&lt;</span><span class="tag">g</span> <span class="attr">transform</span>=<span class="str">"translate(68 24)"</span><span class="punct">&gt;</span>
+    <span class="punct">&lt;</span><span class="tag">path</span> <span class="attr">d</span>=<span class="str">"M32 54 C 12 40, 8 26, 18 18 C 24 14, 30 16, 32 22 C 34 16, 40 14, 46 18 C 56 26, 52 40, 32 54 Z"</span> <span class="attr">fill</span>=<span class="str">"none"</span> <span class="attr">stroke</span>=<span class="str">"#0D9488"</span> <span class="attr">stroke-width</span>=<span class="str">"4"</span> <span class="attr">stroke-linecap</span>=<span class="str">"round"</span> <span class="attr">stroke-linejoin</span>=<span class="str">"round"</span><span class="punct">/&gt;</span>
+    <span class="punct">&lt;</span><span class="tag">path</span> <span class="attr">d</span>=<span class="str">"M14 34 L 22 34 L 26 26 L 30 42 L 34 28 L 38 36 L 50 36"</span> <span class="attr">stroke</span>=<span class="str">"#0D9488"</span> <span class="attr">stroke-width</span>=<span class="str">"4"</span> <span class="attr">stroke-linecap</span>=<span class="str">"round"</span> <span class="attr">stroke-linejoin</span>=<span class="str">"round"</span> <span class="attr">fill</span>=<span class="str">"none"</span><span class="punct">/&gt;</span>
+  <span class="punct">&lt;/</span><span class="tag">g</span><span class="punct">&gt;</span>
+  <span class="punct">&lt;</span><span class="tag">text</span> <span class="attr">x</span>=<span class="str">"100"</span> <span class="attr">y</span>=<span class="str">"148"</span> <span class="attr">text-anchor</span>=<span class="str">"middle"</span> <span class="attr">font-family</span>=<span class="str">"'Inter Tight','Inter',system-ui,sans-serif"</span> <span class="attr">font-weight</span>=<span class="str">"600"</span> <span class="attr">font-size</span>=<span class="str">"38"</span> <span class="attr">letter-spacing</span>=<span class="str">"-0.5"</span> <span class="attr">fill</span>=<span class="str">"#0C0A09"</span><span class="punct">&gt;</span>klinika<span class="punct">&lt;</span><span class="tag">tspan</span> <span class="attr">fill</span>=<span class="str">"#0D9488"</span><span class="punct">&gt;</span>.<span class="punct">&lt;/</span><span class="tag">tspan</span><span class="punct">&gt;&lt;/</span><span class="tag">text</span><span class="punct">&gt;</span>
+<span class="punct">&lt;/</span><span class="tag">svg</span><span class="punct">&gt;</span></code></pre>
+    </div>
+  </section>
+
+  <p class="foot">6 variants · paths sourced from receptionist.html topbar · klinika.health</p>
+
+</div>
+
+<script>
+  // Copy-to-clipboard: grab the matching <pre>'s textContent (strips the
+  // syntax-highlight spans automatically) and write it to the clipboard.
+  document.querySelectorAll('.copy-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var key = btn.getAttribute('data-copy');
+      var pre = document.querySelector('pre[data-svg="' + key + '"]');
+      if (!pre) return;
+      var text = pre.textContent.trim();
+      var done = function () {
+        var prev = btn.textContent;
+        btn.textContent = 'Copied';
+        btn.classList.add('done');
+        setTimeout(function () {
+          btn.textContent = prev;
+          btn.classList.remove('done');
+        }, 1400);
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(done, function () {
+          // fallback
+          var ta = document.createElement('textarea');
+          ta.value = text;
+          document.body.appendChild(ta);
+          ta.select();
+          try { document.execCommand('copy'); } catch (e) {}
+          document.body.removeChild(ta);
+          done();
+        });
+      } else {
+        var ta = document.createElement('textarea');
+        ta.value = text;
+        document.body.appendChild(ta);
+        ta.select();
+        try { document.execCommand('copy'); } catch (e) {}
+        document.body.removeChild(ta);
+        done();
+      }
+    });
+  });
+</script>
+
+</body>
+</html>

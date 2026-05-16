@@ -53,6 +53,48 @@
   --amber-bg:   #FEF3C7;
   --amber-soft: #FDE68A;
 
+  --red:        #B91C1C;
+  --red-bg:     #FEE2E2;
+  --red-soft:   #FECACA;
+
+  /* --- Visit-status canonical color system ----------------------------
+     RATIONALE: ONE color per visit status, used consistently across
+     filter pills, calendar cards, and hover overlays. The receptionist
+     learns the visual language once — same green = completed wherever
+     it appears in the calendar. All bg/fg pairings pass WCAG AA at the
+     typographic scale we use (≥12.5px). The "solid" variant is for
+     selected filter pills (high-contrast bg, white fg).
+       scheduled    → slate / indigo  (calm, future event)
+       arrived      → cyan            (checked in, ↗ adjacent to in-progress)
+       in_progress  → cyan + pulse    (doctor seeing patient now)
+       completed    → green           (done, positive)
+       no_show      → amber           (didn't happen, attention)
+       cancelled    → red             (won't happen, destructive) */
+  --status-scheduled-bg:     #E0E7FF;
+  --status-scheduled-fg:     #3730A3;
+  --status-scheduled-border: #C7D2FE;
+  --status-scheduled-solid:  #4F46E5;
+
+  --status-in-progress-bg:     #CFFAFE;
+  --status-in-progress-fg:     #155E75;
+  --status-in-progress-border: #A5F3FC;
+  --status-in-progress-solid:  #0E7490;
+
+  --status-completed-bg:     #DCFCE7;
+  --status-completed-fg:     #14532D;
+  --status-completed-border: #BBF7D0;
+  --status-completed-solid:  #15803D;
+
+  --status-no-show-bg:     #FEF3C7;
+  --status-no-show-fg:     #92400E;
+  --status-no-show-border: #FDE68A;
+  --status-no-show-solid:  #B45309;
+
+  --status-cancelled-bg:     #FEE2E2;
+  --status-cancelled-fg:     #991B1B;
+  --status-cancelled-border: #FECACA;
+  --status-cancelled-solid:  #B91C1C;
+
   /* --- Growth chart — sex-based patient line/dot color ----------------
      Pediatric convention: blue = boy (Djalë), pink = girl (Vajzë).
      Patient series only (line, dots, header chip). Percentile bands,

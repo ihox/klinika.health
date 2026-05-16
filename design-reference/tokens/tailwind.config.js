@@ -54,6 +54,42 @@ module.exports = {
         warning: { DEFAULT: '#B45309', bg: '#FEF3C7', soft: '#FDE68A' },
         danger:  { DEFAULT: '#B91C1C', bg: '#FEE2E2', soft: '#FECACA' },
 
+        // Canonical visit-status color system (klinika v1.2).
+        // ONE color per visit lifecycle state, used consistently across
+        // filter pills, calendar cards, hover overlays, and badges in
+        // every surface. Pairings pass WCAG AA at ≥12.5px.
+        //   scheduled    → indigo  (calm, future event)
+        //   in-progress  → cyan    (active; arrived shares this family)
+        //   completed    → green   (done, positive)
+        //   no-show      → amber   (didn't happen, attention)
+        //   cancelled    → red     (won't happen, destructive)
+        // Usage in Tailwind:
+        //   bg-status-scheduled-bg text-status-scheduled-fg
+        //   border-status-scheduled-border
+        //   bg-status-scheduled-solid text-white   (active filter pill)
+        status: {
+          'scheduled-bg':       '#E0E7FF',
+          'scheduled-fg':       '#3730A3',
+          'scheduled-border':   '#C7D2FE',
+          'scheduled-solid':    '#4F46E5',
+          'in-progress-bg':     '#CFFAFE',
+          'in-progress-fg':     '#155E75',
+          'in-progress-border': '#A5F3FC',
+          'in-progress-solid':  '#0E7490',
+          'completed-bg':       '#DCFCE7',
+          'completed-fg':       '#14532D',
+          'completed-border':   '#BBF7D0',
+          'completed-solid':    '#15803D',
+          'no-show-bg':         '#FEF3C7',
+          'no-show-fg':         '#92400E',
+          'no-show-border':     '#FDE68A',
+          'no-show-solid':      '#B45309',
+          'cancelled-bg':       '#FEE2E2',
+          'cancelled-fg':       '#991B1B',
+          'cancelled-border':   '#FECACA',
+          'cancelled-solid':    '#B91C1C',
+        },
+
         // Role-chip family (canonical) — distinct from status & brand chips
         // so a user's authority is unambiguous at a glance.
         role: {

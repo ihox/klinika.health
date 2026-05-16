@@ -4,8 +4,8 @@
     "name": "Klinika",
     "domain": "klinika.health",
     "source": "prototype/styles.css",
-    "version": "1.1.0",
-    "notes": "Warm-neutral clinical UI. Teal primary, amber accent (used sparingly), warm near-black text on warm off-white surfaces. v1.1 adds role-chip tokens (doctor/reception/admin) for the multi-role user model."
+    "version": "1.2.0",
+    "notes": "Warm-neutral clinical UI. Teal primary, amber accent (used sparingly), warm near-black text on warm off-white surfaces. v1.1 adds role-chip tokens (doctor/reception/admin) for the multi-role user model. v1.2 adds the canonical visit-status color system (scheduled/in-progress/completed/no-show/cancelled) — one color per lifecycle state, used identically across receptionist, doctor, and chart surfaces."
   },
 
   "color": {
@@ -69,6 +69,15 @@
       "red":        "#B91C1C",
       "red-bg":     "#FEE2E2",
       "red-soft":   "#FECACA"
+    },
+
+    "visit-status": {
+      "notes": "Canonical visit-status color system (klinika v1.2). ONE color per visit lifecycle state, used consistently across filter pills, calendar cards, hover overlays, and badges in every surface (receptionist calendar, doctor list, chart, reports). The receptionist learns the visual language once and it holds everywhere. All bg/fg pairings pass WCAG AA at ≥12.5px. Mapping: scheduled→indigo · arrived+in_progress→cyan · completed→green · no_show→amber · cancelled→red.",
+      "scheduled":   { "bg": "#E0E7FF", "fg": "#3730A3", "border": "#C7D2FE", "solid": "#4F46E5" },
+      "in-progress": { "bg": "#CFFAFE", "fg": "#155E75", "border": "#A5F3FC", "solid": "#0E7490" },
+      "completed":   { "bg": "#DCFCE7", "fg": "#14532D", "border": "#BBF7D0", "solid": "#15803D" },
+      "no-show":     { "bg": "#FEF3C7", "fg": "#92400E", "border": "#FDE68A", "solid": "#B45309" },
+      "cancelled":   { "bg": "#FEE2E2", "fg": "#991B1B", "border": "#FECACA", "solid": "#B91C1C" }
     },
 
     "role": {

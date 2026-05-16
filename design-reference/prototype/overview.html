@@ -544,7 +544,9 @@
         <span class="chip chip-red"><span class="dot"></span>&lt; 7 ditë</span>
         <span class="chip chip-teal"><span class="dot"></span>Tani</span>
         <span class="chip">15 min</span>
-        <span class="chip" style="background: var(--red-bg); color: var(--red); border-color: var(--red-soft);">MS</span>
+        <!-- MS = Mungesë (no-show). Canonical no-show color is amber; red
+             is reserved for cancelled. See styles.css → --status-no-show-*. -->
+        <span class="chip" style="background: var(--status-no-show-bg); color: var(--status-no-show-fg); border-color: var(--status-no-show-border);">MS</span>
       </div>
       <div style="margin-top: 12px; font-size: 11px; color: var(--text-faint); line-height: 1.5;">
         Ngjyra + tekst. Asnjë emoji në UI. WCAG AA në çdo kontrast.

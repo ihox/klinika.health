@@ -59,6 +59,42 @@
   --red-bg:     #FEE2E2;
   --red-soft:   #FECACA;
 
+  /* ---------- Visit-status canonical color system ---------------------
+     One color per status, used CONSISTENTLY across filter pills,
+     calendar cards, hover overlays, and (eventually) status badges on
+     other surfaces. The receptionist learns the visual language once.
+       scheduled    → slate / indigo (calm, future event)
+       arrived      → cyan          (checked in, adjacent to in-progress)
+       in_progress  → cyan + pulse  (doctor seeing patient)
+       completed    → green / teal  (done, positive)
+       no_show      → amber         (attention required, didn't happen)
+       cancelled    → red / rose    (destructive, won't happen)
+     All pairings pass WCAG AA at the typographic scale we use. */
+  --status-scheduled-bg:     #E0E7FF;   /* indigo-100 */
+  --status-scheduled-fg:     #3730A3;   /* indigo-800 */
+  --status-scheduled-border: #C7D2FE;   /* indigo-200 */
+  --status-scheduled-solid:  #4F46E5;   /* indigo-600 — solid pill fill */
+
+  --status-in-progress-bg:     #CFFAFE; /* cyan-100  */
+  --status-in-progress-fg:     #155E75; /* cyan-800  */
+  --status-in-progress-border: #A5F3FC; /* cyan-200  */
+  --status-in-progress-solid:  #0E7490; /* cyan-700  */
+
+  --status-completed-bg:     #DCFCE7;   /* green-100 */
+  --status-completed-fg:     #14532D;   /* green-900 */
+  --status-completed-border: #BBF7D0;   /* green-200 */
+  --status-completed-solid:  #15803D;   /* green-700 */
+
+  --status-no-show-bg:     #FEF3C7;     /* amber-100 */
+  --status-no-show-fg:     #92400E;     /* amber-800 */
+  --status-no-show-border: #FDE68A;     /* amber-200 */
+  --status-no-show-solid:  #B45309;     /* amber-700 */
+
+  --status-cancelled-bg:     #FEE2E2;   /* red-100   */
+  --status-cancelled-fg:     #991B1B;   /* red-800   */
+  --status-cancelled-border: #FECACA;   /* red-200   */
+  --status-cancelled-solid:  #B91C1C;   /* red-700   */
+
   /* ---------- Role chips ------------------------------------------------
      Canonical role-chip family used in user menu, Përdoruesit table,
      Profili im, audit log. Indigo / violet / slate so role is distinct

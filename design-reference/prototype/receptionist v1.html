@@ -133,11 +133,7 @@
   }
 
   /* ---- Calendar ---- */
-  /* cal-card: overflow set to visible so .appt-tip hover overlays
-     can escape above/below the time grid without being clipped. The
-     card chrome (borders/radius) renders fine without overflow:hidden
-     because no child of the grid genuinely needs to be clipped. */
-  .cal-card { background: var(--bg-elevated); border: 1px solid var(--border); border-radius: var(--r-lg); overflow: visible; box-shadow: var(--shadow-xs); }
+  .cal-card { background: var(--bg-elevated); border: 1px solid var(--border); border-radius: var(--r-lg); overflow: hidden; box-shadow: var(--shadow-xs); }
 
   .cal-toolbar {
     display: flex;
@@ -313,72 +309,38 @@
     filter: saturate(0.82);
   }
 
-  /* ===========================================================
-     STATUS COLOR SYSTEM (canonical) — read me first
-     -----------------------------------------------------------
-     This calendar uses ONE canonical color per visit status
-     (scheduled, arrived/in_progress, completed, no_show,
-     cancelled). The same color is used across filter pills,
-     calendar cards, and hover overlays — receptionist learns
-     the visual language once.
-
-     Calendar card content is strictly minimal (name only);
-     hover reveals only name + scheduled time. No extra metadata
-     on cards or hovers — clean cognitive surface for fast
-     scanning across many visits per day.
-
-     Tokens (see styles.css :root):
-       scheduled    → --status-scheduled-*    (slate / indigo)
-       arrived      → --status-in-progress-*  (cyan; no pulse)
-       in_progress  → --status-in-progress-*  (cyan; w/ pulse)
-       completed    → --status-completed-*    (green)
-       no_show      → --status-no-show-*      (amber)
-       cancelled    → --status-cancelled-*    (red)
-
-     ACCESSIBILITY:
-       - Cards carry [data-status] for screen-reader/aria mapping
-         (visual color is a secondary cue, not the only one).
-       - Filter pills use aria-selected for keyboard state.
-       - All fg-on-bg pairs pass WCAG AA at ≥12.5px.
-       - Hover overlay is also keyboard-focusable (focus-within).
-
-     RECENCY COLORING ON CARDS = NEVER.
-       The 7d/30d "visited recently" treatment lives ONLY in the
-       patient-search results panel, not on calendar cards. The
-       calendar uses ONLY the status color logic above.
-     =========================================================== */
-
-  /* ---- Calendar appointment card — baseline = scheduled ---- */
   .appt {
     position: absolute;
     left: 6px;
     right: 6px;
-    background: var(--status-scheduled-bg);
-    border: 1px solid var(--status-scheduled-border);
-    border-left: 3px solid var(--status-scheduled-solid);
+    background: var(--bg-elevated);
+    border: 1px solid var(--teal-200);
+    border-left: 3px solid var(--primary);
     border-radius: var(--r-sm);
-    padding: 3px 8px;
+    padding: 3px 7px;
     box-shadow: var(--shadow-xs);
+    overflow: hidden;
     cursor: pointer;
     transition: transform 120ms ease, box-shadow 120ms ease, opacity 120ms ease;
     display: flex;
     align-items: center;
+    gap: 6px;
     user-select: none;
   }
   .appt:hover { transform: translateY(-1px); box-shadow: var(--shadow-sm); z-index: 5; }
   /* Future appts are draggable */
-  .appt:not(.completed):not(.noshow):not(.cancelled) { cursor: grab; }
-  .appt:not(.completed):not(.noshow):not(.cancelled):active { cursor: grabbing; }
+  .appt:not(.completed):not(.noshow) { cursor: grab; }
+  .appt:not(.completed):not(.noshow):active { cursor: grabbing; }
   .appt.is-dragging { opacity: 0.35; transform: scale(0.98); }
 
   /* Drop preview ghost on the target column */
   .drop-preview {
     position: absolute;
     left: 6px; right: 6px;
-    background: var(--status-scheduled-bg);
-    border: 1.5px solid var(--status-scheduled-solid);
+    background: var(--teal-50);
+    border: 1.5px solid var(--primary);
     border-radius: var(--r-sm);
-    color: var(--status-scheduled-fg);
+    color: var(--primary-dark);
     font-size: 10.5px;
     font-weight: 500;
     padding: 3px 7px;
@@ -387,164 +349,123 @@
     gap: 5px;
     pointer-events: none;
     z-index: 4;
-    box-shadow: 0 2px 8px rgba(79,70,229,0.15);
+    box-shadow: 0 2px 8px rgba(13,148,136,0.15);
     font-variant-numeric: tabular-nums;
   }
   .drop-preview.show { display: flex; }
   .drop-preview.invalid {
-    background: var(--status-cancelled-bg);
-    border-color: var(--status-cancelled-solid);
-    color: var(--status-cancelled-fg);
+    background: var(--red-bg);
+    border-color: var(--red);
+    color: var(--red);
   }
-
-  /* Card content — STRICT MINIMAL.
-     Visible content = first + last name ONLY. Single line,
-     ellipsis on overflow. No status dot (card bg conveys status),
-     no time (grid position conveys time), no age, no sex chip.
-     The .name color is the status fg-token so the text reads
-     legibly on the card bg without an explicit color rule. */
   .appt .name {
     flex: 1 1 auto;
     min-width: 0;
-    font-size: 12px;
+    font-size: 11.5px;
     font-weight: 600;
-    color: var(--status-scheduled-fg);
+    color: var(--text-strong);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    line-height: 1.2;
-    letter-spacing: -0.005em;
+    line-height: 1.15;
   }
-  /* The legacy .meta line is kept in source as the tooltip data
-     payload but NEVER rendered inline. The hover overlay reads
-     from data-time + data-name to compose its content. */
-  .appt .meta { display: none !important; }
-
-  /* ---- Hover/focus overlay — name + time, solid bg, no glass ----
-     EXACTLY two pieces of content: full name + scheduled time.
-     No date (calendar already shows day). No DOB/age/sex/status.
-     Solid bg, subtle drop shadow, clean typography. */
-  .appt-tip {
-    position: absolute;
-    left: 50%;
-    bottom: calc(100% + 6px);
-    transform: translateX(-50%);
-    background: var(--bg-elevated);
-    color: var(--text-strong);
-    border: 1px solid var(--border);
-    border-radius: var(--r-md);
-    box-shadow: 0 10px 24px rgba(28,25,23,0.16), 0 2px 6px rgba(28,25,23,0.08);
-    padding: 8px 12px;
-    min-width: 140px;
-    white-space: nowrap;
-    z-index: 30;
-    display: none;
-    flex-direction: column;
-    gap: 2px;
-    pointer-events: none;
-  }
-  .appt-tip .tip-name {
-    font-family: var(--font-display);
-    font-size: 13px;
-    font-weight: 600;
-    color: var(--text-strong);
-    letter-spacing: -0.005em;
-  }
-  .appt-tip .tip-time {
-    font-family: var(--font-mono);
-    font-size: 11.5px;
-    font-weight: 500;
+  .appt .meta {
+    flex: 0 0 auto;
+    font-size: 10.5px;
     color: var(--text-muted);
     font-variant-numeric: tabular-nums;
-    letter-spacing: 0.01em;
+    display: none;
+    align-items: center;
+    gap: 4px;
+    line-height: 1.1;
+    white-space: nowrap;
   }
-  /* Little notch pointing down at the card */
-  .appt-tip::after {
-    content: '';
-    position: absolute;
-    left: 50%;
-    bottom: -5px;
-    transform: translateX(-50%) rotate(45deg);
-    width: 8px; height: 8px;
-    background: var(--bg-elevated);
-    border-right: 1px solid var(--border);
-    border-bottom: 1px solid var(--border);
-  }
-  .appt:hover .appt-tip,
-  .appt:focus-visible .appt-tip,
-  .appt:focus-within .appt-tip { display: flex; }
+  .appt:hover .meta { display: flex; }
+  .appt .meta .dot { width: 5px; height: 5px; border-radius: 999px; }
 
-  /* ===== STATUS VARIANTS — each one applies the matching token set ===== */
-
-  /* SCHEDULED — baseline, no extra rule needed. */
-
-  /* ARRIVED — same cyan family as in-progress, no pulse. */
-  .appt.arrived {
-    background: var(--status-in-progress-bg);
-    border-color: var(--status-in-progress-border);
-    border-left-color: var(--status-in-progress-solid);
-  }
-  .appt.arrived .name { color: var(--status-in-progress-fg); }
-
-  /* IN-PROGRESS — cyan with subtle pulse on the border ring. */
-  .appt.in-progress {
-    background: var(--status-in-progress-bg);
-    border-color: var(--status-in-progress-border);
-    border-left-color: var(--status-in-progress-solid);
-    animation: appt-inprogress-pulse 2s ease-in-out infinite;
-  }
-  .appt.in-progress .name { color: var(--status-in-progress-fg); }
-  @keyframes appt-inprogress-pulse {
-    0%, 100% { box-shadow: var(--shadow-xs), 0 0 0 0 rgba(14,116,144,0.28); }
-    50%      { box-shadow: var(--shadow-xs), 0 0 0 4px rgba(14,116,144,0); }
-  }
-
-  /* COMPLETED — green. */
   .appt.completed {
-    background: var(--status-completed-bg);
-    border-color: var(--status-completed-border);
-    border-left-color: var(--status-completed-solid);
-  }
-  .appt.completed .name { color: var(--status-completed-fg); }
-
-  /* NO_SHOW — amber. */
-  .appt.noshow {
-    background: var(--status-no-show-bg);
-    border-color: var(--status-no-show-border);
-    border-left-color: var(--status-no-show-solid);
-  }
-  .appt.noshow .name {
-    color: var(--status-no-show-fg);
-    text-decoration: line-through;
-    text-decoration-thickness: 1px;
-    text-decoration-color: rgba(146,64,14,0.5);
-  }
-
-  /* CANCELLED — red, slightly muted. */
-  .appt.cancelled {
-    background: var(--status-cancelled-bg);
-    border-color: var(--status-cancelled-border);
-    border-left-color: var(--status-cancelled-solid);
+    background: var(--green-bg);
+    border-color: var(--green-soft);
+    border-left-color: var(--green);
     opacity: 0.85;
   }
-  .appt.cancelled .name {
-    color: var(--status-cancelled-fg);
-    text-decoration: line-through;
-    text-decoration-thickness: 1px;
-    text-decoration-color: rgba(153,27,27,0.5);
+  .appt.completed .name { color: var(--green); }
+  .appt.completed .meta::before { content: '✓'; color: var(--green); font-weight: 700; margin-right: 2px; }
+
+  .appt.noshow {
+    background: var(--bg-elevated);
+    border: 1px dashed var(--red-soft);
+    border-left: 3px solid var(--red);
+    opacity: 0.7;
+  }
+  .appt.noshow .name { color: var(--red); text-decoration: line-through; text-decoration-thickness: 1px; }
+  .appt.noshow .meta::before { content: 'MS'; background: var(--red-bg); color: var(--red); font-size: 9px; padding: 1px 4px; border-radius: 3px; font-weight: 700; margin-right: 4px; }
+
+  /* arrived — checked in; still teal but with a badge */
+  .appt.arrived {
+    background: var(--teal-50);
+    border-color: var(--teal-300);
+    border-left-color: var(--primary);
+  }
+  .appt.arrived .name::after {
+    content: '✓ Arriti';
+    display: inline-block;
+    margin-left: 6px;
+    font-size: 9px;
+    background: var(--primary-soft);
+    color: var(--teal-800);
+    border: 1px solid var(--teal-200);
+    padding: 0 5px;
+    border-radius: 999px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    vertical-align: 1px;
   }
 
-  /* "scheduled-warm" (new-patient warmth) is RETIRED from cards.
-     New-patient signalling belongs in the booking dialog and the
-     patient search panel — NOT on the time-grid card. Stub the
-     class to inherit the standard scheduled treatment so any
-     leftover demo markup still renders cleanly. */
-  .appt.scheduled-warm {
-    background: var(--status-scheduled-bg);
-    border-color: var(--status-scheduled-border);
-    border-left-color: var(--status-scheduled-solid);
+  /* in-progress — doctor seeing patient; subtle pulse on the border accent */
+  .appt.in-progress {
+    background: var(--teal-50);
+    border-color: var(--teal-400);
+    border-left: 3px solid var(--primary);
+    animation: appt-inprogress-pulse 2s ease-in-out infinite;
   }
-  .appt.scheduled-warm .name { color: var(--status-scheduled-fg); }
+  .appt.in-progress .name::after {
+    content: 'Në vizitë';
+    display: inline-block;
+    margin-left: 6px;
+    font-size: 9px;
+    background: var(--primary);
+    color: white;
+    padding: 0 5px;
+    border-radius: 999px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    vertical-align: 1px;
+  }
+  @keyframes appt-inprogress-pulse {
+    0%, 100% { box-shadow: var(--shadow-xs), 0 0 0 0 rgba(13,148,136,0.22); }
+    50%      { box-shadow: var(--shadow-xs), 0 0 0 4px rgba(13,148,136,0); }
+  }
+
+  /* cancelled — very muted, strikethrough */
+  .appt.cancelled {
+    background: var(--bg-subtle);
+    border-color: var(--border);
+    border-left: 3px solid var(--border-strong);
+    opacity: 0.55;
+  }
+  .appt.cancelled .name {
+    color: var(--text-faint);
+    text-decoration: line-through;
+    text-decoration-thickness: 1px;
+  }
+  .appt.cancelled .meta { color: var(--text-faint); }
+  .appt.cancelled .meta::before { content: 'AN'; background: var(--bg-muted); color: var(--text-muted); font-size: 9px; padding: 1px 4px; border-radius: 3px; font-weight: 700; margin-right: 4px; }
+
+  .appt.scheduled-warm {
+    border-left-color: var(--accent-500);
+    border-color: #FED7AA;
+  }
 
   /* Now line */
   .now-line {
@@ -785,16 +706,6 @@
 
   /* ===========================================================
      Status filter pills (above the calendar)
-     -----------------------------------------------------------
-     Each pill carries the canonical color of its status — same
-     bg/fg/border tokens used by the calendar cards below. Pills
-     show counts so the receptionist sees the breakdown at a
-     glance (no separate stat chip needed).
-
-     States:
-       inactive → soft tinted bg + status-fg text + status border
-       active   → solid status bg + white text (filter applied)
-       hover    → slight elevation (no color shift)
      =========================================================== */
   .status-filters {
     display: flex;
@@ -815,81 +726,49 @@
     appearance: none;
     display: inline-flex;
     align-items: center;
-    gap: 7px;
-    padding: 5px 12px 5px 10px;
+    gap: 6px;
+    padding: 5px 12px;
     border-radius: 999px;
     font-family: var(--font-ui);
     font-size: 12.5px;
     font-weight: 500;
-    cursor: pointer;
-    transition: transform 120ms ease, box-shadow 120ms ease, filter 120ms ease;
-    line-height: 1.3;
-    /* Pill colors are set per-status variant. */
     background: var(--bg-elevated);
-    border: 1px solid var(--border-strong);
-    color: var(--text);
+    border: 1px solid currentColor;
+    cursor: pointer;
+    transition: background 120ms ease, transform 120ms ease;
+    line-height: 1.3;
   }
-  .filter-pill:hover { transform: translateY(-1px); box-shadow: var(--shadow-xs); }
-  .filter-pill:focus-visible { outline: none; box-shadow: var(--focus-ring); }
   .filter-pill .dot {
-    width: 8px; height: 8px; border-radius: 999px;
+    width: 7px; height: 7px; border-radius: 999px;
     background: currentColor;
-    flex-shrink: 0;
   }
   .filter-pill .count {
     font-variant-numeric: tabular-nums;
     font-size: 11px;
     font-weight: 600;
-    background: rgba(0,0,0,0.07);
-    padding: 1px 7px;
+    background: rgba(0,0,0,0.06);
+    padding: 1px 6px;
     border-radius: 999px;
     color: inherit;
-    margin-left: 1px;
   }
+  .filter-pill:hover { background: var(--bg-subtle); }
 
-  /* ----- INACTIVE state — soft tinted bg, status fg + border ----- */
-  .filter-pill.fp-all {
-    background: var(--bg-elevated);
-    color: var(--text-muted);
-    border-color: var(--border-strong);
-  }
-  .filter-pill.fp-scheduled {
-    background: var(--status-scheduled-bg);
-    color: var(--status-scheduled-fg);
-    border-color: var(--status-scheduled-border);
-  }
-  .filter-pill.fp-completed {
-    background: var(--status-completed-bg);
-    color: var(--status-completed-fg);
-    border-color: var(--status-completed-border);
-  }
-  .filter-pill.fp-noshow {
-    background: var(--status-no-show-bg);
-    color: var(--status-no-show-fg);
-    border-color: var(--status-no-show-border);
-  }
-  .filter-pill.fp-cancelled {
-    background: var(--status-cancelled-bg);
-    color: var(--status-cancelled-fg);
-    border-color: var(--status-cancelled-border);
-  }
+  /* Inactive state — outline with status-colored text */
+  .filter-pill.fp-all       { color: var(--text-muted); }
+  .filter-pill.fp-scheduled { color: var(--primary); }
+  .filter-pill.fp-completed { color: var(--green); }
+  .filter-pill.fp-noshow    { color: var(--red); }
+  .filter-pill.fp-cancelled { color: var(--text-muted); opacity: 0.85; }
 
-  /* ----- ACTIVE state — solid status fill, white fg ----- */
-  .filter-pill.is-active {
-    color: white;
-    border-color: transparent;
-    box-shadow: 0 1px 0 rgba(0,0,0,0.05), inset 0 1px 0 rgba(255,255,255,0.15);
-  }
-  .filter-pill.is-active .dot { background: rgba(255,255,255,0.92); }
-  .filter-pill.is-active .count {
-    background: rgba(255,255,255,0.22);
-    color: white;
-  }
+  /* Active state — solid background, white text. */
+  .filter-pill.is-active { color: white; border-color: transparent; }
+  .filter-pill.is-active .dot { background: rgba(255,255,255,0.85); }
+  .filter-pill.is-active .count { background: rgba(255,255,255,0.2); color: white; }
   .filter-pill.fp-all.is-active       { background: var(--text); }
-  .filter-pill.fp-scheduled.is-active { background: var(--status-scheduled-solid); }
-  .filter-pill.fp-completed.is-active { background: var(--status-completed-solid); }
-  .filter-pill.fp-noshow.is-active    { background: var(--status-no-show-solid); }
-  .filter-pill.fp-cancelled.is-active { background: var(--status-cancelled-solid); }
+  .filter-pill.fp-scheduled.is-active { background: var(--primary); }
+  .filter-pill.fp-completed.is-active { background: var(--green); }
+  .filter-pill.fp-noshow.is-active    { background: var(--red); }
+  .filter-pill.fp-cancelled.is-active { background: var(--text-muted); }
   .day-col.flash {
     animation: cellFlash 320ms ease-out;
   }
@@ -1442,55 +1321,43 @@
   .appt.walkin .name {
     color: var(--text-strong);
   }
-  /* NOTE: walk-in cards no longer carry an inline ↻ glyph or status
-     badge. Position (right lane) + dashed left accent already convey
-     "no appointment"; the canonical status colors below convey state.
-     Card body remains strict name-only — same as scheduled cards. */
+  .appt.walkin .name::before {
+    content: '';
+    display: inline-block;
+    width: 9px;
+    height: 9px;
+    margin-right: 5px;
+    vertical-align: -1px;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23EA580C' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M3 8a5 5 0 0 1 8.5-3.5L13 6'/><path d='M13 2.5V6h-3.5'/></svg>");
+    background-repeat: no-repeat;
+    background-size: contain;
+  }
+  .appt.walkin .meta .dot { background: var(--accent-500); }
   .appt.walkin:hover { border-color: var(--accent-400); }
 
-  /* Walk-in status variants — same canonical bg/fg tokens as the
-     scheduled cards, with the dashed left accent retained as the
-     "walk-in" identifier. */
-  .appt.walkin.arrived,
+  /* Walk-in status variants — re-skin the base appt states */
   .appt.walkin.in-progress {
-    background: var(--status-in-progress-bg);
-    border-color: var(--status-in-progress-border);
-    border-left: 3px dashed var(--status-in-progress-solid);
+    background: linear-gradient(180deg, #FFF7ED 0%, var(--bg-elevated) 100%);
+    border-color: var(--accent-400);
+    border-left: 3px solid var(--accent-500);
   }
-  .appt.walkin.arrived .name,
-  .appt.walkin.in-progress .name { color: var(--status-in-progress-fg); }
+  .appt.walkin.in-progress .name::after {
+    content: 'Në vizitë';
+    background: var(--accent-500);
+    color: white;
+    border: none;
+  }
   .appt.walkin.completed {
-    background: var(--status-completed-bg);
-    border-color: var(--status-completed-border);
-    border-left: 3px dashed var(--status-completed-solid);
-  }
-  .appt.walkin.completed .name { color: var(--status-completed-fg); }
-  .appt.walkin.noshow {
-    background: var(--status-no-show-bg);
-    border-color: var(--status-no-show-border);
-    border-left: 3px dashed var(--status-no-show-solid);
-  }
-  .appt.walkin.noshow .name {
-    color: var(--status-no-show-fg);
-    text-decoration: line-through;
-    text-decoration-thickness: 1px;
-  }
-  .appt.walkin.cancelled {
-    background: var(--status-cancelled-bg);
-    border-color: var(--status-cancelled-border);
-    border-left: 3px dashed var(--status-cancelled-solid);
+    background: var(--green-bg);
+    border-color: var(--green-soft);
+    border-left: 3px solid var(--green);
     opacity: 0.85;
   }
-  .appt.walkin.cancelled .name {
-    color: var(--status-cancelled-fg);
-    text-decoration: line-through;
-    text-decoration-thickness: 1px;
+  .appt.walkin.completed .name { color: var(--green); }
+  .appt.walkin.completed .name::before {
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%2315803D' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'><path d='M3 8.5l3 3 7-7'/></svg>");
   }
-
-  /* Pinned-hover demo class — forces the tooltip to render even
-     without a real hover. Used for one card in the demo so the
-     hover content is visible in static screenshots. NEVER on prod. */
-  .appt.show-tip .appt-tip { display: flex; }
+  .appt.walkin.completed .meta::before { content: ''; margin: 0; padding: 0; }
 
   /* Lane indicator in the day-column header — visible whenever the
      day is two-lane (today always, plus any day with walk-ins). */
@@ -2048,21 +1915,25 @@
 </header>
 
 <main class="page">
-  <!-- Greeting.
-       PAGE-HEADER ACTION BUTTONS REMOVED in this pass:
-         · "Eksporto ditën"   — defer to v1.x; not core daily workflow.
-         · "Pacient pa termin" — redundant with the slot-hover walk-in
-           affordance (occupied left-lane slot → "+ Pa termin" ghost in
-           the right lane). Receptionist uses the in-grid path; the
-           toolbar button was a duplicate entry point.
-         · "+ Termin i ri"     — redundant with the empty-slot click
-           path. Same reason.
-       The remaining receptionist actions all live INSIDE the calendar
-       (click a slot, click an appt). Cleaner top bar, more focus. -->
+  <!-- Greeting -->
   <div class="page-header">
     <div>
       <div class="greeting">Mirëdita, Erëblirë.</div>
       <div class="subtitle">E mërkurë, 14 maj 2026 · DonetaMED, Prizren</div>
+    </div>
+    <div class="row" style="gap: 8px;">
+      <button class="btn btn-secondary btn-sm">Eksporto ditën</button>
+      <button class="btn-walkin" onclick="openWalkinPicker(event)" title="Shto pacient që erdhi pa termin">
+        <span class="ic">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 8a5 5 0 0 1 8.5-3.5L13 6"/>
+            <path d="M13 2.5V6h-3.5"/>
+            <circle cx="8" cy="11.5" r="0.8" fill="currentColor"/>
+          </svg>
+        </span>
+        Pacient pa termin
+      </button>
+      <button class="btn btn-primary btn-sm">+ Termin i ri</button>
     </div>
   </div>
 
@@ -2109,10 +1980,13 @@
         <button class="btn btn-ghost btn-sm" style="margin-left: 8px;">Sot</button>
       </div>
 
-      <!-- TOP-RIGHT LEGEND CHIP REMOVED.
-           The status legend duplicated information already encoded in
-           the filter pills (each pill IS a labeled status swatch with
-           its count). Single source of truth = filter row. -->
+      <div class="right-tools">
+        <div class="legend">
+          <div class="item"><div class="sw" style="background: var(--primary);"></div>Planifikuar</div>
+          <div class="item"><div class="sw" style="background: var(--green);"></div>Kryer</div>
+          <div class="item"><div class="sw" style="background: var(--red); opacity:.8"></div>Mungesë</div>
+        </div>
+      </div>
     </div>
 
     <!-- Search above grid -->
@@ -2253,18 +2127,7 @@
         </div>
       </div>
 
-      <!-- Wed 14 (TODAY — always two lanes).
-           STATUS DEMO: this column shows all five canonical statuses
-           visible at once so reviewers can compare the color system
-           side-by-side. Order (top → bottom = morning → evening):
-             10:00  completed     Era Berisha   (green)
-             10:30  no_show       Dion Hoxha    (amber)
-             11:00  arrived       Era Krasniqi  (cyan)         + walk-in hover demo
-             14:20  in_progress   Lena Hoti     (cyan, pulse)
-             15:30  cancelled     Endi Krasniqi (red)
-             16:30  scheduled     Mira Hoxhaj   (indigo)       + pinned hover-tip demo
-           Card bodies are STRICT name-only; hover reveals only
-           "name · time". -->
+      <!-- Wed 14 (TODAY — always two lanes) -->
       <div class="day-col today has-walkins" data-iso="2026-05-14" data-day="14.05.2026" data-dow="E mërkurë, 14 maj">
 
         <!-- WALK-INS (right lane) -->
@@ -2276,41 +2139,37 @@
           <div class="name">Ema Krasniqi</div>
           <div class="meta">13:50</div>
         </div>
-        <div class="appt walkin arrived" style="top: 540px; height: 24px;" onclick="openWalkinActions(event, this)" data-name="Dorian Hoxha" data-arr="14:35" data-status="arrived">
+        <div class="appt walkin" style="top: 540px; height: 24px;" onclick="openWalkinActions(event, this)" data-name="Dorian Hoxha" data-arr="14:35" data-status="arrived">
           <div class="name">Dorian Hoxha</div>
           <div class="meta">14:35</div>
         </div>
 
-        <!-- SCHEDULED LANE — demos all 5 canonical statuses -->
-        <div class="appt completed" style="top: 0px; height: 30px;" data-time="10:00">
+        <!-- SCHEDULED (left lane) -->
+        <div class="appt completed" style="top: 0px; height: 30px;">
           <div class="name">Era Berisha</div>
           <div class="meta">10:00 · 15 min</div>
         </div>
-        <div class="appt noshow" style="top: 60px; height: 20px;" data-time="10:30">
+        <div class="appt completed" style="top: 60px; height: 20px;">
           <div class="name">Dion Hoxha</div>
-          <div class="meta">10:30</div>
+          <div class="meta">10:30 · 10 min</div>
         </div>
-        <!-- HOVER DEMO (b): the 11:00 slot is occupied (arrived state).
-             .hover-suggest-busy pins the amber outline that pairs with
-             the right-lane "+ Pa termin" ghost at the same Y. -->
-        <div class="appt arrived hover-suggest-busy" style="top: 120px; height: 30px;" data-time="11:00">
+        <!-- HOVER DEMO (b) — occupied 11:00 slot pinned with .hover-suggest-busy.
+             The matching "+ Pa termin" ghost sits in the right lane at the same Y. -->
+        <div class="appt hover-suggest-busy" style="top: 120px; height: 30px;">
           <div class="name">Era Krasniqi</div>
-          <div class="meta">11:00 · 15 min</div>
+          <div class="meta"><span class="dot" style="background: var(--primary);"></span>11:00 · 15 min</div>
         </div>
-        <div class="appt in-progress" style="top: 520px; height: 30px;" data-time="14:20">
+        <div class="appt in-progress" style="top: 520px; height: 30px;">
           <div class="name">Lena Hoti</div>
-          <div class="meta">14:20 · 15 min</div>
+          <div class="meta"><span class="dot" style="background: var(--primary);"></span>14:20 · 15 min</div>
         </div>
-        <div class="appt cancelled" style="top: 660px; height: 30px;" data-time="15:30">
+        <div class="appt scheduled-warm" style="top: 660px; height: 30px;">
           <div class="name">Endi Krasniqi</div>
-          <div class="meta">15:30</div>
+          <div class="meta"><span class="dot" style="background: var(--accent-500);"></span>15:30 · 15 min · pacient i ri</div>
         </div>
-        <!-- HOVER STATE DEMO: pinned .show-tip so reviewers see the
-             tooltip without having to mouse over. Production: the tip
-             only appears on :hover / :focus-visible. -->
-        <div class="appt show-tip" style="top: 780px; height: 30px;" data-time="16:30">
+        <div class="appt" style="top: 780px; height: 30px;">
           <div class="name">Mira Hoxhaj</div>
-          <div class="meta">16:30 · 15 min</div>
+          <div class="meta"><span class="dot" style="background: var(--primary);"></span>16:30 · 15 min</div>
         </div>
 
         <!-- HOVER DEMO (b): right-lane "+ Pa termin" pinned to the 11:00 busy
@@ -2715,53 +2574,12 @@
     BUSY_BY_DAY = buildBusyMap();
     // Make future appts draggable + tag them with their iso for drop targeting
     document.querySelectorAll('.day-col .appt').forEach(el => {
-      if (el.classList.contains('completed') || el.classList.contains('noshow') || el.classList.contains('cancelled')) return;
+      if (el.classList.contains('completed') || el.classList.contains('noshow')) return;
       el.setAttribute('draggable', 'true');
       const col = el.closest('.day-col');
       if (col) el.dataset.fromIso = col.dataset.iso;
     });
-    // Inject the hover tooltip overlay into every appt card.
-    // Tooltip content = name + scheduled-or-arrival time ONLY.
-    // No date, no DOB, no age, no sex, no status, no metadata.
-    // Source: data-time / data-arr / .meta text (fallbacks).
-    document.querySelectorAll('.appt').forEach(buildApptTip);
   });
-
-  // Extract the canonical "name · time" tooltip values from a card.
-  function buildApptTip(el) {
-    if (el.querySelector(':scope > .appt-tip')) return;
-    const nameEl = el.querySelector('.name');
-    const metaEl = el.querySelector('.meta');
-    const name = (el.dataset.name || (nameEl ? nameEl.textContent.trim() : '')) || '—';
-    // Time priority: data-time → data-arr → first HH:MM in .meta
-    let time = el.dataset.time || el.dataset.arr || '';
-    if (!time && metaEl) {
-      const m = metaEl.textContent.match(/\b(\d{1,2}:\d{2})\b/);
-      if (m) time = m[1];
-    }
-    if (!time) time = '—';
-    const tip = document.createElement('div');
-    tip.className = 'appt-tip';
-    tip.setAttribute('aria-hidden', 'true');
-    tip.innerHTML =
-      '<span class="tip-name"></span>' +
-      '<span class="tip-time"></span>';
-    tip.querySelector('.tip-name').textContent = name;
-    tip.querySelector('.tip-time').textContent = time;
-    el.appendChild(tip);
-    // Accessibility: status is conveyed by color visually; expose it
-    // semantically too via aria-label so SR users get the full picture.
-    const statusFromClass = el.classList.contains('completed')   ? 'Kryer'
-                          : el.classList.contains('in-progress') ? 'Në vizitë'
-                          : el.classList.contains('arrived')     ? 'Arriti'
-                          : el.classList.contains('noshow')      ? 'Mungesë'
-                          : el.classList.contains('cancelled')   ? 'Anuluar'
-                          : el.classList.contains('walkin')      ? 'Pa termin'
-                          : 'Planifikuar';
-    el.setAttribute('aria-label', `${name} · ${time} · ${statusFromClass}`);
-    el.setAttribute('tabindex', el.getAttribute('tabindex') || '0');
-    el.dataset.status = el.dataset.status || statusFromClass;
-  }
 
   function minToTime(m) {
     const total = DAY_START_MIN + m;
@@ -3482,12 +3300,6 @@
         if (wasNewPatient) txt += ' · pacient i ri';
         metaEl.appendChild(document.createTextNode(txt));
       }
-      // Sync data-time + rebuild the hover tooltip so the new time
-      // appears in the overlay on next hover.
-      dragState.apptEl.dataset.time = newTime;
-      const oldTip = dragState.apptEl.querySelector(':scope > .appt-tip');
-      if (oldTip) oldTip.remove();
-      buildApptTip(dragState.apptEl);
 
       // Refresh busy map so subsequent drags use the new position
       BUSY_BY_DAY = buildBusyMap();

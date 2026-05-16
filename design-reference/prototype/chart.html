@@ -680,6 +680,34 @@
     color: var(--green);
     font-variant-numeric: tabular-nums;
   }
+
+  /* Sex-tinted patient chip in panel header — pulls from --growth-bg /
+     --growth-border / --growth-stroke, which the panel sets per sex.
+     Communicates which patient (and therefore which color) this chart
+     belongs to, in a single glance. */
+  .growth-patient-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 9px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text);
+    background: var(--growth-bg, var(--bg-subtle));
+    border: 1px solid var(--growth-border, var(--border));
+    line-height: 1.4;
+  }
+  .growth-patient-chip .gpc-dot {
+    width: 7px; height: 7px;
+    border-radius: 999px;
+    background: var(--growth-stroke, var(--text-muted));
+    flex-shrink: 0;
+  }
+  .growth-patient-chip .gpc-sex {
+    color: var(--text-muted);
+    font-weight: 400;
+  }
   .growth-svg {
     display: block;
     width: 100%;
@@ -1662,7 +1690,7 @@
     <div class="user-menu" role="menu">
       <div class="um-head">
         <div class="name">Dr. Taulant Shala</div>
-        <div class="email"><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="deaabfabb2bfb0aa9ebab1b0bbaabfb3bbbaf0bdb1b3">[email&#160;protected]</a></div>
+        <div class="email">taulant@donetamed.com</div>
         <div class="roles">
           <span class="chip-role doctor">Mjeku</span>
           <span class="chip-role admin">Administrator i klinikës</span>
@@ -1855,6 +1883,837 @@
     height: 22px;
     background: var(--border);
     margin: 0 2px;
+  }
+</style>
+
+<!-- ============ Design demo · in_progress visit indicators ============
+     RATIONALE
+       After the visit-lifecycle redesign, visits now linger in
+       `in_progress` state for the duration the doctor is documenting
+       (often 30–60 min for a complex chart). Previously this state was
+       transient (arrived→completed in one click) and didn't need a
+       dashboard surface.
+
+     SEMANTICS
+       in_progress = doctor has opened the chart but has not yet pressed
+       "Përfundo vizitën". Clinical data may be partial; the visit is
+       NOT a candidate for completion-bound surfaces (printed report,
+       payment reconciliation) until the doctor closes it explicitly.
+
+     WHY IT DESERVES EQUAL VISUAL WEIGHT
+       From the receptionist's chair, an in_progress visit is _not_
+       "waiting" (the patient is no longer in the waiting room) and
+       _not_ "completed" (the room can't be reassigned, the payment
+       can't be collected). Without a dedicated counter the totals
+       didn't add up — a doctor with 5 done, 3 active, 7 waiting saw
+       "5 / 15" with no explanation for the missing 10.
+
+     COLOR — WHY BLUE
+       The status palette was full: green = completed, amber = warning /
+       held, red = no-show / destructive, teal = brand / scheduled.
+       Blue reads as "active / in motion" without colliding with any
+       existing state and stays distinct from the indigo role chips
+       (Mjeku) by being a saturated cool blue vs. desaturated indigo.
+
+     SCOPE OF THIS PROTOTYPE
+       This section is a static design comparison; promote the patterns
+       below to `receptionist.html` (stat-foot) and `doctor.html`
+       (greeting strip) once approved. The new tokens live in
+       :root inside the inline style block below — fold them into
+       tokens/design-tokens.css when the design ships.
+-->
+<section class="inprogress-demo" aria-label="Demo · in_progress indicators">
+  <header class="ipd-head">
+    <span class="ipd-eyebrow">Design demo · New</span>
+    <h2>Treguesit e vizitave <em>në vijim</em></h2>
+    <span class="ipd-sub">Status i ri me peshë vizuale të barabartë me <em>kryera</em>/<em>pritje</em>. Skenari: 5 të kryera · 3 në vijim · 7 në pritje · 15 totali.</span>
+  </header>
+
+  <!-- ===== Token strip ===== -->
+  <div class="ipd-tokens">
+    <div class="ipd-tok-lab">Token-ët e rinj</div>
+    <div class="ipd-tok-row">
+      <span class="ipd-tok-chip"><span class="ipd-tok-swatch" style="background: var(--in-progress-bg);"></span><code>--in-progress-bg</code><span class="ipd-tok-hex">#DBEAFE</span></span>
+      <span class="ipd-tok-chip"><span class="ipd-tok-swatch" style="background: var(--in-progress-soft); border-color: var(--in-progress-soft);"></span><code>--in-progress-soft</code><span class="ipd-tok-hex">#BFDBFE</span></span>
+      <span class="ipd-tok-chip"><span class="ipd-tok-swatch" style="background: var(--in-progress-dot);"></span><code>--in-progress-dot</code><span class="ipd-tok-hex">#2563EB</span></span>
+      <span class="ipd-tok-chip"><span class="ipd-tok-swatch" style="background: var(--in-progress-fg);"></span><code>--in-progress-fg</code><span class="ipd-tok-hex">#1D4ED8</span></span>
+    </div>
+  </div>
+
+  <!-- ===== Surface 1 · Receptionist stat-foot ===== -->
+  <article class="ipd-panel">
+    <header class="ipd-panel-head">
+      <div class="ipd-panel-title">
+        <span class="ipd-flag">Surface 1</span>
+        <h3>Recepsioniste — stat-foot i kalendarit</h3>
+      </div>
+      <p class="ipd-panel-sub">
+        Shtohet chip <code>X në vijim</code> me pikë blu midis <em>kryera</em> dhe <em>pritje</em>.
+        Rendi operativ: <strong>completed → in&nbsp;progress → waiting → no-show</strong> · pagesa veçohet me ndarës.
+      </p>
+    </header>
+
+    <!-- BEFORE -->
+    <div class="ipd-stage">
+      <div class="ipd-frame">
+        <div class="ipd-frame-lab"><span class="ipd-state-tag ipd-state-tag-old">Para</span> Plain-text stat-foot</div>
+        <div class="sf-card sf-card-old">
+          <div class="sf-card-top">
+            <div class="sf-stat-lab">Sot</div>
+            <div class="sf-stat-row">
+              <span class="sf-num">15</span>
+              <span class="sf-stat-sub">vizita gjithsej · 12 termine + 3 pa termin</span>
+            </div>
+          </div>
+          <div class="sf-foot sf-foot-old">
+            <span><strong>5</strong> të kryera</span>
+            <span><strong>0</strong> mungesë</span>
+            <span><strong>7</strong> në pritje</span>
+            <span class="muted">€ 240 pagesa</span>
+          </div>
+          <div class="sf-flag-old">⚠ 5 + 0 + 7 = 12 &nbsp;≠&nbsp; 15&nbsp;total. Tre vizita në vijim &mdash; askund në UI.</div>
+        </div>
+      </div>
+
+      <!-- AFTER -->
+      <div class="ipd-frame ipd-frame-after">
+        <div class="ipd-frame-lab"><span class="ipd-state-tag ipd-state-tag-new">Pas</span> Status-chips · me <em>në vijim</em></div>
+        <div class="sf-card sf-card-new">
+          <div class="sf-card-top">
+            <div class="sf-stat-lab">Sot</div>
+            <div class="sf-stat-row">
+              <span class="sf-num">15</span>
+              <span class="sf-stat-sub">vizita gjithsej · 12 termine + 3 pa termin</span>
+            </div>
+          </div>
+          <div class="sf-foot sf-foot-new">
+            <span class="sf-chip sf-chip-done"><span class="sf-dot"></span><strong>5</strong>&nbsp;të kryera</span>
+            <span class="sf-chip sf-chip-prog"><span class="sf-dot"></span><strong>3</strong>&nbsp;në vijim</span>
+            <span class="sf-chip sf-chip-wait"><span class="sf-dot"></span><strong>7</strong>&nbsp;në pritje</span>
+            <span class="sf-chip sf-chip-noshow"><span class="sf-dot"></span><strong>0</strong>&nbsp;mungesë</span>
+            <span class="sf-sep" aria-hidden="true"></span>
+            <span class="sf-pay"><strong>€&nbsp;240</strong>&nbsp;pagesa</span>
+          </div>
+          <div class="sf-flag-new">✓ 5 + 3 + 7 + 0 = 15&nbsp;total. Të gjitha vizitat të kontabilizuara.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Anatomy callout -->
+    <div class="ipd-anatomy">
+      <span class="ipd-ana-lab">Anatomia · <em>X në vijim</em></span>
+      <div class="ipd-ana-target">
+        <span class="sf-chip sf-chip-prog sf-chip-large"><span class="sf-dot"></span><strong>3</strong>&nbsp;në vijim</span>
+        <svg class="ipd-callouts" width="320" height="86" viewBox="0 0 320 86" fill="none">
+          <!-- dot callout -->
+          <path d="M22 38 L22 16 L150 16" stroke="var(--in-progress-fg)" stroke-width="1" stroke-dasharray="2 3"/>
+          <text x="156" y="20" font-family="JetBrains Mono, monospace" font-size="10" fill="var(--in-progress-fg)">pikë 6px · --in-progress-dot</text>
+          <!-- bg callout -->
+          <path d="M70 60 L70 76 L260 76" stroke="var(--text-faint)" stroke-width="1" stroke-dasharray="2 3"/>
+          <text x="156" y="74" font-family="JetBrains Mono, monospace" font-size="10" fill="var(--text-muted)">bg blu i butë · --in-progress-bg</text>
+        </svg>
+      </div>
+      <ul class="ipd-ana-notes">
+        <li><strong>Diferencimi.</strong> Vetëm chip <em>në vijim</em> ka background të tonifikuar; tre chip-et tjerë ngelen neutralë me pikë me ngjyrë. E gjithë barra vizuale shkon te statusi i ri.</li>
+        <li><strong>Gjerësia.</strong> +1 chip ≈ +68px. Tek viewport-i 1440 layout-i mbetet i lirshëm; në 1280 chip-i <em>mungesë</em> wrap-on në rresht të dytë &mdash; e pranueshme.</li>
+        <li><strong>Aksesueshmëria.</strong> Pikë + tekst i lexueshëm: ngjyra nuk është mbartësi i vetëm i informacionit (testuar me filtër deuteranopia).</li>
+      </ul>
+    </div>
+  </article>
+
+  <!-- ===== Surface 2 · Doctor DayStats ===== -->
+  <article class="ipd-panel">
+    <header class="ipd-panel-head">
+      <div class="ipd-panel-title">
+        <span class="ipd-flag">Surface 2</span>
+        <h3>Mjeku — DayStats tile</h3>
+      </div>
+      <p class="ipd-panel-sub">
+        <strong>Rekomandimi: Opcioni&nbsp;A.</strong> Fraksioni <code>5 / 15</code> mban skanueshmërinë; rreshti i dytë jep ndarjen pa shtuar densitet.
+      </p>
+    </header>
+
+    <div class="ipd-stage">
+      <!-- Option A (recommended) -->
+      <div class="ipd-frame ipd-frame-pick">
+        <div class="ipd-frame-lab">
+          <span class="ipd-state-tag ipd-state-tag-new">Opcioni A</span>
+          <span class="ipd-pick-tag">Rekomandimi</span>
+          fraction + breakdown sekondar
+        </div>
+        <div class="ds-tile">
+          <div class="ds-lab">Vizita sot</div>
+          <div class="ds-frac">
+            <span class="ds-num">5</span>
+            <span class="ds-slash">/</span>
+            <span class="ds-denom">15</span>
+          </div>
+          <div class="ds-breakdown">
+            <span class="ds-bd-item ds-bd-prog"><span class="ds-bd-dot"></span><strong>3</strong>&nbsp;në vijim</span>
+            <span class="ds-bd-sep">·</span>
+            <span class="ds-bd-item ds-bd-wait"><span class="ds-bd-dot"></span><strong>7</strong>&nbsp;në pritje</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Option B -->
+      <div class="ipd-frame">
+        <div class="ipd-frame-lab">
+          <span class="ipd-state-tag ipd-state-tag-old">Opcioni B</span>
+          chip breakdown i plotë
+        </div>
+        <div class="ds-tile ds-tile-b">
+          <div class="ds-lab">Vizita sot</div>
+          <div class="ds-chip-stack">
+            <span class="sf-chip sf-chip-done sf-chip-large"><span class="sf-dot"></span><strong>5</strong>&nbsp;të kryera</span>
+            <span class="sf-chip sf-chip-prog sf-chip-large"><span class="sf-dot"></span><strong>3</strong>&nbsp;në vijim</span>
+            <span class="sf-chip sf-chip-wait sf-chip-large"><span class="sf-dot"></span><strong>7</strong>&nbsp;në pritje</span>
+          </div>
+          <div class="ds-total-foot">15&nbsp;<span style="color: var(--text-faint);">vizita totali</span></div>
+        </div>
+      </div>
+    </div>
+
+    <ul class="ipd-tradeoffs">
+      <li><strong>Pse A:</strong> fraksioni <code>X / Y</code> është "barometri" i ditës &mdash; një lexim i shpejtë i progresit përgjatë orarit. Rreshti i dytë i vogël mban ndarjen pa konkurruar me numrat e mëdhenj.</li>
+      <li><strong>Pse jo B:</strong> tre chip-e me peshë të barabartë e detyrojnë mjekun të krahasojë numrat; "sa larg jam?" merr 2 sekonda më shumë. Densiteti rritet pa fitim funksional &mdash; Pamja e ditës është për "një vështrim", jo për analizë.</li>
+      <li><strong>Vërejtje:</strong> kur <em>vijim</em>&nbsp;= 0, rreshti sekondar reduktohet automatikisht në <em>X&nbsp;në pritje</em>; kur edhe pritja është 0, rreshti fshihet (dita është mbyllur).</li>
+    </ul>
+  </article>
+
+  <!-- ===== Together · scaled-down preview on both pages ===== -->
+  <article class="ipd-panel ipd-panel-context">
+    <header class="ipd-panel-head">
+      <div class="ipd-panel-title">
+        <span class="ipd-flag ipd-flag-ctx">Konteksti</span>
+        <h3>Konsistenca vizuale në të dy ekranet</h3>
+      </div>
+      <p class="ipd-panel-sub">
+        E njëjta pikë blu, i njëjti token. Recepsionistja sheh <em>3 në vijim</em> në stat-foot; mjeku sheh të njëjtin numër në rreshtin sekondar të DayStats. Burim i njëjtë i të dhënave, gjuhë e njëjtë vizuale.
+      </p>
+    </header>
+
+    <div class="ipd-context-grid">
+      <div class="ipd-ctx-card">
+        <div class="ipd-ctx-cap">
+          <span class="ipd-ctx-role">Recepsioniste</span>
+          <span class="ipd-ctx-where">/receptionist.html · stat-card "Sot"</span>
+        </div>
+        <div class="sf-card sf-card-new sf-card-mini">
+          <div class="sf-card-top">
+            <div class="sf-stat-lab">Sot</div>
+            <div class="sf-stat-row">
+              <span class="sf-num" style="font-size: 28px;">15</span>
+              <span class="sf-stat-sub">vizita gjithsej</span>
+            </div>
+          </div>
+          <div class="sf-foot sf-foot-new">
+            <span class="sf-chip sf-chip-done"><span class="sf-dot"></span><strong>5</strong>&nbsp;kryera</span>
+            <span class="sf-chip sf-chip-prog"><span class="sf-dot"></span><strong>3</strong>&nbsp;vijim</span>
+            <span class="sf-chip sf-chip-wait"><span class="sf-dot"></span><strong>7</strong>&nbsp;pritje</span>
+            <span class="sf-chip sf-chip-noshow"><span class="sf-dot"></span><strong>0</strong>&nbsp;mungesë</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="ipd-ctx-card">
+        <div class="ipd-ctx-cap">
+          <span class="ipd-ctx-role">Mjeku</span>
+          <span class="ipd-ctx-where">/doctor.html · greeting strip · DayStats</span>
+        </div>
+        <div class="ds-tile ds-tile-mini">
+          <div class="ds-lab">Vizita sot</div>
+          <div class="ds-frac">
+            <span class="ds-num">5</span>
+            <span class="ds-slash">/</span>
+            <span class="ds-denom">15</span>
+          </div>
+          <div class="ds-breakdown">
+            <span class="ds-bd-item ds-bd-prog"><span class="ds-bd-dot"></span><strong>3</strong>&nbsp;në vijim</span>
+            <span class="ds-bd-sep">·</span>
+            <span class="ds-bd-item ds-bd-wait"><span class="ds-bd-dot"></span><strong>7</strong>&nbsp;në pritje</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </article>
+</section>
+
+<style>
+  /* ======================================================================
+     in_progress tokens — promote to tokens/design-tokens.css on ship.
+     Cool blue, saturated enough to read "active" against warm neutrals
+     and distinct from the desaturated indigo of role-doctor chips.
+     ====================================================================== */
+  :root {
+    --in-progress-fg:   #1D4ED8;   /* blue-700  — numerals + label color */
+    --in-progress-bg:   #DBEAFE;   /* blue-100  — chip background */
+    --in-progress-soft: #BFDBFE;   /* blue-200  — chip border + dividers */
+    --in-progress-dot:  #2563EB;   /* blue-600  — leading dot */
+  }
+
+  /* ============ Section shell ============ */
+  .inprogress-demo {
+    margin: 18px 32px 4px;
+    padding: 20px 24px 24px;
+    background: var(--bg-subtle);
+    border: 1px dashed var(--border-strong);
+    border-radius: var(--r-lg);
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+  }
+  .inprogress-demo .ipd-head {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .inprogress-demo .ipd-eyebrow {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--in-progress-fg);
+    background: var(--in-progress-bg);
+    border: 1px solid var(--in-progress-soft);
+    padding: 2px 8px;
+    border-radius: 999px;
+  }
+  .inprogress-demo h2 {
+    font-family: var(--font-display);
+    font-size: 17px;
+    font-weight: 600;
+    letter-spacing: -0.012em;
+    color: var(--text-strong);
+    margin: 0;
+  }
+  .inprogress-demo h2 em {
+    color: var(--in-progress-fg);
+    font-style: normal;
+    font-weight: 600;
+  }
+  .inprogress-demo .ipd-sub {
+    font-size: 12.5px;
+    color: var(--text-muted);
+    line-height: 1.45;
+  }
+  .inprogress-demo .ipd-sub em {
+    font-style: normal;
+    color: var(--text);
+  }
+
+  /* ============ Token strip ============ */
+  .ipd-tokens {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    padding: 10px 14px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+  }
+  .ipd-tok-lab {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-faint);
+  }
+  .ipd-tok-row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .ipd-tok-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    background: var(--bg-subtle);
+    border: 1px solid var(--border);
+    padding: 4px 9px;
+    border-radius: var(--r-sm);
+    font-size: 11px;
+  }
+  .ipd-tok-chip code {
+    font-family: var(--font-mono);
+    color: var(--text);
+    font-size: 10.5px;
+  }
+  .ipd-tok-swatch {
+    width: 14px; height: 14px;
+    border-radius: 4px;
+    border: 1px solid var(--border-strong);
+  }
+  .ipd-tok-hex {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text-faint);
+  }
+
+  /* ============ Panels ============ */
+  .ipd-panel {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: var(--r-lg);
+    padding: 18px 22px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    box-shadow: var(--shadow-xs);
+  }
+  .ipd-panel-head { display: flex; flex-direction: column; gap: 4px; }
+  .ipd-panel-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .ipd-panel-title h3 {
+    font-family: var(--font-display);
+    font-size: 14.5px;
+    font-weight: 600;
+    color: var(--text-strong);
+    margin: 0;
+    letter-spacing: -0.005em;
+  }
+  .ipd-flag {
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--in-progress-fg);
+    background: var(--in-progress-bg);
+    border: 1px solid var(--in-progress-soft);
+    padding: 2px 7px;
+    border-radius: 4px;
+  }
+  .ipd-flag-ctx {
+    color: var(--teal-800);
+    background: var(--primary-soft);
+    border-color: var(--teal-200);
+  }
+  .ipd-panel-sub {
+    font-size: 12.5px;
+    color: var(--text-muted);
+    line-height: 1.5;
+    margin: 0;
+  }
+  .ipd-panel-sub code {
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    background: var(--bg-subtle);
+    border: 1px solid var(--border);
+    padding: 0 5px;
+    border-radius: 4px;
+    color: var(--text);
+  }
+  .ipd-panel-sub em {
+    font-style: normal;
+    color: var(--text);
+    font-weight: 500;
+  }
+
+  /* ============ Stage (before / after) ============ */
+  .ipd-stage {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+  @media (max-width: 1100px) {
+    .ipd-stage { grid-template-columns: 1fr; }
+  }
+  .ipd-frame {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
+  }
+  .ipd-frame-lab {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11.5px;
+    color: var(--text-muted);
+    font-weight: 500;
+    flex-wrap: wrap;
+  }
+  .ipd-state-tag {
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    padding: 2px 7px;
+    border-radius: 3px;
+  }
+  .ipd-state-tag-old {
+    color: var(--text-muted);
+    background: var(--bg-subtle);
+    border: 1px solid var(--border);
+  }
+  .ipd-state-tag-new {
+    color: var(--in-progress-fg);
+    background: var(--in-progress-bg);
+    border: 1px solid var(--in-progress-soft);
+  }
+  .ipd-pick-tag {
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--green);
+    background: var(--green-bg);
+    border: 1px solid var(--green-soft);
+    padding: 2px 7px;
+    border-radius: 3px;
+  }
+  .ipd-frame-after .sf-card-new { box-shadow: 0 0 0 2px var(--in-progress-soft); }
+  .ipd-frame-pick .ds-tile      { box-shadow: 0 0 0 2px var(--green-soft); }
+
+  /* ============ Receptionist stat-card mock ============ */
+  .sf-card {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    padding: 16px 18px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .sf-card-mini { padding: 12px 14px 12px; gap: 10px; }
+  .sf-card-top { display: flex; flex-direction: column; gap: 6px; }
+  .sf-stat-lab {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-muted);
+  }
+  .sf-stat-row { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+  .sf-num {
+    font-family: var(--font-display);
+    font-size: 36px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-strong);
+  }
+  .sf-stat-sub { font-size: 12.5px; color: var(--text-muted); }
+
+  /* Old plain-text foot */
+  .sf-foot-old {
+    margin: 0;
+    font-size: 12px;
+    color: var(--text-muted);
+    display: flex;
+    gap: 18px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+    flex-wrap: wrap;
+  }
+  .sf-foot-old strong { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
+  .sf-foot-old .muted { color: var(--text-faint); font-variant-numeric: tabular-nums; }
+
+  /* New chip foot */
+  .sf-foot-new {
+    margin: 0;
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+
+  .sf-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--bg-subtle);
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    padding: 4px 9px;
+    border-radius: var(--r-sm);
+    font-size: 11.5px;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.2;
+    white-space: nowrap;
+  }
+  .sf-chip strong { color: var(--text); font-weight: 600; }
+  .sf-chip .sf-dot {
+    width: 6px; height: 6px;
+    border-radius: 999px;
+    background: var(--text-faint);
+    flex-shrink: 0;
+  }
+  .sf-chip-large { font-size: 12.5px; padding: 5px 11px; }
+  .sf-chip-large .sf-dot { width: 7px; height: 7px; }
+
+  /* status tints — colored leading dot, neutral container EXCEPT in_progress */
+  .sf-chip-done  .sf-dot { background: var(--green); }
+  .sf-chip-wait  .sf-dot { background: var(--primary); }
+  .sf-chip-noshow .sf-dot { background: var(--red); }
+
+  /* in_progress chip — the only chip with a tinted container,
+     making it visually weighted. The blue dot + soft blue bg
+     do the work; the bordered container reads "active state". */
+  .sf-chip-prog {
+    background: var(--in-progress-bg);
+    border-color: var(--in-progress-soft);
+    color: var(--in-progress-fg);
+  }
+  .sf-chip-prog strong { color: var(--in-progress-fg); }
+  .sf-chip-prog .sf-dot { background: var(--in-progress-dot); }
+
+  .sf-sep {
+    width: 1px;
+    height: 16px;
+    background: var(--border);
+    margin: 0 4px;
+  }
+  .sf-pay {
+    font-size: 12px;
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+  }
+  .sf-pay strong { color: var(--text); font-weight: 600; }
+
+  /* Status flags */
+  .sf-flag-old, .sf-flag-new {
+    font-size: 11.5px;
+    line-height: 1.45;
+    padding: 6px 10px;
+    border-radius: var(--r-sm);
+    font-variant-numeric: tabular-nums;
+  }
+  .sf-flag-old {
+    color: #92400E;
+    background: var(--amber-bg);
+    border: 1px solid var(--amber-soft);
+  }
+  .sf-flag-new {
+    color: var(--green);
+    background: var(--green-bg);
+    border: 1px solid var(--green-soft);
+  }
+
+  /* ============ Anatomy callout ============ */
+  .ipd-anatomy {
+    background: var(--bg-subtle);
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    padding: 14px 16px;
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 18px 22px;
+    align-items: flex-start;
+  }
+  @media (max-width: 880px) {
+    .ipd-anatomy { grid-template-columns: 1fr; }
+  }
+  .ipd-ana-lab {
+    grid-column: 1 / -1;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-faint);
+  }
+  .ipd-ana-lab em { color: var(--in-progress-fg); font-style: normal; }
+  .ipd-ana-target {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+    padding-top: 4px;
+  }
+  .ipd-callouts { overflow: visible; }
+  .ipd-ana-notes {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    font-size: 12px;
+    color: var(--text-muted);
+    line-height: 1.5;
+  }
+  .ipd-ana-notes li { padding-left: 14px; position: relative; }
+  .ipd-ana-notes li::before {
+    content: '';
+    position: absolute;
+    left: 2px; top: 7px;
+    width: 4px; height: 4px;
+    border-radius: 999px;
+    background: var(--in-progress-dot);
+  }
+  .ipd-ana-notes strong { color: var(--text); font-weight: 600; }
+  .ipd-ana-notes em { color: var(--in-progress-fg); font-style: normal; font-weight: 500; }
+
+  /* ============ Doctor DayStats tile ============ */
+  .ds-tile {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    padding: 18px 22px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
+  }
+  .ds-tile-mini { padding: 14px 16px; gap: 6px; }
+  .ds-lab {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-muted);
+  }
+  .ds-frac {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 4px;
+    font-family: var(--font-display);
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+    letter-spacing: -0.025em;
+  }
+  .ds-num {
+    font-size: 44px;
+    font-weight: 600;
+    color: var(--text-strong);
+  }
+  .ds-slash {
+    font-size: 32px;
+    color: var(--text-faint);
+    font-weight: 400;
+  }
+  .ds-denom {
+    font-size: 26px;
+    color: var(--text-muted);
+    font-weight: 500;
+  }
+  .ds-tile-mini .ds-num { font-size: 30px; }
+  .ds-tile-mini .ds-slash { font-size: 22px; }
+  .ds-tile-mini .ds-denom { font-size: 18px; }
+
+  .ds-breakdown {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+    flex-wrap: wrap;
+  }
+  .ds-bd-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .ds-bd-item strong { color: var(--text); font-weight: 600; }
+  .ds-bd-dot {
+    width: 6px; height: 6px;
+    border-radius: 999px;
+    background: var(--text-faint);
+  }
+  .ds-bd-prog { color: var(--in-progress-fg); }
+  .ds-bd-prog strong { color: var(--in-progress-fg); }
+  .ds-bd-prog .ds-bd-dot { background: var(--in-progress-dot); }
+  .ds-bd-wait .ds-bd-dot { background: var(--primary); }
+  .ds-bd-sep { color: var(--border-strong); }
+
+  .ds-tile-b { gap: 12px; }
+  .ds-chip-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    align-items: flex-start;
+  }
+  .ds-total-foot {
+    font-family: var(--font-display);
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-strong);
+    font-variant-numeric: tabular-nums;
+    padding-top: 6px;
+    border-top: 1px solid var(--border-soft);
+  }
+
+  /* Tradeoff list */
+  .ipd-tradeoffs {
+    margin: 0;
+    padding: 12px 16px;
+    list-style: none;
+    background: var(--bg-subtle);
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--text-muted);
+    line-height: 1.5;
+  }
+  .ipd-tradeoffs li { padding-left: 18px; position: relative; }
+  .ipd-tradeoffs li::before {
+    content: '→';
+    position: absolute;
+    left: 2px; top: 0;
+    color: var(--text-faint);
+    font-family: var(--font-mono);
+  }
+  .ipd-tradeoffs strong { color: var(--text); font-weight: 600; }
+  .ipd-tradeoffs em { color: var(--text); font-style: normal; font-weight: 500; }
+  .ipd-tradeoffs code {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    padding: 0 4px;
+    border-radius: 3px;
+    color: var(--text);
+  }
+
+  /* ============ Context grid (consistency) ============ */
+  .ipd-panel-context { background: linear-gradient(to bottom, var(--primary-tint), var(--bg-elevated) 40%); }
+  .ipd-context-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+  @media (max-width: 1100px) {
+    .ipd-context-grid { grid-template-columns: 1fr; }
+  }
+  .ipd-ctx-card {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .ipd-ctx-cap {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .ipd-ctx-role {
+    font-family: var(--font-display);
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-strong);
+  }
+  .ipd-ctx-where {
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    color: var(--text-faint);
   }
 </style>
 
@@ -2126,26 +2985,69 @@ Pi shumë lëngje. Pushim.
 
     <!-- Growth charts — WHO percentile curves are clinically valuable in early
          infancy. Hidden when patient is ≥ 24 months; a small link appears
-         instead so the historical view stays reachable. -->
-    <div class="panel" id="growthPanel">
-      <div class="panel-head"><h3>Diagramet e rritjes · WHO</h3><span class="meta">5 pikë</span></div>
+         instead so the historical view stays reachable.
 
-      <!-- Patient series colored by sex: Era is F → --chart-female (pink).
-           Percentile bands and P50 stay neutral. -->
+         === Sex-based color treatment ============================================
+         The patient series (line + dots) is colored by the patient's sex,
+         following the pediatric convention parents and clinicians already read
+         at a glance:
+
+            sex = 'f'  →  --chart-female  (pink)     soft rose, AA on white
+            sex = 'm'  →  --chart-male    (blue)     desaturated brand-adjacent blue
+
+         Why bother with two colors instead of a neutral brand teal?
+
+         1. **Doctor scans fast.** A pediatrician opens dozens of charts a day.
+            The color of the line is a pre-cognitive cue that the chart belongs
+            to the right child — same signal as the sex pill in the master strip,
+            reinforced where the eye actually lands (the curve, not the header).
+            Wrong-chart errors get caught half a second sooner.
+
+         2. **Parents recognize the visual pattern.** Paper WHO booklets in
+            Kosovo/Albania ship in pink and blue. Matching that convention
+            makes the on-screen chart legible to parents during the consult
+            without explanation — they know which booklet "their" chart is.
+
+         3. **Percentile bands stay neutral on purpose.** P3 / P50 / P97, axes,
+            grid, and labels remain neutral gray regardless of sex — so the
+            *clinical* reading (where the child sits in the population) is never
+            tinted by the sex color. Only the patient's own data is colored.
+
+         4. **Both tones are AA on white** and intentionally desaturated so a
+            row of three sparklines doesn't feel like a candy aisle. The colors
+            distinguish; they don't shout.
+
+         The demo below renders the panel twice — once for Era (femër, pink)
+         and once for Dion (mashkull, blue) — so the contrast is visible
+         without flipping patients. In real use the panel renders once,
+         driven by the patient's `sex` field. -->
+
+    <!-- ── Variant 1 · Era Krasniqi (femër) → pink ───────────────────────── -->
+    <div class="panel growth-panel" id="growthPanel" data-sex="f"
+         style="--growth-stroke: var(--chart-female);
+                --growth-bg:     var(--chart-female-bg);
+                --growth-border: var(--chart-female-border);">
+      <div class="panel-head">
+        <h3>Diagramet e rritjes · WHO</h3>
+        <span class="growth-patient-chip">
+          <span class="gpc-dot" aria-hidden="true"></span>
+          Era Krasniqi · <span class="gpc-sex">Femër</span>
+        </span>
+      </div>
+
       <div class="growth-card" onclick="openWhoChart('weight')">
         <div class="growth-head"><span class="t">Pesha sipas moshës</span><span class="pct">P50</span></div>
         <svg class="growth-svg" viewBox="0 0 380 100" preserveAspectRatio="none">
-          <!-- Percentile bands (neutral) -->
+          <!-- Percentile bands + P50 (neutral, sex-agnostic) -->
           <path d="M 0,72 C 80,68 160,62 240,55 S 380,40 380,40 L 380,100 L 0,100 Z" fill="rgba(28,25,23,0.04)"/>
           <path d="M 0,82 C 80,78 160,74 240,68 S 380,54 380,54" stroke="rgba(28,25,23,0.18)" stroke-width="1" fill="none" stroke-dasharray="2 3"/>
           <path d="M 0,62 C 80,58 160,52 240,44 S 380,28 380,28" stroke="rgba(28,25,23,0.18)" stroke-width="1" fill="none" stroke-dasharray="2 3"/>
           <path d="M 0,90 C 80,87 160,84 240,80 S 380,68 380,68" stroke="rgba(28,25,23,0.15)" stroke-width="1" fill="none" stroke-dasharray="2 3"/>
           <path d="M 0,55 C 80,50 160,42 240,32 S 380,18 380,18" stroke="rgba(28,25,23,0.15)" stroke-width="1" fill="none" stroke-dasharray="2 3"/>
-          <!-- P50 (neutral) -->
           <path d="M 0,72 C 80,68 160,62 240,55 S 380,40 380,40" stroke="rgba(28,25,23,0.32)" stroke-width="1.3" fill="none"/>
-          <!-- Patient path (sex-colored) -->
-          <path d="M 30,75 L 110,68 L 180,60 L 250,52 L 340,42" stroke="var(--chart-female)" stroke-width="2" fill="none" stroke-linecap="round"/>
-          <g fill="var(--chart-female)">
+          <!-- Patient path (sex-colored via --growth-stroke) -->
+          <path d="M 30,75 L 110,68 L 180,60 L 250,52 L 340,42" stroke="var(--growth-stroke)" stroke-width="2" fill="none" stroke-linecap="round"/>
+          <g fill="var(--growth-stroke)">
             <circle cx="30" cy="75" r="3"/>
             <circle cx="110" cy="68" r="3"/>
             <circle cx="180" cy="60" r="3"/>
@@ -2164,8 +3066,8 @@ Pi shumë lëngje. Pushim.
           <path d="M 0,75 C 80,70 160,62 240,52 S 380,32 380,32" stroke="rgba(28,25,23,0.32)" stroke-width="1.3" fill="none"/>
           <path d="M 0,85 C 80,80 160,74 240,66 S 380,48 380,48" stroke="rgba(28,25,23,0.18)" stroke-width="1" fill="none" stroke-dasharray="2 3"/>
           <path d="M 0,65 C 80,60 160,50 240,38 S 380,18 380,18" stroke="rgba(28,25,23,0.18)" stroke-width="1" fill="none" stroke-dasharray="2 3"/>
-          <path d="M 30,82 L 110,72 L 180,62 L 250,50 L 340,36" stroke="var(--chart-female)" stroke-width="2" fill="none" stroke-linecap="round"/>
-          <g fill="var(--chart-female)">
+          <path d="M 30,82 L 110,72 L 180,62 L 250,50 L 340,36" stroke="var(--growth-stroke)" stroke-width="2" fill="none" stroke-linecap="round"/>
+          <g fill="var(--growth-stroke)">
             <circle cx="30" cy="82" r="3"/><circle cx="110" cy="72" r="3"/>
             <circle cx="180" cy="62" r="3"/><circle cx="250" cy="50" r="3"/>
             <circle cx="340" cy="36" r="4" stroke="white" stroke-width="1.5"/>
@@ -2180,11 +3082,82 @@ Pi shumë lëngje. Pushim.
         <svg class="growth-svg" viewBox="0 0 380 100" preserveAspectRatio="none">
           <path d="M 0,70 C 80,55 160,40 240,32 S 380,24 380,24 L 380,100 L 0,100 Z" fill="rgba(28,25,23,0.04)"/>
           <path d="M 0,70 C 80,55 160,40 240,32 S 380,24 380,24" stroke="rgba(28,25,23,0.32)" stroke-width="1.3" fill="none"/>
-          <path d="M 30,80 L 110,62 L 180,50 L 250,46 L 340,42" stroke="var(--chart-female)" stroke-width="2" fill="none" stroke-linecap="round"/>
-          <g fill="var(--chart-female)">
+          <path d="M 30,80 L 110,62 L 180,50 L 250,46 L 340,42" stroke="var(--growth-stroke)" stroke-width="2" fill="none" stroke-linecap="round"/>
+          <g fill="var(--growth-stroke)">
             <circle cx="30" cy="80" r="3"/><circle cx="110" cy="62" r="3"/>
             <circle cx="180" cy="50" r="3"/><circle cx="250" cy="46" r="3"/>
             <circle cx="340" cy="42" r="4" stroke="white" stroke-width="1.5"/>
+          </g>
+        </svg>
+      </div>
+    </div>
+
+    <!-- ── Variant 2 · Dion Hoxha (mashkull) → blue ──────────────────────────
+         Design-only second instance so the sex-color contrast is visible
+         in one screenshot. In production only the panel matching the current
+         patient renders. -->
+    <div class="panel growth-panel" data-sex="m"
+         style="--growth-stroke: var(--chart-male);
+                --growth-bg:     var(--chart-male-bg);
+                --growth-border: var(--chart-male-border);">
+      <div class="panel-head">
+        <h3>Diagramet e rritjes · WHO</h3>
+        <span class="growth-patient-chip">
+          <span class="gpc-dot" aria-hidden="true"></span>
+          Dion Hoxha · <span class="gpc-sex">Mashkull</span>
+        </span>
+      </div>
+
+      <div class="growth-card" onclick="openWhoChart('weight')">
+        <div class="growth-head"><span class="t">Pesha sipas moshës</span><span class="pct">P50</span></div>
+        <svg class="growth-svg" viewBox="0 0 380 100" preserveAspectRatio="none">
+          <path d="M 0,72 C 80,68 160,62 240,55 S 380,40 380,40 L 380,100 L 0,100 Z" fill="rgba(28,25,23,0.04)"/>
+          <path d="M 0,82 C 80,78 160,74 240,68 S 380,54 380,54" stroke="rgba(28,25,23,0.18)" stroke-width="1" fill="none" stroke-dasharray="2 3"/>
+          <path d="M 0,62 C 80,58 160,52 240,44 S 380,28 380,28" stroke="rgba(28,25,23,0.18)" stroke-width="1" fill="none" stroke-dasharray="2 3"/>
+          <path d="M 0,90 C 80,87 160,84 240,80 S 380,68 380,68" stroke="rgba(28,25,23,0.15)" stroke-width="1" fill="none" stroke-dasharray="2 3"/>
+          <path d="M 0,55 C 80,50 160,42 240,32 S 380,18 380,18" stroke="rgba(28,25,23,0.15)" stroke-width="1" fill="none" stroke-dasharray="2 3"/>
+          <path d="M 0,72 C 80,68 160,62 240,55 S 380,40 380,40" stroke="rgba(28,25,23,0.32)" stroke-width="1.3" fill="none"/>
+          <path d="M 30,78 L 110,70 L 180,60 L 250,50 L 340,38" stroke="var(--growth-stroke)" stroke-width="2" fill="none" stroke-linecap="round"/>
+          <g fill="var(--growth-stroke)">
+            <circle cx="30" cy="78" r="3"/>
+            <circle cx="110" cy="70" r="3"/>
+            <circle cx="180" cy="60" r="3"/>
+            <circle cx="250" cy="50" r="3"/>
+            <circle cx="340" cy="38" r="4" stroke="white" stroke-width="1.5"/>
+          </g>
+        </svg>
+      </div>
+
+      <div style="height: 1px; background: var(--border);"></div>
+
+      <div class="growth-card" onclick="openWhoChart('length')">
+        <div class="growth-head"><span class="t">Gjatësia sipas moshës</span><span class="pct">P65</span></div>
+        <svg class="growth-svg" viewBox="0 0 380 100" preserveAspectRatio="none">
+          <path d="M 0,75 C 80,70 160,62 240,52 S 380,32 380,32 L 380,100 L 0,100 Z" fill="rgba(28,25,23,0.04)"/>
+          <path d="M 0,75 C 80,70 160,62 240,52 S 380,32 380,32" stroke="rgba(28,25,23,0.32)" stroke-width="1.3" fill="none"/>
+          <path d="M 0,85 C 80,80 160,74 240,66 S 380,48 380,48" stroke="rgba(28,25,23,0.18)" stroke-width="1" fill="none" stroke-dasharray="2 3"/>
+          <path d="M 0,65 C 80,60 160,50 240,38 S 380,18 380,18" stroke="rgba(28,25,23,0.18)" stroke-width="1" fill="none" stroke-dasharray="2 3"/>
+          <path d="M 30,78 L 110,68 L 180,56 L 250,44 L 340,28" stroke="var(--growth-stroke)" stroke-width="2" fill="none" stroke-linecap="round"/>
+          <g fill="var(--growth-stroke)">
+            <circle cx="30" cy="78" r="3"/><circle cx="110" cy="68" r="3"/>
+            <circle cx="180" cy="56" r="3"/><circle cx="250" cy="44" r="3"/>
+            <circle cx="340" cy="28" r="4" stroke="white" stroke-width="1.5"/>
+          </g>
+        </svg>
+      </div>
+
+      <div style="height: 1px; background: var(--border);"></div>
+
+      <div class="growth-card" onclick="openWhoChart('hc')">
+        <div class="growth-head"><span class="t">Perimetri kokës</span><span class="pct">P55</span></div>
+        <svg class="growth-svg" viewBox="0 0 380 100" preserveAspectRatio="none">
+          <path d="M 0,70 C 80,55 160,40 240,32 S 380,24 380,24 L 380,100 L 0,100 Z" fill="rgba(28,25,23,0.04)"/>
+          <path d="M 0,70 C 80,55 160,40 240,32 S 380,24 380,24" stroke="rgba(28,25,23,0.32)" stroke-width="1.3" fill="none"/>
+          <path d="M 30,72 L 110,56 L 180,44 L 250,38 L 340,32" stroke="var(--growth-stroke)" stroke-width="2" fill="none" stroke-linecap="round"/>
+          <g fill="var(--growth-stroke)">
+            <circle cx="30" cy="72" r="3"/><circle cx="110" cy="56" r="3"/>
+            <circle cx="180" cy="44" r="3"/><circle cx="250" cy="38" r="3"/>
+            <circle cx="340" cy="32" r="4" stroke="white" stroke-width="1.5"/>
           </g>
         </svg>
       </div>
@@ -2497,7 +3470,7 @@ Pi shumë lëngje. Pushim.
     <button class="btn btn-ghost btn-sm" style="padding: 3px 8px; font-size: 11px;" onclick="setLiveStatus('completed')">E përfunduar</button>
   </div>
 </div>
-<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
+<script>
   // Toggle the live sticky action bar between the in-progress and completed
   // states without firing the real lifecycle handlers (which trigger toasts).
   window.setLiveStatus = function (s) {
