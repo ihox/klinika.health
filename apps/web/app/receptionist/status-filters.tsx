@@ -67,9 +67,9 @@ export function countByStatusFilter(
 interface PillSpec {
   filter: StatusFilter;
   label: string;
-  // Inline color classes — paired with the design's --primary,
-  // --success, --danger, --ink-muted tokens. Active uses solid bg +
-  // white text; inactive uses outline + the status color as text.
+  // Canonical status-color triplets — indigo / green / amber / red.
+  // The "Të gjitha" pill stays neutral. Active = solid background +
+  // white text; inactive = soft bg + status fg + status border.
   inactiveClass: string;
   activeClass: string;
   dotClass: string;
@@ -79,37 +79,41 @@ const PILLS: readonly PillSpec[] = [
   {
     filter: 'all',
     label: 'Të gjitha',
-    inactiveClass: 'border-ink-muted text-ink-muted',
+    inactiveClass: 'border-line-strong text-ink-muted',
     activeClass: 'border-transparent bg-ink text-white',
     dotClass: 'bg-ink-muted',
   },
   {
     filter: 'scheduled',
     label: 'Planifikuar',
-    inactiveClass: 'border-primary text-primary',
-    activeClass: 'border-transparent bg-primary text-white',
-    dotClass: 'bg-primary',
+    inactiveClass:
+      'border-status-scheduled-border bg-status-scheduled-bg text-status-scheduled-fg',
+    activeClass: 'border-transparent bg-status-scheduled-solid text-white',
+    dotClass: 'bg-status-scheduled-solid',
   },
   {
     filter: 'completed',
     label: 'Kryer',
-    inactiveClass: 'border-success text-success',
-    activeClass: 'border-transparent bg-success text-white',
-    dotClass: 'bg-success',
+    inactiveClass:
+      'border-status-completed-border bg-status-completed-bg text-status-completed-fg',
+    activeClass: 'border-transparent bg-status-completed-solid text-white',
+    dotClass: 'bg-status-completed-solid',
   },
   {
     filter: 'no_show',
     label: 'Mungesë',
-    inactiveClass: 'border-danger text-danger',
-    activeClass: 'border-transparent bg-danger text-white',
-    dotClass: 'bg-danger',
+    inactiveClass:
+      'border-status-no-show-border bg-status-no-show-bg text-status-no-show-fg',
+    activeClass: 'border-transparent bg-status-no-show-solid text-white',
+    dotClass: 'bg-status-no-show-solid',
   },
   {
     filter: 'cancelled',
     label: 'Anuluar',
-    inactiveClass: 'border-ink-muted text-ink-muted opacity-85',
-    activeClass: 'border-transparent bg-ink-muted text-white',
-    dotClass: 'bg-ink-muted',
+    inactiveClass:
+      'border-status-cancelled-border bg-status-cancelled-bg text-status-cancelled-fg',
+    activeClass: 'border-transparent bg-status-cancelled-solid text-white',
+    dotClass: 'bg-status-cancelled-solid',
   },
 ];
 
@@ -143,8 +147,8 @@ export function StatusFilters({
             aria-selected={isActive}
             onClick={() => onChange(p.filter)}
             className={cn(
-              'inline-flex items-center gap-1.5 rounded-full border bg-surface-elevated px-3 py-[5px] text-[12.5px] font-medium leading-[1.3] transition',
-              'hover:bg-surface-subtle',
+              'inline-flex items-center gap-1.5 rounded-full border px-3 py-[5px] text-[12.5px] font-medium leading-[1.3] transition',
+              'hover:brightness-95',
               isActive ? p.activeClass : p.inactiveClass,
             )}
           >

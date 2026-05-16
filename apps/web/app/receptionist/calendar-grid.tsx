@@ -17,10 +17,8 @@ import { CSS } from '@dnd-kit/utilities';
 
 import { cn } from '@/lib/utils';
 import {
-  colorIndicatorForLastVisit,
   formatDayHeader,
   formatDob,
-  type LastVisitColor,
   minutesToTime,
   timeToMinutes,
   toLocalParts,
@@ -104,6 +102,38 @@ const STATUS_LABEL: Record<VisitStatus, string> = {
   completed: 'Kryer',
   no_show: 'Mungesë',
   cancelled: 'Anuluar',
+};
+
+// Canonical status → Tailwind class triplet (bg + border-color + text).
+// Mirrors design-reference/prototype/receptionist.html `.appt.<status>`.
+// `arrived` shares the cyan family with `in_progress` — the prototype
+// uses the same `--status-in-progress-*` tokens. `in_progress` adds
+// the breathing animation declared in globals.css.
+const STATUS_CARD_CLASSES: Record<VisitStatus, string> = {
+  scheduled:
+    'bg-status-scheduled-bg border-status-scheduled-border text-status-scheduled-fg',
+  arrived:
+    'bg-status-in-progress-bg border-status-in-progress-border text-status-in-progress-fg',
+  in_progress:
+    'bg-status-in-progress-bg border-status-in-progress-border text-status-in-progress-fg animate-status-in-progress',
+  completed:
+    'bg-status-completed-bg border-status-completed-border text-status-completed-fg',
+  no_show:
+    'bg-status-no-show-bg border-status-no-show-border text-status-no-show-fg',
+  cancelled:
+    'bg-status-cancelled-bg border-status-cancelled-border text-status-cancelled-fg opacity-85',
+};
+
+// Canonical status → left-accent color used for the 3px stripe on the
+// card's leading edge. Pulled from the canonical solid token of the
+// matching family so the stripe pops slightly against the soft bg.
+const STATUS_LEFT_ACCENT: Record<VisitStatus, string> = {
+  scheduled:   'var(--status-scheduled-solid)',
+  arrived:     'var(--status-in-progress-solid)',
+  in_progress: 'var(--status-in-progress-solid)',
+  completed:   'var(--status-completed-solid)',
+  no_show:     'var(--status-no-show-solid)',
+  cancelled:   'var(--status-cancelled-solid)',
 };
 
 // Default duration assumed for walk-in rows missing one (legacy data
@@ -1042,14 +1072,10 @@ function ScheduledCard({
   const startMin = timeToMinutes(localParts.time);
   const inlineTop = (startMin - gridStartMin) * PX_PER_MIN;
   const inlineHeight = entry.durationMinutes * PX_PER_MIN;
-  const color = colorIndicatorForLastVisit(entry.lastVisitAt);
 
-  const isArrived = entry.status === 'arrived';
-  const isInProgress = entry.status === 'in_progress';
-  const isCompleted = entry.status === 'completed';
   const isNoShow = entry.status === 'no_show';
   const isCancelled = entry.status === 'cancelled';
-  const isNew = entry.isNewPatient;
+  const isCompleted = entry.status === 'completed';
   const { hovered, onMouseEnter, onMouseLeave } = useDelayedHover(
     CARD_HOVER_DELAY_MS,
   );
@@ -1165,30 +1191,10 @@ function ScheduledCard({
       data-locked={locked || undefined}
       aria-disabled={locked || undefined}
       className={cn(
-        'absolute left-1.5 px-2 py-0.5 rounded text-left border bg-surface-elevated border-teal-200 border-l-[3px] border-l-primary shadow-xs transition hover:-translate-y-px hover:shadow-sm flex items-center gap-1.5 overflow-hidden',
-        !leftLaneOnly && !hovered && 'right-1.5',
-        // Status backgrounds — translucent variants flip to solid on
-        // hover so the expanded card's text stays readable over the
-        // grid lines.
-        isArrived &&
-          (hovered && !isDragging
-            ? 'bg-teal-50 border-teal-300'
-            : 'bg-teal-50/60 border-teal-300'),
-        isInProgress && 'relative bg-teal-50 border-teal-300',
-        isCompleted &&
-          (hovered && !isDragging
-            ? 'bg-success-bg border-success-soft border-l-success'
-            : 'bg-success-bg/50 border-success-soft border-l-success opacity-90'),
-        isNoShow &&
-          (hovered && !isDragging
-            ? 'bg-surface-elevated border border-dashed border-danger-soft border-l-danger'
-            : 'border border-dashed border-danger-soft border-l-danger opacity-70'),
-        isCancelled && !(hovered && !isDragging) && 'opacity-50',
-        isNew && !isCompleted && !isNoShow && !isArrived && !isInProgress &&
-          'border-l-accent-500 border-warning-soft',
-        pinned && (hovered && !isDragging
-          ? 'border-dashed bg-surface-elevated'
-          : 'border-dashed bg-stone-50/80'),
+        'absolute left-1.5 px-2 py-0.5 rounded-sm text-left border border-l-[3px] shadow-xs transition hover:-translate-y-px hover:shadow-sm flex items-center overflow-hidden',
+        !leftLaneOnly && 'right-1.5',
+        STATUS_CARD_CLASSES[entry.status],
+        pinned && 'border-dashed',
         isDraggable && !isDragging && 'cursor-grab',
         isDragging && 'cursor-grabbing',
         // Locked: revert to default cursor so the receptionist's
@@ -1198,29 +1204,29 @@ function ScheduledCard({
       )}
       style={{
         ...(pinnedStyle ?? { top: inlineTop, height: Math.max(20, inlineHeight) }),
-        // Hover expansion: lift the right clamp so the card grows to
-        // fit its content (full name + time). Z-index spikes so the
-        // expanded card sits above sibling cards and the right-lane
-        // walk-in band; max-width keeps it from running off the column
-        // group entirely. Suppress while dragging so the card itself
-        // doesn't fight the drag transform.
-        ...(hovered && !isDragging
-          ? { right: 'auto', width: 'max-content', maxWidth: 260, zIndex: 20 }
-          : leftLaneOnly
-            ? { right: 'calc(50% + 2px)', zIndex: pinned ? 6 : 3 }
-            : { zIndex: pinned ? 6 : 3 }),
-        ...(pinned && !(hovered && !isDragging) ? { opacity: 0.88 } : {}),
-        ...(isPast && !isCompleted && !isNoShow && !isCancelled && !pinned && !(hovered && !isDragging)
+        borderLeftColor: STATUS_LEFT_ACCENT[entry.status],
+        ...(leftLaneOnly ? { right: 'calc(50% + 2px)' } : null),
+        zIndex: pinned ? 6 : 3,
+        ...(pinned ? { opacity: 0.88 } : {}),
+        // Past-day fade — pipeline statuses dim slightly so the day's
+        // resolved (completed/no_show/cancelled) cards read as the
+        // primary signal. Their canonical bg already does the heavy
+        // lifting visually.
+        ...(isPast && !isCompleted && !isNoShow && !isCancelled && !pinned
           ? { opacity: 0.85, filter: 'saturate(0.78)' }
           : {}),
-        ...(isDragging ? { zIndex: 100, transform: dragTransform } : {}),
+        ...(isDragging ? { zIndex: 100, transform: dragTransform, opacity: 0.35 } : {}),
       }}
       aria-label={`${entry.patient.firstName} ${entry.patient.lastName}, ${localParts.time}, ${STATUS_LABEL[entry.status]}${pinned ? ', jashtë orarit' : ''}`}
     >
+      {/* Strict minimal content — name only. Card bg conveys status;
+          grid position conveys time. Full name + scheduled time are
+          revealed via the hover tooltip overlay below. */}
       <span
         className={cn(
-          'flex-1 min-w-0 text-[11.5px] font-semibold text-ink-strong leading-[1.15]',
-          hovered && !isDragging ? 'whitespace-nowrap' : 'truncate',
+          'flex-1 min-w-0 truncate text-[12px] font-semibold leading-[1.2] tracking-[-0.005em]',
+          isNoShow && 'line-through decoration-1',
+          isCancelled && 'line-through decoration-1',
         )}
       >
         {pinPrefix ? (
@@ -1231,55 +1237,48 @@ function ScheduledCard({
             {pinPrefix}
           </span>
         ) : null}
-        <span
-          className={cn(
-            isCompleted && 'text-success',
-            isNoShow && 'text-danger line-through decoration-1',
-            isCancelled && 'line-through text-ink-faint',
-            isInProgress && 'text-primary-dark',
-          )}
-        >
-          {entry.patient.firstName} {entry.patient.lastName}
-        </span>
+        {entry.patient.firstName} {entry.patient.lastName}
       </span>
-      <span className="flex-none flex items-center gap-1 text-[10.5px] text-ink-muted tabular-nums">
-        {isArrived ? (
-          <span
-            className="rounded bg-primary-soft px-1 text-[9.5px] font-bold uppercase tracking-[0.04em] text-teal-800"
-            aria-hidden
-          >
-            ✓ Arriti
-          </span>
-        ) : null}
-        {isInProgress ? (
-          <span
-            className="rounded bg-primary-soft px-1 text-[9.5px] font-bold uppercase tracking-[0.04em] text-teal-800"
-            aria-hidden
-          >
-            Në vizitë
-          </span>
-        ) : null}
-        {isCompleted ? (
-          <span aria-hidden className="text-success font-bold">✓</span>
-        ) : null}
-        {isNoShow ? (
-          <span
-            className="text-[9px] font-bold uppercase rounded bg-danger-bg text-danger px-1"
-            aria-hidden
-          >
-            MS
-          </span>
-        ) : null}
-        <ColorChip color={color} />
-        {hovered ? <span>{localParts.time}</span> : null}
-      </span>
-      {isInProgress ? (
-        <span
-          aria-hidden
-          className="pointer-events-none absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-primary shadow-[0_0_0_3px_rgba(13,148,136,0.22)]"
+      {hovered && !isDragging && !locked ? (
+        <ApptTooltip
+          name={`${entry.patient.firstName} ${entry.patient.lastName}`}
+          time={localParts.time}
         />
       ) : null}
     </button>
+  );
+}
+
+/**
+ * Hover/focus overlay shown above each calendar card. Solid white
+ * background, no glassmorphism. Content is strictly name + scheduled
+ * time per design-reference/prototype/receptionist.html `.appt-tip`.
+ * Pointer-events: none so the tooltip never intercepts the click that
+ * opens the action menu on the card itself.
+ */
+function ApptTooltip({
+  name,
+  time,
+}: {
+  name: string;
+  time: string;
+}): ReactElement {
+  return (
+    <div
+      role="tooltip"
+      className={cn(
+        'pointer-events-none absolute left-1/2 z-30 -translate-x-1/2 bottom-[calc(100%+6px)]',
+        'flex flex-col gap-0.5 whitespace-nowrap min-w-[140px]',
+        'rounded-md border border-line bg-surface-elevated px-3 py-2 shadow-modal',
+      )}
+    >
+      <span className="font-display text-[13px] font-semibold tracking-[-0.005em] text-ink-strong">
+        {name}
+      </span>
+      <span className="font-mono text-[11.5px] font-medium tabular-nums tracking-[0.01em] text-ink-muted">
+        {time}
+      </span>
+    </div>
   );
 }
 
@@ -1325,10 +1324,9 @@ function WalkInCard({
   const inlineTop = (startMin - gridStartMin) * PX_PER_MIN;
   const height = walkInHeightPx(entry.durationMinutes);
 
-  const isInProgress = entry.status === 'in_progress';
-  const isCompleted = entry.status === 'completed';
   const isNoShow = entry.status === 'no_show';
   const isCancelled = entry.status === 'cancelled';
+  const isCompleted = entry.status === 'completed';
   const { hovered, onMouseEnter, onMouseLeave } = useDelayedHover(
     CARD_HOVER_DELAY_MS,
   );
@@ -1340,34 +1338,6 @@ function WalkInCard({
     : null;
   const pinPrefix =
     pinned == null ? null : pinned.kind === 'before' ? '← më herët' : 'më vonë →';
-
-  // Border + background per state. Borders are composed inline so the
-  // left edge can be dashed-accent while the other three sides stay
-  // solid-accent (Tailwind has no per-side border-style utility).
-  const borderStyle = isCompleted
-    ? {
-        borderTop: '1px solid var(--green-soft, #BBF7D0)',
-        borderRight: '1px solid var(--green-soft, #BBF7D0)',
-        borderBottom: '1px solid var(--green-soft, #BBF7D0)',
-        borderLeft: '3px solid var(--green, #15803D)',
-        background: 'var(--green-bg, #DCFCE7)',
-      }
-    : isInProgress
-      ? {
-          borderTop: '1px solid var(--accent-400, #FB923C)',
-          borderRight: '1px solid var(--accent-400, #FB923C)',
-          borderBottom: '1px solid var(--accent-400, #FB923C)',
-          borderLeft: '3px solid var(--accent-500, #F97316)',
-          background:
-            'linear-gradient(180deg, #FFF7ED 0%, var(--bg-elevated, #FFFFFF) 100%)',
-        }
-      : {
-          borderTop: '1px solid var(--accent-100, #FFEDD5)',
-          borderRight: '1px solid var(--accent-100, #FFEDD5)',
-          borderBottom: '1px solid var(--accent-100, #FFEDD5)',
-          borderLeft: '3px dashed var(--accent-500, #F97316)',
-          background: '#FFFBF5',
-        };
 
   return (
     <button
@@ -1401,67 +1371,54 @@ function WalkInCard({
       data-locked={locked || undefined}
       aria-disabled={locked || undefined}
       className={cn(
-        'absolute px-2 py-0.5 rounded text-left transition hover:-translate-y-px hover:shadow-sm shadow-xs flex items-center gap-1.5 overflow-hidden cursor-pointer',
-        // Faded status variants — lift the fade when hovered so the
-        // expanded text region stays readable.
-        isCompleted && !hovered && 'opacity-85',
-        isNoShow && !hovered && 'opacity-60',
-        isCancelled && !hovered && 'opacity-50',
-        // Locked walk-in: same visual cue as the scheduled-card path.
+        // Walk-ins share the canonical status palette with scheduled
+        // cards. The DASHED left accent (set inline below) is the only
+        // visual identifier that a card is a walk-in — strict minimal
+        // body, no glyph, no badge.
+        'absolute px-2 py-0.5 rounded-sm text-left border shadow-xs transition hover:-translate-y-px hover:shadow-sm flex items-center overflow-hidden',
+        STATUS_CARD_CLASSES[entry.status],
+        pinned && 'border-dashed',
         locked && 'cursor-default',
       )}
       style={{
         ...(pinnedStyle ?? { top: inlineTop, height }),
         left: 'calc(50% + 2px)',
-        // Hover expansion: drop the right clamp so the walk-in card
-        // grows past the right lane to show full name + arrival time.
-        ...(hovered
-          ? { right: 'auto', width: 'max-content', maxWidth: 260, zIndex: 20 }
-          : { right: 6, zIndex: pinned ? 6 : 3 }),
-        ...borderStyle,
-        ...(pinned && !hovered ? { opacity: 0.88 } : {}),
-        ...(isPast && !isCompleted && !pinned && !hovered ? { opacity: 0.9, filter: 'saturate(0.82)' } : {}),
+        right: 6,
+        // Dashed left accent identifies the card as a walk-in. Color
+        // tracks the canonical status family.
+        borderLeftStyle: 'dashed',
+        borderLeftWidth: 3,
+        borderLeftColor: STATUS_LEFT_ACCENT[entry.status],
+        zIndex: pinned ? 6 : 3,
+        ...(pinned ? { opacity: 0.88 } : {}),
+        ...(isPast && !isCompleted && !isNoShow && !isCancelled && !pinned
+          ? { opacity: 0.9, filter: 'saturate(0.82)' }
+          : {}),
       }}
       aria-label={`${entry.patient.firstName} ${entry.patient.lastName}, pa termin, erdhi ${parts.time}, ${STATUS_LABEL[entry.status]}${pinned ? ', jashtë orarit' : ''}`}
     >
-      <span className="flex-1 min-w-0 flex items-center gap-1 text-[11.5px] font-semibold leading-[1.15]">
-        <WalkInGlyph completed={isCompleted} />
+      <span
+        className={cn(
+          'flex-1 min-w-0 truncate text-[12px] font-semibold leading-[1.2] tracking-[-0.005em]',
+          isNoShow && 'line-through decoration-1',
+          isCancelled && 'line-through decoration-1',
+        )}
+      >
         {pinPrefix ? (
           <span
-            className="font-mono text-[9.5px] font-semibold uppercase tracking-[0.04em] text-ink-faint"
+            className="mr-1 font-mono text-[9.5px] font-semibold uppercase tracking-[0.04em] text-ink-faint"
             aria-hidden
           >
             {pinPrefix}
           </span>
         ) : null}
-        <span
-          className={cn(
-            hovered ? 'whitespace-nowrap' : 'truncate',
-            isCompleted ? 'text-success' : 'text-ink-strong',
-            isNoShow && 'line-through text-danger',
-            isCancelled && 'line-through text-ink-faint',
-          )}
-        >
-          {entry.patient.firstName} {entry.patient.lastName}
-        </span>
-        {isInProgress ? (
-          <span
-            className="ml-1 flex-none rounded bg-accent-500 px-1 text-[9.5px] font-bold uppercase tracking-[0.04em] text-white"
-            aria-hidden
-          >
-            Në vizitë
-          </span>
-        ) : null}
+        {entry.patient.firstName} {entry.patient.lastName}
       </span>
-      {hovered ? (
-        <span
-          className={cn(
-            'flex-none text-[10.5px] tabular-nums',
-            isCompleted ? 'text-success' : 'text-ink-muted',
-          )}
-        >
-          {parts.time}
-        </span>
+      {hovered && !locked ? (
+        <ApptTooltip
+          name={`${entry.patient.firstName} ${entry.patient.lastName}`}
+          time={parts.time}
+        />
       ) : null}
     </button>
   );
@@ -1489,61 +1446,3 @@ function LaneHint(): ReactElement {
   );
 }
 
-function WalkInGlyph({ completed }: { completed: boolean }): ReactElement {
-  if (completed) {
-    return (
-      <svg
-        width="10"
-        height="10"
-        viewBox="0 0 16 16"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2.4"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        className="flex-none text-success"
-        aria-hidden
-      >
-        <path d="M3 8.5l3 3 7-7" />
-      </svg>
-    );
-  }
-  return (
-    <svg
-      width="10"
-      height="10"
-      viewBox="0 0 16 16"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className="flex-none text-accent-600"
-      aria-hidden
-    >
-      <path d="M3 8a5 5 0 0 1 8.5-3.5L13 6" />
-      <path d="M13 2.5V6h-3.5" />
-    </svg>
-  );
-}
-
-export function ColorChip({ color }: { color: LastVisitColor }): ReactElement | null {
-  if (!color) return null;
-  const colorStyles: Record<NonNullable<LastVisitColor>, string> = {
-    green: 'bg-success',
-    yellow: 'bg-warning',
-    red: 'bg-danger',
-  };
-  const label: Record<NonNullable<LastVisitColor>, string> = {
-    green: 'Vizita e fundit më shumë se 30 ditë',
-    yellow: 'Vizita e fundit 7–30 ditë',
-    red: 'Vizita e fundit brenda 7 ditëve',
-  };
-  return (
-    <span
-      aria-label={label[color]}
-      title={label[color]}
-      className={cn('inline-block w-2 h-2 rounded-full', colorStyles[color])}
-    />
-  );
-}
