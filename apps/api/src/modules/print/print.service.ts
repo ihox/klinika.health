@@ -263,6 +263,7 @@ export class PrintService {
       })),
       legacyDiagnosis: v.legacyDiagnosis,
       prescription: v.prescription,
+      analyses: v.labResults,
     }));
 
     // Today summary = most recent visit's weight + height + head circ,

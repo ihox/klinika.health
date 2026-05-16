@@ -377,6 +377,7 @@ const HISTORY_BASE: HistoryTemplateData = {
       ],
       legacyDiagnosis: null,
       prescription: 'Spray.Axxa 2× në ditë, 5 ditë',
+      analyses: 'Hb 12.4 g/dl · CRP <5 mg/L',
     },
     {
       visitDate: '2026-04-01',
@@ -388,6 +389,7 @@ const HISTORY_BASE: HistoryTemplateData = {
       diagnoses: [],
       legacyDiagnosis: 'Tonsillitis acuta (legjend)',
       prescription: 'Amoksicilinë',
+      analyses: null,
     },
   ],
   visitCount: 2,
@@ -502,6 +504,58 @@ describe('history template', () => {
     expect(html).not.toMatch(/class="stamp-area"/);
   });
 
+  it('renders Th + An stacked blocks in col 3 when both fields exist', () => {
+    const html = renderHistory(HISTORY_BASE);
+    // Visit 0 has both prescription + analyses → two blocks emit;
+    // the dashed divider lands between them via the
+    // `.block + .block` CSS rule (no extra HTML needed).
+    expect(html).toMatch(/<span class="seg-lab">Th<\/span>Spray\.Axxa/);
+    expect(html).toMatch(/<span class="seg-lab">An<\/span>Hb 12\.4 g\/dl/);
+    // Visit 1 has prescription only → Th only, no An. Anchor the
+    // capture on Visit 0's content ("Spray.Axxa") so the next
+    // `<td class="clinical">` is unambiguously Visit 1's.
+    const v1Clinical =
+      html.match(/Spray\.Axxa[\s\S]*?(<td class="clinical">[\s\S]*?<\/td>)/)?.[1] ?? '';
+    expect(v1Clinical).toContain('>Th<');
+    expect(v1Clinical).not.toContain('>An<');
+  });
+
+  it('renders An only when only analyses exists (no Th block)', () => {
+    const onlyAn: HistoryTemplateData = {
+      ...HISTORY_BASE,
+      visits: [
+        {
+          ...HISTORY_BASE.visits[0]!,
+          prescription: null,
+          analyses: 'Le 7.8 ×10⁹/L',
+        },
+      ],
+      visitCount: 1,
+    };
+    const html = renderHistory(onlyAn);
+    expect(html).toContain('>An<');
+    expect(html).toContain('Le 7.8 ×10⁹/L');
+    expect(html).not.toContain('>Th<');
+  });
+
+  it('renders an em-dash when neither prescription nor analyses exists', () => {
+    const empty: HistoryTemplateData = {
+      ...HISTORY_BASE,
+      visits: [
+        {
+          ...HISTORY_BASE.visits[0]!,
+          prescription: null,
+          analyses: null,
+        },
+      ],
+      visitCount: 1,
+    };
+    const html = renderHistory(empty);
+    expect(html).not.toContain('>Th<');
+    expect(html).not.toContain('>An<');
+    expect(html).toMatch(/<td class="clinical"><span class="dash">—<\/span><\/td>/);
+  });
+
   it('paginates the visits table + appends one chart page at the end', () => {
     const longList: HistoryTemplateData = {
       ...HISTORY_BASE,
@@ -515,6 +569,7 @@ describe('history template', () => {
         diagnoses: [],
         legacyDiagnosis: 'Kontroll i rregullt',
         prescription: 'Pa terapi',
+        analyses: null,
       })),
       visitCount: 20,
     };

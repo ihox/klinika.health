@@ -173,6 +173,10 @@ export interface HistoryVisitRow {
   diagnoses: VisitDiagnosisForPrint[];
   legacyDiagnosis: string | null;
   prescription: string | null;
+  /** Lab results / analyses free-text (visits.lab_results). Renders
+   *  as the "An" block stacked below the "Th" therapy block in the
+   *  history table's 3rd column. Null/empty omits the block. */
+  analyses: string | null;
 }
 
 export interface GrowthSeriesPoint {

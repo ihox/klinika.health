@@ -217,13 +217,22 @@ function renderDiagnosisCell(
 }
 
 function renderClinicalCell(v: HistoryVisitRow): string {
-  // Th block always renders (with em-dash if no prescription). An
-  // block is reserved for the analyses field that lands with the lab
-  // module — for v1 we don't have a separate analyses column.
-  const tx = hasText(v.prescription)
-    ? escapeHtml(v.prescription).replace(/\n/g, '<br>')
-    : '<span class="dash">—</span>';
-  return `<div class="block"><span class="seg-lab">Th</span>${tx}</div>`;
+  // Stacked blocks separated by a thin dashed teal divider (CSS rule
+  // `.block + .block`). Each block is conditional on its own field:
+  //   prescription only → Th block
+  //   analyses only     → An block
+  //   both              → Th + An (divider auto-rendered by CSS)
+  //   neither           → empty cell
+  const blocks: string[] = [];
+  if (hasText(v.prescription)) {
+    const tx = escapeHtml(v.prescription).replace(/\n/g, '<br>');
+    blocks.push(`<div class="block"><span class="seg-lab">Th</span>${tx}</div>`);
+  }
+  if (hasText(v.analyses)) {
+    const an = escapeHtml(v.analyses).replace(/\n/g, '<br>');
+    blocks.push(`<div class="block"><span class="seg-lab">An</span>${an}</div>`);
+  }
+  return blocks.length === 0 ? '<span class="dash">—</span>' : blocks.join('');
 }
 
 // ---------------------------------------------------------------------------
