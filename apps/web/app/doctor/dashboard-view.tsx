@@ -585,9 +585,18 @@ function AppointmentRow({
       </span>
       <span
         className={cn(
+          // Canonical status colors (klinika v1.2). Default = neutral
+          // (scheduled, no extra signal yet); completed → green;
+          // no_show → amber (NOT red); in_progress/arrived → cyan;
+          // cancelled → red. The "current/next" patient highlight
+          // keeps the teal ring so the doctor's eye lands on the
+          // active row regardless of status.
           'h-2 w-2 rounded-full bg-line-strong',
-          isDone && 'bg-success',
-          isMissed && 'bg-danger',
+          isDone && 'bg-status-completed-solid',
+          isMissed && 'bg-status-no-show-solid',
+          a.status === 'in_progress' && 'bg-status-in-progress-solid',
+          a.status === 'arrived' && 'bg-status-in-progress-solid',
+          a.status === 'cancelled' && 'bg-status-cancelled-solid',
           (isCurrent || isNext) && 'bg-primary ring-4 ring-primary-soft',
         )}
         aria-hidden
@@ -648,7 +657,9 @@ function AppointmentRow({
           className={cn(
             'rounded-md border border-line bg-surface-subtle px-2 py-0.5 text-[11px] font-mono text-ink-muted',
             isCurrent && 'border-primary/40 bg-primary-soft text-primary-dark',
-            isMissed && 'border-danger/30 bg-danger/10 text-danger',
+            // Canonical no_show palette (amber, not red).
+            isMissed &&
+              'border-status-no-show-border bg-status-no-show-bg text-status-no-show-fg',
           )}
         >
           {isCurrent ? 'Tani' : isMissed ? 'MS' : `${a.durationMinutes} min`}
@@ -727,16 +738,66 @@ function DayStats({
   const total = snapshot?.stats.appointmentsTotal ?? 0;
   const avg = snapshot?.stats.averageVisitMinutes;
   const payments = snapshot?.stats.paymentsCents ?? 0;
+  // Derive in_progress + waiting from the appointment rows. The
+  // dashboard endpoint doesn't expose these as separate fields, but
+  // every appointment carries `status`, and the secondary tile line
+  // is purely informational — no rounding concerns. `waiting`
+  // collapses `scheduled` and `arrived` since they both read as
+  // "Doctor hasn't started this one yet" on the doctor's eye.
+  const inProgress =
+    snapshot?.appointments.filter((a) => a.status === 'in_progress').length ?? 0;
+  const waiting =
+    snapshot?.appointments.filter(
+      (a) => a.status === 'scheduled' || a.status === 'arrived',
+    ).length ?? 0;
   return (
     <div className="grid grid-cols-3 border-t border-line">
-      <Stat
-        value={
-          total > 0
-            ? `${completed} / ${total}`
-            : completed.toString()
-        }
-        label="Vizita"
-      />
+      <div className="border-r border-line px-4 py-3.5">
+        {/* Option A from the chart.html in_progress design demo
+            (Surface 2 · "fraction + breakdown sekondar"). Big
+            X / Y stays the day's "barometer"; secondary line
+            breaks the remainder into BLUE-dotted "në vijim" and
+            neutral "në pritje". Same `--in-progress-*` family as
+            the receptionist's stat-foot chip — different surface,
+            same visual language. */}
+        <div className="font-display text-[22px] font-semibold leading-none tracking-tight tabular-nums">
+          {total > 0 ? (
+            <>
+              {completed}
+              <span className="mx-1 text-ink-faint">/</span>
+              {total}
+            </>
+          ) : (
+            completed
+          )}
+        </div>
+        <div className="mt-1.5 text-[11px] uppercase tracking-[0.06em] text-ink-muted">
+          Vizita
+        </div>
+        {inProgress + waiting > 0 ? (
+          <div
+            data-testid="day-stats-in-progress-line"
+            className="mt-2 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[11.5px] text-ink-muted"
+          >
+            {inProgress > 0 ? (
+              <span className="inline-flex items-center gap-1 text-in-progress-fg">
+                <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-in-progress-dot" />
+                <strong className="font-semibold tabular-nums">{inProgress}</strong>{' '}
+                në vijim
+              </span>
+            ) : null}
+            {inProgress > 0 && waiting > 0 ? (
+              <span aria-hidden className="text-ink-faint">·</span>
+            ) : null}
+            {waiting > 0 ? (
+              <span className="inline-flex items-center gap-1">
+                <strong className="font-semibold text-ink tabular-nums">{waiting}</strong>{' '}
+                në pritje
+              </span>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
       <Stat
         value={
           avg == null ? (
@@ -1083,17 +1144,25 @@ function OpenVisitsPanel({
   return (
     <section
       data-testid="doctor-open-visits"
-      className="mb-5 overflow-hidden rounded-lg border border-amber-200 bg-amber-50/40 shadow-xs"
+      // Canonical `in_progress` palette (cyan) — these rows ARE
+      // in_progress visits and the panel cards mirror the calendar's
+      // visual language. The doctor's DayStats tile uses the BLUE
+      // `--in-progress-*` family instead; the two surfaces share a
+      // semantic meaning but live on different layers (cards vs
+      // summary chips). See chart.html · in_progress demo.
+      className="mb-5 overflow-hidden rounded-lg border border-status-in-progress-border bg-status-in-progress-bg/40 shadow-xs"
     >
-      <div className="flex items-center justify-between border-b border-amber-200 px-4 py-3">
+      <div className="flex items-center justify-between border-b border-status-in-progress-border px-4 py-3">
         <div>
-          <h2 className="text-[13px] font-semibold tracking-[-0.005em] text-amber-900">
+          <h2 className="text-[13px] font-semibold tracking-[-0.005em] text-status-in-progress-fg">
             Vizita të hapura
           </h2>
-          <p className="mt-0.5 text-[12px] text-amber-800/80">{subtitle}</p>
+          <p className="mt-0.5 text-[12px] text-status-in-progress-fg/80">
+            {subtitle}
+          </p>
         </div>
       </div>
-      <ul className="divide-y divide-amber-100">
+      <ul className="divide-y divide-status-in-progress-border">
         {entries.map((entry) => (
           <OpenVisitRow
             key={entry.id}
@@ -1131,7 +1200,7 @@ function OpenVisitRow({
             </span>
           ) : null}
         </div>
-        <div className="truncate text-[11.5px] text-amber-800/80">
+        <div className="truncate text-[11.5px] text-status-in-progress-fg/80">
           {dateLabel}
         </div>
       </div>
