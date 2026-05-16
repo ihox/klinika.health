@@ -16,6 +16,20 @@ const config: Config = {
         sans: ['var(--font-inter)', 'system-ui', 'sans-serif'],
         display: ['var(--font-inter-display)', 'var(--font-inter)', 'system-ui', 'sans-serif'],
       },
+      colors: {
+        // Dashboard in-progress chip family. Intentionally distinct
+        // from the CYAN `colors.status.in-progress-*` cards: blue here
+        // is reserved for stat-foot / DayStats summary chips on the
+        // receptionist + doctor dashboards. The two surfaces share a
+        // semantic meaning ("active visit") but live on different
+        // layers and read differently to the eye.
+        'in-progress': {
+          bg:   'var(--in-progress-bg)',
+          fg:   'var(--in-progress-fg)',
+          soft: 'var(--in-progress-soft)',
+          dot:  'var(--in-progress-dot)',
+        },
+      },
     },
   },
   plugins: [],

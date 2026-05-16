@@ -2,6 +2,81 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ============================================================================
+   Canonical design tokens.
+
+   Source of truth: design-reference/tokens/design-tokens.css (and
+   tailwind.config.js). When updating, sync the values here from those
+   files — apps/web/tailwind.config.ts already extends the preset, but
+   any Tailwind class declared as `var(--token-name)` needs the variable
+   defined below to resolve at runtime.
+   ============================================================================ */
+
+:root {
+  /* Brand — referenced inline by growth-chart SVG strokes. */
+  --teal-200: #99F6E4;
+  --teal-300: #5EEAD4;
+  --teal-400: #2DD4BF;
+  --teal-500: #14B8A6;
+  --teal-600: #0D9488;
+  --teal-700: #0F766E;
+  --teal-800: #115E59;
+
+  /* Surfaces — referenced by inline `fill="var(--bg-elevated)"` etc. */
+  --bg-elevated: #FFFFFF;
+
+  /* Visit-status canonical color system (klinika v1.2).
+     ONE color per visit lifecycle state, used consistently across
+     filter pills, calendar cards, hover overlays, and badges.
+       scheduled    → indigo  (calm, future event)
+       in-progress  → cyan    (active; arrived shares this family)
+       completed    → green   (done, positive)
+       no-show      → amber   (didn't happen, attention)
+       cancelled    → red     (won't happen, destructive)                  */
+  --status-scheduled-bg:       #E0E7FF;
+  --status-scheduled-fg:       #3730A3;
+  --status-scheduled-border:   #C7D2FE;
+  --status-scheduled-solid:    #4F46E5;
+
+  --status-in-progress-bg:     #CFFAFE;
+  --status-in-progress-fg:     #155E75;
+  --status-in-progress-border: #A5F3FC;
+  --status-in-progress-solid:  #0E7490;
+
+  --status-completed-bg:       #DCFCE7;
+  --status-completed-fg:       #14532D;
+  --status-completed-border:   #BBF7D0;
+  --status-completed-solid:    #15803D;
+
+  --status-no-show-bg:         #FEF3C7;
+  --status-no-show-fg:         #92400E;
+  --status-no-show-border:     #FDE68A;
+  --status-no-show-solid:      #B45309;
+
+  --status-cancelled-bg:       #FEE2E2;
+  --status-cancelled-fg:       #991B1B;
+  --status-cancelled-border:   #FECACA;
+  --status-cancelled-solid:    #B91C1C;
+
+  /* Dashboard in-progress chip family (BLUE, distinct from the CYAN
+     `--status-in-progress-*` cards). Receptionist stat-foot chip,
+     doctor dashboard tile numerals + label. */
+  --in-progress-bg:   #DBEAFE;
+  --in-progress-fg:   #1D4ED8;
+  --in-progress-soft: #BFDBFE;
+  --in-progress-dot:  #2563EB;
+
+  /* WHO growth-chart sex tint. Albanian convention: blue = boy, pink
+     = girl. Patient line/dot + chip background. Percentile bands and
+     grid stay neutral so the sex color reads as the patient signal. */
+  --chart-male:          #4A90D9;
+  --chart-male-bg:       #E8F1FB;
+  --chart-male-border:   #BFD9F2;
+  --chart-female:        #E8728E;
+  --chart-female-bg:     #FCE9EE;
+  --chart-female-border: #F4C1CD;
+}
+
 @layer base {
   html,
   body {
@@ -25,4 +100,22 @@
 .sk-pulse {
   background-color: #efeeec;
   animation: sk-pulse 1.4s ease-in-out infinite;
+}
+
+/* In-progress visit card pulse. Subtle 2.4s ease that breathes the
+   cyan tint up and back so the receptionist's eye notices which
+   patient the doctor is actively seeing. The animation runs on the
+   card itself (not a child overlay) so the cyan background remains
+   the dominant signal. */
+@keyframes status-in-progress-pulse {
+  0%,
+  100% {
+    background-color: var(--status-in-progress-bg);
+  }
+  50% {
+    background-color: #A5F3FC;
+  }
+}
+.animate-status-in-progress {
+  animation: status-in-progress-pulse 2.4s ease-in-out infinite;
 }
