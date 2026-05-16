@@ -48,6 +48,8 @@ Triggers that would justify reopening this decision.
 | 011 | [Unified visit model](011-unified-visit-model.md) | Accepted |
 | 012 | [Vizitat field-mapping correction](012-vizitat-field-mapping-correction.md) | Accepted |
 | 013 | [Standalone clinical visits](013-standalone-visits.md) | Accepted |
+| 014 | [Access reader uses mdb-json](014-access-reader-mdb-json.md) | Accepted |
+| 015 | [DOB orphan policy + swap recovery + PASS criteria](015-dob-orphan-policy.md) | Accepted |
 
 ## Adding a new ADR
 

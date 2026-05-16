@@ -93,7 +93,7 @@ def cmd_patients(args: argparse.Namespace) -> int:
 
     with Database.open(cfg.target.dsn, dry_run=dry_run) as db:
         clinic_id = db.resolve_clinic_id(cfg.target.clinic_subdomain)
-        with AccessReader.open(cfg.source.path, cfg.source.odbc_driver) as reader:
+        with AccessReader.open(cfg.source.path) as reader:
             with JsonlWriter(log_dir / "warnings.jsonl") as warnings, \
                  JsonlWriter(log_dir / "orphans.jsonl") as orphans:
                 report = import_patients(
@@ -154,7 +154,7 @@ def cmd_visits(args: argparse.Namespace) -> int:
                 "Run `migrate.py patients --commit` first."
             )
 
-        with AccessReader.open(cfg.source.path, cfg.source.odbc_driver) as reader:
+        with AccessReader.open(cfg.source.path) as reader:
             if not args.skip_preflight:
                 run_preflight_checks(reader, logger)
             with JsonlWriter(log_dir / "visits-warnings.jsonl") as warnings, \

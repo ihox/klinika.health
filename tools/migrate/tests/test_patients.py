@@ -159,6 +159,8 @@ def test_dry_run_skips_db_writes(tmp_path: Path) -> None:
 
 
 def test_unparseable_dob_orphans_with_row(tmp_path: Path) -> None:
+    """Date that's not in any known format, and not rescuable via the
+    Vendi swap, lands in the dob_unparseable bucket (ADR-015)."""
     rows = [_row(id_=42, name="Rita Hoxha", dob="not a date")]
     report, warnings, orphans = _import(rows, db=CapturingDB(), tmp_path=tmp_path)
 
@@ -171,6 +173,51 @@ def test_unparseable_dob_orphans_with_row(tmp_path: Path) -> None:
     # The row content stays in the orphans file so the doctor can
     # re-enter the patient manually.
     assert orphans[0]["row"]["Emri dhe mbiemri"] == "Rita Hoxha"
+
+
+def test_year_only_dob_orphan_has_distinct_reason(tmp_path: Path) -> None:
+    """ADR-015: 'Datelindja=YYYY' rows orphan with reason
+    `year_only_dob`, not `dob_unparseable`, so the post-cutover
+    review queue can be triaged separately."""
+    rows = [_row(id_=99, name="Rita Hoxha", dob="2018")]
+    report, _, orphans = _import(rows, db=CapturingDB(), tmp_path=tmp_path)
+    assert report.skipped_orphan == 1
+    assert report.warnings_by_code["year_only_dob"] == 1
+    assert orphans[0]["reason"] == "year_only_dob"
+
+
+def test_dob_missing_distinct_from_unparseable(tmp_path: Path) -> None:
+    """Datelindja absent / blank => `dob_missing` (ADR-015)."""
+    rows = [_row(id_=99, name="Rita Hoxha", dob=None)]
+    report, _, orphans = _import(rows, db=CapturingDB(), tmp_path=tmp_path)
+    assert orphans[0]["reason"] == "dob_missing"
+    assert report.warnings_by_code["dob_missing"] == 1
+
+
+def test_vendi_swap_recovery_imports_row(tmp_path: Path) -> None:
+    """ADR-015: when Vendi holds a parseable DD.MM.YYYY and
+    Datelindja holds a city name, swap them. Row imports with the
+    DOB from Vendi and place_of_birth from Datelindja, plus a
+    `field_swap_recovered` warning."""
+    db = CapturingDB()
+    rows = [_row(id_=99, name="Lorian Xhemaj", dob="Prizren", place="02.11.2021")]
+    report, warnings, orphans = _import(rows, db=db, tmp_path=tmp_path)
+
+    assert orphans == []
+    assert report.imported == 1
+    assert any(w["code"] == "field_swap_recovered" for w in warnings)
+    payload = db.calls[0][1]
+    assert payload.date_of_birth == date(2021, 11, 2)  # type: ignore[attr-defined]
+    assert payload.place_of_birth == "Prizren"  # type: ignore[attr-defined]
+
+
+def test_vendi_swap_requires_dob_shape_not_just_any_date(tmp_path: Path) -> None:
+    """Conservative gate: Vendi must look like a DOB (DD.MM.YYYY).
+    Cities and free text never accidentally pass."""
+    rows = [_row(id_=99, name="Rita Hoxha", dob="garbage", place="Prizren")]
+    report, _, orphans = _import(rows, db=CapturingDB(), tmp_path=tmp_path)
+    assert report.skipped_orphan == 1
+    assert orphans[0]["reason"] == "dob_unparseable"
 
 
 def test_missing_name_orphans(tmp_path: Path) -> None:

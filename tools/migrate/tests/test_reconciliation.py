@@ -129,13 +129,38 @@ def test_db_minus_tool_drift_fails(tmp_path: Path) -> None:
 
 
 def test_orphan_rate_above_threshold_fails(tmp_path: Path) -> None:
-    # 5% orphan rate > 2% threshold.
+    # 5% orphan rate dominated by *unexpected* reasons => still FAIL.
     _write_patient_report(tmp_path, imported=10000, skipped=600, source=10600)
+    (tmp_path / "orphans.jsonl").write_text("\n".join(
+        json.dumps({"reason": "dob_unparseable", "legacy_id": i}) for i in range(600)
+    ))
     _write_visit_report(tmp_path, imported=218234, skipped=2232)
     db = StubDB(patient_count=10000, visit_count=218234)
     payload = reconcile(log_dir=tmp_path, db=db, clinic_id="cid", output_path=tmp_path / "out.json")
     assert payload["verdict"] == "FAIL"
-    assert any("orphan rate" in reason for reason in payload["verdict_reasons"])
+    assert any("unexpected-orphan rate" in reason for reason in payload["verdict_reasons"])
+
+
+def test_orphan_rate_dominated_by_year_only_passes(tmp_path: Path) -> None:
+    """ADR-015 carve-out: 5% orphan rate dominated by year_only_dob
+    and dob_missing should NOT auto-FAIL. These are policy skips,
+    not parser defects."""
+    _write_patient_report(tmp_path, imported=10602, skipped=561, source=11163)
+    _write_visit_report(tmp_path, imported=218234, skipped=2232)
+    # 415 year_only + 58 dob_missing + 85 dob_unparseable + 3 swap.
+    # 'Expected' total = 473. Unexpected = 88 / 11163 = 0.79% < 2%.
+    lines = (
+        [json.dumps({"reason": "year_only_dob", "legacy_id": i}) for i in range(415)]
+        + [json.dumps({"reason": "dob_missing", "legacy_id": i}) for i in range(58)]
+        + [json.dumps({"reason": "dob_unparseable", "legacy_id": i}) for i in range(85)]
+        + [json.dumps({"reason": "name_unparseable", "legacy_id": i}) for i in range(3)]
+    )
+    (tmp_path / "orphans.jsonl").write_text("\n".join(lines))
+    db = StubDB(patient_count=10602, visit_count=218234)
+    payload = reconcile(log_dir=tmp_path, db=db, clinic_id="cid", output_path=tmp_path / "out.json")
+    assert payload["verdict"] == "PASS", payload["verdict_reasons"]
+    # Total orphan rate still reported faithfully.
+    assert payload["patients"]["orphan_rate_pct"] > 4.0
 
 
 def test_missing_per_phase_reports_fails(tmp_path: Path) -> None:

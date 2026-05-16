@@ -29,6 +29,13 @@ BEGIN;
 -- is acquired via `SET ROLE platform_admin_role` from an authenticated
 -- application connection that has been GRANTed the role, never via a
 -- direct login.
+--
+-- BYPASSRLS only sidesteps the row policies; it does NOT confer table
+-- privileges. The GRANTs below are what makes `SET ROLE
+-- platform_admin_role` actually able to query the clinical tables.
+-- The migration tool (slice 17) is the first caller that needed them
+-- to be wired up — before then platform_admin_role existed only on
+-- paper.
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'platform_admin_role') THEN
@@ -36,6 +43,15 @@ BEGIN
   END IF;
 END
 $$;
+
+GRANT platform_admin_role TO CURRENT_USER;
+GRANT USAGE ON SCHEMA public TO platform_admin_role;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO platform_admin_role;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO platform_admin_role;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public
+  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO platform_admin_role;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public
+  GRANT USAGE, SELECT ON SEQUENCES TO platform_admin_role;
 
 -- klinika_app: the tenant-scoped application role. In production the
 -- API connects as this role directly. In dev the connection user is

@@ -1,14 +1,16 @@
 # Python 3.12 — Access (.accdb) -> Postgres migration tool (ADR-010).
 #
-# pyodbc reads the Access file via the mdbtools ODBC driver. macOS:
-#   brew install unixodbc mdbtools && \
-#   echo $'[MDBTools]\nDriver=/opt/homebrew/lib/libmdbodbc.so' >> ~/.odbcinst.ini
-# Ubuntu 24.04:
-#   apt install unixodbc-dev mdbtools libmdbodbc1
+# Access reader: `mdb-json` from mdbtools 1.0+ (ADR-014). The tool
+# subprocesses `mdb-json` and `mdb-count`, so mdbtools is a *system*
+# dependency, not a pip package. Install:
+#   macOS:        brew install mdbtools
+#   Ubuntu 24.04: apt install mdbtools
 #
 # psycopg connects as a role that has been GRANTed platform_admin_role
 # (BYPASSRLS) — the tool issues `SET ROLE platform_admin_role` at session
 # start so RLS doesn't block cross-clinic inserts.
-pyodbc==5.2.0
-psycopg[binary]==3.2.3
+# Range, not pin: psycopg-binary 3.2.3 has no Python 3.14 wheel; 3.2.10+
+# does. Pinning a moving target across host Python versions is more
+# painful than allowing the patch window.
+psycopg[binary]>=3.2.10,<3.3
 PyYAML==6.0.2

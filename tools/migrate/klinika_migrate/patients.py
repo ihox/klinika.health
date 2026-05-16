@@ -27,7 +27,9 @@ any field that has changed.
 from __future__ import annotations
 
 import logging
+import re
 from dataclasses import dataclass
+from datetime import date
 from typing import TYPE_CHECKING, Any
 
 from .access import AbstractReader
@@ -67,6 +69,29 @@ class _ParseFailure:
     reason: str
 
 
+@dataclass(frozen=True)
+class _DobOutcome:
+    """Output of `_classify_dob` — see ADR-015 for the policy.
+
+    `parsed` is the date (None if the row should be orphaned),
+    `reason` is the orphan-reason code (None on success),
+    `swap_applied` is True when the date came from the Vendi column
+    instead of Datelindja (the doctor swapped the fields).
+    """
+
+    parsed: date | None
+    reason: str | None
+    swap_applied: bool
+
+
+# DD.MM.YYYY shape; used to detect the Vendi↔Datelindja swap case.
+_DOB_SHAPE = re.compile(r"^\d{1,2}[./\-]\d{1,2}[./\-]\d{4}$")
+# Year-only fingerprint (e.g. "2018"). Per ADR-015, orphaned with a
+# distinct reason so the doctor's post-cutover review queue separates
+# "no DOB at all" from "DOB approximate".
+_YEAR_ONLY = re.compile(r"^\d{4}$")
+
+
 def import_patients(
     reader: AbstractReader,
     db: Database | None,
@@ -78,10 +103,10 @@ def import_patients(
     orphans_writer: JsonlWriter,
 ) -> PatientImportReport:
     report = PatientImportReport()
-    report.source_rows = reader.count_rows(PACIENTET_TABLE)
-    logger.info("patient_import.start", extra={"source_rows": report.source_rows, "dry_run": dry_run})
+    logger.info("patient_import.start", extra={"dry_run": dry_run})
 
     for row in reader.iter_table(PACIENTET_TABLE):
+        report.source_rows += 1
         legacy_id = _coerce_legacy_id(row.get(COL_ID))
         if legacy_id is None:
             report.skipped_orphan += 1
@@ -106,6 +131,7 @@ def import_patients(
     logger.info(
         "patient_import.done",
         extra={
+            "source_rows": report.source_rows,
             "imported": report.imported,
             "skipped_orphan": report.skipped_orphan,
             "parse_warnings": report.parse_warnings,
@@ -138,6 +164,53 @@ def _record_warning(
     writer.write({"legacy_id": legacy_id, "code": code, "value": value})
 
 
+def _classify_dob(raw_dob: Any, raw_vendi: Any) -> _DobOutcome:
+    """Map a (Datelindja, Vendi) pair to a parsed DOB + reason code.
+
+    Three orphan-reason codes are emitted instead of the original
+    catch-all `dob_unparseable` (ADR-015):
+
+      `dob_missing`     — Datelindja absent / blank and Vendi can't
+                          rescue the row.
+      `year_only_dob`   — Datelindja is exactly four digits ("2018").
+                          We refuse to import: pediatric charts need
+                          month + day for growth charts, dosing, and
+                          milestones.
+      `dob_unparseable` — anything else parse_dob can't handle (typos
+                          like "31.09.2022", "08..02.2023", Albanian
+                          age strings "21 vjeq").
+
+    The Vendi↔Datelindja swap detection rescues the few rows where
+    the doctor typed the DOB into the city field and vice versa.
+    Detection rule (conservative): Vendi matches DD.MM.YYYY shape AND
+    parses as a valid date. When that fires, the parsed date wins and
+    `swap_applied=True` so the caller swaps `place_of_birth` too.
+    """
+    raw_dob_str = str(raw_dob).strip() if raw_dob is not None else ""
+    swap_candidate = None
+    if isinstance(raw_vendi, str):
+        vendi_stripped = raw_vendi.strip()
+        if _DOB_SHAPE.match(vendi_stripped):
+            swap_candidate = parse_dob(vendi_stripped)
+
+    if raw_dob_str:
+        if _YEAR_ONLY.match(raw_dob_str):
+            return _DobOutcome(parsed=None, reason="year_only_dob", swap_applied=False)
+        parsed = parse_dob(raw_dob_str)
+        if parsed is not None:
+            return _DobOutcome(parsed=parsed, reason=None, swap_applied=False)
+        # Datelindja exists but doesn't parse. If Vendi looks like a
+        # date AND Datelindja looks like a non-date string, swap.
+        if swap_candidate is not None and not _DOB_SHAPE.match(raw_dob_str):
+            return _DobOutcome(parsed=swap_candidate, reason=None, swap_applied=True)
+        return _DobOutcome(parsed=None, reason="dob_unparseable", swap_applied=False)
+
+    # Datelindja is blank/missing. Vendi may still rescue.
+    if swap_candidate is not None:
+        return _DobOutcome(parsed=swap_candidate, reason=None, swap_applied=True)
+    return _DobOutcome(parsed=None, reason="dob_missing", swap_applied=False)
+
+
 def _parse_row(
     row: dict[str, Any],
     *,
@@ -156,16 +229,33 @@ def _parse_row(
         )
         return _ParseFailure("name_unparseable")
 
-    dob = parse_dob(row.get(COL_DOB))
-    if dob is None:
+    dob_outcome = _classify_dob(row.get(COL_DOB), row.get(COL_PLACE))
+    if dob_outcome.parsed is None:
+        assert dob_outcome.reason is not None
         _record_warning(
             report,
             warnings_writer,
             legacy_id=legacy_id,
-            code="dob_unparseable",
+            code=dob_outcome.reason,
             value=row.get(COL_DOB),
         )
-        return _ParseFailure("dob_unparseable")
+        return _ParseFailure(dob_outcome.reason)
+
+    if dob_outcome.swap_applied:
+        # Datelindja held the city name and Vendi held the DOB. Use
+        # the (now correctly-typed) date and pull place_of_birth from
+        # what was sitting in the Datelindja field.
+        _record_warning(
+            report,
+            warnings_writer,
+            legacy_id=legacy_id,
+            code="field_swap_recovered",
+            value=row.get(COL_DOB),
+        )
+        place_text = clean_text(row.get(COL_DOB))
+    else:
+        place_text = clean_text(row.get(COL_PLACE))
+    dob = dob_outcome.parsed
 
     birth_weight_raw = row.get(COL_BIRTH_WEIGHT)
     birth_weight = parse_int_grams(birth_weight_raw)
@@ -207,7 +297,7 @@ def _parse_row(
         first_name=name.first_name,
         last_name=name.last_name,
         date_of_birth=dob,
-        place_of_birth=clean_text(row.get(COL_PLACE)),
+        place_of_birth=place_text,
         birth_weight_g=birth_weight,
         birth_head_circumference_cm=birth_head,
         birth_length_cm=birth_length,

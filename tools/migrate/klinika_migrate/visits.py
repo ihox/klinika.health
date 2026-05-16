@@ -87,13 +87,18 @@ class _ParseFailure:
 def run_preflight_checks(reader: AbstractReader, logger: logging.Logger) -> None:
     """Verify the source columns match ADR-012 before we touch anything.
 
-    Reads the columns once (cheap on Access) and tallies distinct
-    values via Python. Streaming rather than `SELECT DISTINCT …` so
-    the same code path works for stubbed readers in tests.
+    Single full pass over Vizitat tallies three things at once: total
+    row count, distinct `Tjera` values (expected to be a payment-code
+    alphabet), and distinct `x` values (expected to be ~5k-11k patient
+    names). Doing it inline rather than as `SELECT DISTINCT …` keeps
+    the same code path working for stubbed readers in tests, and the
+    cost is the same iteration we'd do anyway.
     """
     payment_values: set[Any] = set()
     patient_values: set[Any] = set()
+    total_rows = 0
     for row in reader.iter_table(VIZITAT_TABLE):
+        total_rows += 1
         payment_values.add(row.get(COL_PAYMENT))
         patient_values.add(row.get(COL_PATIENT))
 
@@ -116,6 +121,7 @@ def run_preflight_checks(reader: AbstractReader, logger: logging.Logger) -> None
     logger.info(
         "visit_preflight.ok",
         extra={
+            "source_rows": total_rows,
             "payment_codes_distinct": len(payment_values),
             "patient_names_distinct": n_patients,
         },
@@ -135,17 +141,16 @@ def import_visits(
     orphans_writer: JsonlWriter,
 ) -> VisitImportReport:
     report = VisitImportReport()
-    report.source_rows = reader.count_rows(VIZITAT_TABLE)
     logger.info(
         "visit_import.start",
         extra={
-            "source_rows": report.source_rows,
             "dry_run": dry_run,
             "patient_lookup_size": len(patient_lookup),
         },
     )
 
     for row in reader.iter_table(VIZITAT_TABLE):
+        report.source_rows += 1
         legacy_id = _coerce_legacy_id(row.get(COL_ID))
         if legacy_id is None:
             report.skipped_orphan += 1
@@ -173,6 +178,7 @@ def import_visits(
     logger.info(
         "visit_import.done",
         extra={
+            "source_rows": report.source_rows,
             "imported": report.imported,
             "skipped_orphan": report.skipped_orphan,
             "parse_warnings": report.parse_warnings,

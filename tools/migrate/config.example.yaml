@@ -3,11 +3,12 @@
 
 source:
   # Absolute path to the .accdb. Never commit this file.
+  #
+  # The tool reads the file by subprocessing `mdb-json` and
+  # `mdb-count` from mdbtools 1.0+ (ADR-014). Install the binaries:
+  #   macOS:        brew install mdbtools
+  #   Ubuntu 24.04: apt install mdbtools
   path: ~/PEDIATRIA.accdb
-  # Name of the ODBC driver as registered in odbcinst.ini.
-  # macOS (Homebrew):   MDBTools  -> /opt/homebrew/lib/libmdbodbc.so
-  # Ubuntu 24.04:       MDBTools  -> /usr/lib/x86_64-linux-gnu/libmdbodbc.so.1
-  odbc_driver: MDBTools
 
 target:
   # Postgres DSN. Must connect as a role GRANTed platform_admin_role

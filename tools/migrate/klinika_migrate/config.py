@@ -23,7 +23,6 @@ _ENV_REF = re.compile(r"\$\{([A-Z_][A-Z0-9_]*)\}")
 @dataclass(frozen=True)
 class SourceConfig:
     path: Path
-    odbc_driver: str
 
 
 @dataclass(frozen=True)
@@ -86,7 +85,6 @@ def load_config(path: Path) -> Config:
     return Config(
         source=SourceConfig(
             path=source_path,
-            odbc_driver=str(src.get("odbc_driver", "MDBTools")),
         ),
         target=TargetConfig(
             dsn=str(tgt.get("dsn") or ""),

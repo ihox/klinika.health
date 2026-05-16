@@ -31,6 +31,12 @@ if TYPE_CHECKING:
 
 ORPHAN_RATE_THRESHOLD_PCT = 2.0
 
+# Orphan reason codes that count as "explicitly intended to be
+# skipped" rather than "the tool failed to parse a parseable row".
+# When the high orphan rate is dominated by these, the verdict does
+# not auto-FAIL (ADR-015) — they're a policy choice, not a defect.
+_EXPECTED_ORPHAN_REASONS = frozenset({"year_only_dob", "dob_missing"})
+
 
 @dataclass(frozen=True)
 class PhaseReconciliation:
@@ -152,9 +158,22 @@ def _verdict(
                 "(pre-existing data or external writes)"
             )
         if phase.orphan_rate_pct > ORPHAN_RATE_THRESHOLD_PCT:
-            reasons.append(
-                f"{label}: orphan rate {phase.orphan_rate_pct}% exceeds {ORPHAN_RATE_THRESHOLD_PCT}% threshold"
+            expected = sum(
+                phase.orphans_by_reason.get(code, 0) for code in _EXPECTED_ORPHAN_REASONS
             )
+            total_orphans = sum(phase.orphans_by_reason.values())
+            unexpected = max(0, total_orphans - expected)
+            if phase.source_rows > 0:
+                unexpected_pct = round(100.0 * unexpected / phase.source_rows, 3)
+            else:
+                unexpected_pct = 0.0
+            if unexpected_pct > ORPHAN_RATE_THRESHOLD_PCT:
+                reasons.append(
+                    f"{label}: unexpected-orphan rate {unexpected_pct}% exceeds "
+                    f"{ORPHAN_RATE_THRESHOLD_PCT}% threshold (total orphan rate "
+                    f"{phase.orphan_rate_pct}% includes {expected} expected skips: "
+                    f"{', '.join(sorted(_EXPECTED_ORPHAN_REASONS))})"
+                )
 
     return ("PASS" if not reasons else "FAIL", reasons)
 

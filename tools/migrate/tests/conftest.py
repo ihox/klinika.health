@@ -21,15 +21,12 @@ from klinika_migrate.reports import JsonlWriter
 class StubReader(AbstractReader):
     """In-memory AccessReader for tests.
 
-    Holds a {table_name: [rows]} dict and exposes the same `count_rows`
-    / `iter_table` surface real `AccessReader` does.
+    Holds a {table_name: [rows]} dict and exposes the same
+    `iter_table` surface the real `AccessReader` does.
     """
 
     def __init__(self, tables: dict[str, list[dict[str, Any]]]) -> None:
         self._tables = tables
-
-    def count_rows(self, table: str) -> int:
-        return len(self._tables.get(table, []))
 
     def iter_table(self, table: str) -> Iterator[dict[str, Any]]:
         for row in self._tables.get(table, []):
