@@ -312,8 +312,8 @@ model Patient {
 ///   completed    visit done. Every migrated legacy visit row lands
 ///                here; doctor-driven new rows are born 'in_progress'
 ///                and reach 'completed' via "Përfundo vizitën".
-///   no_show      patient never arrived
-///   cancelled    booking cancelled before patient arrived
+///   no_show      patient never arrived (subsumes pre-arrival
+///                cancellations — see 20260521120000)
 ///
 /// Scheduling fields (`scheduled_for`, `duration_minutes`) are populated
 /// when the receptionist books; they stay NULL for walk-ins (Phase 2
