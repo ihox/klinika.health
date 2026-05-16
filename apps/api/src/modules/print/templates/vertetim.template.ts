@@ -6,26 +6,30 @@
 //     label "Nr. vërtetimi" above the VM-YYYY-NNNN number).
 //   * Title "VËRTETIM" sits near the top, immediately under the
 //     letterhead — never at the bottom.
-//   * Body order: subject identification block, attestation prose,
-//     diagnosis card (latinized text only, no ICD code), period
-//     card with big day count on the right.
+//   * Body order: attestation prose (with patient name + DOB +
+//     place bolded inline), diagnosis card (latinized text only,
+//     no ICD code), centered period sentence.
 //   * Attestation prose uses "në shkollë" only (the "/ kopsht"
 //     pairing from v1 is retired — kindergartens use a different
 //     receipt form).
 //   * Footer: issue block left, signature right; no stamp slot.
 //
+// Fits a single A5 page. Earlier passes layered a "Subject
+// identification block" + a structured period card with a policy
+// note above the footer; both pushed content past the page break
+// and were retired in favor of the inline attestation prose the
+// design calls for.
+//
 // Field visibility (canonical):
-//   master data — name + DOB + place + sex + age + clinic ID
-//   diagnosis — frozen `diagnosisSnapshot` (with structured fallback)
-//   period — absence_from / absence_to
-//   excluded: vitals, allergies, prescription, exams, follow-ups.
+//   master data — name + DOB + place rendered inline within prose
+//   diagnosis   — frozen `diagnosisSnapshot` (with structured fallback)
+//   period      — absence_from / absence_to + duration in days
+//   excluded    — vitals, allergies, prescription, exams, follow-ups.
 
 import {
-  ageLabelLong,
   escapeHtml,
   formatIsoDateDdMmYyyy,
   hasText,
-  sexLabel,
 } from '../print.format';
 import type { VertetimTemplateData } from '../print.dto';
 import {
@@ -44,10 +48,9 @@ function renderBody(data: VertetimTemplateData): string {
     <article class="paper">
       ${renderLetterhead(data)}
       <h1 class="cert-title">VËRTETIM</h1>
-      ${renderSubjectBlock(data)}
       ${renderAttestationProse(data)}
       ${renderDiagnosisCard(data)}
-      ${renderPeriodCard(data)}
+      ${renderPeriodSentence(data)}
       <footer class="doc-footer">
         ${renderIssueBlock(data.signature)}
         ${renderSignatureColumn(data.signature)}
@@ -78,44 +81,6 @@ function renderLetterhead(data: VertetimTemplateData): string {
         <span class="num">${escapeHtml(data.certificateNumber)}</span>
       </div>
     </header>
-  `;
-}
-
-function renderSubjectBlock(data: VertetimTemplateData): string {
-  const { patient } = data;
-  const dobIso = patient.dateOfBirth;
-  const ageStr = dobIso
-    ? ageLabelLong(dobIso, data.issuedAtIso.slice(0, 10))
-    : '';
-  const sexStr = sexLabel(data.patientSex);
-  const dobLine = dobIso
-    ? escapeHtml(formatIsoDateDdMmYyyy(dobIso))
-    : '—';
-  const placeLine = patient.placeOfBirth
-    ? escapeHtml(patient.placeOfBirth)
-    : '—';
-  const sexAgeParts: string[] = [];
-  if (sexStr) sexAgeParts.push(sexStr.charAt(0).toUpperCase() + sexStr.slice(1));
-  if (ageStr) sexAgeParts.push(ageStr);
-  const sexAge = sexAgeParts.length > 0 ? sexAgeParts.join(' · ') : '—';
-  return `
-    <div class="subject-block">
-      <div class="subject-name">${escapeHtml(patient.fullName)}</div>
-      <div class="subject-grid">
-        <div class="subject-cell">
-          <div class="l">Datëlindja · Vendi</div>
-          <div class="v">${dobLine} · ${placeLine}</div>
-        </div>
-        <div class="subject-cell">
-          <div class="l">Gjinia · Mosha</div>
-          <div class="v">${escapeHtml(sexAge)}</div>
-        </div>
-        <div class="subject-cell">
-          <div class="l">ID në klinikë</div>
-          <div class="v">${escapeHtml(data.patientIdLabel)}</div>
-        </div>
-      </div>
-    </div>
   `;
 }
 
@@ -164,23 +129,17 @@ function stripIcdCodeFromSnapshot(snapshot: string): string {
   return m && m[1] ? m[1].trim() : snapshot.trim();
 }
 
-function renderPeriodCard(data: VertetimTemplateData): string {
+function renderPeriodSentence(data: VertetimTemplateData): string {
+  // Simple centered prose. Date range + day count bold inline. No
+  // structured card, no policy footnote — those were retired
+  // because they pushed the cert past one A5 page. CLAUDE.md §1.5:
+  // Albanian only. "ditë" used for both singular and plural
+  // (Albanian doesn't decline the noun here).
   const dateRange = `${formatIsoDateDdMmYyyy(data.absenceFrom)} – ${formatIsoDateDdMmYyyy(data.absenceTo)}`;
-  // CLAUDE.md §1.5: Albanian only. "ditë" used for both 1-day and
-  // multi-day periods (Albanian doesn't decline the noun here).
   return `
-    <div class="cert-period-card">
-      <div class="period-left">
-        <div class="period-label">Periudha e arsyetuar</div>
-        <div class="period-range">${escapeHtml(dateRange)}</div>
-        <div class="period-note">
-          Kthim në aktivitete normale i lejohet vetëm pas vlerësimit klinik.
-        </div>
-      </div>
-      <div class="period-right">
-        <div class="period-days">${data.durationDays}</div>
-        <div class="period-unit">ditë</div>
-      </div>
+    <div class="cert-period">
+      Ky vërtetim i lëshohet për të arsyetuar mungesat<br>
+      për periudhën <strong>${escapeHtml(dateRange)}</strong> (<strong>${data.durationDays} ditë</strong>).
     </div>
   `;
 }
@@ -279,42 +238,6 @@ function vertetimStyles(): string {
     .cert-title::before { left: 0; }
     .cert-title::after { right: 0; }
 
-    /* Subject identification block — faded panel, teal left border. */
-    .subject-block {
-      background: #FAFAF9;
-      border-left: 3px solid #0F766E;
-      padding: 4mm 6mm 4mm 6mm;
-      margin-bottom: 7mm;
-      border-radius: 0 2px 2px 0;
-    }
-    .subject-name {
-      font-family: 'Inter Tight', 'Inter Display', 'Inter', sans-serif;
-      font-size: 12pt;
-      font-weight: 700;
-      color: #1c1917;
-      margin-bottom: 3mm;
-      letter-spacing: -0.005em;
-    }
-    .subject-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 3mm 6mm;
-    }
-    .subject-cell .l {
-      font-size: 6.3pt;
-      font-weight: 500;
-      letter-spacing: 0.06em;
-      color: #78716C;
-      text-transform: uppercase;
-      margin-bottom: 0.5mm;
-    }
-    .subject-cell .v {
-      font-size: 9pt;
-      color: #1c1917;
-      font-variant-numeric: tabular-nums;
-      font-weight: 500;
-    }
-
     .cert-prose {
       font-size: 11pt;
       line-height: 1.75;
@@ -351,61 +274,19 @@ function vertetimStyles(): string {
       color: #1c1917;
     }
 
-    /* Period card — 2-col: label/dates left, big day count right. */
-    .cert-period-card {
-      display: grid;
-      grid-template-columns: 1fr auto;
-      gap: 8mm;
-      align-items: center;
-      padding: 5mm 6mm;
-      border: 1px solid #D6D3D1;
-      border-radius: 3px;
-      background: white;
-    }
-    .period-left .period-label {
-      font-size: 7pt;
-      color: #0F766E;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.1em;
-      margin-bottom: 1.5mm;
-    }
-    .period-left .period-range {
-      font-family: 'JetBrains Mono', ui-monospace, monospace;
-      font-size: 11pt;
-      font-weight: 700;
-      color: #1c1917;
-      letter-spacing: 0.01em;
-      font-variant-numeric: tabular-nums;
-      margin-bottom: 2mm;
-    }
-    .period-left .period-note {
-      font-size: 8pt;
-      color: #57534E;
-      line-height: 1.45;
-      font-style: italic;
-    }
-    .period-right {
+    /* Period sentence — simple centered prose with date range and
+       day count bolded inline. Replaces the older 2-col structured
+       card that pushed the cert past one A5 page. */
+    .cert-period {
       text-align: center;
-      padding-left: 6mm;
-      border-left: 1px solid #E7E5E4;
-      min-width: 24mm;
+      margin-top: 4mm;
+      font-size: 10.5pt;
+      line-height: 1.6;
+      color: #1c1917;
     }
-    .period-right .period-days {
-      font-family: 'Inter Tight', 'Inter Display', 'Inter', sans-serif;
-      font-size: 24pt;
-      font-weight: 700;
-      color: #0F766E;
-      line-height: 1;
-      font-variant-numeric: tabular-nums;
-    }
-    .period-right .period-unit {
-      font-size: 8pt;
-      color: #57534E;
-      text-transform: uppercase;
-      letter-spacing: 0.1em;
-      margin-top: 1.5mm;
+    .cert-period strong {
       font-weight: 600;
+      font-variant-numeric: tabular-nums;
     }
 
     .doc-footer { padding-top: 10mm; }

@@ -288,17 +288,23 @@ describe('vërtetim template', () => {
     expect(titleAt).toBeLessThan(footerAt);
   });
 
-  it('renders the subject identification block (name, DOB·place, sex·age, ID)', () => {
+  it('does NOT render a separate subject identification block', () => {
+    // The patient is identified entirely within the attestation
+    // prose now — the subject-block panel was pushing the cert past
+    // one A5 page.
     const html = renderVertetim(VERTETIM_BASE);
-    expect(html).toMatch(/class="subject-block"/);
-    expect(html).toContain('Era Krasniqi');
-    expect(html).toContain('Datëlindja · Vendi');
-    expect(html).toContain('03.08.2023');
-    expect(html).toContain('Prizren');
-    expect(html).toContain('Gjinia · Mosha');
-    expect(html).toContain('Vajzë');
-    expect(html).toContain('ID në klinikë');
-    expect(html).toContain('PT-15626');
+    expect(html).not.toMatch(/class="subject-block"/);
+    expect(html).not.toMatch(/class="subject-grid"/);
+    expect(html).not.toContain('Datëlindja · Vendi');
+    expect(html).not.toContain('Gjinia · Mosha');
+    expect(html).not.toContain('ID në klinikë');
+  });
+
+  it('attestation prose still carries patient name + DOB + place inline (bold)', () => {
+    const html = renderVertetim(VERTETIM_BASE);
+    expect(html).toMatch(/<strong>Era Krasniqi<\/strong>/);
+    expect(html).toMatch(/<strong>03\.08\.2023<\/strong>/);
+    expect(html).toMatch(/<strong>Prizren<\/strong>/);
   });
 
   it('attestation prose uses "në shkollë" only (NOT "kopsht")', () => {
@@ -327,15 +333,21 @@ describe('vërtetim template', () => {
     expect(html).not.toContain('J03.9 — Tonsillopharyngitis acuta');
   });
 
-  it('renders the period card with date range + big day count + policy note', () => {
+  it('renders the period as a simple centered prose sentence (no card)', () => {
     const html = renderVertetim(VERTETIM_BASE);
-    expect(html).toMatch(/class="cert-period-card"/);
-    expect(html).toContain('Periudha e arsyetuar');
-    expect(html).toContain('14.05.2026 – 18.05.2026');
-    // Day count rendered large in the right column + "ditë" unit.
-    expect(html).toMatch(/<div class="period-days">5<\/div>/);
-    expect(html).toMatch(/<div class="period-unit">ditë<\/div>/);
-    expect(html).toContain('Kthim në aktivitete normale');
+    // Centered .cert-period prose with date range + day count bold
+    // inline. The structured 2-col card is gone (it overflowed to
+    // a second A5 page).
+    expect(html).toMatch(/class="cert-period"/);
+    expect(html).toContain('Ky vërtetim i lëshohet për të arsyetuar mungesat');
+    expect(html).toMatch(/<strong>14\.05\.2026 – 18\.05\.2026<\/strong>/);
+    expect(html).toMatch(/<strong>5 ditë<\/strong>/);
+    expect(html).not.toMatch(/class="cert-period-card"/);
+    expect(html).not.toMatch(/class="period-days"/);
+    expect(html).not.toContain('Periudha e arsyetuar');
+    // Policy note dropped — not in the approved design and
+    // contributed to the page overflow.
+    expect(html).not.toContain('Kthim në aktivitete normale');
   });
 
   it('NEVER renders vitals, payment code, prescription, allergies, exams', () => {
