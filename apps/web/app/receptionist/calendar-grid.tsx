@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import type { ReactElement } from 'react';
 import {
   DndContext,
@@ -18,7 +18,6 @@ import { CSS } from '@dnd-kit/utilities';
 import { cn } from '@/lib/utils';
 import {
   formatDayHeader,
-  formatDob,
   minutesToTime,
   timeToMinutes,
   toLocalParts,
@@ -644,6 +643,25 @@ function DayColumnBody({
     return null;
   };
 
+  // Does an existing walk-in occupy the right-lane row at `y`? Used
+  // to suppress the "+ Pa termin" suggest when a walk-in card is
+  // already sitting in that slot — the suggest should never cover an
+  // actual card. Out-of-range (pinned) walk-ins are ignored: they
+  // render at the column edges, not at the row of any appt the
+  // receptionist would be pairing against.
+  const walkInOccupiesY = (yPos: number): boolean => {
+    for (const w of walkIns) {
+      const iso = w.arrivedAt ?? w.createdAt;
+      if (!iso) continue;
+      const sMin = timeToMinutes(toLocalParts(new Date(iso)).time);
+      if (sMin < gridStartMin || sMin >= gridEndMin) continue;
+      const top = (sMin - gridStartMin) * PX_PER_MIN;
+      const height = walkInHeightPx(w.durationMinutes);
+      if (yPos >= top && yPos <= top + height) return true;
+    }
+    return false;
+  };
+
   // Overlap check: would a default-duration booking starting at
   // `targetMin` collide with any existing scheduled visit? Walk-ins
   // don't occupy time slots so they're ignored.
@@ -677,24 +695,34 @@ function DayColumnBody({
     if (!col.open) return;
     const rect = event.currentTarget.getBoundingClientRect();
     const y = event.clientY - rect.top;
+    const x = event.clientX - rect.left;
 
-    // Row check first — the receptionist's cursor over an appt (or its
-    // row in the right lane) means "walk-in suggest" wins, regardless
-    // of whether the 5-min snap would land cleanly.
-    const apptAtRow = findPairableApptAtY(y);
-    if (apptAtRow && apptAtRow.scheduledFor != null && apptAtRow.durationMinutes != null) {
-      const sMin = timeToMinutes(toLocalParts(new Date(apptAtRow.scheduledFor)).time);
-      const top = (sMin - gridStartMin) * PX_PER_MIN;
-      const height = Math.max(20, apptAtRow.durationMinutes * PX_PER_MIN);
-      const time = minutesToTime(sMin);
+    // The "+ Pa termin" suggest fires only on two-lane days, only when
+    // the cursor sits in the right-lane half, only at a row with a
+    // pairable scheduled appt, and only when no walk-in already
+    // occupies that row. Left-lane hover is reserved for the card's
+    // inline expand-on-hover affordance — no cross-lane effect.
+    if (isTwoLane && x > rect.width / 2) {
+      const apptAtRow = findPairableApptAtY(y);
       if (
-        !walkinSuggest ||
-        walkinSuggest.pairedVisit.id !== apptAtRow.id
+        apptAtRow &&
+        apptAtRow.scheduledFor != null &&
+        apptAtRow.durationMinutes != null &&
+        !walkInOccupiesY(y)
       ) {
-        setWalkinSuggest({ pairedVisit: apptAtRow, top, height, time });
+        const sMin = timeToMinutes(toLocalParts(new Date(apptAtRow.scheduledFor)).time);
+        const top = (sMin - gridStartMin) * PX_PER_MIN;
+        const height = Math.max(20, apptAtRow.durationMinutes * PX_PER_MIN);
+        const time = minutesToTime(sMin);
+        if (
+          !walkinSuggest ||
+          walkinSuggest.pairedVisit.id !== apptAtRow.id
+        ) {
+          setWalkinSuggest({ pairedVisit: apptAtRow, top, height, time });
+        }
+        if (hoverSlot) setHoverSlot(null);
+        return;
       }
-      if (hoverSlot) setHoverSlot(null);
-      return;
     }
 
     if (walkinSuggest) setWalkinSuggest(null);
@@ -986,44 +1014,6 @@ function DayColumnBody({
   );
 }
 
-// Hover-with-delay: cards stay name-only until the cursor sits for
-// ~200ms, then they expand right to reveal the full name + time.
-// Matching the prototype's "meta visible on hover" rule plus a small
-// guard against flicker when the receptionist sweeps across cards.
-const CARD_HOVER_DELAY_MS = 200;
-
-function useDelayedHover(delayMs: number): {
-  hovered: boolean;
-  onMouseEnter: () => void;
-  onMouseLeave: () => void;
-} {
-  const [hovered, setHovered] = useState(false);
-  const timerRef = useRef<number | null>(null);
-
-  useEffect(() => {
-    return () => {
-      if (timerRef.current != null) window.clearTimeout(timerRef.current);
-    };
-  }, []);
-
-  const onMouseEnter = (): void => {
-    if (timerRef.current != null) window.clearTimeout(timerRef.current);
-    timerRef.current = window.setTimeout(() => {
-      setHovered(true);
-      timerRef.current = null;
-    }, delayMs);
-  };
-  const onMouseLeave = (): void => {
-    if (timerRef.current != null) {
-      window.clearTimeout(timerRef.current);
-      timerRef.current = null;
-    }
-    setHovered(false);
-  };
-
-  return { hovered, onMouseEnter, onMouseLeave };
-}
-
 interface ScheduledCardProps {
   entry: CalendarEntry;
   gridStartMin: number;
@@ -1071,9 +1061,6 @@ function ScheduledCard({
 
   const isNoShow = entry.status === 'no_show';
   const isCompleted = entry.status === 'completed';
-  const { hovered, onMouseEnter, onMouseLeave } = useDelayedHover(
-    CARD_HOVER_DELAY_MS,
-  );
 
   // Drag-and-drop reschedule: only the `scheduled` status is movable.
   // arrived/in-progress/completed/no-show cards stay anchored (you
@@ -1176,18 +1163,16 @@ function ScheduledCard({
             }
           : undefined
       }
-      onMouseEnter={onMouseEnter}
-      onMouseLeave={onMouseLeave}
-      title={
-        locked
-          ? LOCKED_HOVER_MESSAGE
-          : `${entry.patient.firstName} ${entry.patient.lastName} · ${formatDob(entry.patient.dateOfBirth)} · ${STATUS_LABEL[entry.status]}${pinned ? ` · jashtë orarit (${localParts.time})` : ''}`
-      }
+      // Native browser `title` is reserved for the locked-card
+      // explanation. Non-locked cards rely on the inline expand-on-hover
+      // affordance (.appt-card .appt-time) — no native tooltip, no DOB,
+      // no status text duplication of the card colour.
+      title={locked ? LOCKED_HOVER_MESSAGE : undefined}
       data-locked={locked || undefined}
       aria-disabled={locked || undefined}
       className={cn(
-        'absolute left-1.5 px-2 py-0.5 rounded-sm text-left border border-l-[3px] shadow-xs transition hover:-translate-y-px hover:shadow-sm flex items-center overflow-hidden',
-        !leftLaneOnly && 'right-1.5',
+        'appt-card absolute left-1.5 px-2 py-0.5 rounded-sm text-left border border-l-[3px] shadow-xs hover:shadow-sm flex items-center overflow-hidden',
+        leftLaneOnly ? 'right-[calc(50%+2px)]' : 'right-1.5',
         STATUS_CARD_CLASSES[entry.status],
         pinned && 'border-dashed',
         isDraggable && !isDragging && 'cursor-grab',
@@ -1200,7 +1185,6 @@ function ScheduledCard({
       style={{
         ...(pinnedStyle ?? { top: inlineTop, height: Math.max(20, inlineHeight) }),
         borderLeftColor: STATUS_LEFT_ACCENT[entry.status],
-        ...(leftLaneOnly ? { right: 'calc(50% + 2px)' } : null),
         zIndex: pinned ? 6 : 3,
         ...(pinned ? { opacity: 0.88 } : {}),
         // Past-day fade — pipeline statuses dim slightly so the day's
@@ -1214,9 +1198,10 @@ function ScheduledCard({
       }}
       aria-label={`${entry.patient.firstName} ${entry.patient.lastName}, ${localParts.time}, ${STATUS_LABEL[entry.status]}${pinned ? ', jashtë orarit' : ''}`}
     >
-      {/* Strict minimal content — name only. Card bg conveys status;
-          grid position conveys time. Full name + scheduled time are
-          revealed via the hover tooltip overlay below. */}
+      {/* Default reads as the patient name only. On hover/focus the
+          card expands and the sibling `.appt-time` reveals the time
+          inline so the card reads as "Name · HH:MM". CSS rules live in
+          apps/web/app/globals.css under `.appt-card`. */}
       <span
         className={cn(
           'flex-1 min-w-0 truncate text-[12px] font-semibold leading-[1.2] tracking-[-0.005em]',
@@ -1233,46 +1218,10 @@ function ScheduledCard({
         ) : null}
         {entry.patient.firstName} {entry.patient.lastName}
       </span>
-      {hovered && !isDragging && !locked ? (
-        <ApptTooltip
-          name={`${entry.patient.firstName} ${entry.patient.lastName}`}
-          time={localParts.time}
-        />
-      ) : null}
+      <span className="appt-time" aria-hidden>
+        {localParts.time}
+      </span>
     </button>
-  );
-}
-
-/**
- * Hover/focus overlay shown above each calendar card. Solid white
- * background, no glassmorphism. Content is strictly name + scheduled
- * time per design-reference/prototype/receptionist.html `.appt-tip`.
- * Pointer-events: none so the tooltip never intercepts the click that
- * opens the action menu on the card itself.
- */
-function ApptTooltip({
-  name,
-  time,
-}: {
-  name: string;
-  time: string;
-}): ReactElement {
-  return (
-    <div
-      role="tooltip"
-      className={cn(
-        'pointer-events-none absolute left-1/2 z-30 -translate-x-1/2 bottom-[calc(100%+6px)]',
-        'flex flex-col gap-0.5 whitespace-nowrap min-w-[140px]',
-        'rounded-md border border-line bg-surface-elevated px-3 py-2 shadow-modal',
-      )}
-    >
-      <span className="font-display text-[13px] font-semibold tracking-[-0.005em] text-ink-strong">
-        {name}
-      </span>
-      <span className="font-mono text-[11.5px] font-medium tabular-nums tracking-[0.01em] text-ink-muted">
-        {time}
-      </span>
-    </div>
   );
 }
 
@@ -1320,9 +1269,6 @@ function WalkInCard({
 
   const isNoShow = entry.status === 'no_show';
   const isCompleted = entry.status === 'completed';
-  const { hovered, onMouseEnter, onMouseLeave } = useDelayedHover(
-    CARD_HOVER_DELAY_MS,
-  );
 
   const pinnedStyle = pinned
     ? pinned.kind === 'before'
@@ -1354,13 +1300,10 @@ function WalkInCard({
             }
           : undefined
       }
-      onMouseEnter={onMouseEnter}
-      onMouseLeave={onMouseLeave}
-      title={
-        locked
-          ? LOCKED_HOVER_MESSAGE
-          : `${entry.patient.firstName} ${entry.patient.lastName} · pa termin · erdhi ${parts.time} · ${STATUS_LABEL[entry.status]}${pinned ? ' · jashtë orarit' : ''}`
-      }
+      // Native browser `title` is reserved for the locked-card
+      // explanation; non-locked walk-ins surface their time via the
+      // inline expand-on-hover affordance instead.
+      title={locked ? LOCKED_HOVER_MESSAGE : undefined}
       data-locked={locked || undefined}
       aria-disabled={locked || undefined}
       className={cn(
@@ -1368,15 +1311,13 @@ function WalkInCard({
         // cards. The DASHED left accent (set inline below) is the only
         // visual identifier that a card is a walk-in — strict minimal
         // body, no glyph, no badge.
-        'absolute px-2 py-0.5 rounded-sm text-left border shadow-xs transition hover:-translate-y-px hover:shadow-sm flex items-center overflow-hidden',
+        'appt-card appt-card--walkin absolute left-[calc(50%+2px)] right-1.5 px-2 py-0.5 rounded-sm text-left border shadow-xs hover:shadow-sm flex items-center overflow-hidden',
         STATUS_CARD_CLASSES[entry.status],
         pinned && 'border-dashed',
         locked && 'cursor-default',
       )}
       style={{
         ...(pinnedStyle ?? { top: inlineTop, height }),
-        left: 'calc(50% + 2px)',
-        right: 6,
         // Dashed left accent identifies the card as a walk-in. Color
         // tracks the canonical status family.
         borderLeftStyle: 'dashed',
@@ -1406,12 +1347,9 @@ function WalkInCard({
         ) : null}
         {entry.patient.firstName} {entry.patient.lastName}
       </span>
-      {hovered && !locked ? (
-        <ApptTooltip
-          name={`${entry.patient.firstName} ${entry.patient.lastName}`}
-          time={parts.time}
-        />
-      ) : null}
+      <span className="appt-time" aria-hidden>
+        {parts.time}
+      </span>
     </button>
   );
 }

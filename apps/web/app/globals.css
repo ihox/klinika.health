@@ -113,3 +113,90 @@
 .animate-status-in-progress {
   animation: status-in-progress-pulse 2.4s ease-in-out infinite;
 }
+
+/* Calendar appointment card — inline expand-on-hover affordance.
+   Mirrors design-reference/prototype/receptionist.html `.appt`. Default
+   state shows the patient name only and fits the column. On hover/focus
+   the card sizes to its content (up to 280px), z-index lifts above
+   neighbours, and the `.appt-time` child fades in inline so the card
+   reads as "Egzona Vata · 14:00". */
+.appt-card {
+  transition:
+    transform 120ms ease,
+    box-shadow 160ms ease,
+    width 180ms ease,
+    max-width 180ms ease,
+    left 180ms ease,
+    right 180ms ease;
+}
+
+.appt-card .appt-time {
+  flex: 0 0 auto;
+  font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace;
+  font-size: 11px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: inherit;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  opacity: 0;
+  max-width: 0;
+  overflow: hidden;
+  margin-left: 0;
+  transition:
+    opacity 80ms ease,
+    max-width 180ms ease,
+    margin-left 180ms ease;
+}
+
+.appt-card .appt-time::before {
+  content: '·';
+  margin-right: 5px;
+  opacity: 0.5;
+}
+
+.appt-card:hover,
+.appt-card:focus-visible {
+  width: max-content;
+  max-width: 280px;
+  /* `!important` is required to beat the inline `style={{ zIndex: 3|6 }}`
+     set on every card in calendar-grid.tsx. Without it, the hovered
+     left-lane card stays at z:3 and gets covered by the right-lane
+     walk-in card (z:3, later in DOM order) when the expanded card
+     spills across the lane boundary. 100 is well above pinned (6) and
+     ties the drag-in-flight z (also 100), which is fine — drag uses
+     opacity 0.35 and reads visually distinct anyway. */
+  z-index: 100 !important;
+}
+
+.appt-card:hover .appt-time,
+.appt-card:focus-visible .appt-time {
+  opacity: 0.78;
+  max-width: 60px;
+  margin-left: 6px;
+  transition:
+    opacity 90ms ease 50ms,
+    max-width 180ms ease,
+    margin-left 180ms ease;
+}
+
+/* Left-lane (scheduled) cards anchor on the left; release the right
+   anchor on hover so width can grow rightward. */
+.appt-card:not(.appt-card--walkin):hover,
+.appt-card:not(.appt-card--walkin):focus-visible {
+  right: auto;
+}
+
+/* Right-lane (walk-in) cards anchor on the right; release the left
+   anchor so width can grow leftward into the booked lane. */
+.appt-card--walkin:hover,
+.appt-card--walkin:focus-visible {
+  left: auto;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .appt-card,
+  .appt-card .appt-time {
+    transition: none !important;
+  }
+}

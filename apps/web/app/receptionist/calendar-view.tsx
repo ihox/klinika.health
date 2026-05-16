@@ -801,7 +801,10 @@ export function CalendarView(): ReactElement {
         ) : null}
 
         {/* Calendar card */}
-        <section className="mt-5 overflow-hidden rounded-lg border border-line bg-surface-elevated shadow-xs">
+        {/* overflow-visible so an inline-expanded .appt-card on hover
+            can spill past its column / the section's rounded edge.
+            Mirrors design-reference/prototype/receptionist.html `.cal-card`. */}
+        <section className="mt-5 overflow-visible rounded-lg border border-line bg-surface-elevated shadow-xs">
           <div className="flex items-center justify-between border-b border-line bg-surface-elevated px-5 py-3.5">
             <div className="flex items-center gap-3">
               <WeekNavButton dir="prev" onClick={goPrevWeek} />
