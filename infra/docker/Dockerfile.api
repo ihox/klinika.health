@@ -6,10 +6,19 @@ FROM node:20.18-bookworm-slim AS dev
 
 ENV TZ=Europe/Belgrade \
     PNPM_HOME=/root/.local/share/pnpm \
-    PATH=/root/.local/share/pnpm:$PATH
+    PATH=/root/.local/share/pnpm:$PATH \
+    PUPPETEER_SKIP_DOWNLOAD=1 \
+    PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 
+# `chromium` matches the container arch automatically (aarch64 on
+# Apple Silicon hosts, amd64 on x86 hosts), unlike Puppeteer's bundled
+# Chrome which only ships x86-64 for linux64. PUPPETEER_SKIP_DOWNLOAD
+# above stops `pnpm install` from pulling the unusable bundle, and
+# PUPPETEER_EXECUTABLE_PATH points the renderer at the apt binary —
+# the renderer falls back to Puppeteer's bundled Chrome when the env
+# var is unset, so production images without it still work.
 RUN apt-get update \
- && apt-get install -y --no-install-recommends ca-certificates tzdata \
+ && apt-get install -y --no-install-recommends ca-certificates tzdata chromium \
  && ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone \
  && rm -rf /var/lib/apt/lists/* \
  && corepack enable \

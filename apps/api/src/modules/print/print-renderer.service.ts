@@ -90,20 +90,7 @@ export class PuppeteerRenderer implements PrintRenderer, OnModuleDestroy {
       concurrency: Cluster.CONCURRENCY_CONTEXT,
       maxConcurrency: DEFAULT_CONCURRENCY,
       puppeteer,
-      puppeteerOptions: {
-        headless: true,
-        args: [
-          '--no-sandbox',
-          '--disable-setuid-sandbox',
-          '--disable-dev-shm-usage',
-          '--disable-extensions',
-          '--disable-default-apps',
-          '--disable-gpu',
-          '--mute-audio',
-          '--no-first-run',
-          '--no-default-browser-check',
-        ],
-      },
+      puppeteerOptions: buildPuppeteerLaunchOptions(),
       timeout: 30_000,
     });
     cluster.task(async ({ page, data }: { page: Page; data: PuppeteerJob }) => {
@@ -153,3 +140,32 @@ export class PrintRendererProxy {
 // Ensure `Browser` is treated as used — TypeScript would otherwise
 // flag the type import as unused under noUnusedLocals.
 export type _PuppeteerBrowser = Browser;
+
+/**
+ * Build the Puppeteer launch options. Honors `PUPPETEER_EXECUTABLE_PATH`
+ * when set (Dockerfile.api sets it to `/usr/bin/chromium` so the
+ * apt-installed binary matches the container arch). When unset, the
+ * launch options omit `executablePath`, leaving Puppeteer free to
+ * fall back to its bundled Chrome — which is the production path on
+ * x86-64 Linux servers.
+ *
+ * Exported for the unit test; the renderer is the only runtime caller.
+ */
+export function buildPuppeteerLaunchOptions() {
+  const executablePath = process.env['PUPPETEER_EXECUTABLE_PATH'];
+  return {
+    headless: true,
+    ...(executablePath ? { executablePath } : {}),
+    args: [
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-dev-shm-usage',
+      '--disable-extensions',
+      '--disable-default-apps',
+      '--disable-gpu',
+      '--mute-audio',
+      '--no-first-run',
+      '--no-default-browser-check',
+    ],
+  };
+}
