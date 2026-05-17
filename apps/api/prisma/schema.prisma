@@ -287,6 +287,14 @@ model Patient {
   legacyId                 Int?        @map("legacy_id")
   legacyDisplayName        String?     @map("legacy_display_name") @db.Text
   hasNameDuplicate         Boolean     @default(false) @map("has_name_duplicate")
+  /// Original Datelindja text from the Access source, kept verbatim
+  /// when the date-of-birth couldn't be parsed and the import fell
+  /// back to the UNKNOWN_DOB_SENTINEL (1900-01-01). Holds the
+  /// year-only value ("2018"), the typo'd string ("21 vjeq"), or
+  /// the empty cell — Dr. Taulant uses it to triage the post-cutover
+  /// completion queue. NULL for any patient whose DOB parsed cleanly
+  /// at import time or who was created post-migration via the UI.
+  legacyDobRaw             String?     @map("legacy_dob_raw") @db.Text
   firstName                String      @map("first_name")
   lastName                 String      @map("last_name")
   dateOfBirth              DateTime    @map("date_of_birth") @db.Date
