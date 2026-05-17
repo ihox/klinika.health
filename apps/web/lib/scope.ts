@@ -40,39 +40,58 @@ const SUBDOMAIN_SHAPE = /^[a-z0-9][a-z0-9-]{0,40}$/;
 
 /**
  * Default production apex. Overridden per-environment via the
- * `CLINIC_HOST_SUFFIX` env var (e.g. staging uses
- * `klinika.health.ihox.net`). The Next.js middleware reads the env
- * in its module scope and passes the resolved suffix to {@link classifyHost}.
+ * `CLINIC_HOST_SUFFIX` env var (suffix mode) or
+ * `CLINIC_HOST_APEX` + `CLINIC_HOST_PREFIX` (prefix mode — staging).
+ * See the matching API-side comment on `HostResolutionConfig` in
+ * `apps/api/src/common/middleware/clinic-resolution.middleware.ts`
+ * and ADR-018 for the two-mode rationale.
  */
 const DEFAULT_HOST_SUFFIX = 'klinika.health';
 
+/** Two-mode host-resolution config. Mirrors the API-side interface. */
+export interface HostResolutionConfig {
+  /** Suffix mode apex (e.g. `klinika.health`). Falls back to the default. */
+  suffix?: string;
+  /** Prefix mode apex FQDN (e.g. `klinika-health.ihox.net`). */
+  apex?: string;
+  /** Prefix mode tenant prefix (e.g. `klinika-health-`). */
+  prefix?: string;
+}
+
+const ENV =
+  typeof process !== 'undefined' && process.env ? process.env : ({} as Record<string, string | undefined>);
+
 /**
- * Apex suffix this Next.js process is configured for. Resolved once
- * at module load — `next dev` and the standalone production server
- * both pick up `CLINIC_HOST_SUFFIX` from the runtime env. Exported
- * so tests can read it and so callers wiring up the middleware don't
- * have to re-resolve the env themselves.
+ * Module-level host resolution config — resolved once when this file
+ * is first loaded by `next dev` or the standalone production server.
+ * Both pick up the env vars from the runtime environment. Exported
+ * so callers and tests can introspect what mode this process is in.
  */
-export const CLINIC_HOST_SUFFIX =
-  (typeof process !== 'undefined' && process.env && process.env['CLINIC_HOST_SUFFIX']) ||
-  DEFAULT_HOST_SUFFIX;
+export const CLINIC_HOST_CONFIG: Required<HostResolutionConfig> = {
+  suffix: ENV['CLINIC_HOST_SUFFIX'] || DEFAULT_HOST_SUFFIX,
+  apex: ENV['CLINIC_HOST_APEX'] || '',
+  prefix: ENV['CLINIC_HOST_PREFIX'] || '',
+};
+
+/** Back-compat shim — the suffix used in suffix mode (production). */
+export const CLINIC_HOST_SUFFIX = CLINIC_HOST_CONFIG.suffix;
 
 /** Classify a hostname (lowercase, port-stripped) into a request scope. */
 export function classifyHost(
   rawHost: string | null | undefined,
-  hostSuffix: string = CLINIC_HOST_SUFFIX,
+  config: HostResolutionConfig | string = CLINIC_HOST_CONFIG,
 ): ResolvedScope {
+  const cfg: HostResolutionConfig =
+    typeof config === 'string' ? { suffix: config } : config;
+  const hostPrefix = (cfg.prefix ?? '').toLowerCase();
+  const hostApex = (cfg.apex ?? '').toLowerCase();
+  const hostSuffix = (cfg.suffix ?? DEFAULT_HOST_SUFFIX).toLowerCase();
+
   const host = (rawHost ?? '').toLowerCase();
   const withoutPort = host.split(':')[0] ?? host;
-  const apex = hostSuffix.toLowerCase();
-  const apexDotted = `.${apex}`;
 
-  if (
-    withoutPort === '' ||
-    withoutPort === 'localhost' ||
-    withoutPort === apex ||
-    withoutPort === `app.${apex}`
-  ) {
+  // localhost is always platform (dev convenience), mode-agnostic.
+  if (withoutPort === '' || withoutPort === 'localhost') {
     return { kind: 'platform', subdomain: null };
   }
 
@@ -88,6 +107,43 @@ export function classifyHost(
     return { kind: 'reserved', subdomain: sub };
   }
 
+  // Prefix mode — apex is a fixed FQDN, tenants are sibling FQDNs
+  // sharing the apex's parent domain and a hyphen-joined prefix.
+  // Active when both apex + prefix are configured.
+  if (hostApex && hostPrefix) {
+    if (withoutPort === hostApex) {
+      return { kind: 'platform', subdomain: null };
+    }
+    const apexDotIdx = hostApex.indexOf('.');
+    if (apexDotIdx > 0) {
+      const parentDomain = hostApex.slice(apexDotIdx + 1);
+      const parentSuffix = `.${parentDomain}`;
+      if (
+        withoutPort.startsWith(hostPrefix) &&
+        withoutPort.endsWith(parentSuffix)
+      ) {
+        const sub = withoutPort.slice(
+          hostPrefix.length,
+          withoutPort.length - parentSuffix.length,
+        );
+        if (!sub) return { kind: 'reserved', subdomain: '' };
+        if (RESERVED_HOST_PREFIXES.has(sub)) {
+          return { kind: 'reserved', subdomain: sub };
+        }
+        if (SUBDOMAIN_SHAPE.test(sub)) {
+          return { kind: 'tenant', subdomain: sub };
+        }
+        return { kind: 'reserved', subdomain: sub };
+      }
+    }
+    return { kind: 'reserved', subdomain: withoutPort };
+  }
+
+  // Suffix mode (production).
+  if (withoutPort === hostSuffix || withoutPort === `app.${hostSuffix}`) {
+    return { kind: 'platform', subdomain: null };
+  }
+  const apexDotted = `.${hostSuffix}`;
   if (withoutPort.endsWith(apexDotted)) {
     const sub = withoutPort.slice(0, -apexDotted.length);
     if (!sub) return { kind: 'platform', subdomain: null };

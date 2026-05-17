@@ -77,4 +77,85 @@ describe('resolveScope', () => {
       });
     });
   });
+
+  describe('with CLINIC_HOST_APEX + CLINIC_HOST_PREFIX (staging prefix mode)', () => {
+    const PREFIX_CONFIG = {
+      apex: 'klinika-health.ihox.net',
+      prefix: 'klinika-health-',
+    };
+
+    it('treats the apex as platform scope', () => {
+      expect(resolveScope('klinika-health.ihox.net', null, PREFIX_CONFIG)).toEqual({
+        kind: 'platform',
+      });
+    });
+
+    it('extracts the slug from a hyphen-joined tenant host', () => {
+      expect(resolveScope('klinika-health-clinic.ihox.net', null, PREFIX_CONFIG)).toEqual({
+        kind: 'tenant',
+        subdomain: 'clinic',
+      });
+    });
+
+    it('resolves donetamed as a tenant slug', () => {
+      expect(resolveScope('klinika-health-donetamed.ihox.net', null, PREFIX_CONFIG)).toEqual({
+        kind: 'tenant',
+        subdomain: 'donetamed',
+      });
+    });
+
+    it('strips the port from the apex host', () => {
+      expect(resolveScope('klinika-health.ihox.net:443', null, PREFIX_CONFIG)).toEqual({
+        kind: 'platform',
+      });
+    });
+
+    it('is case-insensitive on apex', () => {
+      expect(resolveScope('KLINIKA-HEALTH.IHOX.NET', null, PREFIX_CONFIG)).toEqual({
+        kind: 'platform',
+      });
+    });
+
+    it('rejects an empty slug between prefix and parent domain', () => {
+      expect(resolveScope('klinika-health-.ihox.net', null, PREFIX_CONFIG)).toEqual({
+        kind: 'reserved',
+        subdomain: '',
+      });
+    });
+
+    it('rejects a slug containing invalid characters', () => {
+      expect(resolveScope('klinika-health-bad_slug.ihox.net', null, PREFIX_CONFIG)).toEqual({
+        kind: 'reserved',
+        subdomain: 'bad_slug',
+      });
+    });
+
+    it('rejects a host that does not start with the prefix', () => {
+      expect(resolveScope('not-klinika-health-clinic.ihox.net', null, PREFIX_CONFIG)).toEqual({
+        kind: 'reserved',
+        subdomain: 'not-klinika-health-clinic.ihox.net',
+      });
+    });
+
+    it('rejects a host whose parent domain does not match the apex parent', () => {
+      expect(resolveScope('klinika-health-clinic.different.com', null, PREFIX_CONFIG)).toEqual({
+        kind: 'reserved',
+        subdomain: 'klinika-health-clinic.different.com',
+      });
+    });
+
+    it('still rejects reserved prefixes as a slug', () => {
+      expect(resolveScope('klinika-health-admin.ihox.net', null, PREFIX_CONFIG)).toEqual({
+        kind: 'reserved',
+        subdomain: 'admin',
+      });
+    });
+
+    it('still honours the localhost override', () => {
+      expect(resolveScope('localhost:3000', 'donetamed', PREFIX_CONFIG)).toEqual({
+        kind: 'tenant',
+        subdomain: 'donetamed',
+      });
+    });
+  });
 });

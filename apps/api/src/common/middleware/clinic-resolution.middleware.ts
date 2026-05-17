@@ -7,11 +7,44 @@ import { buildBaseContext, type RequestWithContext } from '../request-context/re
 
 /**
  * Default production apex. Overridden per-environment via the
- * `CLINIC_HOST_SUFFIX` env var (e.g. staging uses
- * `klinika.health.ihox.net`). The middleware reads the env once on
- * construction and passes the resolved suffix to {@link resolveScope}.
+ * `CLINIC_HOST_SUFFIX` env var. Staging used to set the suffix
+ * to `klinika.health.ihox.net` but now uses the flat hyphen-joined
+ * scheme described in the {@link HostResolutionConfig} comment.
  */
 const DEFAULT_HOST_SUFFIX = 'klinika.health';
+
+/**
+ * How the middleware classifies a request Host header.
+ *
+ * Two modes — only one is active per process, decided at startup
+ * from the env:
+ *
+ * **Suffix mode** (production). The apex is the bare suffix, tenant
+ * subdomains are `<slug>.<suffix>`. Example: `klinika.health` apex,
+ * `donetamed.klinika.health` tenant. Driven by `CLINIC_HOST_SUFFIX`.
+ *
+ * **Prefix mode** (staging). The apex is a fixed FQDN, tenants are
+ * sibling FQDNs that share a hyphen-joined prefix and parent domain.
+ * Example: `klinika-health.ihox.net` apex, `klinika-health-clinic.ihox.net`
+ * tenant. Driven by `CLINIC_HOST_APEX` + `CLINIC_HOST_PREFIX` (both
+ * required to activate the mode).
+ *
+ * Prefix mode exists because the staging environment sits under the
+ * `*.ihox.net` wildcard cert, which only covers level-1 subdomains.
+ * `klinika.health.ihox.net` would require a separate wildcard issued
+ * for `*.klinika.health.ihox.net`; the flat scheme avoids it. See
+ * ADR-018.
+ *
+ * When both modes are configured, prefix wins. Suffix is the fallback.
+ */
+export interface HostResolutionConfig {
+  /** Suffix mode apex (e.g. `klinika.health`). Falls back to `DEFAULT_HOST_SUFFIX`. */
+  suffix?: string;
+  /** Prefix mode apex FQDN (e.g. `klinika-health.ihox.net`). */
+  apex?: string;
+  /** Prefix mode tenant prefix (e.g. `klinika-health-`). */
+  prefix?: string;
+}
 
 /**
  * Subdomains reserved for the platform's own infrastructure. Tenants
@@ -75,14 +108,18 @@ export type ResolvedScope =
  */
 @Injectable()
 export class ClinicResolutionMiddleware implements NestMiddleware {
-  private readonly hostSuffix: string;
+  private readonly hostConfig: HostResolutionConfig;
 
   constructor(
     private readonly prisma: PrismaService,
     @InjectPinoLogger(ClinicResolutionMiddleware.name)
     private readonly logger: PinoLogger,
   ) {
-    this.hostSuffix = process.env['CLINIC_HOST_SUFFIX'] || DEFAULT_HOST_SUFFIX;
+    this.hostConfig = {
+      suffix: process.env['CLINIC_HOST_SUFFIX'],
+      apex: process.env['CLINIC_HOST_APEX'],
+      prefix: process.env['CLINIC_HOST_PREFIX'],
+    };
   }
 
   async use(req: RequestWithContext, res: Response, next: NextFunction): Promise<void> {
@@ -102,7 +139,7 @@ export class ClinicResolutionMiddleware implements NestMiddleware {
     const overrideHeader = req.headers['x-clinic-subdomain'];
     const override = typeof overrideHeader === 'string' ? overrideHeader.toLowerCase() : null;
 
-    const resolved = resolveScope(host, override, this.hostSuffix);
+    const resolved = resolveScope(host, override, this.hostConfig);
 
     if (resolved.kind === 'reserved') {
       this.logger.warn(
@@ -167,80 +204,115 @@ export class ClinicResolutionMiddleware implements NestMiddleware {
   }
 }
 
+const SUBDOMAIN_SHAPE = /^[a-z0-9][a-z0-9-]{0,40}$/;
+
 /**
  * Pure host → scope classifier. Exported for unit tests and for the
  * frontend middleware which mirrors this logic.
  *
- * `hostSuffix` is the apex domain for this environment — `klinika.health`
- * in production, `klinika.health.ihox.net` in staging. Defaults to the
- * production suffix so existing callers (test fixtures, dev shells)
- * keep working without changes.
+ * `config` selects suffix vs prefix mode. See {@link HostResolutionConfig}.
+ * For back-compat the third arg also accepts a bare string, which is
+ * treated as `{ suffix: <string> }`.
  */
 export function resolveScope(
   host: string,
   override: string | null,
-  hostSuffix: string = DEFAULT_HOST_SUFFIX,
+  config: HostResolutionConfig | string = {},
 ): ResolvedScope {
-  const hostWithoutPort = host.split(':')[0] ?? host;
-  const apex = hostSuffix.toLowerCase();
-  const apexDotted = `.${apex}`;
+  const cfg: HostResolutionConfig =
+    typeof config === 'string' ? { suffix: config } : config;
+  const hostPrefix = (cfg.prefix ?? '').toLowerCase();
+  const hostApex = (cfg.apex ?? '').toLowerCase();
+  const hostSuffix = (cfg.suffix ?? DEFAULT_HOST_SUFFIX).toLowerCase();
 
-  // Localhost override (dev / E2E) — explicit, takes precedence over
-  // anything the Host header carries. Honoured as a tenant subdomain
-  // so tests can target a specific clinic without DNS gymnastics.
+  const hostWithoutPort = (host.split(':')[0] ?? host).toLowerCase();
+
+  // Override (X-Clinic-Subdomain header) — checked first regardless
+  // of mode. Honoured as a tenant subdomain so localhost-based tests
+  // can target a specific clinic without DNS gymnastics.
   if (override) {
     if (RESERVED_HOST_PREFIXES.has(override)) {
       return { kind: 'reserved', subdomain: override };
     }
-    if (/^[a-z0-9][a-z0-9-]{0,40}$/.test(override)) {
+    if (SUBDOMAIN_SHAPE.test(override)) {
       return { kind: 'tenant', subdomain: override };
     }
     return { kind: 'reserved', subdomain: override };
   }
 
-  // Apex hosts — platform scope. `app.${apex}` historically served
-  // the marketing page; treat it as platform too so the boundary
-  // stays apex-only.
-  if (
-    hostWithoutPort === 'localhost' ||
-    hostWithoutPort === apex ||
-    hostWithoutPort === `app.${apex}`
-  ) {
+  // localhost is always platform (dev convenience), independent of mode.
+  if (hostWithoutPort === 'localhost') {
     return { kind: 'platform' };
   }
 
-  // `*.localhost` — dev-time mirror of `*.${apex}` so subdomain-driven
-  // clinic routing works without `/etc/hosts` edits for every tenant.
+  // `*.localhost` — dev-time mirror of tenant subdomains, also mode-agnostic.
   if (hostWithoutPort.endsWith('.localhost')) {
     const sub = hostWithoutPort.slice(0, -'.localhost'.length);
     if (!sub) return { kind: 'platform' };
     if (RESERVED_HOST_PREFIXES.has(sub)) {
       return { kind: 'reserved', subdomain: sub };
     }
-    if (/^[a-z0-9][a-z0-9-]{0,40}$/.test(sub)) {
+    if (SUBDOMAIN_SHAPE.test(sub)) {
       return { kind: 'tenant', subdomain: sub };
     }
-    // Malformed subdomain — treat as reserved (rejected at the edge)
-    // rather than silently falling through to platform.
     return { kind: 'reserved', subdomain: sub };
   }
 
-  // Production / staging tenant subdomains under the configured apex.
+  // Prefix mode — used when both apex + prefix are configured (staging).
+  // Apex is an exact FQDN match; tenants share the same parent domain
+  // and start with the configured prefix.
+  if (hostApex && hostPrefix) {
+    if (hostWithoutPort === hostApex) {
+      return { kind: 'platform' };
+    }
+    // For apex `klinika-health.ihox.net`, parent is `ihox.net`.
+    const apexDotIdx = hostApex.indexOf('.');
+    if (apexDotIdx > 0) {
+      const parentDomain = hostApex.slice(apexDotIdx + 1);
+      const parentSuffix = `.${parentDomain}`;
+      if (
+        hostWithoutPort.startsWith(hostPrefix) &&
+        hostWithoutPort.endsWith(parentSuffix)
+      ) {
+        const sub = hostWithoutPort.slice(
+          hostPrefix.length,
+          hostWithoutPort.length - parentSuffix.length,
+        );
+        if (!sub) return { kind: 'reserved', subdomain: '' };
+        if (RESERVED_HOST_PREFIXES.has(sub)) {
+          return { kind: 'reserved', subdomain: sub };
+        }
+        if (SUBDOMAIN_SHAPE.test(sub)) {
+          return { kind: 'tenant', subdomain: sub };
+        }
+        return { kind: 'reserved', subdomain: sub };
+      }
+    }
+    // Anything else in prefix mode is unrelated to this environment.
+    return { kind: 'reserved', subdomain: hostWithoutPort };
+  }
+
+  // Suffix mode — existing production logic. Apex hosts and `app.<apex>`
+  // are platform; `*.<apex>` are tenants.
+  if (hostWithoutPort === hostSuffix || hostWithoutPort === `app.${hostSuffix}`) {
+    return { kind: 'platform' };
+  }
+  const apexDotted = `.${hostSuffix}`;
   if (hostWithoutPort.endsWith(apexDotted)) {
     const sub = hostWithoutPort.slice(0, -apexDotted.length);
     if (!sub) return { kind: 'platform' };
     if (RESERVED_HOST_PREFIXES.has(sub)) {
       return { kind: 'reserved', subdomain: sub };
     }
-    if (/^[a-z0-9][a-z0-9-]{0,40}$/.test(sub)) {
+    if (SUBDOMAIN_SHAPE.test(sub)) {
       return { kind: 'tenant', subdomain: sub };
     }
     return { kind: 'reserved', subdomain: sub };
   }
 
-  // Unknown host (e.g. someone pointing their own domain at us). Don't
-  // give it platform scope — that would expose admin endpoints. 400
-  // makes it explicit at the edge.
+  // Unknown host (someone pointing their own domain at us). Don't give
+  // it platform scope — that would expose admin endpoints. 400 makes
+  // it explicit at the edge.
   return { kind: 'reserved', subdomain: hostWithoutPort };
 }
 

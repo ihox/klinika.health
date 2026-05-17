@@ -28,33 +28,56 @@ async function bootstrap(): Promise<void> {
   // helper extracts it; this just makes Express stop second-guessing.
   app.set('trust proxy', true);
 
-  // Tenant subdomains (`*.${CLINIC_HOST_SUFFIX}`) and the apex host
-  // share the same API origin pattern. Allowing credentials is
-  // required for the session cookie to round-trip. Wildcards are
-  // expanded against the suffix at request time so the same code
-  // works on production (klinika.health) and staging
-  // (klinika.health.ihox.net) without touching app code.
+  // Tenant + apex origins share the same API. Allowing credentials is
+  // required for the session cookie to round-trip. The accepted-host
+  // pattern is built from env so production (suffix mode:
+  // `*.klinika.health`) and staging (prefix mode:
+  // `klinika-health-*.ihox.net`) work from the same code path. See
+  // {@link HostResolutionConfig} in the tenancy middleware for the
+  // two-mode rationale.
   const corsOrigin = (process.env['CORS_ORIGIN'] ?? 'http://localhost:3000')
     .split(',')
     .map((o) => o.trim())
     .filter((o) => o.length > 0);
+  const hostApex = process.env['CLINIC_HOST_APEX'];
+  const hostPrefix = process.env['CLINIC_HOST_PREFIX'];
   const hostSuffix = process.env['CLINIC_HOST_SUFFIX'] || 'klinika.health';
-  const escapedSuffix = hostSuffix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const tenantOriginRegex = new RegExp(
-    `^https:\\/\\/[a-z0-9][a-z0-9-]{0,40}\\.${escapedSuffix}$`,
-  );
-  const apexOrigin = `https://${hostSuffix}`;
-  const appOrigin = `https://app.${hostSuffix}`;
+  const escapeForRegex = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+  let tenantOriginRegex: RegExp;
+  let apexOrigin: string;
+  let appOrigin: string;
+  if (hostApex && hostPrefix) {
+    // Prefix mode (staging). Tenants are sibling FQDNs sharing the
+    // apex's parent domain. For apex `klinika-health.ihox.net`:
+    // parent = `ihox.net`, prefix = `klinika-health-`, accepted tenant
+    // origins look like `https://klinika-health-<slug>.ihox.net`.
+    const parentDotIdx = hostApex.indexOf('.');
+    const parentDomain = parentDotIdx > 0 ? hostApex.slice(parentDotIdx + 1) : hostApex;
+    tenantOriginRegex = new RegExp(
+      `^https:\\/\\/${escapeForRegex(hostPrefix)}[a-z0-9][a-z0-9-]{0,40}\\.${escapeForRegex(parentDomain)}$`,
+    );
+    apexOrigin = `https://${hostApex}`;
+    // No separate `app.<apex>` in prefix mode — reuse the apex origin
+    // so the check below stays uniform.
+    appOrigin = apexOrigin;
+  } else {
+    // Suffix mode (production).
+    tenantOriginRegex = new RegExp(
+      `^https:\\/\\/[a-z0-9][a-z0-9-]{0,40}\\.${escapeForRegex(hostSuffix)}$`,
+    );
+    apexOrigin = `https://${hostSuffix}`;
+    appOrigin = `https://app.${hostSuffix}`;
+  }
+
   app.enableCors({
     origin: (origin, callback) => {
       if (!origin) {
         callback(null, true);
         return;
       }
-      // Exact match against the configured list, OR a tenant
-      // subdomain under the configured suffix, OR the apex / app
-      // host (platform). The admin context lives on the apex —
-      // never on admin.<suffix>.
+      // Exact match against the configured list, OR a tenant subdomain
+      // matching the active mode's pattern, OR the apex / app host.
       const ok =
         corsOrigin.includes(origin) ||
         tenantOriginRegex.test(origin) ||

@@ -71,6 +71,83 @@ describe('classifyHost', () => {
       });
     });
   });
+
+  describe('with CLINIC_HOST_APEX + CLINIC_HOST_PREFIX (staging prefix mode)', () => {
+    const PREFIX_CONFIG = {
+      apex: 'klinika-health.ihox.net',
+      prefix: 'klinika-health-',
+    };
+
+    it('treats the apex as platform scope', () => {
+      expect(classifyHost('klinika-health.ihox.net', PREFIX_CONFIG)).toEqual({
+        kind: 'platform',
+        subdomain: null,
+      });
+    });
+
+    it('extracts the slug from a hyphen-joined tenant host', () => {
+      expect(classifyHost('klinika-health-clinic.ihox.net', PREFIX_CONFIG)).toEqual({
+        kind: 'tenant',
+        subdomain: 'clinic',
+      });
+    });
+
+    it('resolves donetamed as a tenant slug', () => {
+      expect(classifyHost('klinika-health-donetamed.ihox.net', PREFIX_CONFIG)).toEqual({
+        kind: 'tenant',
+        subdomain: 'donetamed',
+      });
+    });
+
+    it('strips the port from the apex host', () => {
+      expect(classifyHost('klinika-health.ihox.net:443', PREFIX_CONFIG)).toEqual({
+        kind: 'platform',
+        subdomain: null,
+      });
+    });
+
+    it('is case-insensitive on apex', () => {
+      expect(classifyHost('KLINIKA-HEALTH.IHOX.NET', PREFIX_CONFIG)).toEqual({
+        kind: 'platform',
+        subdomain: null,
+      });
+    });
+
+    it('rejects an empty slug between prefix and parent domain', () => {
+      expect(classifyHost('klinika-health-.ihox.net', PREFIX_CONFIG)).toEqual({
+        kind: 'reserved',
+        subdomain: '',
+      });
+    });
+
+    it('rejects a slug containing invalid characters', () => {
+      expect(classifyHost('klinika-health-bad_slug.ihox.net', PREFIX_CONFIG)).toEqual({
+        kind: 'reserved',
+        subdomain: 'bad_slug',
+      });
+    });
+
+    it('rejects a host that does not start with the prefix', () => {
+      expect(classifyHost('not-klinika-health-clinic.ihox.net', PREFIX_CONFIG)).toEqual({
+        kind: 'reserved',
+        subdomain: 'not-klinika-health-clinic.ihox.net',
+      });
+    });
+
+    it('rejects a host whose parent domain does not match the apex parent', () => {
+      expect(classifyHost('klinika-health-clinic.different.com', PREFIX_CONFIG)).toEqual({
+        kind: 'reserved',
+        subdomain: 'klinika-health-clinic.different.com',
+      });
+    });
+
+    it('still rejects reserved prefixes as a slug', () => {
+      expect(classifyHost('klinika-health-admin.ihox.net', PREFIX_CONFIG)).toEqual({
+        kind: 'reserved',
+        subdomain: 'admin',
+      });
+    });
+  });
 });
 
 describe('pathStartsWithAny', () => {
