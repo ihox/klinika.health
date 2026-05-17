@@ -32,8 +32,11 @@ jobs:
           ssh-private-key: ${{ secrets.STAGING_SSH_KEY }}
 
       - name: Pin staging host into known_hosts
+        env:
+          STAGING_HOST: ${{ secrets.STAGING_HOST }}
+          STAGING_PORT: ${{ secrets.STAGING_PORT }}
         run: |
-          ssh-keyscan -H "${{ secrets.STAGING_HOST }}" >> ~/.ssh/known_hosts
+          ssh-keyscan -p "${STAGING_PORT:-22}" -H "$STAGING_HOST" >> ~/.ssh/known_hosts
 
       # The runner never carries application secrets. All build + run
       # state lives on the VM under /srv/sites/klinika-health/, and the
@@ -43,8 +46,9 @@ jobs:
         env:
           STAGING_HOST: ${{ secrets.STAGING_HOST }}
           STAGING_USER: ${{ secrets.STAGING_USER }}
+          STAGING_PORT: ${{ secrets.STAGING_PORT }}
         run: |
-          ssh "$STAGING_USER@$STAGING_HOST" 'bash -s' <<'REMOTE'
+          ssh -p "${STAGING_PORT:-22}" "$STAGING_USER@$STAGING_HOST" 'bash -s' <<'REMOTE'
             set -euo pipefail
             cd /srv/sites/klinika-health/repo
 
