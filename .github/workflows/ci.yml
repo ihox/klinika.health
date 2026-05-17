@@ -11,6 +11,12 @@ concurrency:
 
 env:
   TZ: Europe/Belgrade
+  # The CI box has no `api` service. Use the `disabled` sentinel that
+  # next.config.mjs honours by skipping the /api/* and /health/*
+  # rewrites entirely, so unmocked requests 404 from the dev server
+  # instead of looping on DNS retries to the docker-compose hostname
+  # and flooding logs with EAI_AGAIN unhandledRejections.
+  API_INTERNAL_URL: disabled
 
 jobs:
   build:

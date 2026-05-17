@@ -54,6 +54,11 @@ const nextConfig = {
   // output, so an env override only matters during `next build`.
   async rewrites() {
     const apiInternal = process.env.API_INTERNAL_URL ?? 'http://api:3001';
+    // Sentinel value used by CI (no `api` service running): skip the
+    // proxy entirely so unmocked /api/* requests 404 from the dev
+    // server instead of looping on DNS retries and flooding the logs
+    // with EAI_AGAIN unhandledRejections.
+    if (apiInternal === 'disabled') return [];
     return [
       { source: '/api/:path*', destination: `${apiInternal}/api/:path*` },
       { source: '/health/:path*', destination: `${apiInternal}/health/:path*` },
