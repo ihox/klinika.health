@@ -37,7 +37,14 @@ const TENANT_HOST = 'donetamed.klinika.health';
 const DOCTOR_EMAIL = 'taulant.shala@klinika.health';
 const RECEPTIONIST_EMAIL = 'ereblire.krasniqi@klinika.health';
 
-const RECEPTIONIST_PUBLIC_KEYS = ['id', 'firstName', 'lastName', 'dateOfBirth'].sort();
+const RECEPTIONIST_PUBLIC_KEYS = [
+  'id',
+  'firstName',
+  'lastName',
+  'dateOfBirth',
+  'placeOfBirth',
+  'lastVisitAt',
+].sort();
 
 describe.skipIf(!ENABLED)('Patients integration', () => {
   let app: NestExpressApplication;
@@ -203,7 +210,7 @@ describe.skipIf(!ENABLED)('Patients integration', () => {
       }
     });
 
-    it('search "Hoxa" matches the surname "Hoxha" (trigram)', async () => {
+    it('search "Hoxa" matches the surname "Hoxha" (trigram fallback)', async () => {
       const cookie = await loginAs(RECEPTIONIST_EMAIL, SEED_RECEPTIONIST_PASSWORD!);
       const res = await req()
         .get('/api/patients?q=Hoxa')
@@ -212,6 +219,55 @@ describe.skipIf(!ENABLED)('Patients integration', () => {
       expect(res.status).toBe(200);
       const names = (res.body.patients as Array<{ lastName: string }>).map((p) => p.lastName);
       expect(names).toContain('Hoxha');
+    });
+
+    // Short-query bug (pre-fix): trigram similarity on "Rit" vs.
+    // "Rita Hoxha" sits below pg_trgm's 0.3 threshold, so the `%`
+    // operator returned false and the receptionist saw an empty list
+    // even though "Rita …" patients existed. Hybrid prefix matching
+    // closes this gap.
+    it('3-char prefix "Rit" returns "Rita" patients (prefix tier)', async () => {
+      const cookie = await loginAs(RECEPTIONIST_EMAIL, SEED_RECEPTIONIST_PASSWORD!);
+      const res = await req()
+        .get('/api/patients?q=Rit')
+        .set('host', TENANT_HOST)
+        .set('Cookie', cookie);
+      expect(res.status).toBe(200);
+      const firstNames = (res.body.patients as Array<{ firstName: string }>).map(
+        (p) => p.firstName,
+      );
+      // Both seeded "Rita" rows must surface.
+      expect(firstNames.filter((n) => n === 'Rita').length).toBeGreaterThanOrEqual(2);
+    });
+
+    it('2-char prefix "Ri" returns "Rita" patients', async () => {
+      const cookie = await loginAs(RECEPTIONIST_EMAIL, SEED_RECEPTIONIST_PASSWORD!);
+      const res = await req()
+        .get('/api/patients?q=Ri')
+        .set('host', TENANT_HOST)
+        .set('Cookie', cookie);
+      expect(res.status).toBe(200);
+      const firstNames = (res.body.patients as Array<{ firstName: string }>).map(
+        (p) => p.firstName,
+      );
+      expect(firstNames).toContain('Rita');
+    });
+
+    // Last-name prefix tier — "Hox" doesn't start any first_name in
+    // the seed set, so the row must be picked up by the last_name
+    // branch (rank 0.9) and rank above any trigram-only match.
+    it('3-char prefix "Hox" returns "Hoxha" patients via last_name prefix', async () => {
+      const cookie = await loginAs(RECEPTIONIST_EMAIL, SEED_RECEPTIONIST_PASSWORD!);
+      const res = await req()
+        .get('/api/patients?q=Hox')
+        .set('host', TENANT_HOST)
+        .set('Cookie', cookie);
+      expect(res.status).toBe(200);
+      const lastNames = (res.body.patients as Array<{ lastName: string }>).map(
+        (p) => p.lastName,
+      );
+      expect(lastNames).toContain('Hoxha');
+      expect(lastNames).toContain('Hoxhaj');
     });
 
     it('search "Cekaj" matches "Çelë Cekaj" via diacritic-insensitive unaccent', async () => {
@@ -237,6 +293,270 @@ describe.skipIf(!ENABLED)('Patients integration', () => {
       );
       // Top hits should include 2024 birthdays.
       expect(dobs).toContain('2024');
+    });
+
+    // ------------------------------------------------------------------
+    // Full DOB token (DD.MM.YYYY / DD/MM/YYYY / DD-MM-YYYY)
+    // ------------------------------------------------------------------
+
+    it('full DOB "12.02.2024" finds the patient with that exact DOB', async () => {
+      const cookie = await loginAs(RECEPTIONIST_EMAIL, SEED_RECEPTIONIST_PASSWORD!);
+      const res = await req()
+        .get('/api/patients?q=' + encodeURIComponent('12.02.2024'))
+        .set('host', TENANT_HOST)
+        .set('Cookie', cookie);
+      expect(res.status).toBe(200);
+      const hits = res.body.patients as Array<{
+        firstName: string;
+        lastName: string;
+        dateOfBirth: string | null;
+      }>;
+      const rita = hits.find((p) => p.firstName === 'Rita' && p.lastName === 'Hoxha');
+      expect(rita).toBeDefined();
+      // Sibling "Rita Hoxhaj" (DOB 2024-02-15) must NOT appear — equality
+      // on date_of_birth, not range.
+      expect(hits.find((p) => p.lastName === 'Hoxhaj')).toBeUndefined();
+    });
+
+    it('combined "Hoxha 12.02.2024" surfaces the exact-DOB patient first', async () => {
+      const cookie = await loginAs(RECEPTIONIST_EMAIL, SEED_RECEPTIONIST_PASSWORD!);
+      const res = await req()
+        .get('/api/patients?q=' + encodeURIComponent('Hoxha 12.02.2024'))
+        .set('host', TENANT_HOST)
+        .set('Cookie', cookie);
+      expect(res.status).toBe(200);
+      const hits = res.body.patients as Array<{
+        firstName: string;
+        lastName: string;
+        dateOfBirth: string | null;
+      }>;
+      // The DOB boost (+1.5) dominates so Rita Hoxha ranks ahead of
+      // sibling Hoxhas with different birthdays.
+      expect(hits[0]).toMatchObject({ firstName: 'Rita', lastName: 'Hoxha' });
+    });
+
+    it('slash separator "12/02/2024" also matches', async () => {
+      const cookie = await loginAs(RECEPTIONIST_EMAIL, SEED_RECEPTIONIST_PASSWORD!);
+      const res = await req()
+        .get('/api/patients?q=' + encodeURIComponent('12/02/2024'))
+        .set('host', TENANT_HOST)
+        .set('Cookie', cookie);
+      expect(res.status).toBe(200);
+      const lastNames = (res.body.patients as Array<{ lastName: string }>).map(
+        (p) => p.lastName,
+      );
+      expect(lastNames).toContain('Hoxha');
+    });
+
+    it('dash separator "12-02-2024" also matches', async () => {
+      const cookie = await loginAs(RECEPTIONIST_EMAIL, SEED_RECEPTIONIST_PASSWORD!);
+      const res = await req()
+        .get('/api/patients?q=' + encodeURIComponent('12-02-2024'))
+        .set('host', TENANT_HOST)
+        .set('Cookie', cookie);
+      expect(res.status).toBe(200);
+      const lastNames = (res.body.patients as Array<{ lastName: string }>).map(
+        (p) => p.lastName,
+      );
+      expect(lastNames).toContain('Hoxha');
+    });
+
+    it('invalid date "30.02.2024" returns no DOB-based match', async () => {
+      // The regex shape matches but Feb 30 fails the round-trip
+      // validator, so the parser drops the token entirely. No patient
+      // should be returned via DOB; nothing else in the query points at
+      // a real row either.
+      const cookie = await loginAs(RECEPTIONIST_EMAIL, SEED_RECEPTIONIST_PASSWORD!);
+      const res = await req()
+        .get('/api/patients?q=' + encodeURIComponent('30.02.2024'))
+        .set('host', TENANT_HOST)
+        .set('Cookie', cookie);
+      expect(res.status).toBe(200);
+      expect(res.body.patients).toEqual([]);
+    });
+
+    it('year-alone "2024" still returns all 2024 births (unchanged)', async () => {
+      const cookie = await loginAs(RECEPTIONIST_EMAIL, SEED_RECEPTIONIST_PASSWORD!);
+      const res = await req()
+        .get('/api/patients?q=2024')
+        .set('host', TENANT_HOST)
+        .set('Cookie', cookie);
+      expect(res.status).toBe(200);
+      const lastNames = (res.body.patients as Array<{ lastName: string }>).map(
+        (p) => p.lastName,
+      );
+      // Both Rita Hoxha (2024-02-12) and Rita Hoxhaj (2024-02-15) are
+      // 2024 births and must appear; "30.02.2024" would not.
+      expect(lastNames).toContain('Hoxha');
+      expect(lastNames).toContain('Hoxhaj');
+    });
+
+    // ------------------------------------------------------------------
+    // Partial DOB tokens
+    // ------------------------------------------------------------------
+
+    it('day+month "12.02" returns only the Feb 12 patient (any year)', async () => {
+      const cookie = await loginAs(RECEPTIONIST_EMAIL, SEED_RECEPTIONIST_PASSWORD!);
+      const res = await req()
+        .get('/api/patients?q=' + encodeURIComponent('12.02'))
+        .set('host', TENANT_HOST)
+        .set('Cookie', cookie);
+      expect(res.status).toBe(200);
+      const hits = res.body.patients as Array<{
+        firstName: string;
+        lastName: string;
+        dateOfBirth: string | null;
+      }>;
+      const rita = hits.find((p) => p.firstName === 'Rita' && p.lastName === 'Hoxha');
+      expect(rita).toBeDefined();
+      // Rita Hoxhaj is Feb 15 — partial day+month must NOT lump in
+      // siblings born in the same month.
+      expect(hits.find((p) => p.lastName === 'Hoxhaj')).toBeUndefined();
+    });
+
+    it('combined "Hoxha 12.02" ranks the Feb-12 Hoxha above the others', async () => {
+      const cookie = await loginAs(RECEPTIONIST_EMAIL, SEED_RECEPTIONIST_PASSWORD!);
+      const res = await req()
+        .get('/api/patients?q=' + encodeURIComponent('Hoxha 12.02'))
+        .set('host', TENANT_HOST)
+        .set('Cookie', cookie);
+      expect(res.status).toBe(200);
+      const hits = res.body.patients as Array<{
+        firstName: string;
+        lastName: string;
+      }>;
+      // Rita Hoxha: last_name prefix (0.9) + day+month (0.6) = 1.5
+      // Rita Hoxhaj, Dion Hoxha: last_name prefix only (0.9)
+      expect(hits[0]).toMatchObject({ firstName: 'Rita', lastName: 'Hoxha' });
+    });
+
+    // ------------------------------------------------------------------
+    // Progressive year-prefix tier (DD.MM.Y / .YY / .YYY)
+    // ------------------------------------------------------------------
+
+    it('year-prefix "12.02.2" returns Feb 12 patients with year starting 2*', async () => {
+      const cookie = await loginAs(RECEPTIONIST_EMAIL, SEED_RECEPTIONIST_PASSWORD!);
+      const res = await req()
+        .get('/api/patients?q=' + encodeURIComponent('12.02.2'))
+        .set('host', TENANT_HOST)
+        .set('Cookie', cookie);
+      expect(res.status).toBe(200);
+      const hits = res.body.patients as Array<{
+        firstName: string;
+        lastName: string;
+      }>;
+      // Rita Hoxha (2024-02-12) matches; Rita Hoxhaj (Feb 15) and the
+      // other non-Feb-12 patients do not.
+      expect(hits.find((p) => p.firstName === 'Rita' && p.lastName === 'Hoxha')).toBeDefined();
+      expect(hits.find((p) => p.lastName === 'Hoxhaj')).toBeUndefined();
+    });
+
+    it('year-prefix "12.02.20" narrows further (year LIKE 20%)', async () => {
+      const cookie = await loginAs(RECEPTIONIST_EMAIL, SEED_RECEPTIONIST_PASSWORD!);
+      const res = await req()
+        .get('/api/patients?q=' + encodeURIComponent('12.02.20'))
+        .set('host', TENANT_HOST)
+        .set('Cookie', cookie);
+      expect(res.status).toBe(200);
+      const hits = res.body.patients as Array<{
+        firstName: string;
+        lastName: string;
+      }>;
+      expect(hits.find((p) => p.firstName === 'Rita' && p.lastName === 'Hoxha')).toBeDefined();
+    });
+
+    it('year-prefix "12.02.202" narrows to 2020s births', async () => {
+      const cookie = await loginAs(RECEPTIONIST_EMAIL, SEED_RECEPTIONIST_PASSWORD!);
+      const res = await req()
+        .get('/api/patients?q=' + encodeURIComponent('12.02.202'))
+        .set('host', TENANT_HOST)
+        .set('Cookie', cookie);
+      expect(res.status).toBe(200);
+      const hits = res.body.patients as Array<{
+        firstName: string;
+        lastName: string;
+      }>;
+      expect(hits.find((p) => p.firstName === 'Rita' && p.lastName === 'Hoxha')).toBeDefined();
+    });
+
+    it('year-prefix "12.02.19" excludes 2020s births (Rita is 2024)', async () => {
+      // Same day+month as Rita Hoxha, but the 19xx-year prefix should
+      // exclude her — verifying the year-prefix is actually filtering
+      // rather than acting like day+month alone.
+      const cookie = await loginAs(RECEPTIONIST_EMAIL, SEED_RECEPTIONIST_PASSWORD!);
+      const res = await req()
+        .get('/api/patients?q=' + encodeURIComponent('12.02.19'))
+        .set('host', TENANT_HOST)
+        .set('Cookie', cookie);
+      expect(res.status).toBe(200);
+      const hits = res.body.patients as Array<{
+        firstName: string;
+        lastName: string;
+      }>;
+      expect(hits.find((p) => p.firstName === 'Rita' && p.lastName === 'Hoxha')).toBeUndefined();
+    });
+
+    it('combined "Hoxha 12.02.20" ranks the matching Hoxha above the others', async () => {
+      const cookie = await loginAs(RECEPTIONIST_EMAIL, SEED_RECEPTIONIST_PASSWORD!);
+      const res = await req()
+        .get('/api/patients?q=' + encodeURIComponent('Hoxha 12.02.20'))
+        .set('host', TENANT_HOST)
+        .set('Cookie', cookie);
+      expect(res.status).toBe(200);
+      const hits = res.body.patients as Array<{
+        firstName: string;
+        lastName: string;
+      }>;
+      // Rita Hoxha: last_name prefix (0.9) + year-prefix (0.7) = 1.6
+      // Rita Hoxhaj, Dion Hoxha: last_name prefix only (0.9)
+      expect(hits[0]).toMatchObject({ firstName: 'Rita', lastName: 'Hoxha' });
+    });
+
+    it('partial DOB separators (slash/dash) work for both tiers', async () => {
+      const cookie = await loginAs(RECEPTIONIST_EMAIL, SEED_RECEPTIONIST_PASSWORD!);
+      for (const q of ['12/02', '12-02', '12/02/20', '12-02-20']) {
+        const res = await req()
+          .get('/api/patients?q=' + encodeURIComponent(q))
+          .set('host', TENANT_HOST)
+          .set('Cookie', cookie);
+        expect(res.status).toBe(200);
+        const lastNames = (res.body.patients as Array<{ lastName: string }>).map(
+          (p) => p.lastName,
+        );
+        expect(lastNames).toContain('Hoxha');
+      }
+    });
+
+    it('invalid partial tokens "30.02", "12.13", "13.13.20" return no rows', async () => {
+      // Invalid date components now fall through to nameTokens — these
+      // strings don't match any patient name either, so the response
+      // is still empty. The contract is "no DOB-based match," not
+      // "token dropped silently."
+      const cookie = await loginAs(RECEPTIONIST_EMAIL, SEED_RECEPTIONIST_PASSWORD!);
+      for (const q of ['30.02', '12.13', '13.13.20']) {
+        const res = await req()
+          .get('/api/patients?q=' + encodeURIComponent(q))
+          .set('host', TENANT_HOST)
+          .set('Cookie', cookie);
+        expect(res.status).toBe(200);
+        expect(res.body.patients).toEqual([]);
+      }
+    });
+
+    it('full DOB still beats partial DOB when both could match', async () => {
+      // Sanity check that a full DOB query — even with a tighter date
+      // — still surfaces the right Rita ahead of any partial-DOB cohort
+      // and that the previous full-DOB tier wasn't regressed.
+      const cookie = await loginAs(RECEPTIONIST_EMAIL, SEED_RECEPTIONIST_PASSWORD!);
+      const res = await req()
+        .get('/api/patients?q=' + encodeURIComponent('12.02.2024'))
+        .set('host', TENANT_HOST)
+        .set('Cookie', cookie);
+      expect(res.status).toBe(200);
+      expect(res.body.patients[0]).toMatchObject({
+        firstName: 'Rita',
+        lastName: 'Hoxha',
+      });
     });
 
     it('GET /:id returns 403', async () => {
@@ -293,7 +613,7 @@ describe.skipIf(!ENABLED)('Patients integration', () => {
           placeOfBirth: 'attempt',
         });
       expect(res.status).toBe(201);
-      // Response is PatientPublicDto — exactly four keys.
+      // Response is PatientPublicDto — exactly the public keys.
       expect(Object.keys(res.body.patient).sort()).toEqual(RECEPTIONIST_PUBLIC_KEYS);
       // Row in DB has nulls for every forbidden field.
       const row = await prisma.patient.findFirstOrThrow({

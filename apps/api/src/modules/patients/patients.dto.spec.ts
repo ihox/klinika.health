@@ -47,6 +47,7 @@ describe('PatientPublicDto serialization', () => {
       'id',
       'lastName',
       'lastVisitAt',
+      'placeOfBirth',
     ]);
   });
 
@@ -54,7 +55,6 @@ describe('PatientPublicDto serialization', () => {
     const out = toPublicDto(fullRow) as unknown as Record<string, unknown>;
     const forbidden = [
       'phone',
-      'placeOfBirth',
       'alergjiTjera',
       'birthWeightG',
       'birthLengthCm',
@@ -70,6 +70,16 @@ describe('PatientPublicDto serialization', () => {
     for (const f of forbidden) {
       expect(out[f]).toBeUndefined();
     }
+  });
+
+  it('forwards placeOfBirth as a display-only identification aid', () => {
+    const out = toPublicDto(fullRow);
+    expect(out.placeOfBirth).toBe('Prizren');
+  });
+
+  it('returns null placeOfBirth when the row has none', () => {
+    const out = toPublicDto({ ...fullRow, placeOfBirth: null });
+    expect(out.placeOfBirth).toBeNull();
   });
 
   it('renders the date of birth as ISO yyyy-mm-dd', () => {
@@ -94,7 +104,7 @@ describe('PatientPublicDto serialization', () => {
     const garbage: Record<string, unknown> = { ...fullRow };
     for (let i = 0; i < 200; i += 1) garbage[`extra_${i}`] = `secret-${i}`;
     const out = toPublicDto(garbage as Parameters<typeof toPublicDto>[0]) as unknown as Record<string, unknown>;
-    expect(Object.keys(out)).toHaveLength(5);
+    expect(Object.keys(out)).toHaveLength(6);
     for (let i = 0; i < 200; i += 1) {
       expect(out[`extra_${i}`]).toBeUndefined();
     }

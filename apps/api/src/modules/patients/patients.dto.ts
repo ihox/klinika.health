@@ -190,6 +190,11 @@ export type PatientSearchQuery = z.infer<typeof PatientSearchQuerySchema>;
  * used to drive the search-result dot the receptionist already sees
  * on calendar cards. It is the date of the patient's most recent
  * COMPLETED visit in this clinic — null when the patient has none.
+ *
+ * `placeOfBirth` is a low-sensitivity identification aid surfaced on
+ * the top-bar search dropdown so the receptionist can disambiguate
+ * homonyms by hometown. It carries no clinical content and sits at
+ * the same disclosure level as DOB.
  */
 export interface PatientPublicDto {
   id: string;
@@ -197,6 +202,8 @@ export interface PatientPublicDto {
   lastName: string;
   /** ISO yyyy-mm-dd, or null when not yet captured (quick-add). */
   dateOfBirth: string | null;
+  /** Town/city of birth, or null when not captured. Display-only. */
+  placeOfBirth: string | null;
   /** ISO yyyy-mm-dd of the patient's most recent completed visit, or
    *  null when there are none. */
   lastVisitAt: string | null;
@@ -259,6 +266,10 @@ export interface PatientRowLike {
   firstName: string;
   lastName: string;
   dateOfBirth: Date | string | null;
+  /** Town/city of birth — surfaced on the receptionist's top-bar
+   *  search row alongside DOB. Absent on rows that didn't select it;
+   *  defaults to null. */
+  placeOfBirth?: string | null;
   /** Optional recency signal — surfaced when the caller has joined
    *  the patient row with a last-visit aggregation. Absent on rows
    *  that didn't include the field; defaults to null in that case. */
@@ -276,6 +287,7 @@ export function toPublicDto(row: PatientRowLike): PatientPublicDto {
     firstName: row.firstName,
     lastName: row.lastName,
     dateOfBirth: dateToIso(row.dateOfBirth),
+    placeOfBirth: row.placeOfBirth ?? null,
     lastVisitAt: lastVisitToIso(row.lastVisitAt ?? null),
   };
 }

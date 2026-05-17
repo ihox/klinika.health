@@ -5,9 +5,12 @@ import type { ReactElement } from 'react';
 
 import { cn } from '@/lib/utils';
 import { ApiError } from '@/lib/api';
-import { formatDob } from '@/lib/appointment-client';
 import { LastVisitDot } from '@/components/last-visit-dot';
-import { patientClient, type PatientPublicDto } from '@/lib/patient-client';
+import {
+  formatDobAndPlace,
+  patientClient,
+  type PatientPublicDto,
+} from '@/lib/patient-client';
 
 /**
  * Path 2 entry point — the "search anywhere" field in the receptionist's
@@ -178,15 +181,15 @@ export function GlobalPatientSearch({
                     idx === focusedIdx && 'bg-surface-subtle',
                   )}
                 >
-                  <div>
-                    <div className="flex items-center gap-2 text-[13px] font-semibold text-ink-strong">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 truncate font-display text-[13.5px] font-semibold text-ink-strong">
                       <LastVisitDot lastVisitAt={p.lastVisitAt} />
-                      <span>
+                      <span className="truncate">
                         {p.firstName} {p.lastName}
                       </span>
                     </div>
-                    <div className="mt-px text-[11.5px] text-ink-muted tabular-nums">
-                      DL {formatDob(p.dateOfBirth)}
+                    <div className="mt-0.5 truncate text-[11.5px] text-ink-muted tabular-nums">
+                      {formatDobAndPlace(p.dateOfBirth, p.placeOfBirth)}
                     </div>
                   </div>
                 </button>

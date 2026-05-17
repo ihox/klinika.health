@@ -491,6 +491,10 @@ export function CalendarView(): ReactElement {
         firstName: entry.patient.firstName,
         lastName: entry.patient.lastName,
         dateOfBirth: entry.patient.dateOfBirth,
+        // Calendar entries don't carry placeOfBirth — the booking
+        // dialog doesn't render it. Pass null to satisfy the shared
+        // PatientPublicDto contract.
+        placeOfBirth: null,
         lastVisitAt: entry.lastVisitAt,
       },
       initialDate: local.date,

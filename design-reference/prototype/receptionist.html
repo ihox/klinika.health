@@ -171,39 +171,66 @@
   .cal-range .nav-btn:hover { background: var(--bg-subtle); color: var(--text); }
   .cal-toolbar .right-tools { display: flex; gap: 8px; align-items: center; }
 
-  /* Search field above calendar */
+  /* ===========================================================
+     Patient search — lives on the RIGHT of the date toolbar.
+     -----------------------------------------------------------
+     Rationale: search lives on the right of the date toolbar to
+     conserve vertical space. The toolbar's horizontal real estate
+     was underused, and search is secondary to date navigation in
+     priority — the receptionist scans the calendar far more often
+     than they reach for the search field. Compact width (300px),
+     subtle border so it reads as a quiet, secondary affordance,
+     and the dropdown anchors to the right edge of the input so it
+     never breaks the calendar grid below.
+     =========================================================== */
   .quick-search {
-    margin: 16px 20px 0;
     position: relative;
+    width: 300px;
+    flex-shrink: 0;
   }
   .quick-search input {
     width: 100%;
-    padding: 11px 14px 11px 40px;
-    border-radius: var(--r-md);
+    height: 32px;
+    padding: 0 36px 0 34px;
+    border-radius: var(--r-sm);
     border: 1px solid var(--border-strong);
     background: var(--bg-elevated);
-    font-size: 14px;
+    font-size: 13px;
+    color: var(--text);
     outline: none;
     transition: all 150ms ease;
   }
-  .quick-search input:focus { border-color: var(--primary); box-shadow: var(--focus-ring); }
+  .quick-search input::placeholder { color: var(--text-faint); }
+  .quick-search input:hover { border-color: var(--text-faint); }
+  .quick-search input:focus {
+    border-color: var(--primary);
+    box-shadow: var(--focus-ring);
+    background: var(--bg-elevated);
+  }
   .quick-search .icon {
     position: absolute;
-    left: 14px;
+    left: 11px;
     top: 50%;
     transform: translateY(-50%);
     color: var(--text-faint);
+    pointer-events: none;
+    display: grid;
+    place-items: center;
   }
+  .quick-search input:focus + .icon,
+  .quick-search:focus-within .icon { color: var(--primary); }
   .quick-search .kbd-hint {
     position: absolute;
-    right: 12px;
+    right: 10px;
     top: 50%;
     transform: translateY(-50%);
     font-size: 11px;
     color: var(--text-faint);
     display: flex;
     gap: 4px;
+    pointer-events: none;
   }
+  .quick-search:focus-within .kbd-hint { opacity: 0; }
 
   /* Calendar grid */
   .cal-grid {
@@ -1329,17 +1356,20 @@
     background: var(--bg-subtle);
   }
 
-  /* Search dropdown */
+  /* Search dropdown — anchored to the right edge of the input so
+     it doesn't push into the calendar grid awkwardly. */
   .search-results {
     position: absolute;
     top: calc(100% + 6px);
-    left: 0; right: 0;
+    right: 0;
+    width: 360px;
+    max-width: calc(100vw - 40px);
     background: var(--bg-elevated);
     border: 1px solid var(--border-strong);
     border-radius: var(--r-md);
     box-shadow: var(--shadow-lg);
     overflow: hidden;
-    z-index: 20;
+    z-index: 30;
   }
   .search-results .res-item {
     display: flex;
@@ -2111,7 +2141,7 @@
     <div class="user-menu" role="menu">
       <div class="um-head">
         <div class="name">Erëblirë Krasniqi</div>
-        <div class="email"><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="bfdacddaddd3d6cddaffdbd0d1dacbded2dadb91dcd0d2">[email&#160;protected]</a></div>
+        <div class="email">ereblire@donetamed.com</div>
         <div class="roles">
           <span class="chip-role reception">Recepsioniste</span>
         </div>
@@ -2185,59 +2215,64 @@
 
   <!-- Calendar -->
   <section class="cal-card">
+    <!-- Calendar toolbar.
+         Search lives on the right of the date toolbar to conserve
+         vertical space. The toolbar's horizontal real estate was
+         underused, and search is secondary to date navigation in
+         priority — receptionists scan the calendar far more often
+         than they reach for the search field. The dropdown anchors
+         to the right edge of the input so it never breaks the
+         calendar grid below. -->
     <div class="cal-toolbar">
       <div class="cal-range">
         <button class="nav-btn" aria-label="Java e kaluar">
           <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M10 3l-5 5 5 5"/></svg>
         </button>
-        <div class="title">12 — 17 maj 2026</div>
+        <button class="btn btn-ghost btn-sm">Sot</button>
         <button class="nav-btn" aria-label="Java tjetër">
           <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M6 3l5 5-5 5"/></svg>
         </button>
-        <button class="btn btn-ghost btn-sm" style="margin-left: 8px;">Sot</button>
+        <div class="title" style="margin-left: 6px;">12 — 17 maj 2026</div>
       </div>
 
-      <!-- TOP-RIGHT LEGEND CHIP REMOVED.
-           The status legend duplicated information already encoded in
-           the filter pills (each pill IS a labeled status swatch with
-           its count). Single source of truth = filter row. -->
-    </div>
+      <!-- Patient search — far right of toolbar.
+           Same height as toolbar buttons, compact 300px width,
+           subtle border so it reads as a quiet secondary affordance. -->
+      <div class="quick-search" id="search-wrap">
+        <input id="patient-search" placeholder="Kërko pacient..." data-os-search-placeholder="Kërko pacient... ({shortcut} ose /)" oninput="onSearch(this.value)" onfocus="onSearch(this.value)" autocomplete="off">
+        <span class="icon">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+            <circle cx="7" cy="7" r="5"/><path d="M11 11l3 3" stroke-linecap="round"/>
+          </svg>
+        </span>
+        <div class="kbd-hint"><kbd class="kbd">/</kbd></div>
 
-    <!-- Search above grid -->
-    <div class="quick-search" id="search-wrap">
-      <span class="icon">
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
-          <circle cx="7" cy="7" r="5"/><path d="M11 11l3 3" stroke-linecap="round"/>
-        </svg>
-      </span>
-      <input id="patient-search" placeholder="Kërko pacient për të caktuar termin... (/ për të fokusuar)" data-os-search-placeholder="Kërko pacient për të caktuar termin... ({shortcut} ose /)" oninput="onSearch(this.value)" onfocus="onSearch(this.value)">
-      <div class="kbd-hint"><kbd class="kbd">/</kbd></div>
-
-      <div class="search-results" id="results" style="display: none;">
-        <div class="res-item" onclick="openBooking('Rita Hoxha', '12.02.2024')">
-          <div>
-            <div class="name">Rita Hoxha</div>
-            <div class="dob">12.02.2024 · 2v 3m</div>
+        <div class="search-results" id="results" style="display: none;">
+          <div class="res-item" onclick="openBooking('Rita Hoxha', '12.02.2024')">
+            <div>
+              <div class="name">Rita Hoxha</div>
+              <div class="dob">12.02.2024 · Prizren</div>
+            </div>
+            <span class="chip chip-teal"><span class="dot"></span>14 viz.</span>
           </div>
-          <span class="chip chip-teal"><span class="dot"></span>14 viz.</span>
-        </div>
-        <div class="res-item" onclick="openBooking('Rita Hoxhaj', '15.02.2024')">
-          <div>
-            <div class="name">Rita Hoxhaj</div>
-            <div class="dob">15.02.2024 · 2v 2m</div>
+          <div class="res-item" onclick="openBooking('Rita Hoxhaj', '15.02.2024')">
+            <div>
+              <div class="name">Rita Hoxhaj</div>
+              <div class="dob">15.02.2024 · Prizren</div>
+            </div>
+            <span class="chip">3 viz.</span>
           </div>
-          <span class="chip">3 viz.</span>
-        </div>
-        <div class="res-item" onclick="openBooking('Rinor Hoxha', '07.11.2022')">
-          <div>
-            <div class="name">Rinor Hoxha</div>
-            <div class="dob">07.11.2022 · 3v 6m</div>
+          <div class="res-item" onclick="openBooking('Rinor Hoxha', '07.11.2022')">
+            <div>
+              <div class="name">Rinor Hoxha</div>
+              <div class="dob">07.11.2022 · Prizren</div>
+            </div>
+            <span class="chip">9 viz.</span>
           </div>
-          <span class="chip">9 viz.</span>
-        </div>
-        <div class="add-new" onclick="quickAdd()">
-          <span class="plus">+</span>
-          Shto pacient të ri: <strong style="color: var(--text-strong); margin-left: 2px;">"<span id="qa-text">Rita</span>"</strong>
+          <div class="add-new" onclick="quickAdd()">
+            <span class="plus">+</span>
+            Shto pacient të ri: <strong style="color: var(--text-strong); margin-left: 2px;">"<span id="qa-text">Rita</span>"</strong>
+          </div>
         </div>
       </div>
     </div>
@@ -2764,7 +2799,7 @@
   </button>
 </div>
 
-<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
+<script>
   // ============================================================
   // Sample patient list (the only patients in this prototype)
   // ============================================================

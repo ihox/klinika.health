@@ -16,6 +16,9 @@ export interface PatientPublicDto {
   lastName: string;
   /** ISO yyyy-mm-dd, or null when not yet captured. */
   dateOfBirth: string | null;
+  /** Town/city of birth — display-only identification aid for the
+   *  receptionist's top-bar search row. Carries no clinical content. */
+  placeOfBirth: string | null;
   /** ISO yyyy-mm-dd of the patient's most recent completed visit, or
    *  null when they have none. Drives the recency dot in search rows. */
   lastVisitAt: string | null;
@@ -213,6 +216,29 @@ export function formatDob(iso: string | null): string {
   const [y, m, d] = iso.split('-');
   if (!y || !m || !d) return '—';
   return `${d}.${m}.${y}`;
+}
+
+/**
+ * Compose the second line of a top-nav search row: DOB · Place. The
+ * doctor's ⌘K dropdown and the receptionist's top-bar share this
+ * helper so both surfaces stay visually identical.
+ *
+ * Rules (per the slice spec):
+ *   - Both present              → "12.02.2024 · Prizren"
+ *   - DOB only, no place        → "12.02.2024"
+ *   - DOB sentinel (1900-01-01) → already mapped to null at the DTO
+ *                                  boundary; renders as "DL pa caktuar"
+ *                                  to preserve consistent row height
+ *   - Both missing              → "DL pa caktuar"
+ */
+export function formatDobAndPlace(
+  dateOfBirth: string | null,
+  placeOfBirth: string | null,
+): string {
+  if (!dateOfBirth) return 'DL pa caktuar';
+  const dob = formatDob(dateOfBirth);
+  const place = placeOfBirth?.trim();
+  return place ? `${dob} · ${place}` : dob;
 }
 
 /**

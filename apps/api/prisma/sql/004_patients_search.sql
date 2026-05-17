@@ -63,6 +63,12 @@ CREATE INDEX IF NOT EXISTS "patients_full_name_trgm_idx"
   );
 
 -- legacy_id is INTEGER — searched by exact match, no trigram needed.
--- date_of_birth is DATE — searched by year extraction, also exact.
+-- date_of_birth is DATE — searched by EXTRACT(YEAR …) for the year
+-- boost and by direct equality for the full-DOB boost. A plain B-tree
+-- supports the equality probe; the year extraction stays a sequential
+-- evaluation inside whichever rowset the planner already produced.
+
+CREATE INDEX IF NOT EXISTS "patients_date_of_birth_idx"
+  ON "patients" USING btree ("date_of_birth");
 
 COMMIT;

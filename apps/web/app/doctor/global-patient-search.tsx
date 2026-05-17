@@ -10,11 +10,11 @@ import {
   type ReactElement,
 } from 'react';
 
+import { LastVisitDot } from '@/components/last-visit-dot';
 import { ApiError } from '@/lib/api';
 import { safeNavigateToPatient } from '@/lib/patient';
 import {
-  ageLabel,
-  formatDob,
+  formatDobAndPlace,
   patientClient,
   type PatientFullDto,
 } from '@/lib/patient-client';
@@ -242,7 +242,7 @@ export function GlobalPatientSearch(): ReactElement {
                     onMouseEnter={() => setHighlightedIdx(idx)}
                     onClick={() => navigateToPatient(p)}
                     className={cn(
-                      'grid w-full grid-cols-[1fr_auto] items-center gap-3 px-3.5 py-2 text-left transition',
+                      'flex w-full items-center px-3.5 py-2 text-left transition',
                       idx === highlightedIdx
                         ? 'bg-surface-subtle'
                         : 'hover:bg-surface-subtle',
@@ -250,18 +250,15 @@ export function GlobalPatientSearch(): ReactElement {
                     data-testid="doctor-global-search-result"
                   >
                     <div className="min-w-0">
-                      <div className="truncate font-display text-[13.5px] font-semibold text-ink-strong">
-                        {p.firstName} {p.lastName}
+                      <div className="flex items-center gap-2 truncate font-display text-[13.5px] font-semibold text-ink-strong">
+                        <LastVisitDot lastVisitAt={p.lastVisitAt} />
+                        <span className="truncate">
+                          {p.firstName} {p.lastName}
+                        </span>
                       </div>
-                      <div className="mt-0.5 truncate text-[11.5px] text-ink-muted">
-                        {formatAgeAndSex({
-                          dateOfBirth: p.dateOfBirth,
-                          sex: p.sex,
-                        }) || '—'}
+                      <div className="mt-0.5 truncate text-[11.5px] text-ink-muted tabular-nums">
+                        {formatDobAndPlace(p.dateOfBirth, p.placeOfBirth)}
                       </div>
-                    </div>
-                    <div className="text-right font-mono text-[11px] tabular-nums text-ink-faint">
-                      {formatDob(p.dateOfBirth)}
                     </div>
                   </button>
                 </li>
@@ -285,28 +282,6 @@ export function GlobalPatientSearch(): ReactElement {
       ) : null}
     </div>
   );
-}
-
-/**
- * Compose the second-line meta on a search result row: age + sex,
- * joined by " · ". Either half may be missing (receptionist quick-add
- * patients arrive with a null DOB and a null sex until the doctor
- * completes the record); the helper returns whichever halves are
- * available.
- *
- * Exported for unit tests. `asOf` lets the spec freeze "today" so the
- * age math is deterministic.
- */
-export function formatAgeAndSex(
-  p: Pick<PatientFullDto, 'dateOfBirth' | 'sex'>,
-  asOf: Date = new Date(),
-): string {
-  const parts: string[] = [];
-  const age = ageLabel(p.dateOfBirth, asOf);
-  if (age) parts.push(age);
-  if (p.sex === 'f') parts.push('vajzë');
-  else if (p.sex === 'm') parts.push('djalë');
-  return parts.join(' · ');
 }
 
 function SearchIcon({ className }: { className?: string }): ReactElement {

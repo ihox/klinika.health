@@ -41,6 +41,7 @@ interface SearchRow {
   first_name: string;
   last_name: string;
   date_of_birth: Date | string | null;
+  place_of_birth: string | null;
   legacy_id: number | null;
   score: number;
 }
@@ -56,15 +57,32 @@ export class PatientsService {
   // Search
   // -------------------------------------------------------------------------
   //
-  // Single SQL query with three layered match strategies:
+  // Single SQL query with layered match strategies. For each row the
+  // name-component score is the FIRST matching tier (CASE short-circuits):
   //
-  //   1. Trigram similarity on (first_name || ' ' || last_name), with
-  //      diacritics stripped via `klinika_unaccent_lower`. Returns a
-  //      numeric score in [0,1] used for ranking.
-  //   2. Year-of-birth match on the date_of_birth column (e.g. "Hoxha
-  //      2024" matches surname Hoxha + DOB year 2024). Token-aware so
-  //      we don't try to interpret name tokens as years.
-  //   3. legacy_id exact match (for old chart references).
+  //   1. ILIKE prefix on first_name      → 1.0   ("Rit" → "Rita …")
+  //   2. ILIKE prefix on last_name       → 0.9   ("Hox" → "… Hoxha")
+  //   3. ILIKE substring on combined     → 0.7   ("ita Hox" → "Rita Hoxha")
+  //   4. Trigram fuzzy on combined       → similarity()  ("Hoxa" → "Hoxha")
+  //
+  // Prefix/substring tiers exist because trigram alone misses short
+  // queries: "Rit" against "Rita Hoxha" scores below pg_trgm's 0.3
+  // session threshold and the `%` operator returns false. Trigram
+  // stays as the last-resort fuzzy fallback for typos. All tiers use
+  // `klinika_unaccent_lower` so diacritics ("Çekaj" ↔ "Cekaj") match.
+  //
+  // Additive boosts on top of the name score:
+  //   + full DOB exact match     → +1.5   ("12.02.2024", "Hoxha 12-02-2024")
+  //   + legacy_id exact match    → +1.0   ("#4829")
+  //   + day+month+year-prefix    → +0.7   ("12.02.2", "12.02.20", "Hoxha 12.02.202")
+  //   + day+month any year       → +0.6   ("12.02", "Hoxha 12-02")
+  //   + year-of-birth match      → +0.4   ("Hoxha 2024")
+  //
+  // The DOB tiers form a progressive ladder as the user types out a
+  // birthday: each additional digit narrows the cohort and scores a
+  // little higher. All boost predicates are also OR'd into the WHERE
+  // clause so a pure DOB, year, or legacy_id query (no name token)
+  // still returns rows.
   //
   // The query results are converted to either `PatientPublicDto` (for
   // receptionists) or `PatientFullDto` (for doctors / clinic admins).
@@ -157,17 +175,22 @@ export class PatientsService {
       return rows.map((r) => normaliseRow(r));
     }
 
-    const { nameTokens, year, legacyId } = parseSearchTerm(term);
+    const { nameTokens, year, legacyId, dobFull, dobDayMonth, dobDayMonthYearPrefix } =
+      parseSearchTerm(term);
 
-    // Build the score expression: trigram on the combined name slot,
-    // plus boosts for an exact legacy_id and a matching DOB year.
-    // The combined SQL uses raw $queryRaw because Prisma can't express
-    // the trigram `%` operator or `set_limit()`.
-    //
-    // RLS is enforced by `clinic_id = $1` and by Postgres' policy on
-    // the table — defense in depth.
+    // Raw $queryRaw because Prisma can't express the trigram `%`
+    // operator. RLS is enforced by `clinic_id = $1` and by Postgres'
+    // policy on the table — defense in depth.
     const nameTerm = nameTokens.join(' ').toLowerCase();
     const hasName = nameTerm.length > 0;
+    // Prisma can't bind objects, so each partial-DOB component travels
+    // as its own parameter. Null-on-absent so the CASE/WHERE guards
+    // short-circuit when the user didn't supply that tier.
+    const dobDayMonthDay = dobDayMonth?.day ?? null;
+    const dobDayMonthMonth = dobDayMonth?.month ?? null;
+    const dobPfxDay = dobDayMonthYearPrefix?.day ?? null;
+    const dobPfxMonth = dobDayMonthYearPrefix?.month ?? null;
+    const dobPfxYearPrefix = dobDayMonthYearPrefix?.yearPrefix ?? null;
 
     const result = await this.prisma.$queryRaw<SearchRow[]>`
       SELECT
@@ -175,16 +198,41 @@ export class PatientsService {
         p.first_name       AS first_name,
         p.last_name        AS last_name,
         p.date_of_birth    AS date_of_birth,
+        p.place_of_birth   AS place_of_birth,
         p.legacy_id        AS legacy_id,
         (
           CASE WHEN ${hasName}::boolean THEN
-            similarity(
-              klinika_unaccent_lower(p.first_name || ' ' || p.last_name),
-              klinika_unaccent_lower(${nameTerm})
-            )
+            CASE
+              WHEN klinika_unaccent_lower(p.first_name)
+                   LIKE klinika_unaccent_lower(${nameTerm}) || '%' THEN 1.0
+              WHEN klinika_unaccent_lower(p.last_name)
+                   LIKE klinika_unaccent_lower(${nameTerm}) || '%' THEN 0.9
+              WHEN klinika_unaccent_lower(p.first_name || ' ' || p.last_name)
+                   LIKE '%' || klinika_unaccent_lower(${nameTerm}) || '%' THEN 0.7
+              WHEN klinika_unaccent_lower(p.first_name || ' ' || p.last_name)
+                   % klinika_unaccent_lower(${nameTerm}) THEN
+                similarity(
+                  klinika_unaccent_lower(p.first_name || ' ' || p.last_name),
+                  klinika_unaccent_lower(${nameTerm})
+                )
+              ELSE 0
+            END
           ELSE 0 END
         ) + (
+          CASE WHEN ${dobFull}::date IS NOT NULL AND p.date_of_birth = ${dobFull}::date THEN 1.5 ELSE 0 END
+        ) + (
           CASE WHEN ${legacyId}::int IS NOT NULL AND p.legacy_id = ${legacyId}::int THEN 1.0 ELSE 0 END
+        ) + (
+          CASE WHEN ${dobPfxDay}::int IS NOT NULL
+                AND EXTRACT(DAY FROM p.date_of_birth)::int = ${dobPfxDay}::int
+                AND EXTRACT(MONTH FROM p.date_of_birth)::int = ${dobPfxMonth}::int
+                AND EXTRACT(YEAR FROM p.date_of_birth)::text LIKE ${dobPfxYearPrefix} || '%'
+               THEN 0.7 ELSE 0 END
+        ) + (
+          CASE WHEN ${dobDayMonthDay}::int IS NOT NULL
+                AND EXTRACT(DAY FROM p.date_of_birth)::int = ${dobDayMonthDay}::int
+                AND EXTRACT(MONTH FROM p.date_of_birth)::int = ${dobDayMonthMonth}::int
+               THEN 0.6 ELSE 0 END
         ) + (
           CASE WHEN ${year}::int IS NOT NULL AND EXTRACT(YEAR FROM p.date_of_birth)::int = ${year}::int THEN 0.4 ELSE 0 END
         ) AS score
@@ -192,9 +240,25 @@ export class PatientsService {
       WHERE p.clinic_id = ${clinicId}::uuid
         AND p.deleted_at IS NULL
         AND (
-          (${hasName}::boolean AND
-            klinika_unaccent_lower(p.first_name || ' ' || p.last_name) % klinika_unaccent_lower(${nameTerm}))
+          (${hasName}::boolean AND (
+            klinika_unaccent_lower(p.first_name)
+              LIKE klinika_unaccent_lower(${nameTerm}) || '%'
+            OR klinika_unaccent_lower(p.last_name)
+              LIKE klinika_unaccent_lower(${nameTerm}) || '%'
+            OR klinika_unaccent_lower(p.first_name || ' ' || p.last_name)
+              LIKE '%' || klinika_unaccent_lower(${nameTerm}) || '%'
+            OR klinika_unaccent_lower(p.first_name || ' ' || p.last_name)
+              % klinika_unaccent_lower(${nameTerm})
+          ))
+          OR (${dobFull}::date IS NOT NULL AND p.date_of_birth = ${dobFull}::date)
           OR (${legacyId}::int IS NOT NULL AND p.legacy_id = ${legacyId}::int)
+          OR (${dobPfxDay}::int IS NOT NULL
+              AND EXTRACT(DAY FROM p.date_of_birth)::int = ${dobPfxDay}::int
+              AND EXTRACT(MONTH FROM p.date_of_birth)::int = ${dobPfxMonth}::int
+              AND EXTRACT(YEAR FROM p.date_of_birth)::text LIKE ${dobPfxYearPrefix} || '%')
+          OR (${dobDayMonthDay}::int IS NOT NULL
+              AND EXTRACT(DAY FROM p.date_of_birth)::int = ${dobDayMonthDay}::int
+              AND EXTRACT(MONTH FROM p.date_of_birth)::int = ${dobDayMonthMonth}::int)
           OR (${year}::int IS NOT NULL AND EXTRACT(YEAR FROM p.date_of_birth)::int = ${year}::int)
         )
       ORDER BY score DESC, p.last_name ASC, p.first_name ASC
@@ -252,6 +316,7 @@ export class PatientsService {
         p.first_name        AS first_name,
         p.last_name         AS last_name,
         p.date_of_birth     AS date_of_birth,
+        p.place_of_birth    AS place_of_birth,
         p.legacy_id         AS legacy_id,
         similarity(
           klinika_unaccent_lower(p.first_name || ' ' || p.last_name),
@@ -279,6 +344,7 @@ export class PatientsService {
       firstName: r.first_name,
       lastName: r.last_name,
       dateOfBirth: r.date_of_birth,
+      placeOfBirth: r.place_of_birth,
     }));
   }
 
@@ -542,6 +608,7 @@ export class PatientsService {
         firstName: true,
         lastName: true,
         dateOfBirth: true,
+        placeOfBirth: true,
       };
     }
     return {
@@ -589,12 +656,60 @@ function parseSearchTerm(term: string): {
   nameTokens: string[];
   year: number | null;
   legacyId: number | null;
+  dobFull: string | null;
+  dobDayMonth: { day: number; month: number } | null;
+  dobDayMonthYearPrefix: { day: number; month: number; yearPrefix: string } | null;
 } {
-  const tokens = term.split(/\s+/).filter((t) => t.length > 0);
+  const rawTokens = term.split(/\s+/).filter((t) => t.length > 0);
   let year: number | null = null;
   let legacyId: number | null = null;
+  let dobFull: string | null = null;
+  let dobDayMonth: { day: number; month: number } | null = null;
+  let dobDayMonthYearPrefix:
+    | { day: number; month: number; yearPrefix: string }
+    | null = null;
   const nameTokens: string[] = [];
-  for (const t of tokens) {
+  for (const raw of rawTokens) {
+    // Strip TRAILING separators only — a user mid-typing "12.02." has
+    // a full day+month token plus a half-typed third component. Leading
+    // separators (".12.02") are intentional typos and stay so the
+    // token falls through to nameTokens normally; middle separators
+    // are part of the pattern and are preserved.
+    const t = raw.replace(/[./-]+$/, '');
+    if (t.length === 0) continue;
+    // Date-shaped tokens, most specific first. A tier only consumes
+    // the token when validation succeeds — if a regex matches the
+    // shape but the date is impossible (Feb 30, month 13), the token
+    // keeps falling through and eventually lands in nameTokens, which
+    // produces an intuitive empty/name-only result rather than a
+    // silently-dropped query.
+    //
+    //   Tier 1 — full DOB:               DD.MM.YYYY  (3rd group 4 digits)
+    //   Tier 2 — day+month+year-prefix:  DD.MM.Y..Y  (3rd group 1-3 digits)
+    //   Tier 3 — day+month:              DD.MM       (no 3rd group)
+    //   Tier 4 — year alone:             YYYY
+    //   Tier 5 — legacy_id:              digits, optional #
+    if (/^\d{1,2}[./-]\d{1,2}[./-]\d{4}$/.test(t)) {
+      const iso = tryParseDobToken(t);
+      if (iso) {
+        dobFull = iso;
+        continue;
+      }
+    }
+    if (/^\d{1,2}[./-]\d{1,2}[./-]\d{1,3}$/.test(t)) {
+      const pfx = tryParseDobDayMonthYearPrefixToken(t);
+      if (pfx) {
+        dobDayMonthYearPrefix = pfx;
+        continue;
+      }
+    }
+    if (/^\d{1,2}[./-]\d{1,2}$/.test(t)) {
+      const dm = tryParseDobDayMonthToken(t);
+      if (dm) {
+        dobDayMonth = dm;
+        continue;
+      }
+    }
     if (/^\d{4}$/.test(t)) {
       const n = Number(t);
       if (n >= 1900 && n <= 2100) {
@@ -612,7 +727,62 @@ function parseSearchTerm(term: string): {
     }
     nameTokens.push(t);
   }
-  return { nameTokens, year, legacyId };
+  return { nameTokens, year, legacyId, dobFull, dobDayMonth, dobDayMonthYearPrefix };
+}
+
+function tryParseDobToken(token: string): string | null {
+  const m = /^(\d{1,2})[./-](\d{1,2})[./-](\d{4})$/.exec(token);
+  if (!m) return null;
+  const day = Number(m[1]);
+  const month = Number(m[2]);
+  const year = Number(m[3]);
+  if (year < 1900 || year > 2100) return null;
+  // Round-trip via UTC Date so impossible dates (Feb 30 wraps to Mar 2,
+  // April 31 wraps to May 1) get rejected when the components disagree.
+  const dt = new Date(Date.UTC(year, month - 1, day));
+  if (
+    dt.getUTCFullYear() !== year ||
+    dt.getUTCMonth() !== month - 1 ||
+    dt.getUTCDate() !== day
+  ) {
+    return null;
+  }
+  const yyyy = year.toString().padStart(4, '0');
+  const mm = month.toString().padStart(2, '0');
+  const dd = day.toString().padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+// Per-month max-day table. Feb is 29 (not 28) on purpose — the partial
+// "29.02" pattern has no year context so we can't know whether it's a
+// leap year; we accept it and rely on the row-level EXTRACT match to
+// surface only actual Feb 29 patients (leap-year births).
+const MAX_DAYS_PER_MONTH = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+
+function tryParseDobDayMonthToken(token: string): { day: number; month: number } | null {
+  const m = /^(\d{1,2})[./-](\d{1,2})$/.exec(token);
+  if (!m) return null;
+  const day = Number(m[1]);
+  const month = Number(m[2]);
+  if (month < 1 || month > 12) return null;
+  if (day < 1 || day > MAX_DAYS_PER_MONTH[month - 1]!) return null;
+  return { day, month };
+}
+
+function tryParseDobDayMonthYearPrefixToken(
+  token: string,
+): { day: number; month: number; yearPrefix: string } | null {
+  const m = /^(\d{1,2})[./-](\d{1,2})[./-](\d{1,3})$/.exec(token);
+  if (!m) return null;
+  const day = Number(m[1]);
+  const month = Number(m[2]);
+  const yearPrefix = m[3]!;
+  if (month < 1 || month > 12) return null;
+  if (day < 1 || day > MAX_DAYS_PER_MONTH[month - 1]!) return null;
+  // yearPrefix is 1-3 digits by regex. We don't require it to start
+  // with '1' or '2'; an impossible prefix ("0", "5") simply returns
+  // zero rows from the SQL LIKE — same UX as any miss.
+  return { day, month, yearPrefix };
 }
 
 function computeDiffs(before: object, after: object): AuditFieldDiff[] {
@@ -662,6 +832,10 @@ function rowToPublicDto(row: SearchRow & Record<string, unknown>): PatientPublic
     dateOfBirth:
       (row.dateOfBirth as Date | string | null | undefined) ??
       (row.date_of_birth as Date | string | null | undefined) ??
+      null,
+    placeOfBirth:
+      (row.placeOfBirth as string | null | undefined) ??
+      (row.place_of_birth as string | null | undefined) ??
       null,
     lastVisitAt:
       (row.lastVisitAt as Date | string | null | undefined) ??

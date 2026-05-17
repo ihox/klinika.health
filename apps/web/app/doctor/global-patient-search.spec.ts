@@ -1,52 +1,35 @@
-// Pure-helper tests for the doctor's global patient search. The full
+// Pure-helper tests for the second-line meta on top-nav search rows.
+// Both the doctor's ⌘K dropdown and the receptionist's top-bar share
+// `formatDobAndPlace` so the two surfaces stay visually identical;
+// pinning the helper here keeps the row stable for both. The full
 // click/keyboard flow is covered by the Playwright spec in
-// `apps/web/tests/e2e/doctor-home.spec.ts`; this file pins the small
-// formatting helper so the dropdown row stays stable.
+// `apps/web/tests/e2e/doctor-home.spec.ts`.
 
 import { describe, expect, it } from 'vitest';
 
-import { formatAgeAndSex } from './global-patient-search';
+import { formatDobAndPlace } from '@/lib/patient-client';
 
-// 2026-05-16 is the project's CLAUDE.md "today" — keep the asOf date
-// in sync with that so the age math reads naturally next to the
-// expected output.
-const ASOF = new Date('2026-05-16T12:00:00Z');
-
-describe('formatAgeAndSex', () => {
-  it('returns age and sex separated by " · " when both are present', () => {
-    expect(
-      formatAgeAndSex({ dateOfBirth: '2023-08-03', sex: 'f' }, ASOF),
-    ).toBe('2v 9m · vajzë');
-    expect(
-      formatAgeAndSex({ dateOfBirth: '2022-03-12', sex: 'm' }, ASOF),
-    ).toBe('4v 2m · djalë');
+describe('formatDobAndPlace', () => {
+  it('joins DOB and place with " · " when both are present', () => {
+    expect(formatDobAndPlace('2024-02-12', 'Prizren')).toBe('12.02.2024 · Prizren');
   });
 
-  it('returns only age when sex is null (receptionist quick-add)', () => {
-    expect(
-      formatAgeAndSex({ dateOfBirth: '2023-08-03', sex: null }, ASOF),
-    ).toBe('2v 9m');
+  it('omits the separator when place is missing', () => {
+    expect(formatDobAndPlace('2024-02-12', null)).toBe('12.02.2024');
   });
 
-  it('returns only sex when DOB is null', () => {
-    expect(formatAgeAndSex({ dateOfBirth: null, sex: 'f' }, ASOF)).toBe(
-      'vajzë',
-    );
-    expect(formatAgeAndSex({ dateOfBirth: null, sex: 'm' }, ASOF)).toBe(
-      'djalë',
-    );
+  it('treats an empty/whitespace place as missing', () => {
+    expect(formatDobAndPlace('2024-02-12', '')).toBe('12.02.2024');
+    expect(formatDobAndPlace('2024-02-12', '   ')).toBe('12.02.2024');
   });
 
-  it('returns an empty string when both halves are missing', () => {
-    expect(formatAgeAndSex({ dateOfBirth: null, sex: null }, ASOF)).toBe('');
+  it('renders "DL pa caktuar" when DOB is null (sentinel mapped at DTO boundary)', () => {
+    // The 1900-01-01 sentinel arrives as null on the wire — see
+    // `patients.dto.ts#dateToIso`. The helper only sees null.
+    expect(formatDobAndPlace(null, 'Prizren')).toBe('DL pa caktuar');
   });
 
-  it('uses Albanian month/day bands for sub-year ages', () => {
-    expect(
-      formatAgeAndSex({ dateOfBirth: '2025-11-16', sex: 'f' }, ASOF),
-    ).toBe('6 muaj · vajzë');
-    expect(
-      formatAgeAndSex({ dateOfBirth: '2026-04-30', sex: 'm' }, ASOF),
-    ).toBe('16 ditë · djalë');
+  it('renders "DL pa caktuar" when both DOB and place are missing', () => {
+    expect(formatDobAndPlace(null, null)).toBe('DL pa caktuar');
   });
 });
