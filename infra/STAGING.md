@@ -309,10 +309,10 @@ Login credentials are the `SEED_*_PASSWORD` values from `.env`:
 
 | URL | Email | Password env var |
 |---|---|---|
-| `https://klinika-health.ihox.net/login` | `admin@klinika-health.ihox.net` | `SEED_PLATFORM_ADMIN_PASSWORD` |
-| `https://klinika-health-donetamed.ihox.net/login` | `doctor@klinika-health.ihox.net` | `SEED_DOCTOR_PASSWORD` |
-| `https://klinika-health-donetamed.ihox.net/login` | `receptionist@klinika-health.ihox.net` | `SEED_RECEPTIONIST_PASSWORD` |
-| `https://klinika-health-donetamed.ihox.net/login` | `clinic-admin@klinika-health.ihox.net` | `SEED_CLINIC_ADMIN_PASSWORD` |
+| `https://klinika-health.ihox.net/login` | `admin_staging@klinika.health` | `SEED_PLATFORM_ADMIN_PASSWORD` |
+| `https://klinika-health-donetamed.ihox.net/login` | `doctor_staging@klinika.health` | `SEED_DOCTOR_PASSWORD` |
+| `https://klinika-health-donetamed.ihox.net/login` | `receptionist_staging@klinika.health` | `SEED_RECEPTIONIST_PASSWORD` |
+| `https://klinika-health-donetamed.ihox.net/login` | `clinic-admin_staging@klinika.health` | `SEED_CLINIC_ADMIN_PASSWORD` |
 
 Retrieve the actual passwords with:
 
