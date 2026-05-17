@@ -1,23 +1,38 @@
 name: Deploy Staging
 
+# Mirrors the tregu-online / montelgo pattern (ADR-018):
+#   1. CI builds the api + web images and pushes them to GHCR.
+#   2. CI SSHes to the staging VM as `deploy` and triggers the
+#      restricted dispatcher (/usr/local/bin/deploy.sh klinika-health),
+#      which `compose pulls`, runs prisma migrate deploy, and brings
+#      the stack up.
+#
+# The deploy keypair on the VM has `command="/usr/local/bin/deploy.sh"`
+# in authorized_keys, so the SSH command argument (`klinika-health`)
+# is the slug — that's the entire payload this workflow ships.
+
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
+      - 'design-reference/prototype/**'
+      - 'tools/migrate/**'
   workflow_dispatch:
 
-# A second push to main while a deploy is mid-flight should queue, not
-# cancel. Cancelling could leave the VM mid-`docker compose up` with a
-# half-deployed stack. The next run will catch the latest commit anyway.
 concurrency:
   group: deploy-staging
   cancel-in-progress: false
 
 permissions:
   contents: read
+  packages: write
 
 jobs:
   deploy:
-    name: Build + migrate + deploy to staging VM
+    name: Build images + trigger VM deploy
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment:
@@ -26,62 +41,54 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup SSH agent
-        uses: webfactory/ssh-agent@v0.9.0
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
         with:
-          ssh-private-key: ${{ secrets.STAGING_SSH_KEY }}
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Pin staging host into known_hosts
+      - name: Build & push api image (staging)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./infra/docker/Dockerfile.api.prod
+          push: true
+          tags: |
+            ghcr.io/ihox/klinika-api:staging
+            ghcr.io/ihox/klinika-api:staging-${{ github.sha }}
+          cache-from: type=gha,scope=klinika-api
+          cache-to: type=gha,mode=max,scope=klinika-api
+
+      - name: Build & push web image (staging)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./infra/docker/Dockerfile.web.prod
+          push: true
+          tags: |
+            ghcr.io/ihox/klinika-web:staging
+            ghcr.io/ihox/klinika-web:staging-${{ github.sha }}
+          cache-from: type=gha,scope=klinika-web
+          cache-to: type=gha,mode=max,scope=klinika-web
+
+      - name: Trigger deploy on staging-vm
         env:
-          STAGING_HOST: ${{ secrets.STAGING_HOST }}
-          STAGING_PORT: ${{ secrets.STAGING_PORT }}
+          DEPLOY_KEY: ${{ secrets.STAGING_SSH_KEY }}
         run: |
-          ssh-keyscan -p "${STAGING_PORT:-22}" -H "$STAGING_HOST" >> ~/.ssh/known_hosts
-
-      # The runner never carries application secrets. All build + run
-      # state lives on the VM under /srv/sites/klinika-health/, and the
-      # .env.staging file there is the source of truth for credentials.
-      # The runner just orchestrates: pull → build → migrate → restart.
-      - name: Pull main, build images, migrate, restart
-        env:
-          STAGING_HOST: ${{ secrets.STAGING_HOST }}
-          STAGING_USER: ${{ secrets.STAGING_USER }}
-          STAGING_PORT: ${{ secrets.STAGING_PORT }}
-        run: |
-          ssh -p "${STAGING_PORT:-22}" "$STAGING_USER@$STAGING_HOST" 'bash -s' <<'REMOTE'
-            set -euo pipefail
-            cd /srv/sites/klinika-health/repo
-
-            echo "→ Fetching latest origin/main"
-            git fetch --quiet origin main
-            git reset --hard origin/main
-            # NB: do NOT `git clean` — that would wipe .env.staging
-            # (which is gitignored and lives next to the workflow file
-            # on the VM only).
-
-            COMPOSE="docker compose -f infra/compose/docker-compose.staging.yml --env-file .env.staging"
-
-            echo "→ Building images"
-            $COMPOSE build --pull
-
-            echo "→ Applying database migrations"
-            $COMPOSE run --rm api pnpm exec prisma migrate deploy
-
-            echo "→ Restarting services"
-            $COMPOSE up -d --remove-orphans
-
-            echo "→ Service status"
-            $COMPOSE ps
-
-            echo "→ Pruning dangling build artefacts"
-            docker image prune -f --filter "label!=keep" >/dev/null || true
-          REMOTE
+          mkdir -p ~/.ssh
+          echo "$DEPLOY_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh -o StrictHostKeyChecking=accept-new \
+              -p 101 \
+              -i ~/.ssh/deploy_key \
+              deploy@80.108.9.40 \
+              klinika-health
 
       # End-to-end health check via the public URL — exercises DNS →
       # sibling NPM → web container → Next.js rewrite → api → postgres.
-      # /health/ready returns 200 only when the DB probe passes; 503
-      # otherwise. A few retries cover the few seconds the api takes to
-      # start its event loop and open the DB pool.
       - name: Health check
         env:
           STAGING_PUBLIC_URL: ${{ vars.STAGING_PUBLIC_URL }}
@@ -89,10 +96,9 @@ jobs:
           set -e
           if [ -z "$STAGING_PUBLIC_URL" ]; then
             echo "STAGING_PUBLIC_URL repo variable is not set; skipping HTTPS check."
-            echo "Set it in repo settings → Variables → Actions to enable end-to-end verification."
             exit 0
           fi
-          for attempt in 1 2 3 4 5; do
+          for attempt in $(seq 1 10); do
             if curl -fsS -m 10 "$STAGING_PUBLIC_URL/health/ready" > /tmp/health.json; then
               echo "✓ Staging health check passed:"
               cat /tmp/health.json
@@ -101,5 +107,5 @@ jobs:
             echo "  attempt $attempt failed, retrying in 6s…"
             sleep 6
           done
-          echo "✗ Staging health check failed after 5 attempts"
+          echo "✗ Staging health check failed after 10 attempts"
           exit 1

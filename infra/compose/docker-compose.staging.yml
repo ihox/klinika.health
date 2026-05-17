@@ -1,16 +1,14 @@
-# Staging stack for Klinika — runs on the shared Proxmox VM
-# alongside other site stacks (montelgo, tregu-online, …). NPM
-# lives on a sibling VM on the same LAN and proxies the public
-# hostnames to 10.2.1.101:8003 — see infra/STAGING.md for the
-# NPM proxy host config and DNS records the operator adds
-# manually.
+# Klinika staging stack — runs on the shared Proxmox VM at
+# /srv/sites/klinika-health/. Mirrors the tregu-online / montelgo
+# convention: image refs point at GHCR, CI builds + pushes, the
+# VM-side /usr/local/bin/deploy.sh `compose pulls` + restarts.
 #
-# Per ADR-018 (superseding the staging portion of ADR-002): no
-# Cloudflare Tunnel, no self-hosted runner, no Caddy on this VM.
-# All ingress is via the sibling NPM; this compose file binds
-# only one host port (8003) for that NPM to reach.
-#
-# All services run TZ=Europe/Belgrade per ADR-006.
+# This file is the canonical version under version control. An
+# identical copy lives at /srv/sites/klinika-health/docker-compose.yml
+# on the VM and is fed by the `.env` file in that same directory
+# (gitignored, secrets only). When this file changes meaningfully,
+# sync the VM copy by hand — there is no auto-sync step in CI.
+# See infra/STAGING.md + ADR-018.
 
 name: klinika-staging
 
@@ -26,11 +24,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-klinika}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
-      # Bind-mounted on the host so backups can run from outside
-      # the container and the data survives `docker compose down -v`.
-      # Host directory must be chowned to uid 999 (the postgres
-      # image's user) — see infra/STAGING.md "Filesystem prep".
-      - /srv/sites/klinika-health/postgres_data:/var/lib/postgresql/data
+      - ./postgres_data:/var/lib/postgresql/data
     networks:
       - internal
     healthcheck:
@@ -38,103 +32,42 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
-    # No host port exposed — only the api service reaches postgres,
-    # and only across the internal network.
 
   api:
-    build:
-      context: ../..
-      dockerfile: infra/docker/Dockerfile.api.prod
-    image: klinika-staging-api:local
+    image: ghcr.io/ihox/klinika-api:staging
     container_name: klinika-staging-api
     restart: unless-stopped
+    env_file: .env
     environment:
       TZ: Europe/Belgrade
       NODE_ENV: production
       API_PORT: 3001
       API_HOST: 0.0.0.0
-      # Postgres is reached as `postgres:5432` on the internal net.
       DATABASE_URL: postgresql://${POSTGRES_USER:-klinika}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-klinika}?schema=public
-      AUTH_SECRET: ${AUTH_SECRET}
-      AUTH_TRUSTED_DEVICE_TTL_DAYS: ${AUTH_TRUSTED_DEVICE_TTL_DAYS:-30}
-      # Tenancy — staging runs in PREFIX mode (apex + prefix set).
-      # Production uses SUFFIX mode by leaving APEX + PREFIX unset.
-      # See apps/api/src/common/middleware/clinic-resolution.middleware.ts
-      # and ADR-018.
-      CLINIC_HOST_APEX: ${CLINIC_HOST_APEX:-klinika-health.ihox.net}
-      CLINIC_HOST_PREFIX: ${CLINIC_HOST_PREFIX:-klinika-health-}
-      CLINIC_HOST_SUFFIX: ${CLINIC_HOST_SUFFIX:-klinika.health}
-      # CORS — explicit allow-list of staging hosts. The regex driven
-      # by CLINIC_HOST_APEX + CLINIC_HOST_PREFIX in main.ts handles the
-      # tenant subdomains automatically.
-      CORS_ORIGIN: ${CORS_ORIGIN:-https://klinika-health.ihox.net}
-      # Storage path inside the container. Matched by the bind mount
-      # below so logos and signatures persist across deploys.
       STORAGE_ROOT: /workspace/storage
-      # Email — staging defaults to the capturing sender (writes the
-      # body to stdout). Set SMTP_* or RESEND_API_KEY in .env.staging
-      # if you need real delivery.
-      EMAIL_FROM: ${EMAIL_FROM:-no-reply@klinika-health.ihox.net}
-      EMAIL_FROM_NAME: ${EMAIL_FROM_NAME:-Klinika (staging)}
-      SMTP_HOST: ${SMTP_HOST:-}
-      SMTP_PORT: ${SMTP_PORT:-587}
-      SMTP_USERNAME: ${SMTP_USERNAME:-}
-      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
-      RESEND_API_KEY: ${RESEND_API_KEY:-}
-      # Logging
-      LOG_LEVEL: ${LOG_LEVEL:-info}
-      APP_VERSION: ${APP_VERSION:-staging}
-      # Telemetry off for staging — no clinic agents in this env.
-      TELEMETRY_DISABLED: "1"
-      JOBS_DISABLED: ${JOBS_DISABLED:-0}
     volumes:
-      # Persistent storage for clinic logos + signatures (encrypted).
-      # Host directory must exist and be chowned to uid 10001 — see
-      # infra/STAGING.md.
-      - /srv/sites/klinika-health/storage:/workspace/storage
+      - ./storage:/workspace/storage
     depends_on:
       postgres:
         condition: service_healthy
     networks:
       - internal
       - public
-    # No host port. The web service reaches api as `api:3001` on
-    # the public network; nothing outside the compose project sees
-    # the api directly.
 
   web:
-    build:
-      context: ../..
-      dockerfile: infra/docker/Dockerfile.web.prod
-    image: klinika-staging-web:local
+    image: ghcr.io/ihox/klinika-web:staging
     container_name: klinika-staging-web
     restart: unless-stopped
+    env_file: .env
     environment:
       TZ: Europe/Belgrade
       NODE_ENV: production
-      # Server-side proxy target — Next.js rewrites /api/* and
-      # /health/* to this URL (apps/web/next.config.mjs). The
-      # browser hits the same origin it loaded the page from
-      # (klinika-health.ihox.net / klinika-health-*.ihox.net), which
-      # NPM forwards to this container on port 3000.
       API_INTERNAL_URL: http://api:3001
-      # Tenancy — same env vars as the api so apps/web/lib/scope.ts
-      # picks the matching mode at module load (apps/web/middleware.ts
-      # is an Edge function reading these from process.env).
-      CLINIC_HOST_APEX: ${CLINIC_HOST_APEX:-klinika-health.ihox.net}
-      CLINIC_HOST_PREFIX: ${CLINIC_HOST_PREFIX:-klinika-health-}
-      CLINIC_HOST_SUFFIX: ${CLINIC_HOST_SUFFIX:-klinika.health}
-      # Intentionally not setting NEXT_PUBLIC_API_URL — browser
-      # uses relative URLs (apps/web/lib/api.ts). Lets the staging
-      # domain change without rebuilding the image.
     depends_on:
       - api
     networks:
       - public
     ports:
-      # Bound on 0.0.0.0 so the sibling NPM (different VM on the
-      # same LAN) can reach it via 10.2.1.101:8003. Mirrors the
-      # 8001/8002 pattern used by montelgo and tregu-online.
       - "8003:3000"
 
 networks:
