@@ -27,7 +27,11 @@ test.describe('Boundary routing', () => {
   test('apex /login renders the platform-admin form', async ({ page }) => {
     await page.goto(`${APEX_BASE_URL}/login`);
     await expect(page.getByRole('heading', { name: 'Hyrja për admin' })).toBeVisible();
-    await expect(page.getByText('Admini i Platformës')).toBeVisible();
+    // The split-screen footer carries scope context: clinic name on the
+    // tenant side, the literal "admin" on the apex side. That's how a
+    // tester verifies the boundary visually without relying on the
+    // removed "Admini i Platformës" pill.
+    await expect(page.getByText('admin', { exact: true })).toBeVisible();
     // The clinic identity card must NOT be present here.
     await expect(page.getByText('donetamed.klinika.health')).toHaveCount(0);
   });

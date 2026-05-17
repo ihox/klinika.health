@@ -78,6 +78,32 @@
   }
 }
 
+/* Brand-row animation on auth pages — mirrors `.logo-anim` in
+   design-reference/prototype/index.html. `tile-in` is a one-shot
+   scale-in on mount; `beat` is the infinite heart-pulse that takes
+   over after 1500ms so the mark feels alive without distracting from
+   the form. */
+@keyframes auth-brand-tile-in {
+  from { opacity: 0; transform: scale(0.7); }
+  to   { opacity: 1; transform: scale(1); }
+}
+@keyframes auth-brand-beat {
+  0%, 100% { transform: scale(1); }
+  20%      { transform: scale(1.06); }
+  40%      { transform: scale(0.98); }
+  60%      { transform: scale(1.04); }
+  80%      { transform: scale(1); }
+}
+.auth-brand-anim {
+  transform-origin: center;
+  animation:
+    auth-brand-tile-in 600ms cubic-bezier(0.2, 0.7, 0.2, 1) 100ms backwards,
+    auth-brand-beat 1400ms ease-in-out 1500ms infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .auth-brand-anim { animation: none; }
+}
+
 /* Loading-skeleton pulse — mirrors design-reference/prototype/components/
    loading-skeletons.html. Same 1.4s ease-in-out timing between two
    warm stone tones; intentionally distinct from Tailwind's opacity-only

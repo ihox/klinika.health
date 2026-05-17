@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { BrandLogo } from '../brand-logo';
+import { BrandRow } from './brand-row';
 
 interface AuthShellProps {
   title: string;
@@ -7,24 +7,29 @@ interface AuthShellProps {
   children: ReactNode;
   footer?: ReactNode;
   /**
-   * Optional header that replaces the default BrandLogo above the title.
-   * Used by the clinic login to surface the clinic identity card (logo +
-   * name + subdomain) per design-reference/prototype/components/clinic-login.html.
+   * Optional content rendered between the animated brand-row and the
+   * title. The clinic login uses this slot for the clinic-identity
+   * card (initials + name + subdomain). The brand-row itself (animated
+   * klinika.health wordmark) is always rendered above this slot per
+   * design-reference/prototype/index.html — callers don't pass it in.
    */
   header?: ReactNode;
 }
 
 /**
- * Split-screen auth layout. Left: form (centered, max-width 380px).
- * Right: dark-teal hero with subtle WHO-curve illustration. The hero
- * collapses on viewports < 900px to keep the form usable on tablets.
+ * Split-screen auth layout. Left: animated klinika.health brand-row at
+ * the top, optional clinic-identity card, title + form (max-width
+ * 380px). Right: dark-teal hero with the WHO-curve illustration and
+ * headline. The hero collapses on viewports < 900px so the form stays
+ * usable on tablets.
  */
 export function AuthShell({ title, subtitle, children, footer, header }: AuthShellProps) {
   return (
     <main className="min-h-screen bg-stone-50 grid lg:grid-cols-2">
       <div className="grid place-items-center p-6 lg:p-10">
         <div className="w-full max-w-[380px]">
-          <div className="mb-10">{header ?? <BrandLogo height={36} />}</div>
+          <BrandRow className="mb-7" />
+          {header ? <div className="mb-8">{header}</div> : null}
           <h1 className="font-display text-[28px] font-semibold tracking-[-0.025em] text-stone-900">
             {title}
           </h1>

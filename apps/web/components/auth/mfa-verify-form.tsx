@@ -307,11 +307,13 @@ export function MfaVerifyForm({
         </form>
       ) : null}
 
-      <div className="mt-8 text-[12px] text-stone-500">
-        <Link href={loginPath} className="hover:text-teal-700">
-          ← Kthehu te hyrja
-        </Link>
-      </div>
+      {state.kind === 'locked' ? null : (
+        <div className="mt-8 text-[12px] text-stone-500">
+          <Link href={loginPath} className="hover:text-teal-700">
+            ← Kthehu te hyrja
+          </Link>
+        </div>
+      )}
     </div>
   );
 }

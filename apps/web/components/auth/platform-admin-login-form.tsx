@@ -6,7 +6,8 @@ import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
-import { BrandLogo } from '@/components/brand-logo';
+import { AuthShell } from '@/components/auth/auth-shell';
+import { CenteredAuthShell } from '@/components/auth/centered-auth-shell';
 import {
   MfaVerifyForm,
   type MfaResendResult,
@@ -17,6 +18,7 @@ import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { ApiError } from '@/lib/api';
 import { adminClient } from '@/lib/admin-client';
+import { AuthFooter } from '@/components/auth/auth-footer';
 
 const LoginSchema = z.object({
   email: z.string().trim().min(1, 'Email-i mungon').email('Email-i është i pasaktë'),
@@ -104,32 +106,28 @@ export function PlatformAdminLoginForm() {
   };
 
   if (mfaState) {
+    // The MFA step continues to use the centered shell — it's a
+    // verification screen, not a login form per se, and the user's
+    // mental model of "logging in" is satisfied by the time we land
+    // here. Same chrome as the clinic /verify route.
     return (
-      <MfaVerifyForm
-        maskedEmail={mfaState.maskedEmail}
-        onVerify={handleMfaVerify}
-        onResend={handleMfaResend}
-        onSuccess={() => router.replace(redirect)}
-      />
+      <CenteredAuthShell>
+        <MfaVerifyForm
+          maskedEmail={mfaState.maskedEmail}
+          onVerify={handleMfaVerify}
+          onResend={handleMfaResend}
+          onSuccess={() => router.replace(redirect)}
+        />
+      </CenteredAuthShell>
     );
   }
 
   return (
-    <div className="w-full max-w-[400px]">
-      <div className="flex items-baseline gap-2.5 mb-8">
-        <BrandLogo height={28} />
-        <span className="text-[11px] font-semibold uppercase tracking-wider text-teal-800 bg-teal-50 border border-teal-200 px-2 py-0.5 rounded-full">
-          Admini i Platformës
-        </span>
-      </div>
-
-      <h1 className="font-display text-[24px] font-semibold tracking-[-0.025em] text-stone-900">
-        Hyrja për admin
-      </h1>
-      <p className="mt-1.5 mb-7 text-[13px] text-stone-500">
-        Hyrja kërkon verifikim me email në çdo seancë.
-      </p>
-
+    <AuthShell
+      title="Hyrja për admin"
+      subtitle="Hyrja kërkon verifikim me email në çdo seancë."
+      footer={<AuthFooter left="admin" />}
+    >
       <form onSubmit={onLogin} className="flex flex-col gap-4" noValidate>
         <Field
           label="Email"
@@ -158,16 +156,11 @@ export function PlatformAdminLoginForm() {
           />
         </Field>
         {formError ? <p className="text-[12.5px] text-amber-700">{formError}</p> : null}
-        <Button type="submit" disabled={submitting} size="lg">
+        <Button type="submit" disabled={submitting} size="lg" className="mt-2">
           {submitting ? 'Po hyhet…' : 'Vazhdo'}
         </Button>
       </form>
-
-      <div className="mt-10 pt-5 border-t border-stone-200 flex justify-between text-[12px] text-stone-400">
-        <span>klinika.health</span>
-        <span>v1.0</span>
-      </div>
-    </div>
+    </AuthShell>
   );
 }
 
