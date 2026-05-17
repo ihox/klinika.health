@@ -18,6 +18,7 @@ import { expect, test, type Page, type Route } from '@playwright/test';
  */
 
 const PATIENT_ID = 'a11a11a1-1111-4111-8111-111111111111';
+const DEFAULT_VISIT_ID = 'b22b22b2-2222-4222-8222-222222222222';
 
 interface GrowthPointFixture {
   visitId: string;
@@ -45,6 +46,47 @@ interface ChartFixture {
 }
 
 async function mockChart(page: Page, fixture: ChartFixture): Promise<void> {
+  // The chart shell calls useMe() on mount; an unmocked 401 would
+  // bounce the test to /login. Stub a doctor session so the chart
+  // renders deterministically in both CI (api unreachable) and local
+  // (api returns a real 401) environments.
+  await page.route('**/api/auth/me', (route: Route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        user: {
+          id: 'u-taulant',
+          email: 'taulant@donetamed.example',
+          firstName: 'Taulant',
+          lastName: 'Shala',
+          roles: ['doctor'],
+          title: 'Dr.',
+          clinicName: 'DonetaMED',
+          clinicShortName: 'donetamed',
+          createdAt: '2024-01-01T00:00:00.000Z',
+          lastLoginAt: '2026-05-14T08:00:00.000Z',
+        },
+      }),
+    }),
+  );
+
+  // Chart-view short-circuits to EmptyVisitsState (no right column) when
+  // visits.length === 0, which hides the growth panel these tests assert
+  // against. Default to a single placeholder visit when the fixture
+  // doesn't care about the visit list.
+  const visits = fixture.visits ?? [
+    {
+      id: DEFAULT_VISIT_ID,
+      visitDate: '2026-05-14',
+      status: 'completed',
+      primaryDiagnosis: null,
+      legacyDiagnosis: null,
+      paymentCode: null,
+      updatedAt: '2026-05-14T11:00:00.000Z',
+    },
+  ];
+
   await page.route(`**/api/patients/${PATIENT_ID}/chart`, (route: Route) =>
     route.fulfill({
       status: 200,
@@ -66,15 +108,63 @@ async function mockChart(page: Page, fixture: ChartFixture): Promise<void> {
           alergjiTjera: null,
           createdAt: '2024-09-12T08:00:00.000Z',
           updatedAt: '2026-05-14T09:00:00.000Z',
+          // Force the chart shell past its isComplete redirect guard.
+          // The unresolved-sex test keeps `sex: null` on purpose so the
+          // GrowthPanel renders its placeholder, so we mark the row
+          // complete from the fixture rather than letting it derive.
+          isComplete: true,
         },
-        visits: fixture.visits ?? [],
+        visits,
         vertetime: [],
         daysSinceLastVisit: null,
-        visitCount: fixture.visits?.length ?? 0,
+        visitCount: visits.length,
         growthPoints: fixture.growthPoints ?? [],
       }),
     }),
   );
+
+  // Chart-view auto-loads the full visit detail for the active visit.
+  // Stub the placeholder visit so the side fetch returns clean data
+  // instead of hitting the live API.
+  await page.route(`**/api/visits/${DEFAULT_VISIT_ID}`, (route: Route) => {
+    if (route.request().method() !== 'GET') return route.fallback();
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        visit: {
+          id: DEFAULT_VISIT_ID,
+          clinicId: 'c-donetamed',
+          patientId: PATIENT_ID,
+          visitDate: '2026-05-14',
+          status: 'completed',
+          complaint: null,
+          feedingNotes: null,
+          feedingBreast: false,
+          feedingFormula: false,
+          feedingSolid: false,
+          weightG: null,
+          heightCm: null,
+          headCircumferenceCm: null,
+          temperatureC: null,
+          paymentCode: null,
+          examinations: null,
+          ultrasoundNotes: null,
+          legacyDiagnosis: null,
+          prescription: null,
+          labResults: null,
+          followupNotes: null,
+          otherNotes: null,
+          diagnoses: [],
+          createdAt: '2026-05-14T08:00:00.000Z',
+          updatedAt: '2026-05-14T08:00:00.000Z',
+          createdBy: 'u-taulant',
+          updatedBy: 'u-taulant',
+          wasUpdated: false,
+        },
+      }),
+    });
+  });
 }
 
 test.describe('WHO growth charts', () => {
@@ -102,8 +192,12 @@ test.describe('WHO growth charts', () => {
 
     // Open the modal via the weight card.
     await weightCard.click();
-    const dialog = page.getByRole('dialog', { name: /Pesha sipas moshës/ });
+    // The modal's accessible name is `meta.title`, which changes when
+    // the tab switches (weight → length → hc). Matching the trailing
+    // "sipas moshës" keeps the locator stable across tab clicks.
+    const dialog = page.getByRole('dialog', { name: /sipas moshës/ });
     await expect(dialog).toBeVisible();
+    await expect(dialog.getByRole('heading', { name: 'Pesha sipas moshës' })).toBeVisible();
 
     // "Djalë" chip with the male tone.
     const chip = page.getByTestId('growth-modal-sex-chip');
@@ -128,8 +222,10 @@ test.describe('WHO growth charts', () => {
       dialog.getByRole('heading', { name: 'Perimetri i kokës sipas moshës' }),
     ).toBeVisible();
 
-    // Mbyll closes the modal.
-    await dialog.getByRole('button', { name: 'Mbyll' }).click();
+    // Mbyll closes the modal. The header × button and the footer
+    // primary button both carry the "Mbyll" accessible name — pick the
+    // footer button (the explicit affordance) by exact text match.
+    await dialog.getByRole('button', { name: 'Mbyll', exact: true }).last().click();
     await expect(dialog).not.toBeVisible();
   });
 
@@ -250,6 +346,7 @@ test.describe('WHO growth charts', () => {
               alergjiTjera: null,
               createdAt: '2024-09-12T08:00:00.000Z',
               updatedAt: '2026-05-14T09:00:00.000Z',
+              isComplete: true,
             },
           }),
         });
