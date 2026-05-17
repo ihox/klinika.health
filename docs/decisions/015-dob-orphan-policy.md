@@ -1,7 +1,9 @@
 # ADR 015: DOB orphan policy + Vendi↔Datelindja swap recovery + revised PASS criteria
 
 Date: 2026-05-17
-Status: Accepted — refines [ADR-010](./010-migration-approach.md) and [ADR-012](./012-vizitat-field-mapping-correction.md)
+Status: Accepted — orphan rule superseded by [ADR-017](./017-import-incomplete-dob-with-sentinel.md); swap recovery and reconciliation carve-out still in effect
+
+> **Note (same day):** The "orphan unparseable-DOB rows" decision below was reversed by [ADR-017](./017-import-incomplete-dob-with-sentinel.md) once we realised Klinika already had an established `UNKNOWN_DOB_SENTINEL` (`1900-01-01`) convention for incomplete patients (used by the receptionist quick-add path and the `isPatientComplete` predicate). Those rows now import with the sentinel and surface in the UI's existing completion queue. The Vendi↔Datelindja swap detection and the reconciliation verdict carve-out described here remain in force.
 
 ## Context
 

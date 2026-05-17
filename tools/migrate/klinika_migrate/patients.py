@@ -71,24 +71,36 @@ class _ParseFailure:
 
 @dataclass(frozen=True)
 class _DobOutcome:
-    """Output of `_classify_dob` — see ADR-015 for the policy.
+    """Output of `_classify_dob`.
 
-    `parsed` is the date (None if the row should be orphaned),
-    `reason` is the orphan-reason code (None on success),
-    `swap_applied` is True when the date came from the Vendi column
-    instead of Datelindja (the doctor swapped the fields).
+    ADR-017 supersedes ADR-015's orphan policy on DOB: rows that
+    can't produce a real DOB now import with `UNKNOWN_DOB_SENTINEL`
+    and surface in the UI via the existing isPatientComplete
+    predicate. So `parsed` is always a date now — never None — and
+    `reason` is the warning code when the sentinel was used (or when
+    a Vendi↔Datelindja swap fired). `legacy_dob_raw` carries the
+    original Datelindja text verbatim so Dr. Taulant can triage the
+    completion queue by source shape.
     """
 
-    parsed: date | None
+    parsed: date
     reason: str | None
     swap_applied: bool
+    legacy_dob_raw: str | None
 
+
+# Mirror of UNKNOWN_DOB_SENTINEL in
+# apps/api/src/modules/patients/patients.service.ts. The receptionist
+# quick-add path uses the same date when no DOB is captured; the
+# isPatientComplete predicate (apps/web/lib/patient.ts) treats this
+# value as "patient needs completion".
+SENTINEL_DOB = date(1900, 1, 1)
 
 # DD.MM.YYYY shape; used to detect the Vendi↔Datelindja swap case.
 _DOB_SHAPE = re.compile(r"^\d{1,2}[./\-]\d{1,2}[./\-]\d{4}$")
-# Year-only fingerprint (e.g. "2018"). Per ADR-015, orphaned with a
-# distinct reason so the doctor's post-cutover review queue separates
-# "no DOB at all" from "DOB approximate".
+# Year-only fingerprint (e.g. "2018"). Per ADR-017 these no longer
+# orphan — they import with sentinel DOB and the verbatim "2018" is
+# kept in patients.legacy_dob_raw for the completion queue.
 _YEAR_ONLY = re.compile(r"^\d{4}$")
 
 
@@ -165,26 +177,31 @@ def _record_warning(
 
 
 def _classify_dob(raw_dob: Any, raw_vendi: Any) -> _DobOutcome:
-    """Map a (Datelindja, Vendi) pair to a parsed DOB + reason code.
+    """Map a (Datelindja, Vendi) pair to a (date, warning code) pair.
 
-    Three orphan-reason codes are emitted instead of the original
-    catch-all `dob_unparseable` (ADR-015):
+    ADR-017: rows where the DOB can't be parsed import with the
+    sentinel date (1900-01-01) instead of orphaning. The UI's
+    existing isPatientComplete predicate routes them into the
+    master-data completion queue — same convention as the
+    receptionist quick-add path. Three warning codes distinguish the
+    completion-queue triage shape:
 
       `dob_missing`     — Datelindja absent / blank and Vendi can't
                           rescue the row.
       `year_only_dob`   — Datelindja is exactly four digits ("2018").
-                          We refuse to import: pediatric charts need
-                          month + day for growth charts, dosing, and
-                          milestones.
+                          Parents knew the year but not the day.
       `dob_unparseable` — anything else parse_dob can't handle (typos
                           like "31.09.2022", "08..02.2023", Albanian
                           age strings "21 vjeq").
 
-    The Vendi↔Datelindja swap detection rescues the few rows where
-    the doctor typed the DOB into the city field and vice versa.
+    The Vendi↔Datelindja swap detection still rescues rows where the
+    doctor typed the DOB into the city field and vice versa.
     Detection rule (conservative): Vendi matches DD.MM.YYYY shape AND
     parses as a valid date. When that fires, the parsed date wins and
     `swap_applied=True` so the caller swaps `place_of_birth` too.
+
+    `legacy_dob_raw` carries the verbatim source string so the
+    completion queue can be sorted by raw shape without re-parsing.
     """
     raw_dob_str = str(raw_dob).strip() if raw_dob is not None else ""
     swap_candidate = None
@@ -195,20 +212,50 @@ def _classify_dob(raw_dob: Any, raw_vendi: Any) -> _DobOutcome:
 
     if raw_dob_str:
         if _YEAR_ONLY.match(raw_dob_str):
-            return _DobOutcome(parsed=None, reason="year_only_dob", swap_applied=False)
+            return _DobOutcome(
+                parsed=SENTINEL_DOB,
+                reason="year_only_dob",
+                swap_applied=False,
+                legacy_dob_raw=raw_dob_str,
+            )
         parsed = parse_dob(raw_dob_str)
         if parsed is not None:
-            return _DobOutcome(parsed=parsed, reason=None, swap_applied=False)
+            return _DobOutcome(
+                parsed=parsed,
+                reason=None,
+                swap_applied=False,
+                legacy_dob_raw=None,
+            )
         # Datelindja exists but doesn't parse. If Vendi looks like a
         # date AND Datelindja looks like a non-date string, swap.
         if swap_candidate is not None and not _DOB_SHAPE.match(raw_dob_str):
-            return _DobOutcome(parsed=swap_candidate, reason=None, swap_applied=True)
-        return _DobOutcome(parsed=None, reason="dob_unparseable", swap_applied=False)
+            return _DobOutcome(
+                parsed=swap_candidate,
+                reason=None,
+                swap_applied=True,
+                legacy_dob_raw=None,
+            )
+        return _DobOutcome(
+            parsed=SENTINEL_DOB,
+            reason="dob_unparseable",
+            swap_applied=False,
+            legacy_dob_raw=raw_dob_str,
+        )
 
     # Datelindja is blank/missing. Vendi may still rescue.
     if swap_candidate is not None:
-        return _DobOutcome(parsed=swap_candidate, reason=None, swap_applied=True)
-    return _DobOutcome(parsed=None, reason="dob_missing", swap_applied=False)
+        return _DobOutcome(
+            parsed=swap_candidate,
+            reason=None,
+            swap_applied=True,
+            legacy_dob_raw=None,
+        )
+    return _DobOutcome(
+        parsed=SENTINEL_DOB,
+        reason="dob_missing",
+        swap_applied=False,
+        legacy_dob_raw=None,
+    )
 
 
 def _parse_row(
@@ -219,7 +266,12 @@ def _parse_row(
     warnings_writer: JsonlWriter,
 ) -> PatientUpsertInput | _ParseFailure:
     name = parse_name(row.get(COL_NAME))
-    if name is None or not name.first_name or not name.last_name:
+    if name is None or not name.first_name:
+        # No identifiable name at all — orphan with the source row in
+        # the orphans log. Single-token names (`first_name` only,
+        # `last_name=""`) are allowed: they import under the same
+        # convention the receptionist quick-add already uses (CLAUDE.md
+        # §1.13 — `last_name` may be empty string).
         _record_warning(
             report,
             warnings_writer,
@@ -230,16 +282,6 @@ def _parse_row(
         return _ParseFailure("name_unparseable")
 
     dob_outcome = _classify_dob(row.get(COL_DOB), row.get(COL_PLACE))
-    if dob_outcome.parsed is None:
-        assert dob_outcome.reason is not None
-        _record_warning(
-            report,
-            warnings_writer,
-            legacy_id=legacy_id,
-            code=dob_outcome.reason,
-            value=row.get(COL_DOB),
-        )
-        return _ParseFailure(dob_outcome.reason)
 
     if dob_outcome.swap_applied:
         # Datelindja held the city name and Vendi held the DOB. Use
@@ -253,6 +295,19 @@ def _parse_row(
             value=row.get(COL_DOB),
         )
         place_text = clean_text(row.get(COL_DOB))
+    elif dob_outcome.reason is not None:
+        # Sentinel DOB applied (ADR-017). Row imports; the UI's
+        # isPatientComplete predicate will flag the patient as
+        # needing completion. The warning is recorded so the
+        # post-cutover queue can be triaged by code.
+        _record_warning(
+            report,
+            warnings_writer,
+            legacy_id=legacy_id,
+            code=dob_outcome.reason,
+            value=row.get(COL_DOB),
+        )
+        place_text = clean_text(row.get(COL_PLACE))
     else:
         place_text = clean_text(row.get(COL_PLACE))
     dob = dob_outcome.parsed
@@ -303,6 +358,7 @@ def _parse_row(
         birth_length_cm=birth_length,
         alergji_tjera=clean_text(row.get(COL_ALLERGIES)),
         phone=parse_phone(row.get(COL_PHONE)),
+        legacy_dob_raw=dob_outcome.legacy_dob_raw,
     )
 
 

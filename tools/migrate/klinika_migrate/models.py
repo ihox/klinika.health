@@ -26,6 +26,11 @@ class PatientUpsertInput:
     birth_length_cm: Decimal | None
     alergji_tjera: str | None
     phone: str | None
+    # Verbatim Datelindja text when the row fell back to
+    # UNKNOWN_DOB_SENTINEL. NULL on every patient whose DOB parsed
+    # cleanly. See ADR-017 and apps/api/.../patients.service.ts
+    # UNKNOWN_DOB_SENTINEL.
+    legacy_dob_raw: str | None
 
 
 @dataclass(frozen=True)

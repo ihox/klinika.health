@@ -158,40 +158,65 @@ def test_dry_run_skips_db_writes(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_unparseable_dob_orphans_with_row(tmp_path: Path) -> None:
-    """Date that's not in any known format, and not rescuable via the
-    Vendi swap, lands in the dob_unparseable bucket (ADR-015)."""
-    rows = [_row(id_=42, name="Rita Hoxha", dob="not a date")]
-    report, warnings, orphans = _import(rows, db=CapturingDB(), tmp_path=tmp_path)
+def test_unparseable_dob_imports_with_sentinel(tmp_path: Path) -> None:
+    """ADR-017: dates that don't parse and can't be Vendi-rescued
+    import with date_of_birth=1900-01-01, the original Datelindja
+    text preserved in legacy_dob_raw, and a `dob_unparseable`
+    warning recorded for the completion queue."""
+    db = CapturingDB()
+    rows = [_row(id_=42, name="Rita Hoxha", dob="21 vjeq")]
+    report, warnings, orphans = _import(rows, db=db, tmp_path=tmp_path)
 
-    assert report.imported == 0
-    assert report.skipped_orphan == 1
+    assert report.imported == 1
+    assert report.skipped_orphan == 0
+    assert orphans == []
     assert report.warnings_by_code["dob_unparseable"] == 1
     assert any(w["code"] == "dob_unparseable" for w in warnings)
-    assert orphans[0]["reason"] == "dob_unparseable"
-    assert orphans[0]["legacy_id"] == 42
-    # The row content stays in the orphans file so the doctor can
-    # re-enter the patient manually.
-    assert orphans[0]["row"]["Emri dhe mbiemri"] == "Rita Hoxha"
+
+    payload = db.calls[0][1]
+    assert payload.date_of_birth == date(1900, 1, 1)  # type: ignore[attr-defined]
+    assert payload.legacy_dob_raw == "21 vjeq"  # type: ignore[attr-defined]
 
 
-def test_year_only_dob_orphan_has_distinct_reason(tmp_path: Path) -> None:
-    """ADR-015: 'Datelindja=YYYY' rows orphan with reason
-    `year_only_dob`, not `dob_unparseable`, so the post-cutover
-    review queue can be triaged separately."""
+def test_year_only_dob_imports_with_sentinel(tmp_path: Path) -> None:
+    """ADR-017: 'Datelindja=YYYY' rows import with sentinel DOB and
+    the verbatim year preserved in legacy_dob_raw."""
+    db = CapturingDB()
     rows = [_row(id_=99, name="Rita Hoxha", dob="2018")]
-    report, _, orphans = _import(rows, db=CapturingDB(), tmp_path=tmp_path)
-    assert report.skipped_orphan == 1
+    report, warnings, orphans = _import(rows, db=db, tmp_path=tmp_path)
+
+    assert report.imported == 1
+    assert orphans == []
     assert report.warnings_by_code["year_only_dob"] == 1
-    assert orphans[0]["reason"] == "year_only_dob"
+    payload = db.calls[0][1]
+    assert payload.date_of_birth == date(1900, 1, 1)  # type: ignore[attr-defined]
+    assert payload.legacy_dob_raw == "2018"  # type: ignore[attr-defined]
 
 
-def test_dob_missing_distinct_from_unparseable(tmp_path: Path) -> None:
-    """Datelindja absent / blank => `dob_missing` (ADR-015)."""
+def test_dob_missing_imports_with_sentinel_and_null_raw(tmp_path: Path) -> None:
+    """ADR-017: completely absent Datelindja imports with sentinel
+    DOB. legacy_dob_raw is NULL — there's no source string to
+    preserve."""
+    db = CapturingDB()
     rows = [_row(id_=99, name="Rita Hoxha", dob=None)]
-    report, _, orphans = _import(rows, db=CapturingDB(), tmp_path=tmp_path)
-    assert orphans[0]["reason"] == "dob_missing"
+    report, _, orphans = _import(rows, db=db, tmp_path=tmp_path)
+
+    assert report.imported == 1
+    assert orphans == []
     assert report.warnings_by_code["dob_missing"] == 1
+    payload = db.calls[0][1]
+    assert payload.date_of_birth == date(1900, 1, 1)  # type: ignore[attr-defined]
+    assert payload.legacy_dob_raw is None  # type: ignore[attr-defined]
+
+
+def test_clean_dob_leaves_legacy_raw_null(tmp_path: Path) -> None:
+    """Normal DOB rows must not get legacy_dob_raw set — the column
+    is the audit signal for incomplete imports only."""
+    db = CapturingDB()
+    rows = [_row(id_=1, name="Rita Hoxha", dob="01.02.2010")]
+    _import(rows, db=db, tmp_path=tmp_path)
+    payload = db.calls[0][1]
+    assert payload.legacy_dob_raw is None  # type: ignore[attr-defined]
 
 
 def test_vendi_swap_recovery_imports_row(tmp_path: Path) -> None:
@@ -213,11 +238,18 @@ def test_vendi_swap_recovery_imports_row(tmp_path: Path) -> None:
 
 def test_vendi_swap_requires_dob_shape_not_just_any_date(tmp_path: Path) -> None:
     """Conservative gate: Vendi must look like a DOB (DD.MM.YYYY).
-    Cities and free text never accidentally pass."""
+    Cities and free text never accidentally pass. Post-ADR-017 the
+    row still imports — sentinel DOB, the unparseable string in
+    legacy_dob_raw — instead of orphaning."""
+    db = CapturingDB()
     rows = [_row(id_=99, name="Rita Hoxha", dob="garbage", place="Prizren")]
-    report, _, orphans = _import(rows, db=CapturingDB(), tmp_path=tmp_path)
-    assert report.skipped_orphan == 1
-    assert orphans[0]["reason"] == "dob_unparseable"
+    report, _, orphans = _import(rows, db=db, tmp_path=tmp_path)
+    assert report.imported == 1
+    assert orphans == []
+    payload = db.calls[0][1]
+    assert payload.date_of_birth == date(1900, 1, 1)  # type: ignore[attr-defined]
+    assert payload.legacy_dob_raw == "garbage"  # type: ignore[attr-defined]
+    assert payload.place_of_birth == "Prizren"  # type: ignore[attr-defined]
 
 
 def test_missing_name_orphans(tmp_path: Path) -> None:
@@ -229,14 +261,20 @@ def test_missing_name_orphans(tmp_path: Path) -> None:
     assert orphans[0]["reason"] == "name_unparseable"
 
 
-def test_single_word_name_orphans(tmp_path: Path) -> None:
-    """A single-token name is junk data — flagged as
-    name_unparseable rather than imported with empty last_name."""
+def test_single_word_name_imports_with_empty_last_name(tmp_path: Path) -> None:
+    """ADR-017 / CLAUDE.md §1.13: a single-token name imports with
+    last_name = '', matching the receptionist quick-add convention.
+    The patient lands in the completion queue (isPatientComplete
+    treats '' as missing) rather than being dropped as an orphan."""
+    db = CapturingDB()
     rows = [_row(id_=1, name="Pacient", dob="01.02.2010")]
-    report, _, orphans = _import(rows, db=CapturingDB(), tmp_path=tmp_path)
+    report, _, orphans = _import(rows, db=db, tmp_path=tmp_path)
 
-    assert report.imported == 0
-    assert orphans[0]["reason"] == "name_unparseable"
+    assert report.imported == 1
+    assert orphans == []
+    payload = db.calls[0][1]
+    assert payload.first_name == "Pacient"  # type: ignore[attr-defined]
+    assert payload.last_name == ""  # type: ignore[attr-defined]
 
 
 def test_missing_legacy_id_orphans(tmp_path: Path) -> None:
@@ -270,6 +308,9 @@ def test_bad_birth_weight_warns_but_imports(tmp_path: Path) -> None:
 
 
 def test_mixed_batch_counters(tmp_path: Path) -> None:
+    """All four rows have parseable names so all four import.
+    Under ADR-017 the 'Bad Patient' row with dob='????' lands with
+    sentinel DOB + a dob_unparseable warning rather than orphaning."""
     rows = [
         _row(id_=1, name="Rita Hoxha", dob="01.02.2010"),
         _row(id_=2, name="Jon Gashi *", dob="03.04.2011"),
@@ -279,6 +320,7 @@ def test_mixed_batch_counters(tmp_path: Path) -> None:
     report, _, _ = _import(rows, db=CapturingDB(), tmp_path=tmp_path)
 
     assert report.source_rows == 4
-    assert report.imported == 3
-    assert report.skipped_orphan == 1
+    assert report.imported == 4
+    assert report.skipped_orphan == 0
     assert report.duplicate_names == 1
+    assert report.warnings_by_code["dob_unparseable"] == 1

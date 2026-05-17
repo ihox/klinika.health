@@ -229,13 +229,13 @@ class Database:
               clinic_id, legacy_id, legacy_display_name, has_name_duplicate,
               first_name, last_name, date_of_birth, place_of_birth,
               birth_weight_g, birth_head_circumference_cm, birth_length_cm,
-              alergji_tjera, phone
+              alergji_tjera, phone, legacy_dob_raw
             )
             VALUES (
               %(clinic_id)s, %(legacy_id)s, %(legacy_display_name)s, %(has_name_duplicate)s,
               %(first_name)s, %(last_name)s, %(date_of_birth)s, %(place_of_birth)s,
               %(birth_weight_g)s, %(birth_head_circumference_cm)s, %(birth_length_cm)s,
-              %(alergji_tjera)s, %(phone)s
+              %(alergji_tjera)s, %(phone)s, %(legacy_dob_raw)s
             )
             ON CONFLICT (clinic_id, legacy_id) DO UPDATE SET
               legacy_display_name = EXCLUDED.legacy_display_name,
@@ -249,6 +249,7 @@ class Database:
               birth_length_cm = EXCLUDED.birth_length_cm,
               alergji_tjera = EXCLUDED.alergji_tjera,
               phone = EXCLUDED.phone,
+              legacy_dob_raw = EXCLUDED.legacy_dob_raw,
               updated_at = now()
             RETURNING id
         """
@@ -266,6 +267,7 @@ class Database:
             "birth_length_cm": p.birth_length_cm,
             "alergji_tjera": p.alergji_tjera,
             "phone": p.phone,
+            "legacy_dob_raw": p.legacy_dob_raw,
         }
         with self._conn.cursor() as cursor:
             cursor.execute(sql, params)
