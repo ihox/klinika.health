@@ -191,6 +191,7 @@ describe('ClinicGeneralUpdateSchema', () => {
   });
 
   it('requires walkinDurationMinutes (the field is non-optional)', () => {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { walkinDurationMinutes: _drop, ...withoutDuration } = validPayload;
     expect(ClinicGeneralUpdateSchema.safeParse(withoutDuration).success).toBe(
       false,

@@ -73,12 +73,13 @@ function makeService(
       findMany: vi.fn().mockResolvedValue(existingWalkIns),
     },
   };
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  /* eslint-disable @typescript-eslint/no-explicit-any */
   return new VisitsCalendarService(
     prismaStub as any,
     null as any,
     null as any,
   );
+  /* eslint-enable @typescript-eslint/no-explicit-any */
 }
 
 describe('VisitsCalendarService.computeWalkInArrivedAt', () => {
