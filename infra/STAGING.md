@@ -11,38 +11,55 @@ For the design rationale, see [ADR-018](../docs/decisions/018-staging-via-shared
 ## Architecture
 
 ```
-Internet
+GitHub Actions runner
+   │  1. build api + web images, push to GHCR
+   │     - ghcr.io/ihox/klinika-api:staging
+   │     - ghcr.io/ihox/klinika-web:staging
+   │  2. ssh -p 101 deploy@<vm> klinika-health
+   ▼
+staging-vm  10.2.1.101  (Ubuntu 24.04, Docker 29, the shared host)
    │
-   ▼
- NPM VM  (sibling on the same Proxmox LAN — runs Nginx Proxy Manager)
-   │  forwards: klinika-health.ihox.net + klinika-health-*.ihox.net
-   │            → 10.2.1.101:8003
-   ▼
- staging-vm  10.2.1.101  (Ubuntu 24.04, Docker 29, the shared host)
+   │  Deploy keypair has command="/usr/local/bin/deploy.sh" in
+   │  authorized_keys. The SSH argument ("klinika-health") arrives
+   │  in SSH_ORIGINAL_COMMAND. deploy.sh:
+   │   - cd /srv/sites/klinika-health
+   │   - docker compose pull
+   │   - docker compose up -d postgres (wait pg_isready)
+   │   - docker compose run --rm api node node_modules/prisma/build/index.js migrate deploy
+   │   - docker compose up -d --remove-orphans
+   │
    └─ /srv/sites/klinika-health/
-       ├─ repo/             ← git checkout, owned by `deploy`
-       │   ├─ .env.staging  ← gitignored, secrets only here
-       │   └─ infra/compose/docker-compose.staging.yml
-       ├─ postgres_data/    ← bind mount, chown 999:999
-       └─ storage/          ← bind mount, chown 10001:10001
-                              (clinic logos + per-user signatures)
+       ├─ .env                       ← gitignored, secrets only
+       ├─ docker-compose.yml         ← GHCR image refs (mirrored from
+       │                                infra/compose/docker-compose.staging.yml)
+       ├─ postgres_data/             ← bind mount, chown 999:999
+       ├─ storage/                   ← bind mount, chown 10001:10001
+       │                                (clinic logos + per-user signatures)
+       └─ repo/                      ← optional git clone kept for ops; the
+                                       deploy doesn't use it (compose lives
+                                       at the site root, not inside repo/)
 
- Compose stack (project name `klinika-staging`):
+Compose stack (project name `klinika-staging`):
    ├─ klinika-staging-web        Next.js 15 standalone   :3000 → host 8003
    ├─ klinika-staging-api        NestJS 10               :3001 (internal only)
    └─ klinika-staging-postgres   Postgres 16             :5432 (internal only)
 
- Two networks:
+Networks:
    - klinika-staging-internal   postgres ↔ api
    - klinika-staging-public     api ↔ web
+
+Sibling NPM VM on the same LAN proxies the public hostnames to
+10.2.1.101:8003. See "NPM proxy host configuration" below.
 ```
 
-The web container's Next.js process proxies `/api/*` and `/health/*` server-side to `api:3001` (configured via `API_INTERNAL_URL` in compose). The browser only ever talks to the same origin it loaded the page from, so the sibling NPM only needs **one upstream** — port 8003 on this VM.
+The web container's Next.js process proxies `/api/*` and `/health/*` to `api:3001` via a build-time rewrite (next.config.mjs). The browser only ever talks to the same origin it loaded the page from, so the sibling NPM only needs **one upstream** — port 8003 on this VM.
 
 The tenancy split (apex vs clinic subdomain) is decided in two places, both driven by `CLINIC_HOST_APEX=klinika-health.ihox.net` + `CLINIC_HOST_PREFIX=klinika-health-` (prefix mode; ADR-018). Production keeps the dotted suffix scheme via `CLINIC_HOST_SUFFIX`:
 
 - **API** — [apps/api/src/common/middleware/clinic-resolution.middleware.ts](../apps/api/src/common/middleware/clinic-resolution.middleware.ts)
 - **Web** — [apps/web/lib/scope.ts](../apps/web/lib/scope.ts)
+
+The deploy pattern (build in CI, restricted SSH command on the VM) mirrors the existing `tregu-online` and `montelgo` site stacks on the same VM — see `/usr/local/bin/deploy.sh` for the per-slug dispatcher.
 
 ---
 
@@ -53,10 +70,11 @@ The tenancy split (apex vs clinic subdomain) is decided in two places, both driv
 ### Prereqs on the VM
 
 - Ubuntu LTS 24.04+ with Docker 24+ and Compose v2
-- `deploy` user with `docker` group membership, no sudo, valid `~/.ssh/authorized_keys`
+- `deploy` user with `docker` group membership, no sudo
 - Operator account (e.g. `ilir`) with NOPASSWD sudo
+- `/usr/local/bin/deploy.sh` dispatcher already exists from a sibling site stack
 - LAN reachability from the NPM VM
-- Outbound 443 to GitHub for the deploy workflow (`git fetch` over HTTPS)
+- Internet-routable SSH path to the VM for the GitHub-hosted runner
 
 ### Filesystem prep
 
@@ -69,33 +87,80 @@ sudo chown -R 999:999 /srv/sites/klinika-health/postgres_data    # postgres:16-a
 sudo chown -R 10001:10001 /srv/sites/klinika-health/storage      # api runtime uid (Dockerfile.api.prod)
 ```
 
-### Clone the repo as `deploy`
+### Add the klinika-health case to `/usr/local/bin/deploy.sh`
 
 ```bash
-sudo -H -u deploy git clone https://github.com/ihox/klinika.health.git \
-    /srv/sites/klinika-health/repo
+sudo tee /usr/local/bin/deploy.sh > /dev/null <<'DEPLOY'
+#!/usr/bin/env bash
+set -euo pipefail
+slug="${SSH_ORIGINAL_COMMAND:-}"
+case "$slug" in
+  tregu-online|montelgo)
+    cd "/srv/sites/$slug"
+    docker compose pull
+    docker compose up -d
+    sleep 3
+    docker compose exec -T php-fpm kill -USR2 1 || true
+    ;;
+  klinika-health)
+    cd "/srv/sites/$slug"
+    docker compose pull
+    docker compose up -d postgres
+    for i in $(seq 1 15); do
+      if docker compose exec -T postgres pg_isready >/dev/null 2>&1; then
+        break
+      fi
+      sleep 2
+    done
+    # Call the prisma binary directly — corepack/pnpm in the api
+    # base image (Node 20.18.x) trips a stale-signing-key error when
+    # the non-root user first invokes pnpm.
+    docker compose run --rm api node node_modules/prisma/build/index.js migrate deploy
+    docker compose up -d --remove-orphans
+    ;;
+  *) echo "ERROR: invalid slug '$slug'" >&2; exit 1 ;;
+esac
+echo "deployed $slug at $(date -u +%FT%TZ)"
+DEPLOY
+sudo chmod 755 /usr/local/bin/deploy.sh
+sudo chown root:root /usr/local/bin/deploy.sh
 ```
 
-### Generate the GitHub Actions deploy key
+### Generate the GitHub Actions deploy key (command-restricted)
 
 ```bash
 sudo -H -u deploy ssh-keygen -t ed25519 \
     -f /home/deploy/.ssh/github_actions_deploy \
     -N "" \
     -C "github-actions-deploy@klinika-staging" -q
-sudo bash -c 'cat /home/deploy/.ssh/github_actions_deploy.pub >> /home/deploy/.ssh/authorized_keys'
+
+# Append the public key WITH the command="…" restriction so the
+# runner can only invoke /usr/local/bin/deploy.sh (matches the
+# tregu-online deploy key).
+PUBKEY=$(sudo cat /home/deploy/.ssh/github_actions_deploy.pub)
+echo "command=\"/usr/local/bin/deploy.sh\",no-port-forwarding,no-agent-forwarding,no-X11-forwarding,no-pty,restrict $PUBKEY" \
+  | sudo tee -a /home/deploy/.ssh/authorized_keys > /dev/null
 sudo chmod 600 /home/deploy/.ssh/authorized_keys
 sudo chown deploy:deploy /home/deploy/.ssh/authorized_keys
 ```
 
-The **private key** at `/home/deploy/.ssh/github_actions_deploy` goes into the GitHub repo secret `STAGING_SSH_KEY` (see below). The public key is already authorised on the VM.
+The **private key** at `/home/deploy/.ssh/github_actions_deploy` goes into the GitHub repo secret `STAGING_SSH_KEY`.
 
-### Write `.env.staging`
-
-Generate strong randoms and write the file directly (the values never need to be human-readable except the `SEED_*_PASSWORD`s):
+### Place the compose file at the site root
 
 ```bash
-sudo tee /srv/sites/klinika-health/repo/.env.staging > /dev/null <<ENV
+sudo cp /path/to/repo/infra/compose/docker-compose.staging.yml \
+    /srv/sites/klinika-health/docker-compose.yml
+sudo chown deploy:deploy /srv/sites/klinika-health/docker-compose.yml
+sudo chmod 644 /srv/sites/klinika-health/docker-compose.yml
+```
+
+The in-repo file is the canonical reference; the on-VM copy must be hand-synced when the contract changes (no auto-sync in CI).
+
+### Write `.env`
+
+```bash
+sudo tee /srv/sites/klinika-health/.env > /dev/null <<ENV
 NODE_ENV=production
 TZ=Europe/Belgrade
 APP_VERSION=staging
@@ -110,9 +175,9 @@ AUTH_TRUSTED_DEVICE_TTL_DAYS=30
 
 CLINIC_HOST_APEX=klinika-health.ihox.net
 CLINIC_HOST_PREFIX=klinika-health-
-CLINIC_HOST_SUFFIX=klinika.health
-CORS_ORIGIN=https://klinika-health.ihox.net
+# CLINIC_HOST_SUFFIX=.klinika.health  (uncomment to fall back to suffix mode)
 
+CORS_ORIGIN=https://klinika-health.ihox.net
 EMAIL_FROM=no-reply@klinika-health.ihox.net
 EMAIL_FROM_NAME=Klinika (staging)
 SMTP_HOST=
@@ -128,11 +193,11 @@ SEED_CLINIC_ADMIN_PASSWORD=$(openssl rand -hex 16)
 
 JOBS_DISABLED=0
 ENV
-sudo chown deploy:deploy /srv/sites/klinika-health/repo/.env.staging
-sudo chmod 600 /srv/sites/klinika-health/repo/.env.staging
+sudo chown deploy:deploy /srv/sites/klinika-health/.env
+sudo chmod 600 /srv/sites/klinika-health/.env
 ```
 
-Note: heredocs with `$(…)` work fine with `sudo tee`. **Read back the file once** with `sudo cat` and store the `SEED_*_PASSWORD` values in a password manager — those are the only credentials you'll need at the web UI; everything else (AUTH_SECRET, POSTGRES_PASSWORD) lives in the file and on the VM.
+**Read back the file once** with `sudo cat` and store the `SEED_*_PASSWORD` values in a password manager — those are the only credentials you'll need at the web UI.
 
 ---
 
@@ -143,8 +208,8 @@ Note: heredocs with `$(…)` work fine with `sudo tee`. **Read back the file onc
 | Name | Value |
 |---|---|
 | `STAGING_SSH_KEY` | The contents of `/home/deploy/.ssh/github_actions_deploy` from the VM. Paste the entire multi-line block including the `-----BEGIN/END OPENSSH PRIVATE KEY-----` markers. |
-| `STAGING_HOST` | The hostname or IP the GitHub-hosted runner uses to SSH in (Tailscale name, public hostname, or LAN-routable IP if the runner shares the LAN). |
-| `STAGING_USER` | `deploy` |
+
+The deploy workflow hardcodes the host (`80.108.9.40`), port (`101`), and user (`deploy`) — they're not sensitive and they don't change per environment.
 
 ### Variables (`Settings → Secrets and variables → Actions → Variables`)
 
@@ -214,11 +279,15 @@ Most operators already run option B for the wildcard cert — in which case ther
 
 ## Day-to-day operations
 
+All on-VM commands run as the `deploy` user from `/srv/sites/klinika-health/`. Compose auto-loads `.env` next to `docker-compose.yml`, so the standard `docker compose <command>` works without `-f` or `--env-file` flags.
+
 ### Trigger a deploy
 
-Pushing to `main` triggers `deploy-staging.yml` automatically. To deploy a specific branch or re-run after fixing DNS/NPM, use the GitHub UI:
+Pushing to `main` triggers `deploy-staging.yml` automatically. To re-run manually (e.g. after fixing NPM/DNS):
 
 > Actions → Deploy Staging → Run workflow → main
+
+The workflow builds the api + web images, pushes them to GHCR, then SSHes the dispatcher (`ssh -p 101 deploy@80.108.9.40 klinika-health`) which pulls, migrates, and brings the stack up.
 
 ### Run the staging seed (first deploy only)
 
@@ -226,15 +295,17 @@ The deploy workflow does **not** seed by design. After the first successful depl
 
 ```bash
 sudo -H -u deploy bash -c '
-  cd /srv/sites/klinika-health/repo &&
-  docker compose -f infra/compose/docker-compose.staging.yml --env-file .env.staging \
-    run --rm api pnpm seed:staging
+  cd /srv/sites/klinika-health &&
+  docker compose run --rm api ./node_modules/.bin/ts-node \
+    --transpile-only prisma/seed-staging.ts
 '
 ```
 
 This creates the platform admin + the `donetamed` tenant + three users (doctor / receptionist / clinic_admin). No patients — the staging clinic starts empty by design. The slug matches the NPM proxy host the operator pre-configured (`klinika-health-donetamed.ihox.net`).
 
-Login credentials are the `SEED_*_PASSWORD` values from `.env.staging`:
+The seed is idempotent — re-running is a no-op for existing records.
+
+Login credentials are the `SEED_*_PASSWORD` values from `.env`:
 
 | URL | Email | Password env var |
 |---|---|---|
@@ -246,44 +317,42 @@ Login credentials are the `SEED_*_PASSWORD` values from `.env.staging`:
 Retrieve the actual passwords with:
 
 ```bash
-sudo grep '^SEED_' /srv/sites/klinika-health/repo/.env.staging
+sudo grep '^SEED_' /srv/sites/klinika-health/.env
 ```
 
 ### View logs
 
 ```bash
-# As deploy
-cd /srv/sites/klinika-health/repo
-docker compose -f infra/compose/docker-compose.staging.yml --env-file .env.staging logs -f --tail=200
-
-# Single service
-docker compose -f infra/compose/docker-compose.staging.yml --env-file .env.staging logs -f api
+cd /srv/sites/klinika-health
+docker compose logs -f --tail=200
+# or, single service
+docker compose logs -f api
 ```
 
 ### Service status
 
 ```bash
-docker compose -f infra/compose/docker-compose.staging.yml --env-file .env.staging ps
+cd /srv/sites/klinika-health && docker compose ps
 ```
 
 ### Take staging offline
 
 ```bash
-docker compose -f infra/compose/docker-compose.staging.yml --env-file .env.staging down
+cd /srv/sites/klinika-health && docker compose down
 ```
 
-Bind-mounted data (`postgres_data/`, `storage/`) survives `down`. Bringing it back up with `up -d` resumes from the same state.
+Bind-mounted data (`postgres_data/`, `storage/`) survives `down`. Bringing it back up with `docker compose up -d` resumes from the same state.
 
 ### Reset staging to empty
 
 Destructive — only use if you're sure.
 
 ```bash
-docker compose -f infra/compose/docker-compose.staging.yml --env-file .env.staging down
-sudo rm -rf /srv/sites/klinika-health/postgres_data/* /srv/sites/klinika-health/storage/*
-# Postgres mount needs the uid back after a wipe
-sudo chown -R 999:999 /srv/sites/klinika-health/postgres_data
-sudo chown -R 10001:10001 /srv/sites/klinika-health/storage
+cd /srv/sites/klinika-health && docker compose down
+sudo rm -rf postgres_data/* storage/*
+# Postgres + api mounts need their uids back after a wipe
+sudo chown -R 999:999 postgres_data
+sudo chown -R 10001:10001 storage
 
 # Then trigger a deploy (it'll run prisma migrate deploy on the
 # empty DB) and re-run the staging seed.
@@ -294,27 +363,48 @@ sudo chown -R 10001:10001 /srv/sites/klinika-health/storage
 The postgres container has no host-port mapping — use `docker compose exec`:
 
 ```bash
-docker compose -f infra/compose/docker-compose.staging.yml --env-file .env.staging \
-  exec postgres psql -U klinika klinika
+cd /srv/sites/klinika-health
+docker compose exec postgres psql -U klinika klinika
 ```
 
 ---
 
 ## Troubleshooting
 
-### Deploy workflow fails at "Pull main, build images, …" with permission denied
+### Deploy workflow fails at "Trigger deploy on staging-vm"
 
-The deploy keypair isn't authorised. Verify the public key in `/home/deploy/.ssh/authorized_keys` matches what's in the GitHub `STAGING_SSH_KEY` secret (run the keygen step again if unsure).
+Two common causes:
+
+1. **The SSH key doesn't match.** Compare:
+   - `STAGING_SSH_KEY` secret in the GitHub repo (the private key)
+   - `/home/deploy/.ssh/github_actions_deploy` on the VM (the matching private key, kept as a backup)
+   - The line in `/home/deploy/.ssh/authorized_keys` (the matching public key, `command=…`-restricted)
+   
+   Regenerate via the "Generate the GitHub Actions deploy key" section if needed.
+
+2. **The dispatcher rejected the slug.** Run `sudo cat /usr/local/bin/deploy.sh` and confirm there's a `klinika-health)` case. If not, re-apply the snippet under "Add the klinika-health case" above.
 
 ### Deploy succeeds but `/health/ready` 5xxs
 
-- The api logs are the first stop: `docker compose … logs api --tail=200`. Look for "DB readiness probe failed" or "Schema drift detected."
-- Run the schema probe: `curl http://localhost:8003/health/schema` from the VM (works without DNS/NPM). A failing probe identifies which migration didn't apply.
+- The api logs are the first stop: `docker compose logs api --tail 200`. Look for "DB readiness probe failed" or "Schema drift detected."
+- Run the schema probe directly against web on the VM (works without NPM): `curl http://localhost:8003/health/schema`.
 - Most often the `prisma migrate deploy` step succeeded but the api container was still warming up when the workflow checked. Re-trigger the workflow.
+
+### `Cannot find matching keyid` from corepack inside the api container
+
+The Node 20.18.x base image ships with corepack signing keys that don't match the npm registry's current keys, so the first invocation of `pnpm` by the non-root `klinika` user fails. The dispatcher (`deploy.sh`) and the staging seed both avoid pnpm at runtime — call the prisma / ts-node binaries directly:
+
+```bash
+# Migrations
+docker compose run --rm api node node_modules/prisma/build/index.js migrate deploy
+
+# Seed
+docker compose run --rm api ./node_modules/.bin/ts-node --transpile-only prisma/seed-staging.ts
+```
 
 ### NPM SSL "Cert renewal failed" for the wildcard
 
-Klinika now reuses the existing `*.ihox.net` wildcard cert, so the renewal failure mode is the same as any other site stack on the NPM — check the cert's renewal history in NPM and the DNS-01 token for `_acme-challenge.ihox.net`.
+Klinika reuses the existing `*.ihox.net` wildcard cert, so the renewal failure mode is the same as any other site stack on the NPM — check the cert's renewal history in NPM and the DNS-01 token for `_acme-challenge.ihox.net`.
 
 ### Port 8003 already in use
 
@@ -322,11 +412,7 @@ Klinika now reuses the existing `*.ihox.net` wildcard cert, so the renewal failu
 sudo ss -tlnp | grep ':8003'
 ```
 
-If something else (another site stack) grabbed 8003, change `8003:3000` in `infra/compose/docker-compose.staging.yml` to the next free port AND update the NPM forward port to match. Don't reuse a port from `montelgo` (8002) or `tregu-online` (8001).
-
-### `docker compose build` fails with a Prisma error
-
-The Prisma client postinstall on the deps stage emits a stub when no schema is present — that's expected. The real generate happens in stage 2 (`builder`). If you see "Cannot find module '@prisma/client'" at runtime, the build silently skipped the generate step — try `docker compose build --no-cache api`.
+If something else (another site stack) grabbed 8003, change the `8003:3000` port mapping in `/srv/sites/klinika-health/docker-compose.yml` (and the in-repo copy) to the next free port AND update the NPM forward port to match. Don't reuse a port from `montelgo` (8002) or `tregu-online` (8001).
 
 ### Clinic subdomain returns 404 with `{"reason":"clinic_not_found"}`
 
@@ -342,14 +428,18 @@ DNS isn't pointing the tenant host at the NPM. Confirm `dig klinika-health-donet
 
 | Concern | Location |
 |---|---|
-| Tenancy host config | `CLINIC_HOST_APEX` + `CLINIC_HOST_PREFIX` env vars in `.env.staging` (prefix mode); `CLINIC_HOST_SUFFIX` is kept for production parity but unused on staging |
+| Tenancy host config | `CLINIC_HOST_APEX` + `CLINIC_HOST_PREFIX` env vars in `.env` (prefix mode); `CLINIC_HOST_SUFFIX` available as a commented fallback |
 | Public hostnames | NPM (sibling VM) + DNS provider for `ihox.net` |
-| TLS termination | NPM |
-| Application code | `/srv/sites/klinika-health/repo` on the VM (gitignored `.env.staging` next to it) |
-| Database files | `/srv/sites/klinika-health/postgres_data` on the VM |
-| Clinic logos + signatures | `/srv/sites/klinika-health/storage` on the VM |
+| TLS termination | NPM (using the `*.ihox.net` wildcard cert) |
+| Container images | `ghcr.io/ihox/klinika-{api,web}:staging` (built + pushed by CI) |
+| Compose file (canonical) | [infra/compose/docker-compose.staging.yml](compose/docker-compose.staging.yml) in repo |
+| Compose file (deployed) | `/srv/sites/klinika-health/docker-compose.yml` on the VM (hand-synced from repo) |
+| Environment + secrets | `/srv/sites/klinika-health/.env` on the VM only — gitignored |
+| Database files | `/srv/sites/klinika-health/postgres_data` |
+| Clinic logos + signatures | `/srv/sites/klinika-health/storage` |
+| Deploy dispatcher | `/usr/local/bin/deploy.sh` on the VM (shared with tregu-online, montelgo) |
 | Deploy keypair (private) | GitHub secret `STAGING_SSH_KEY` + backup at `/home/deploy/.ssh/github_actions_deploy` on the VM |
-| Seed credentials | `SEED_*_PASSWORD` rows in `.env.staging` on the VM |
+| Seed credentials | `SEED_*_PASSWORD` rows in `.env` on the VM |
 
 ---
 
