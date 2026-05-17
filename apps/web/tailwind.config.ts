@@ -1,6 +1,11 @@
 import type { Config } from 'tailwindcss';
 // The canonical token set lives in design-reference/tokens/. Extend it here
 // instead of duplicating values — keeps the prototype and app in lockstep.
+// `@ts-expect-error` because the design-reference token JS has no `.d.ts`
+// sibling; TS treats it as implicit-any and would otherwise fail the
+// production build. Casting it through `Partial<Config>` below pins the
+// shape we actually consume.
+// @ts-expect-error — JS import without declaration file
 import baseConfig from '../../design-reference/tokens/tailwind.config.js';
 
 const config: Config = {
