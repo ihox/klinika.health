@@ -42,7 +42,7 @@ from typing import Any
 # so the apply path stays compatible; the version is tracked purely
 # for audit-log traceability. The moment we change the JSON *shape*
 # we'll need a real migration path here.
-SUPPORTED_SCHEMA_VERSIONS = frozenset({1, 2, 3})
+SUPPORTED_SCHEMA_VERSIONS = frozenset({1, 2, 3, 4})
 # Latest supported version — surfaced via `SUPPORTED_SCHEMA_VERSION`
 # for backwards compatibility with any caller that still reads it.
 SUPPORTED_SCHEMA_VERSION = max(SUPPORTED_SCHEMA_VERSIONS)
