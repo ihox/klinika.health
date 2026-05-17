@@ -15,7 +15,7 @@ Internet
    │
    ▼
  NPM VM  (sibling on the same Proxmox LAN — runs Nginx Proxy Manager)
-   │  forwards: klinika.health.ihox.net + *.klinika.health.ihox.net
+   │  forwards: klinika-health.ihox.net + klinika-health-*.ihox.net
    │            → 10.2.1.101:8003
    ▼
  staging-vm  10.2.1.101  (Ubuntu 24.04, Docker 29, the shared host)
@@ -39,7 +39,7 @@ Internet
 
 The web container's Next.js process proxies `/api/*` and `/health/*` server-side to `api:3001` (configured via `API_INTERNAL_URL` in compose). The browser only ever talks to the same origin it loaded the page from, so the sibling NPM only needs **one upstream** — port 8003 on this VM.
 
-The tenancy split (apex vs clinic subdomain) is decided in two places, both driven by `CLINIC_HOST_SUFFIX=klinika.health.ihox.net`:
+The tenancy split (apex vs clinic subdomain) is decided in two places, both driven by `CLINIC_HOST_APEX=klinika-health.ihox.net` + `CLINIC_HOST_PREFIX=klinika-health-` (prefix mode; ADR-018). Production keeps the dotted suffix scheme via `CLINIC_HOST_SUFFIX`:
 
 - **API** — [apps/api/src/common/middleware/clinic-resolution.middleware.ts](../apps/api/src/common/middleware/clinic-resolution.middleware.ts)
 - **Web** — [apps/web/lib/scope.ts](../apps/web/lib/scope.ts)
@@ -108,10 +108,12 @@ POSTGRES_PASSWORD=$(openssl rand -hex 24)
 AUTH_SECRET=$(openssl rand -hex 32)
 AUTH_TRUSTED_DEVICE_TTL_DAYS=30
 
-CLINIC_HOST_SUFFIX=klinika.health.ihox.net
-CORS_ORIGIN=https://klinika.health.ihox.net
+CLINIC_HOST_APEX=klinika-health.ihox.net
+CLINIC_HOST_PREFIX=klinika-health-
+CLINIC_HOST_SUFFIX=klinika.health
+CORS_ORIGIN=https://klinika-health.ihox.net
 
-EMAIL_FROM=no-reply@klinika.health.ihox.net
+EMAIL_FROM=no-reply@klinika-health.ihox.net
 EMAIL_FROM_NAME=Klinika (staging)
 SMTP_HOST=
 SMTP_PORT=587
@@ -148,53 +150,65 @@ Note: heredocs with `$(…)` work fine with `sudo tee`. **Read back the file onc
 
 | Name | Value |
 |---|---|
-| `STAGING_PUBLIC_URL` | `https://klinika.health.ihox.net` — used by the workflow's HTTPS health-check step. Optional; the workflow skips the check if absent. |
+| `STAGING_PUBLIC_URL` | `https://klinika-health.ihox.net` — used by the workflow's HTTPS health-check step. Optional; the workflow skips the check if absent. |
 
 ---
 
 ## NPM proxy host configuration
 
-Done manually in the sibling NPM's web UI.
+Done manually in the sibling NPM's web UI. The flat hyphen-joined scheme (ADR-018) means every Klinika host is a level-1 subdomain of `ihox.net` and fits the existing `*.ihox.net` wildcard cert — no DNS-01 challenge or per-host cert issuance required.
+
+Each clinic gets its own proxy host with the SAME forward target. Add one for the apex, plus one per active tenant slug.
 
 **Proxy Host 1 — apex**
 
 | Field | Value |
 |---|---|
-| Domain Names | `klinika.health.ihox.net` |
+| Domain Names | `klinika-health.ihox.net` |
 | Forward Hostname / IP | `10.2.1.101` |
 | Forward Port | `8003` |
 | Cache Assets | off |
 | Block Common Exploits | on |
 | Websockets Support | on |
-| SSL — Certificate | Request a new SSL certificate (Let's Encrypt) |
+| SSL — Certificate | The existing `*.ihox.net` wildcard cert |
 | Force SSL | on |
 | HTTP/2 Support | on |
 | HSTS | on (recommended once you've confirmed everything works) |
 
-**Proxy Host 2 — wildcard for tenant subdomains**
+**Proxy Host 2..N — per clinic slug**
 
 | Field | Value |
 |---|---|
-| Domain Names | `*.klinika.health.ihox.net` |
+| Domain Names | `klinika-health-<slug>.ihox.net` (e.g. `klinika-health-clinic.ihox.net`) |
 | Forward Hostname / IP | `10.2.1.101` |
 | Forward Port | `8003` |
-| Other settings | identical to Proxy Host 1 |
-| SSL — Certificate | **Request a wildcard cert via DNS challenge.** Let's Encrypt requires DNS-01 for wildcards. You'll need an API token for the DNS provider hosting `ihox.net`; configure it once in NPM's "SSL Certificates" tab. |
+| Other settings | identical to Proxy Host 1 (reuse the `*.ihox.net` cert) |
 
-Both hosts route to the same Next.js process — Klinika's tenancy middleware handles the apex vs subdomain routing internally from the `Host` header (which NPM forwards via `X-Forwarded-Host`).
+All hosts route to the same Next.js process — Klinika's tenancy middleware handles the apex vs tenant routing internally from the `Host` header (which NPM forwards via `X-Forwarded-Host`).
+
+If you'd rather not add one NPM proxy host per new clinic, you can configure a single `*.ihox.net` proxy host in NPM and let it match every Klinika tenant slug automatically. That makes sense only if no other site stack on the LAN needs to claim a specific `*.ihox.net` host — check with the operator of the sibling NPM before doing it.
 
 ---
 
 ## DNS configuration
 
-Add to your DNS provider for `ihox.net`:
+Add to your DNS provider for `ihox.net`. Two equivalent options:
+
+**Option A — per-host A records** (matches the per-clinic NPM proxy hosts above):
 
 | Type | Name | Value |
 |---|---|---|
-| `A` | `klinika.health` | The public IP of the NPM VM |
-| `A` | `*.klinika.health` | The public IP of the NPM VM |
+| `A` | `klinika-health` | The public IP of the NPM VM |
+| `A` | `klinika-health-clinic` | The public IP of the NPM VM |
+| `A` | `klinika-health-<slug>` | (one per future tenant) |
 
-(The wildcard covers `clinic.klinika.health.ihox.net` and any future tenant subdomains.)
+**Option B — wildcard at `*.ihox.net`** (covers every level-1 subdomain on the same NPM):
+
+| Type | Name | Value |
+|---|---|---|
+| `A` | `*` | The public IP of the NPM VM |
+
+Most operators already run option B for the wildcard cert — in which case there's nothing to add for Klinika.
 
 ---
 
@@ -224,10 +238,10 @@ Login credentials are the `SEED_*_PASSWORD` values from `.env.staging`:
 
 | URL | Email | Password env var |
 |---|---|---|
-| `https://klinika.health.ihox.net/login` | `admin@klinika.health.ihox.net` | `SEED_PLATFORM_ADMIN_PASSWORD` |
-| `https://clinic.klinika.health.ihox.net/login` | `doctor@klinika.health.ihox.net` | `SEED_DOCTOR_PASSWORD` |
-| `https://clinic.klinika.health.ihox.net/login` | `receptionist@klinika.health.ihox.net` | `SEED_RECEPTIONIST_PASSWORD` |
-| `https://clinic.klinika.health.ihox.net/login` | `clinic-admin@klinika.health.ihox.net` | `SEED_CLINIC_ADMIN_PASSWORD` |
+| `https://klinika-health.ihox.net/login` | `admin@klinika-health.ihox.net` | `SEED_PLATFORM_ADMIN_PASSWORD` |
+| `https://klinika-health-clinic.ihox.net/login` | `doctor@klinika-health.ihox.net` | `SEED_DOCTOR_PASSWORD` |
+| `https://klinika-health-clinic.ihox.net/login` | `receptionist@klinika-health.ihox.net` | `SEED_RECEPTIONIST_PASSWORD` |
+| `https://klinika-health-clinic.ihox.net/login` | `clinic-admin@klinika-health.ihox.net` | `SEED_CLINIC_ADMIN_PASSWORD` |
 
 Retrieve the actual passwords with:
 
@@ -300,7 +314,7 @@ The deploy keypair isn't authorised. Verify the public key in `/home/deploy/.ssh
 
 ### NPM SSL "Cert renewal failed" for the wildcard
 
-Let's Encrypt requires DNS-01 challenge for wildcards. Make sure the DNS provider's API token in NPM's "SSL Certificates" tab is still valid and has permission to write `_acme-challenge.klinika.health.ihox.net` records.
+Klinika now reuses the existing `*.ihox.net` wildcard cert, so the renewal failure mode is the same as any other site stack on the NPM — check the cert's renewal history in NPM and the DNS-01 token for `_acme-challenge.ihox.net`.
 
 ### Port 8003 already in use
 
@@ -320,7 +334,7 @@ The clinic isn't seeded yet. Run the staging seed (see "Run the staging seed" ab
 
 ### Apex hits the platform login but a clinic subdomain hits a 404 page
 
-You forgot the wildcard DNS record. Add `*.klinika.health.ihox.net` and confirm `dig clinic.klinika.health.ihox.net` resolves to the NPM IP.
+DNS isn't pointing the tenant host at the NPM. Confirm `dig klinika-health-clinic.ihox.net` resolves to the NPM IP — either via a per-host A record or via the `*.ihox.net` wildcard.
 
 ---
 
@@ -328,7 +342,7 @@ You forgot the wildcard DNS record. Add `*.klinika.health.ihox.net` and confirm 
 
 | Concern | Location |
 |---|---|
-| Tenancy host suffix | `CLINIC_HOST_SUFFIX` env var in `.env.staging` |
+| Tenancy host config | `CLINIC_HOST_APEX` + `CLINIC_HOST_PREFIX` env vars in `.env.staging` (prefix mode); `CLINIC_HOST_SUFFIX` is kept for production parity but unused on staging |
 | Public hostnames | NPM (sibling VM) + DNS provider for `ihox.net` |
 | TLS termination | NPM |
 | Application code | `/srv/sites/klinika-health/repo` on the VM (gitignored `.env.staging` next to it) |

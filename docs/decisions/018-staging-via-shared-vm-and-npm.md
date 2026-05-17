@@ -64,3 +64,41 @@ The marketing-page Phase 4 in ADR-002 is unaffected.
 - A second on-premise install needs its own staging environment — consider moving staging to a per-clinic model.
 - Production cloud goes live — staging should mirror production's ingress (Caddy vs NPM) closely enough that catching prod-only bugs in staging is realistic. May force ingress unification.
 - Cloudflare Access is reintroduced (regulatory or internal-audit requirement to gate non-public environments).
+
+## URL scheme refinement (2026-05-17)
+
+Status: Accepted (supplements the original decision; does not supersede)
+
+### The constraint
+
+The original decision pinned the apex at `klinika.health.ihox.net` and tenants at `*.klinika.health.ihox.net` — both **level-2** subdomains of `ihox.net`. The operator's existing wildcard cert covers only **level-1** subdomains (`*.ihox.net`), so the level-2 wildcard would have required a separate cert issued via DNS-01 challenge against `_acme-challenge.klinika.health.ihox.net`. That's possible but pushes a new operational dependency (a DNS-API token tied to the staging cert) for no application benefit.
+
+### The fix
+
+Switch staging to a flat hyphen-joined scheme that keeps every Klinika host at level-1:
+
+| Was | Is |
+|---|---|
+| `klinika.health.ihox.net` (apex) | `klinika-health.ihox.net` |
+| `clinic.klinika.health.ihox.net` (tenant) | `klinika-health-clinic.ihox.net` |
+| `donetamed.klinika.health.ihox.net` (future tenant) | `klinika-health-donetamed.ihox.net` |
+
+The middleware grew a second resolution mode (PREFIX), driven by `CLINIC_HOST_APEX` + `CLINIC_HOST_PREFIX`. Production continues to use SUFFIX mode (`CLINIC_HOST_SUFFIX=klinika.health`) unchanged; the dotted scheme there has wildcard-cert headroom because `klinika.health` is the production zone apex, not a delegation.
+
+See `HostResolutionConfig` in [apps/api/src/common/middleware/clinic-resolution.middleware.ts](../../apps/api/src/common/middleware/clinic-resolution.middleware.ts) and the mirror in [apps/web/lib/scope.ts](../../apps/web/lib/scope.ts) for the routing logic.
+
+### What changed in NPM / DNS
+
+NPM proxy hosts are now one per Klinika host (the apex + one per tenant slug), all forwarded to the same `10.2.1.101:8003` and all reusing the existing `*.ihox.net` wildcard cert. No DNS-01 challenge for Klinika; no per-host cert issuance. The operator can alternatively use a single `*.ihox.net` proxy host if no other site stack needs to claim a competing host name.
+
+DNS keeps the same shape — either per-host A records or a `*.ihox.net` wildcard pointing at the NPM IP.
+
+### What changed in code
+
+- Added `HostResolutionConfig` interface + prefix-mode branch to `resolveScope` (api) and `classifyHost` (web). Backwards-compat shim: the third arg still accepts a bare string treated as `{ suffix }`.
+- CORS regex in `main.ts` picks the mode at startup from env and builds the tenant-origin pattern accordingly.
+- Existing suffix-mode tests stay green. +21 prefix-mode test cases across api + web.
+
+### Trade-off accepted
+
+Adding two operating modes raises the middleware's surface area. The two-mode interface is documented on `HostResolutionConfig` and gated by env, so the routing logic in either mode is the same code path that already ran in production for months. The simpler alternative — issuing a level-2 wildcard for staging — was rejected because the new DNS-API dependency cost more than the second mode does to maintain.

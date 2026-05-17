@@ -114,10 +114,10 @@ async function seedClinic(): Promise<string> {
 async function seedPlatformAdmin(): Promise<void> {
   const password = readEnvOrThrow('SEED_PLATFORM_ADMIN_PASSWORD');
   await prisma.platformAdmin.upsert({
-    where: { email: 'admin@klinika.health.ihox.net' },
+    where: { email: 'admin@klinika-health.ihox.net' },
     update: {},
     create: {
-      email: 'admin@klinika.health.ihox.net',
+      email: 'admin@klinika-health.ihox.net',
       passwordHash: await hashPassword(password),
       firstName: 'Staging',
       lastName: 'Admin',
@@ -132,11 +132,11 @@ async function seedClinicUsers(clinicId: string): Promise<void> {
   const clinicAdminPassword = readEnvOrThrow('SEED_CLINIC_ADMIN_PASSWORD');
 
   await prisma.user.upsert({
-    where: { email: 'doctor@klinika.health.ihox.net' },
+    where: { email: 'doctor@klinika-health.ihox.net' },
     update: { roles: ['doctor'] },
     create: {
       clinicId,
-      email: 'doctor@klinika.health.ihox.net',
+      email: 'doctor@klinika-health.ihox.net',
       passwordHash: await hashPassword(doctorPassword),
       roles: ['doctor'],
       firstName: 'Test',
@@ -149,11 +149,11 @@ async function seedClinicUsers(clinicId: string): Promise<void> {
   });
 
   await prisma.user.upsert({
-    where: { email: 'receptionist@klinika.health.ihox.net' },
+    where: { email: 'receptionist@klinika-health.ihox.net' },
     update: { roles: ['receptionist'] },
     create: {
       clinicId,
-      email: 'receptionist@klinika.health.ihox.net',
+      email: 'receptionist@klinika-health.ihox.net',
       passwordHash: await hashPassword(receptionistPassword),
       roles: ['receptionist'],
       firstName: 'Test',
@@ -166,11 +166,11 @@ async function seedClinicUsers(clinicId: string): Promise<void> {
   });
 
   await prisma.user.upsert({
-    where: { email: 'clinic-admin@klinika.health.ihox.net' },
+    where: { email: 'clinic-admin@klinika-health.ihox.net' },
     update: { roles: ['clinic_admin'] },
     create: {
       clinicId,
-      email: 'clinic-admin@klinika.health.ihox.net',
+      email: 'clinic-admin@klinika-health.ihox.net',
       passwordHash: await hashPassword(clinicAdminPassword),
       roles: ['clinic_admin'],
       firstName: 'Test',
@@ -281,7 +281,7 @@ async function main(): Promise<void> {
 
   await seedPlatformAdmin();
   // eslint-disable-next-line no-console
-  console.log('  ✓ Platform admin admin@klinika.health.ihox.net');
+  console.log('  ✓ Platform admin admin@klinika-health.ihox.net');
 
   const clinicId = await seedClinic();
   // eslint-disable-next-line no-console
