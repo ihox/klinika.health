@@ -1,12 +1,38 @@
 import { expect, test } from '@playwright/test';
 
 // Klinika handles PHI and must never appear in search engines or
-// AI training datasets — see CLAUDE.md §1 and the SEO blocking
-// stack in app/layout.tsx + app/robots.ts. The third layer
-// (X-Robots-Tag HTTP header in next.config.mjs) lands in a
-// follow-up commit alongside the slice 18a Docker work that also
-// touches next.config.mjs; once it ships, add a response-header
-// assertion here.
+// AI training datasets — see CLAUDE.md §1. The no-index policy
+// has three defense layers, asserted here:
+//   1. <meta name="robots"> + <meta name="googlebot"> on every
+//      page (app/layout.tsx)
+//   2. /robots.txt blocking the wildcard + a named AI denylist
+//      (app/robots.ts)
+//   3. X-Robots-Tag HTTP response header on every response
+//      (next.config.mjs)
+// Layers 1+2 catch HTML-aware crawlers; layer 3 catches every
+// other client (non-HTML routes, AI scrapers that ignore meta and
+// robots.txt). Each layer is independently asserted so a single
+// regression doesn't slip through.
+
+const EXPECTED_HEADER_DIRECTIVES = [
+  'noindex',
+  'nofollow',
+  'noarchive',
+  'nosnippet',
+  'noimageindex',
+  'nocache',
+  'notranslate',
+];
+
+function assertXRobotsTagHeader(headerValue: string | undefined, where: string) {
+  expect(headerValue, `X-Robots-Tag present on ${where}`).toBeDefined();
+  const lowered = (headerValue ?? '').toLowerCase();
+  for (const directive of EXPECTED_HEADER_DIRECTIVES) {
+    expect(lowered, `X-Robots-Tag on ${where} contains "${directive}"`).toContain(
+      directive,
+    );
+  }
+}
 
 // 18 known AI training / answer-engine crawlers. The denylist in
 // app/robots.ts is the source of truth — keep these in sync.
@@ -88,6 +114,20 @@ test.describe('SEO + AI-crawler blocking', () => {
         'i',
       );
       expect(body, `robots.txt blocks ${ua}`).toMatch(pattern);
+    }
+  });
+
+  test('X-Robots-Tag header rides every response (/, /login, /robots.txt)', async ({
+    request,
+  }) => {
+    // The HTTP header is the catch-all layer: it ships on every
+    // response from the Next.js process, including non-HTML routes
+    // and clients that ignore meta tags. Use playwright's `request`
+    // fixture (not `page.goto`) to read headers from the very first
+    // response without client-side redirects collapsing the chain.
+    for (const path of ['/', '/login', '/robots.txt']) {
+      const response = await request.get(path, { maxRedirects: 0 });
+      assertXRobotsTagHeader(response.headers()['x-robots-tag'], path);
     }
   });
 });

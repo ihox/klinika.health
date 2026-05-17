@@ -1,11 +1,13 @@
 // Klinika handles PHI. Every response from apps/web is marked
 // no-index, no-follow, no-archive, no-snippet, no-imageindex,
-// no-translate at the HTTP layer. The policy is unconditional —
-// dev, staging, on-prem, and production. Defense-in-depth is
-// completed by the `robots` metadata on the root layout
-// (renders meta tags) and `app/robots.ts` (serves /robots.txt).
+// no-cache, no-translate at the HTTP layer. The policy is
+// unconditional — dev, staging, on-prem, and production.
+// Defense-in-depth is completed by the `robots` metadata on the
+// root layout (renders meta tags) and `app/robots.ts` (serves
+// /robots.txt). Keep this directive list in sync with the
+// metadata.robots config so the header and the meta tag agree.
 const NO_INDEX_HEADER_VALUE =
-  'noindex, nofollow, noarchive, nosnippet, noimageindex, notranslate';
+  'noindex, nofollow, noarchive, nosnippet, noimageindex, nocache, notranslate';
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
