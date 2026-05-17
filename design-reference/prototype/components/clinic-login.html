@@ -29,6 +29,25 @@
     max-width: 400px;
   }
 
+  /* Platform brand-row — mirrors the pattern in prototype/index.html
+     so logged-out users see the same klinika.health lockup whether they
+     land on the platform login or a clinic-scoped login. The clinic
+     identity sits below in its own section. */
+  .brand-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 28px;
+  }
+  .brand-row .word {
+    font-family: var(--font-display);
+    font-size: 20px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    color: var(--text-strong);
+  }
+  .brand-row .word .ext { color: var(--text-faint); font-weight: 400; }
+
   /* Clinic header — logo placeholder + clinic name. Different from the
      platform-admin pill: we lead with the clinic, not the platform. */
   .clinic-head {
@@ -157,6 +176,12 @@
 <body>
 
 <div class="login-card">
+  <!-- Platform brand — same lockup as the platform login. -->
+  <div class="brand-row">
+    <span class="brand-mark" style="width:40px;height:40px;border-radius:11px" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l2-6 4 12 2-6h6"/></svg></span>
+    <span class="word">klinika<span class="ext">.health</span></span>
+  </div>
+
   <!-- Clinic identity header (logo placeholder + name) -->
   <div class="clinic-head">
     <div class="clinic-logo" aria-hidden="true">DM</div>
