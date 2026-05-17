@@ -5,7 +5,13 @@ import { InjectPinoLogger, type PinoLogger } from 'nestjs-pino';
 import { PrismaService } from '../../prisma/prisma.service';
 import { buildBaseContext, type RequestWithContext } from '../request-context/request-context';
 
-const SUBDOMAIN_HOST_SUFFIX = '.klinika.health';
+/**
+ * Default production apex. Overridden per-environment via the
+ * `CLINIC_HOST_SUFFIX` env var (e.g. staging uses
+ * `klinika.health.ihox.net`). The middleware reads the env once on
+ * construction and passes the resolved suffix to {@link resolveScope}.
+ */
+const DEFAULT_HOST_SUFFIX = 'klinika.health';
 
 /**
  * Subdomains reserved for the platform's own infrastructure. Tenants
@@ -69,11 +75,15 @@ export type ResolvedScope =
  */
 @Injectable()
 export class ClinicResolutionMiddleware implements NestMiddleware {
+  private readonly hostSuffix: string;
+
   constructor(
     private readonly prisma: PrismaService,
     @InjectPinoLogger(ClinicResolutionMiddleware.name)
     private readonly logger: PinoLogger,
-  ) {}
+  ) {
+    this.hostSuffix = process.env['CLINIC_HOST_SUFFIX'] || DEFAULT_HOST_SUFFIX;
+  }
 
   async use(req: RequestWithContext, res: Response, next: NextFunction): Promise<void> {
     const ctx = buildBaseContext(req);
@@ -92,7 +102,7 @@ export class ClinicResolutionMiddleware implements NestMiddleware {
     const overrideHeader = req.headers['x-clinic-subdomain'];
     const override = typeof overrideHeader === 'string' ? overrideHeader.toLowerCase() : null;
 
-    const resolved = resolveScope(host, override);
+    const resolved = resolveScope(host, override, this.hostSuffix);
 
     if (resolved.kind === 'reserved') {
       this.logger.warn(
@@ -160,9 +170,20 @@ export class ClinicResolutionMiddleware implements NestMiddleware {
 /**
  * Pure host → scope classifier. Exported for unit tests and for the
  * frontend middleware which mirrors this logic.
+ *
+ * `hostSuffix` is the apex domain for this environment — `klinika.health`
+ * in production, `klinika.health.ihox.net` in staging. Defaults to the
+ * production suffix so existing callers (test fixtures, dev shells)
+ * keep working without changes.
  */
-export function resolveScope(host: string, override: string | null): ResolvedScope {
+export function resolveScope(
+  host: string,
+  override: string | null,
+  hostSuffix: string = DEFAULT_HOST_SUFFIX,
+): ResolvedScope {
   const hostWithoutPort = host.split(':')[0] ?? host;
+  const apex = hostSuffix.toLowerCase();
+  const apexDotted = `.${apex}`;
 
   // Localhost override (dev / E2E) — explicit, takes precedence over
   // anything the Host header carries. Honoured as a tenant subdomain
@@ -177,20 +198,19 @@ export function resolveScope(host: string, override: string | null): ResolvedSco
     return { kind: 'reserved', subdomain: override };
   }
 
-  // Apex hosts — platform scope. `app.klinika.health` historically
-  // served the marketing page; treat it as platform too so the
-  // boundary stays apex-only.
+  // Apex hosts — platform scope. `app.${apex}` historically served
+  // the marketing page; treat it as platform too so the boundary
+  // stays apex-only.
   if (
     hostWithoutPort === 'localhost' ||
-    hostWithoutPort === 'klinika.health' ||
-    hostWithoutPort === 'app.klinika.health'
+    hostWithoutPort === apex ||
+    hostWithoutPort === `app.${apex}`
   ) {
     return { kind: 'platform' };
   }
 
-  // `*.localhost` — dev-time mirror of `*.klinika.health` so
-  // subdomain-driven clinic routing works without `/etc/hosts` edits
-  // for every tenant.
+  // `*.localhost` — dev-time mirror of `*.${apex}` so subdomain-driven
+  // clinic routing works without `/etc/hosts` edits for every tenant.
   if (hostWithoutPort.endsWith('.localhost')) {
     const sub = hostWithoutPort.slice(0, -'.localhost'.length);
     if (!sub) return { kind: 'platform' };
@@ -205,9 +225,9 @@ export function resolveScope(host: string, override: string | null): ResolvedSco
     return { kind: 'reserved', subdomain: sub };
   }
 
-  // Production tenant subdomains.
-  if (hostWithoutPort.endsWith(SUBDOMAIN_HOST_SUFFIX)) {
-    const sub = hostWithoutPort.slice(0, -SUBDOMAIN_HOST_SUFFIX.length);
+  // Production / staging tenant subdomains under the configured apex.
+  if (hostWithoutPort.endsWith(apexDotted)) {
+    const sub = hostWithoutPort.slice(0, -apexDotted.length);
     if (!sub) return { kind: 'platform' };
     if (RESERVED_HOST_PREFIXES.has(sub)) {
       return { kind: 'reserved', subdomain: sub };

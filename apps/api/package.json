@@ -13,7 +13,8 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:migrate:deploy": "prisma migrate deploy",
     "prisma:studio": "prisma studio",
-    "seed": "ts-node --transpile-only prisma/seed.ts"
+    "seed": "ts-node --transpile-only prisma/seed.ts",
+    "seed:staging": "ts-node --transpile-only prisma/seed-staging.ts"
   },
   "prisma": {
     "seed": "ts-node --transpile-only prisma/seed.ts"

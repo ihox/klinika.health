@@ -39,6 +39,38 @@ describe('classifyHost', () => {
       subdomain: 'admin',
     });
   });
+
+  describe('with CLINIC_HOST_SUFFIX override (staging)', () => {
+    const STAGING_SUFFIX = 'klinika.health.ihox.net';
+
+    it('treats the staging apex as platform scope', () => {
+      expect(classifyHost('klinika.health.ihox.net', STAGING_SUFFIX)).toEqual({
+        kind: 'platform',
+        subdomain: null,
+      });
+    });
+
+    it('extracts a tenant subdomain under the staging suffix', () => {
+      expect(classifyHost('clinic.klinika.health.ihox.net', STAGING_SUFFIX)).toEqual({
+        kind: 'tenant',
+        subdomain: 'clinic',
+      });
+    });
+
+    it('rejects production hosts as unrelated when suffix is staging', () => {
+      expect(classifyHost('donetamed.klinika.health', STAGING_SUFFIX)).toEqual({
+        kind: 'reserved',
+        subdomain: 'donetamed.klinika.health',
+      });
+    });
+
+    it('still rejects reserved prefixes under the staging suffix', () => {
+      expect(classifyHost('admin.klinika.health.ihox.net', STAGING_SUFFIX)).toEqual({
+        kind: 'reserved',
+        subdomain: 'admin',
+      });
+    });
+  });
 });
 
 describe('pathStartsWithAny', () => {

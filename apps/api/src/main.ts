@@ -28,28 +28,38 @@ async function bootstrap(): Promise<void> {
   // helper extracts it; this just makes Express stop second-guessing.
   app.set('trust proxy', true);
 
-  // Tenant subdomains (`*.klinika.health`) and the apex/admin host
+  // Tenant subdomains (`*.${CLINIC_HOST_SUFFIX}`) and the apex host
   // share the same API origin pattern. Allowing credentials is
   // required for the session cookie to round-trip. Wildcards are
-  // expanded against the explicit allow-list at request time.
+  // expanded against the suffix at request time so the same code
+  // works on production (klinika.health) and staging
+  // (klinika.health.ihox.net) without touching app code.
   const corsOrigin = (process.env['CORS_ORIGIN'] ?? 'http://localhost:3000')
     .split(',')
     .map((o) => o.trim())
     .filter((o) => o.length > 0);
+  const hostSuffix = process.env['CLINIC_HOST_SUFFIX'] || 'klinika.health';
+  const escapedSuffix = hostSuffix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const tenantOriginRegex = new RegExp(
+    `^https:\\/\\/[a-z0-9][a-z0-9-]{0,40}\\.${escapedSuffix}$`,
+  );
+  const apexOrigin = `https://${hostSuffix}`;
+  const appOrigin = `https://app.${hostSuffix}`;
   app.enableCors({
     origin: (origin, callback) => {
       if (!origin) {
         callback(null, true);
         return;
       }
-      // Exact match against the configured list, OR a *.klinika.health
-      // subdomain (tenants), OR the apex / app host (platform). The
-      // admin context now lives on apex — no admin.klinika.health.
+      // Exact match against the configured list, OR a tenant
+      // subdomain under the configured suffix, OR the apex / app
+      // host (platform). The admin context lives on the apex —
+      // never on admin.<suffix>.
       const ok =
         corsOrigin.includes(origin) ||
-        /^https:\/\/[a-z0-9][a-z0-9-]{0,40}\.klinika\.health$/.test(origin) ||
-        origin === 'https://klinika.health' ||
-        origin === 'https://app.klinika.health';
+        tenantOriginRegex.test(origin) ||
+        origin === apexOrigin ||
+        origin === appOrigin;
       callback(null, ok);
     },
     credentials: true,

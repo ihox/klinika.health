@@ -36,7 +36,7 @@ Triggers that would justify reopening this decision.
 | # | Title | Status |
 |---|---|---|
 | 001 | [Repository structure](001-repo-structure.md) | Accepted |
-| 002 | [Deployment topology](002-deployment-topology.md) | Accepted |
+| 002 | [Deployment topology](002-deployment-topology.md) | Accepted (staging portion superseded by 018) |
 | 003 | [Background jobs](003-background-jobs.md) | Accepted |
 | 004 | [Authentication](004-authentication.md) | Accepted |
 | 005 | [Multi-tenancy](005-multi-tenancy.md) | Accepted |
@@ -52,6 +52,7 @@ Triggers that would justify reopening this decision.
 | 015 | [DOB orphan policy + swap recovery + PASS criteria](015-dob-orphan-policy.md) | Accepted (orphan rule superseded by 017) |
 | 016 | [Payment-code mapping + Tjera preflight refinement](016-payment-code-and-preflight-refinement.md) | Accepted |
 | 017 | [Import incomplete-DOB patients with sentinel](017-import-incomplete-dob-with-sentinel.md) | Accepted |
+| 018 | [Staging via shared Proxmox VM + sibling NPM](018-staging-via-shared-vm-and-npm.md) | Accepted (supersedes staging portion of 002) |
 
 ## Adding a new ADR
 

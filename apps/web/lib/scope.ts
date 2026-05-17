@@ -38,16 +38,40 @@ const RESERVED_HOST_PREFIXES = new Set([
 
 const SUBDOMAIN_SHAPE = /^[a-z0-9][a-z0-9-]{0,40}$/;
 
+/**
+ * Default production apex. Overridden per-environment via the
+ * `CLINIC_HOST_SUFFIX` env var (e.g. staging uses
+ * `klinika.health.ihox.net`). The Next.js middleware reads the env
+ * in its module scope and passes the resolved suffix to {@link classifyHost}.
+ */
+const DEFAULT_HOST_SUFFIX = 'klinika.health';
+
+/**
+ * Apex suffix this Next.js process is configured for. Resolved once
+ * at module load — `next dev` and the standalone production server
+ * both pick up `CLINIC_HOST_SUFFIX` from the runtime env. Exported
+ * so tests can read it and so callers wiring up the middleware don't
+ * have to re-resolve the env themselves.
+ */
+export const CLINIC_HOST_SUFFIX =
+  (typeof process !== 'undefined' && process.env && process.env['CLINIC_HOST_SUFFIX']) ||
+  DEFAULT_HOST_SUFFIX;
+
 /** Classify a hostname (lowercase, port-stripped) into a request scope. */
-export function classifyHost(rawHost: string | null | undefined): ResolvedScope {
+export function classifyHost(
+  rawHost: string | null | undefined,
+  hostSuffix: string = CLINIC_HOST_SUFFIX,
+): ResolvedScope {
   const host = (rawHost ?? '').toLowerCase();
   const withoutPort = host.split(':')[0] ?? host;
+  const apex = hostSuffix.toLowerCase();
+  const apexDotted = `.${apex}`;
 
   if (
     withoutPort === '' ||
     withoutPort === 'localhost' ||
-    withoutPort === 'klinika.health' ||
-    withoutPort === 'app.klinika.health'
+    withoutPort === apex ||
+    withoutPort === `app.${apex}`
   ) {
     return { kind: 'platform', subdomain: null };
   }
@@ -64,8 +88,8 @@ export function classifyHost(rawHost: string | null | undefined): ResolvedScope 
     return { kind: 'reserved', subdomain: sub };
   }
 
-  if (withoutPort.endsWith('.klinika.health')) {
-    const sub = withoutPort.slice(0, -'.klinika.health'.length);
+  if (withoutPort.endsWith(apexDotted)) {
+    const sub = withoutPort.slice(0, -apexDotted.length);
     if (!sub) return { kind: 'platform', subdomain: null };
     if (RESERVED_HOST_PREFIXES.has(sub)) {
       return { kind: 'reserved', subdomain: sub };

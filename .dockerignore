@@ -1,0 +1,80 @@
+# Klinika .dockerignore — applied to the build context for both
+# infra/docker/Dockerfile.api.prod and Dockerfile.web.prod.
+#
+# Keep this conservative — anything excluded here is unavailable
+# during `docker build`, including to COPY directives. In particular
+# design-reference/tokens IS required (apps/web/tailwind.config.ts
+# imports from it), so only the prototype/ subtree is excluded.
+
+# Build outputs / installed deps
+node_modules
+**/node_modules
+.next
+**/.next
+dist
+**/dist
+build
+**/build
+out
+**/out
+*.tsbuildinfo
+.pnpm-store
+
+# Test artefacts (would shadow apps/web/.next when copying)
+coverage
+test-results
+**/test-results
+playwright-report
+**/playwright-report
+playwright/.cache
+
+# Secrets — anything matching .env at the repo root, but NOT
+# .env.example or .env.staging.example (no leading-dot rule
+# excludes those).
+.env
+.env.local
+.env.staging
+.env.production
+.env.*.local
+
+# Runtime data the app writes — never bake into an image.
+/storage
+storage
+**/storage
+
+# Migration tool (Python; never needed in the api/web image)
+tools
+
+# Legacy data sources (large + sensitive)
+*.accdb
+docs/PEDIATRIA.accdb
+migration-logs
+
+# Large reference material — only design-reference/tokens is used
+# by tailwind, so the prototype HTML can be skipped.
+design-reference/prototype
+
+# Slice plans, backlog, etc. — developer-facing, not runtime.
+docs
+backlog.md
+SLICE-PLAN-*.md
+Makefile
+README.md
+*.zip
+
+# Repo machinery
+.git
+.gitignore
+.github
+
+# Editor / OS noise
+.DS_Store
+.idea
+.vscode
+*.swp
+
+# Python (migration tool venv if it ever leaks into the context)
+__pycache__
+*.pyc
+.venv
+venv

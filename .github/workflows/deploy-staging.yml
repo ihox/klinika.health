@@ -1,0 +1,101 @@
+name: Deploy Staging
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# A second push to main while a deploy is mid-flight should queue, not
+# cancel. Cancelling could leave the VM mid-`docker compose up` with a
+# half-deployed stack. The next run will catch the latest commit anyway.
+concurrency:
+  group: deploy-staging
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Build + migrate + deploy to staging VM
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment:
+      name: staging
+      url: ${{ vars.STAGING_PUBLIC_URL }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup SSH agent
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.STAGING_SSH_KEY }}
+
+      - name: Pin staging host into known_hosts
+        run: |
+          ssh-keyscan -H "${{ secrets.STAGING_HOST }}" >> ~/.ssh/known_hosts
+
+      # The runner never carries application secrets. All build + run
+      # state lives on the VM under /srv/sites/klinika-health/, and the
+      # .env.staging file there is the source of truth for credentials.
+      # The runner just orchestrates: pull → build → migrate → restart.
+      - name: Pull main, build images, migrate, restart
+        env:
+          STAGING_HOST: ${{ secrets.STAGING_HOST }}
+          STAGING_USER: ${{ secrets.STAGING_USER }}
+        run: |
+          ssh "$STAGING_USER@$STAGING_HOST" 'bash -s' <<'REMOTE'
+            set -euo pipefail
+            cd /srv/sites/klinika-health/repo
+
+            echo "→ Fetching latest origin/main"
+            git fetch --quiet origin main
+            git reset --hard origin/main
+            # NB: do NOT `git clean` — that would wipe .env.staging
+            # (which is gitignored and lives next to the workflow file
+            # on the VM only).
+
+            COMPOSE="docker compose -f infra/compose/docker-compose.staging.yml --env-file .env.staging"
+
+            echo "→ Building images"
+            $COMPOSE build --pull
+
+            echo "→ Applying database migrations"
+            $COMPOSE run --rm api pnpm exec prisma migrate deploy
+
+            echo "→ Restarting services"
+            $COMPOSE up -d --remove-orphans
+
+            echo "→ Service status"
+            $COMPOSE ps
+
+            echo "→ Pruning dangling build artefacts"
+            docker image prune -f --filter "label!=keep" >/dev/null || true
+          REMOTE
+
+      # End-to-end health check via the public URL — exercises DNS →
+      # sibling NPM → web container → Next.js rewrite → api → postgres.
+      # /health/ready returns 200 only when the DB probe passes; 503
+      # otherwise. A few retries cover the few seconds the api takes to
+      # start its event loop and open the DB pool.
+      - name: Health check
+        env:
+          STAGING_PUBLIC_URL: ${{ vars.STAGING_PUBLIC_URL }}
+        run: |
+          set -e
+          if [ -z "$STAGING_PUBLIC_URL" ]; then
+            echo "STAGING_PUBLIC_URL repo variable is not set; skipping HTTPS check."
+            echo "Set it in repo settings → Variables → Actions to enable end-to-end verification."
+            exit 0
+          fi
+          for attempt in 1 2 3 4 5; do
+            if curl -fsS -m 10 "$STAGING_PUBLIC_URL/health/ready" > /tmp/health.json; then
+              echo "✓ Staging health check passed:"
+              cat /tmp/health.json
+              exit 0
+            fi
+            echo "  attempt $attempt failed, retrying in 6s…"
+            sleep 6
+          done
+          echo "✗ Staging health check failed after 5 attempts"
+          exit 1

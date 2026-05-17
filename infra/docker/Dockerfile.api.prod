@@ -1,0 +1,112 @@
+## Klinika api — production image (NestJS 10).
+##
+## Multi-stage build:
+##   1. deps     — pnpm install for @klinika/api (workspace-aware)
+##   2. builder  — TypeScript compile + prisma generate
+##   3. runtime  — slim base + system Chromium for Puppeteer,
+##                 non-root user, dist + node_modules + prisma schema
+##
+## Companion to infra/docker/Dockerfile.api (dev image, bind-mounted
+## hot-reload). The dev image's CMD runs `prisma migrate deploy`
+## defensively when NODE_ENV=development; this prod image NEVER
+## migrates on container start. Production migrations are a
+## deliberate step in the deploy workflow (see
+## .github/workflows/deploy-staging.yml and infra/STAGING.md).
+
+# ──────────────────────────────────────────────────────────────
+# Stage 1 — deps
+# ──────────────────────────────────────────────────────────────
+FROM node:20.18-bookworm-slim AS deps
+
+ENV PNPM_HOME=/root/.local/share/pnpm \
+    PATH=/root/.local/share/pnpm:$PATH \
+    PUPPETEER_SKIP_DOWNLOAD=1
+
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends ca-certificates \
+ && rm -rf /var/lib/apt/lists/* \
+ && corepack enable \
+ && corepack prepare pnpm@9.12.0 --activate
+
+WORKDIR /workspace
+
+# Workspace manifests first so the install layer caches against
+# the lockfile rather than the source tree. Bumps to apps/api code
+# don't invalidate this layer.
+COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
+COPY apps/api/package.json ./apps/api/
+
+RUN pnpm install --filter @klinika/api --frozen-lockfile=false
+
+# ──────────────────────────────────────────────────────────────
+# Stage 2 — builder
+# ──────────────────────────────────────────────────────────────
+FROM deps AS builder
+
+COPY apps/api ./apps/api
+
+WORKDIR /workspace/apps/api
+
+# `prisma generate` reads schema.prisma and emits the typed client
+# into apps/api/node_modules/@prisma/client. Required before
+# `nest build` because controllers import from there.
+RUN pnpm exec prisma generate \
+ && pnpm build
+
+# ──────────────────────────────────────────────────────────────
+# Stage 3 — runtime
+# ──────────────────────────────────────────────────────────────
+FROM node:20.18-bookworm-slim AS runtime
+
+ENV NODE_ENV=production \
+    TZ=Europe/Belgrade \
+    PNPM_HOME=/root/.local/share/pnpm \
+    PATH=/root/.local/share/pnpm:$PATH \
+    PUPPETEER_SKIP_DOWNLOAD=1 \
+    PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
+
+# tzdata for Europe/Belgrade (ADR-006); chromium for Puppeteer's
+# PDF renderer (ADR-007). The apt chromium tracks the container
+# arch automatically, unlike Puppeteer's bundled Chrome which is
+# linux64-only.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends ca-certificates tzdata chromium \
+ && ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone \
+ && rm -rf /var/lib/apt/lists/* \
+ && corepack enable \
+ && corepack prepare pnpm@9.12.0 --activate
+
+# Non-root user. uid 10001 sits above the host's typical 1000-range
+# so bind-mounted volumes can be chowned to this uid without
+# colliding with a real account on the VM (see infra/STAGING.md
+# "Filesystem prep" for the host-side chown).
+RUN groupadd --system --gid 10001 klinika \
+ && useradd --system --uid 10001 --gid klinika --shell /usr/sbin/nologin --create-home klinika
+
+WORKDIR /workspace
+
+# Workspace + lockfile so `pnpm exec prisma migrate deploy` and
+# `pnpm --filter @klinika/api seed` resolve the filter root.
+COPY --from=builder --chown=10001:10001 /workspace/pnpm-workspace.yaml /workspace/package.json /workspace/pnpm-lock.yaml ./
+COPY --from=builder --chown=10001:10001 /workspace/node_modules ./node_modules
+
+# api package: built JS + node_modules (carries the prisma CLI for
+# `prisma migrate deploy`) + prisma schema/migrations + package.json
+# (needed by the pnpm filter target).
+COPY --from=builder --chown=10001:10001 /workspace/apps/api/dist ./apps/api/dist
+COPY --from=builder --chown=10001:10001 /workspace/apps/api/node_modules ./apps/api/node_modules
+COPY --from=builder --chown=10001:10001 /workspace/apps/api/prisma ./apps/api/prisma
+COPY --from=builder --chown=10001:10001 /workspace/apps/api/package.json ./apps/api/package.json
+
+# In-image storage dir so an empty bind mount inherits the right
+# ownership on first boot. Host directory must be chowned to 10001
+# before bringing the stack up — see infra/STAGING.md.
+RUN mkdir -p /workspace/storage \
+ && chown -R 10001:10001 /workspace/storage
+
+USER klinika
+WORKDIR /workspace/apps/api
+
+EXPOSE 3001
+
+CMD ["node", "dist/main.js"]
