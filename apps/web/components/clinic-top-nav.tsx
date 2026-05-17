@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useMemo } from 'react';
 
-import type { AuthRole, MeResponse } from '@/lib/auth-client';
+import { homePathForRoles, type AuthRole, type MeResponse } from '@/lib/auth-client';
 import { BrandLogo } from './brand-logo';
 import { ClinicUserMenu } from './clinic-user-menu';
 
@@ -95,12 +95,16 @@ export function ClinicTopNav({ me, brandAdjacent, rightAdjacent }: Props) {
     return NAV_ITEMS.filter((item) => item.grantedBy.some((r) => roles.includes(r)));
   }, [roles]);
 
+  // Logo click target matches each role's post-login landing route
+  // (homePathForRoles is the canonical priority — see auth-client.ts).
+  const homePath = homePathForRoles(roles);
+
   return (
     <header className="sticky top-0 z-30 border-b border-line bg-surface-elevated">
       <div className="mx-auto flex max-w-page items-center justify-between px-page-x py-3">
         <div className="flex items-center gap-8">
           <Link
-            href="/profili-im"
+            href={homePath}
             className="flex items-center"
             aria-label="Klinika"
           >
