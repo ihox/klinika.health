@@ -223,7 +223,9 @@ export function resolveScope(
     typeof config === 'string' ? { suffix: config } : config;
   const hostPrefix = (cfg.prefix ?? '').toLowerCase();
   const hostApex = (cfg.apex ?? '').toLowerCase();
-  const hostSuffix = (cfg.suffix ?? DEFAULT_HOST_SUFFIX).toLowerCase();
+  // Accept the suffix with or without a leading dot — both
+  // `klinika.health` and `.klinika.health` should behave the same.
+  const hostSuffix = (cfg.suffix ?? DEFAULT_HOST_SUFFIX).toLowerCase().replace(/^\./, '');
 
   const hostWithoutPort = (host.split(':')[0] ?? host).toLowerCase();
 

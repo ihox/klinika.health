@@ -64,6 +64,17 @@ describe('classifyHost', () => {
       });
     });
 
+    it('accepts a leading-dot suffix value (both conventions normalize to the same)', () => {
+      expect(classifyHost('donetamed.klinika.health', '.klinika.health')).toEqual({
+        kind: 'tenant',
+        subdomain: 'donetamed',
+      });
+      expect(classifyHost('klinika.health', '.klinika.health')).toEqual({
+        kind: 'platform',
+        subdomain: null,
+      });
+    });
+
     it('still rejects reserved prefixes under the staging suffix', () => {
       expect(classifyHost('admin.klinika.health.ihox.net', STAGING_SUFFIX)).toEqual({
         kind: 'reserved',
@@ -138,6 +149,15 @@ describe('classifyHost', () => {
       expect(classifyHost('klinika-health-clinic.different.com', PREFIX_CONFIG)).toEqual({
         kind: 'reserved',
         subdomain: 'klinika-health-clinic.different.com',
+      });
+    });
+
+    it('rejects suffix-poisoning attempts where the apex parent appears mid-host', () => {
+      expect(
+        classifyHost('klinika-health-clinic.ihox.net.evil.com', PREFIX_CONFIG),
+      ).toEqual({
+        kind: 'reserved',
+        subdomain: 'klinika-health-clinic.ihox.net.evil.com',
       });
     });
 

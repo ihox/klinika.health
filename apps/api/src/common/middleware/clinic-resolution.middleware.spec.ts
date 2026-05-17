@@ -70,6 +70,16 @@ describe('resolveScope', () => {
       });
     });
 
+    it('accepts a leading-dot suffix value (both conventions normalize to the same)', () => {
+      expect(resolveScope('donetamed.klinika.health', null, '.klinika.health')).toEqual({
+        kind: 'tenant',
+        subdomain: 'donetamed',
+      });
+      expect(resolveScope('klinika.health', null, '.klinika.health')).toEqual({
+        kind: 'platform',
+      });
+    });
+
     it('still rejects reserved prefixes under the staging suffix', () => {
       expect(resolveScope('admin.klinika.health.ihox.net', null, STAGING_SUFFIX)).toEqual({
         kind: 'reserved',
@@ -141,6 +151,17 @@ describe('resolveScope', () => {
       expect(resolveScope('klinika-health-clinic.different.com', null, PREFIX_CONFIG)).toEqual({
         kind: 'reserved',
         subdomain: 'klinika-health-clinic.different.com',
+      });
+    });
+
+    it('rejects suffix-poisoning attempts where the apex parent appears mid-host', () => {
+      // `.ihox.net` is in the middle but the host actually ends with `.evil.com`.
+      // endsWith(parentSuffix) must be checked against the full tail.
+      expect(
+        resolveScope('klinika-health-clinic.ihox.net.evil.com', null, PREFIX_CONFIG),
+      ).toEqual({
+        kind: 'reserved',
+        subdomain: 'klinika-health-clinic.ihox.net.evil.com',
       });
     });
 
