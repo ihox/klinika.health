@@ -57,19 +57,24 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER:-klinika}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-klinika}?schema=public
       AUTH_SECRET: ${AUTH_SECRET}
       AUTH_TRUSTED_DEVICE_TTL_DAYS: ${AUTH_TRUSTED_DEVICE_TTL_DAYS:-30}
-      # Tenancy — see apps/api/src/common/middleware/clinic-resolution.middleware.ts
-      CLINIC_HOST_SUFFIX: ${CLINIC_HOST_SUFFIX:-klinika.health.ihox.net}
+      # Tenancy — staging runs in PREFIX mode (apex + prefix set).
+      # Production uses SUFFIX mode by leaving APEX + PREFIX unset.
+      # See apps/api/src/common/middleware/clinic-resolution.middleware.ts
+      # and ADR-018.
+      CLINIC_HOST_APEX: ${CLINIC_HOST_APEX:-klinika-health.ihox.net}
+      CLINIC_HOST_PREFIX: ${CLINIC_HOST_PREFIX:-klinika-health-}
+      CLINIC_HOST_SUFFIX: ${CLINIC_HOST_SUFFIX:-klinika.health}
       # CORS — explicit allow-list of staging hosts. The regex driven
-      # by CLINIC_HOST_SUFFIX in main.ts handles the wildcard tenant
-      # subdomains automatically.
-      CORS_ORIGIN: ${CORS_ORIGIN:-https://klinika.health.ihox.net}
+      # by CLINIC_HOST_APEX + CLINIC_HOST_PREFIX in main.ts handles the
+      # tenant subdomains automatically.
+      CORS_ORIGIN: ${CORS_ORIGIN:-https://klinika-health.ihox.net}
       # Storage path inside the container. Matched by the bind mount
       # below so logos and signatures persist across deploys.
       STORAGE_ROOT: /workspace/storage
       # Email — staging defaults to the capturing sender (writes the
       # body to stdout). Set SMTP_* or RESEND_API_KEY in .env.staging
       # if you need real delivery.
-      EMAIL_FROM: ${EMAIL_FROM:-no-reply@klinika.health.ihox.net}
+      EMAIL_FROM: ${EMAIL_FROM:-no-reply@klinika-health.ihox.net}
       EMAIL_FROM_NAME: ${EMAIL_FROM_NAME:-Klinika (staging)}
       SMTP_HOST: ${SMTP_HOST:-}
       SMTP_PORT: ${SMTP_PORT:-587}
@@ -110,9 +115,15 @@ services:
       # Server-side proxy target — Next.js rewrites /api/* and
       # /health/* to this URL (apps/web/next.config.mjs). The
       # browser hits the same origin it loaded the page from
-      # (klinika.health.ihox.net / *.klinika.health.ihox.net),
-      # which NPM forwards to this container on port 3000.
+      # (klinika-health.ihox.net / klinika-health-*.ihox.net), which
+      # NPM forwards to this container on port 3000.
       API_INTERNAL_URL: http://api:3001
+      # Tenancy — same env vars as the api so apps/web/lib/scope.ts
+      # picks the matching mode at module load (apps/web/middleware.ts
+      # is an Edge function reading these from process.env).
+      CLINIC_HOST_APEX: ${CLINIC_HOST_APEX:-klinika-health.ihox.net}
+      CLINIC_HOST_PREFIX: ${CLINIC_HOST_PREFIX:-klinika-health-}
+      CLINIC_HOST_SUFFIX: ${CLINIC_HOST_SUFFIX:-klinika.health}
       # Intentionally not setting NEXT_PUBLIC_API_URL — browser
       # uses relative URLs (apps/web/lib/api.ts). Lets the staging
       # domain change without rebuilding the image.
