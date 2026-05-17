@@ -35,19 +35,23 @@ const nextConfig = {
       },
     ];
   },
-  // Dev-only: proxy API + health probes to the NestJS service so the
-  // browser always talks to the same host:port as the page. Avoids
-  // CORS and cross-host cookie issues when developers visit the app
-  // on admin.localhost / donetamed.localhost subdomains.
+  // Proxy /api/* and /health/* to the NestJS service so the browser
+  // always talks to the same host:port as the page.
   //
-  // In staging/prod, Caddy fronts everything and routes /api/* and
-  // /health/* to the API service directly — those requests must not
-  // reach the Next.js process. We gate the rewrites on
-  // API_INTERNAL_URL being set so a prod image without that env var
-  // is a pure SSR server with no upstream proxying.
+  // Default to the compose-network hostname `http://api:3001`. The
+  // staging stack (one Next.js process behind NPM at port 8003)
+  // relies on this — NPM forwards everything to web:3000 and Next.js
+  // rewrites the API/health paths internally to api:3001.
+  //
+  // On-prem (Caddy split): Caddy intercepts /api/* and /health/*
+  // before they reach Next.js, so the baked rewrite is dormant and
+  // harmless. Local dev points the env at `http://api:3001` from
+  // the dev compose file; the same default value matches.
+  //
+  // Rewrites in App Router are resolved at BUILD time for standalone
+  // output, so an env override only matters during `next build`.
   async rewrites() {
-    const apiInternal = process.env.API_INTERNAL_URL;
-    if (!apiInternal) return [];
+    const apiInternal = process.env.API_INTERNAL_URL ?? 'http://api:3001';
     return [
       { source: '/api/:path*', destination: `${apiInternal}/api/:path*` },
       { source: '/health/:path*', destination: `${apiInternal}/health/:path*` },
