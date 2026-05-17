@@ -32,6 +32,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile=false
 
+      - name: Generate Prisma client
+        run: pnpm --filter @klinika/api prisma:generate
+
       - name: Lint
         run: pnpm lint
 
