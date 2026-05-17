@@ -1041,7 +1041,17 @@ interface ScheduledCardProps {
   onReschedule?: CalendarGridProps['onReschedule'];
 }
 
-function ScheduledCard({
+function ScheduledCard(props: ScheduledCardProps): ReactElement | null {
+  // Cards without a scheduled time or duration aren't placed on the
+  // grid. Gate before the inner component so the early return doesn't
+  // sit above hook calls (react-hooks/rules-of-hooks).
+  if (props.entry.scheduledFor == null || props.entry.durationMinutes == null) {
+    return null;
+  }
+  return <ScheduledCardInner {...props} />;
+}
+
+function ScheduledCardInner({
   entry,
   gridStartMin,
   leftLaneOnly,
@@ -1051,13 +1061,14 @@ function ScheduledCard({
   onClick,
   onContextMenu,
   onReschedule,
-}: ScheduledCardProps): ReactElement | null {
-  if (entry.scheduledFor == null || entry.durationMinutes == null) return null;
-  const start = new Date(entry.scheduledFor);
+}: ScheduledCardProps): ReactElement {
+  const scheduledFor = entry.scheduledFor!;
+  const durationMinutes = entry.durationMinutes!;
+  const start = new Date(scheduledFor);
   const localParts = toLocalParts(start);
   const startMin = timeToMinutes(localParts.time);
   const inlineTop = (startMin - gridStartMin) * PX_PER_MIN;
-  const inlineHeight = entry.durationMinutes * PX_PER_MIN;
+  const inlineHeight = durationMinutes * PX_PER_MIN;
 
   const isNoShow = entry.status === 'no_show';
   const isCompleted = entry.status === 'completed';
