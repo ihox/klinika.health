@@ -1106,8 +1106,11 @@ export function findActiveVisitToday(
  * (`visits[0]`) when the patient has only past or completed visits.
  * The caller has already confirmed the list is non-empty.
  */
-export function pickInitialVisit(visits: readonly ChartVisitDto[]): ChartVisitDto {
-  const active = findActiveVisitToday(visits);
+export function pickInitialVisit(
+  visits: readonly ChartVisitDto[],
+  today: string = todayIsoLocal(),
+): ChartVisitDto {
+  const active = findActiveVisitToday(visits, today);
   return active ?? visits[0]!;
 }
 

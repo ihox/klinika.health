@@ -79,7 +79,7 @@ describe('pickInitialVisit', () => {
     // ordering doesn't matter for the helper — it scans by status.
     const completedToday = visit({ id: 'done', status: 'completed' });
     const scheduledToday = visit({ id: 'pending', status: 'scheduled' });
-    expect(pickInitialVisit([completedToday, scheduledToday]).id).toBe('pending');
+    expect(pickInitialVisit([completedToday, scheduledToday], TODAY).id).toBe('pending');
   });
 
   it('falls back to the newest row when no active-today exists', () => {
@@ -89,7 +89,7 @@ describe('pickInitialVisit', () => {
       status: 'completed',
       visitDate: YESTERDAY,
     });
-    expect(pickInitialVisit([newest, older]).id).toBe('a');
+    expect(pickInitialVisit([newest, older], TODAY).id).toBe('a');
   });
 
   it('falls back to the newest row when patient only has past completed visits', () => {
@@ -102,6 +102,6 @@ describe('pickInitialVisit', () => {
       status: 'completed',
       visitDate: YESTERDAY,
     });
-    expect(pickInitialVisit([today, past]).id).toBe('today-done');
+    expect(pickInitialVisit([today, past], TODAY).id).toBe('today-done');
   });
 });
