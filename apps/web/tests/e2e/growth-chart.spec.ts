@@ -7,8 +7,10 @@ import { expect, test, type Page, type Route } from '@playwright/test';
  *   1. Boy under 24 months — blue sparkline cards visible, click opens
  *      modal, "Djalë" chip + blue patient line + three working tabs.
  *   2. Girl under 24 months — pink sparkline cards + "Vajzë" chip.
- *   3. Patient with no recorded measurements — empty state with the
- *      "Asnjë e dhënë e regjistruar" copy from components/empty-states.
+ *   3. Patient with no recorded measurements — each of the three chart
+ *      cards renders its frame with a "Nuk ka të dhëna" overlay (the
+ *      cards stay visible so the doctor knows growth charts exist, even
+ *      when nothing has been measured yet — common for migrated rows).
  *   4. Patient past 24 months with infancy data — historical link
  *      replaces the sparkline cards.
  *   5. Patient without resolved sex — placeholder + inline "Cakto
@@ -157,15 +159,36 @@ test.describe('WHO growth charts', () => {
     expect(stroke.replace(/\s/g, '')).toBe('rgb(232,114,142)');
   });
 
-  test('empty state when no measurements recorded', async ({ page }) => {
+  test('per-chart empty state when no measurements recorded', async ({ page }) => {
     await mockChart(page, {
       sex: 'm',
       dateOfBirth: '2024-09-12',
       growthPoints: [],
     });
     await page.goto(`/pacient/${PATIENT_ID}`);
-    await expect(page.getByTestId('growth-empty')).toBeVisible();
-    await expect(page.getByText('Asnjë e dhënë e regjistruar')).toBeVisible();
+
+    // All three sparkline cards still render — the frame (axes,
+    // percentile bands, P50) stays visible so the doctor sees the
+    // clinical reference even before the first measurement.
+    await expect(page.getByTestId('growth-sparklines')).toBeVisible();
+    await expect(page.getByTestId('growth-sparkline-weight')).toHaveAttribute(
+      'data-empty',
+      'true',
+    );
+    await expect(page.getByTestId('growth-sparkline-length')).toHaveAttribute(
+      'data-empty',
+      'true',
+    );
+    await expect(page.getByTestId('growth-sparkline-hc')).toHaveAttribute(
+      'data-empty',
+      'true',
+    );
+
+    // Each card carries its own "Nuk ka të dhëna" overlay.
+    await expect(page.getByTestId('growth-empty-weight')).toBeVisible();
+    await expect(page.getByTestId('growth-empty-length')).toBeVisible();
+    await expect(page.getByTestId('growth-empty-hc')).toBeVisible();
+    await expect(page.getByText('Nuk ka të dhëna')).toHaveCount(3);
   });
 
   test('past 24 months with infancy data shows the historical link', async ({

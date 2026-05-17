@@ -39,6 +39,10 @@ interface Props {
  * Patient-chart right-column panel for the WHO growth charts.
  *
  *   ≤ 24 months + known sex → three sparkline cards, click any to open modal.
+ *     Each card renders the chart frame (axes, percentile bands) even when
+ *     that metric has zero measurements, overlaying "Nuk ka të dhëna"
+ *     centered over the empty plot area. Migrated patients commonly have
+ *     zero measurements; hiding the panel made the absence look like a bug.
  *   > 24 months + has 0-24mo data → "Shiko grafikët historikë" link.
  *   > 24 months + no 0-24mo data → hidden entirely.
  *   Sex unresolved → placeholder asking the doctor to set it inline.
@@ -164,38 +168,34 @@ export function GrowthPanel({
             <SexTintedChip sex={sex} />
           </span>
         </header>
-        {inWhoBand.length === 0 ? (
-          <EmptyState />
-        ) : (
-          <div data-testid="growth-sparklines">
-            <SparklineCard
-              metric="weight"
-              patientSex={sex}
-              growthPoints={inWhoBand}
-              onOpen={() =>
-                setModal({ open: true, metric: 'weight', historical: false })
-              }
-            />
-            <Divider />
-            <SparklineCard
-              metric="length"
-              patientSex={sex}
-              growthPoints={inWhoBand}
-              onOpen={() =>
-                setModal({ open: true, metric: 'length', historical: false })
-              }
-            />
-            <Divider />
-            <SparklineCard
-              metric="hc"
-              patientSex={sex}
-              growthPoints={inWhoBand}
-              onOpen={() =>
-                setModal({ open: true, metric: 'hc', historical: false })
-              }
-            />
-          </div>
-        )}
+        <div data-testid="growth-sparklines">
+          <SparklineCard
+            metric="weight"
+            patientSex={sex}
+            growthPoints={inWhoBand}
+            onOpen={() =>
+              setModal({ open: true, metric: 'weight', historical: false })
+            }
+          />
+          <Divider />
+          <SparklineCard
+            metric="length"
+            patientSex={sex}
+            growthPoints={inWhoBand}
+            onOpen={() =>
+              setModal({ open: true, metric: 'length', historical: false })
+            }
+          />
+          <Divider />
+          <SparklineCard
+            metric="hc"
+            patientSex={sex}
+            growthPoints={inWhoBand}
+            onOpen={() =>
+              setModal({ open: true, metric: 'hc', historical: false })
+            }
+          />
+        </div>
       </section>
       <GrowthChartModal
         open={modal.open}
@@ -270,6 +270,7 @@ function SparklineCard({
     ? estimatePercentileLabel(reference, last.ageMonths, last.value)
     : '—';
   const warn = isWarnPercentile(pctLabel);
+  const isEmpty = series.points.length === 0;
 
   return (
     <button
@@ -277,6 +278,7 @@ function SparklineCard({
       onClick={onOpen}
       data-testid={`growth-sparkline-${metric}`}
       data-tone={tone}
+      data-empty={isEmpty ? 'true' : 'false'}
       aria-label={`Hap grafikun: ${meta.title}`}
       className="grid w-full grid-cols-[1fr_auto] gap-x-3 gap-y-1 px-4 pb-2.5 pt-2.5 text-left transition-colors hover:bg-surface-subtle"
       style={{ gridTemplateAreas: '"title pct" "svg svg"' }}
@@ -300,12 +302,22 @@ function SparklineCard({
       >
         {pctLabel}
       </span>
-      <SparklineSvg
-        metric={metric}
-        reference={reference}
-        series={series.points}
-        tone={tone}
-      />
+      <div className="relative" style={{ gridArea: 'svg' }}>
+        <SparklineSvg
+          metric={metric}
+          reference={reference}
+          series={series.points}
+          tone={tone}
+        />
+        {isEmpty ? (
+          <span
+            data-testid={`growth-empty-${metric}`}
+            className="pointer-events-none absolute inset-0 flex items-center justify-center pb-2.5 text-[12px] font-medium text-ink-muted"
+          >
+            Nuk ka të dhëna
+          </span>
+        ) : null}
+      </div>
     </button>
   );
 }
@@ -372,7 +384,6 @@ function SparklineSvg({
       viewBox={`0 0 ${w} ${h}`}
       preserveAspectRatio="none"
       className="block h-[60px] w-full pb-2.5"
-      style={{ gridArea: 'svg' }}
     >
       {/* Neutral-tinted percentile band — the cards stay in cool teal
           tones; the sex color is reserved for the patient's line and
@@ -419,42 +430,8 @@ function SparklineSvg({
 }
 
 // ---------------------------------------------------------------------------
-// Empty / placeholder states
+// Placeholder for unresolved sex
 // ---------------------------------------------------------------------------
-
-function EmptyState(): ReactElement {
-  return (
-    <div
-      data-testid="growth-empty"
-      className="flex flex-col items-center gap-1 px-6 py-7 text-center"
-    >
-      <span
-        aria-hidden
-        className="grid h-12 w-12 place-items-center rounded-full border border-line bg-surface-subtle text-ink-faint"
-      >
-        <svg
-          width="20"
-          height="20"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.6"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <path d="M4 4v16h16" />
-          <path d="M8 16l3-4 3 2 5-7" strokeDasharray="2 3" />
-        </svg>
-      </span>
-      <h4 className="text-[14px] font-semibold tracking-snug text-ink-strong">
-        Asnjë e dhënë e regjistruar
-      </h4>
-      <p className="max-w-[260px] text-[12px] text-ink-muted">
-        Pesha, gjatësia dhe PK shfaqen pas matjes së parë.
-      </p>
-    </div>
-  );
-}
 
 function UnknownSexPlaceholder({
   onRequestSetSex,
