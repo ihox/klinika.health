@@ -80,8 +80,9 @@ Switch staging to a flat hyphen-joined scheme that keeps every Klinika host at l
 | Was | Is |
 |---|---|
 | `klinika.health.ihox.net` (apex) | `klinika-health.ihox.net` |
-| `clinic.klinika.health.ihox.net` (tenant) | `klinika-health-clinic.ihox.net` |
-| `donetamed.klinika.health.ihox.net` (future tenant) | `klinika-health-donetamed.ihox.net` |
+| `<slug>.klinika.health.ihox.net` (tenant) | `klinika-health-<slug>.ihox.net` |
+
+The staging seed creates one tenant with slug `donetamed` (matching the NPM proxy host the operator pre-configured at `klinika-health-donetamed.ihox.net`). Note that the originally-accepted body above refers to this tenant by an earlier placeholder slug `clinic` — the slug name is operational, not a decision change.
 
 The middleware grew a second resolution mode (PREFIX), driven by `CLINIC_HOST_APEX` + `CLINIC_HOST_PREFIX`. Production continues to use SUFFIX mode (`CLINIC_HOST_SUFFIX=klinika.health`) unchanged; the dotted scheme there has wildcard-cert headroom because `klinika.health` is the production zone apex, not a delegation.
 

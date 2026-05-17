@@ -179,7 +179,7 @@ Each clinic gets its own proxy host with the SAME forward target. Add one for th
 
 | Field | Value |
 |---|---|
-| Domain Names | `klinika-health-<slug>.ihox.net` (e.g. `klinika-health-clinic.ihox.net`) |
+| Domain Names | `klinika-health-<slug>.ihox.net` (e.g. `klinika-health-donetamed.ihox.net`) |
 | Forward Hostname / IP | `10.2.1.101` |
 | Forward Port | `8003` |
 | Other settings | identical to Proxy Host 1 (reuse the `*.ihox.net` cert) |
@@ -199,7 +199,7 @@ Add to your DNS provider for `ihox.net`. Two equivalent options:
 | Type | Name | Value |
 |---|---|---|
 | `A` | `klinika-health` | The public IP of the NPM VM |
-| `A` | `klinika-health-clinic` | The public IP of the NPM VM |
+| `A` | `klinika-health-donetamed` | The public IP of the NPM VM |
 | `A` | `klinika-health-<slug>` | (one per future tenant) |
 
 **Option B — wildcard at `*.ihox.net`** (covers every level-1 subdomain on the same NPM):
@@ -232,16 +232,16 @@ sudo -H -u deploy bash -c '
 '
 ```
 
-This creates the platform admin + the `clinic` tenant + three users (doctor / receptionist / clinic_admin). No patients — the staging clinic starts empty by design.
+This creates the platform admin + the `donetamed` tenant + three users (doctor / receptionist / clinic_admin). No patients — the staging clinic starts empty by design. The slug matches the NPM proxy host the operator pre-configured (`klinika-health-donetamed.ihox.net`).
 
 Login credentials are the `SEED_*_PASSWORD` values from `.env.staging`:
 
 | URL | Email | Password env var |
 |---|---|---|
 | `https://klinika-health.ihox.net/login` | `admin@klinika-health.ihox.net` | `SEED_PLATFORM_ADMIN_PASSWORD` |
-| `https://klinika-health-clinic.ihox.net/login` | `doctor@klinika-health.ihox.net` | `SEED_DOCTOR_PASSWORD` |
-| `https://klinika-health-clinic.ihox.net/login` | `receptionist@klinika-health.ihox.net` | `SEED_RECEPTIONIST_PASSWORD` |
-| `https://klinika-health-clinic.ihox.net/login` | `clinic-admin@klinika-health.ihox.net` | `SEED_CLINIC_ADMIN_PASSWORD` |
+| `https://klinika-health-donetamed.ihox.net/login` | `doctor@klinika-health.ihox.net` | `SEED_DOCTOR_PASSWORD` |
+| `https://klinika-health-donetamed.ihox.net/login` | `receptionist@klinika-health.ihox.net` | `SEED_RECEPTIONIST_PASSWORD` |
+| `https://klinika-health-donetamed.ihox.net/login` | `clinic-admin@klinika-health.ihox.net` | `SEED_CLINIC_ADMIN_PASSWORD` |
 
 Retrieve the actual passwords with:
 
@@ -334,7 +334,7 @@ The clinic isn't seeded yet. Run the staging seed (see "Run the staging seed" ab
 
 ### Apex hits the platform login but a clinic subdomain hits a 404 page
 
-DNS isn't pointing the tenant host at the NPM. Confirm `dig klinika-health-clinic.ihox.net` resolves to the NPM IP — either via a per-host A record or via the `*.ihox.net` wildcard.
+DNS isn't pointing the tenant host at the NPM. Confirm `dig klinika-health-donetamed.ihox.net` resolves to the NPM IP — either via a per-host A record or via the `*.ihox.net` wildcard.
 
 ---
 

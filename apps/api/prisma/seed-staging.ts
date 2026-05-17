@@ -8,7 +8,8 @@
 // Contents:
 //   1. ICD-10 reference data (visit creation needs it)
 //   2. One platform admin
-//   3. One clinic: subdomain `clinic`, name "Klinika Test"
+//   3. One clinic: subdomain `donetamed`, name "DonetaMED (Staging)"
+//      — slug matches the NPM proxy host the operator pre-configured
 //   4. Three users in that clinic — doctor, receptionist, clinic_admin
 //   5. NO patients, NO visits — staging starts empty by design
 //
@@ -36,8 +37,12 @@ const ARGON2_OPTIONS: argon2.Options = {
 
 const prisma = new PrismaClient();
 
-const STAGING_SUBDOMAIN = 'clinic';
-const STAGING_CLINIC_NAME = 'Klinika Test';
+// Subdomain matches the NPM proxy host the operator pre-configured
+// (`klinika-health-donetamed.ihox.net` → 10.2.1.101:8003). Keeping
+// the slug stable across staging + production avoids re-pointing
+// NPM/DNS later when real-data migration to staging is reconsidered.
+const STAGING_SUBDOMAIN = 'donetamed';
+const STAGING_CLINIC_NAME = 'DonetaMED (Staging)';
 
 interface Icd10Row {
   code: string;
@@ -70,16 +75,16 @@ async function seedClinic(): Promise<string> {
     where: { subdomain: STAGING_SUBDOMAIN },
     update: {
       name: STAGING_CLINIC_NAME,
-      shortName: 'KLINIKA-TEST',
+      shortName: 'DONETA-MED (STG)',
     },
     create: {
       subdomain: STAGING_SUBDOMAIN,
       name: STAGING_CLINIC_NAME,
-      shortName: 'KLINIKA-TEST',
+      shortName: 'DONETA-MED (STG)',
       address: 'Rr. Test 1',
       city: 'Prishtinë',
       phones: ['+383 38 000 000'],
-      email: 'info@klinika-test.health',
+      email: 'info@donetamed-staging.health',
       licenseNumber: 'STAGING-ONLY',
       hoursConfig: {
         timezone: 'Europe/Belgrade',
