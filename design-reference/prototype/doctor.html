@@ -274,11 +274,8 @@
 
 <header class="topbar">
   <a href="index.html" class="topbar-brand">
-    <svg width="22" height="22" viewBox="0 0 64 64" fill="none" style="color: var(--primary);">
-      <path d="M32 54 C 12 40, 8 26, 18 18 C 24 14, 30 16, 32 22 C 34 16, 40 14, 46 18 C 56 26, 52 40, 32 54 Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
-      <path d="M14 34 L 22 34 L 26 26 L 30 42 L 34 28 L 38 36 L 50 36" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-    </svg>
-    klinika<span class="dot-app">.</span>
+    <span class="brand-mark" style="width:28px;height:28px;border-radius:8px" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l2-6 4 12 2-6h6"/></svg></span>
+    <span class="brand-word">klinika<span class="dot-app">.health</span></span>
   </a>
 
   <nav class="topbar-nav">
@@ -401,10 +398,10 @@
           </div>
           <!-- Mungesë row — uses CANONICAL no-show amber, not red.
                The canonical status color system (see receptionist.html
-               + styles.css :root) marks no_show with amber. Red is
-               reserved for cancelled. Keeping these distinct across
-               every surface (calendar cards, doctor list, reports)
-               so the user learns the color language once. -->
+               + styles.css :root) marks no_show with amber. Keeping
+               this consistent across every surface (calendar cards,
+               doctor list, reports) so the user learns the color
+               language once. -->
           <div class="appt-row done" style="opacity: 0.6;">
             <div class="time">12:10</div><div class="status-dot" style="background: var(--status-no-show-solid);"></div>
             <div><div class="name">Ben Krasniqi <span class="age">3v</span></div><div class="reason">Mungesë</div></div>

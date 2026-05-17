@@ -68,7 +68,10 @@
        in_progress  → cyan + pulse  (doctor seeing patient)
        completed    → green / teal  (done, positive)
        no_show      → amber         (attention required, didn't happen)
-       cancelled    → red / rose    (destructive, won't happen)
+     Lifecycle: scheduled → arrived → in_progress → completed, with
+     no_show as the single alternate terminal state. (Cancellation as
+     a separate status was retired — bookings that don't happen are
+     either no-shows or hard-deleted from the schedule.)
      All pairings pass WCAG AA at the typographic scale we use. */
   --status-scheduled-bg:     #E0E7FF;   /* indigo-100 */
   --status-scheduled-fg:     #3730A3;   /* indigo-800 */
@@ -89,11 +92,6 @@
   --status-no-show-fg:     #92400E;     /* amber-800 */
   --status-no-show-border: #FDE68A;     /* amber-200 */
   --status-no-show-solid:  #B45309;     /* amber-700 */
-
-  --status-cancelled-bg:     #FEE2E2;   /* red-100   */
-  --status-cancelled-fg:     #991B1B;   /* red-800   */
-  --status-cancelled-border: #FECACA;   /* red-200   */
-  --status-cancelled-solid:  #B91C1C;   /* red-700   */
 
   /* ---------- Role chips ------------------------------------------------
      Canonical role-chip family used in user menu, Përdoruesit table,

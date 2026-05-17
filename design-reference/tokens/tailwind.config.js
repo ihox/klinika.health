@@ -62,7 +62,8 @@ module.exports = {
         //   in-progress  → cyan    (active; arrived shares this family)
         //   completed    → green   (done, positive)
         //   no-show      → amber   (didn't happen, attention)
-        //   cancelled    → red     (won't happen, destructive)
+        // Lifecycle: scheduled → arrived → in_progress → completed,
+        // with no_show as the single alternate terminal state.
         // Usage in Tailwind:
         //   bg-status-scheduled-bg text-status-scheduled-fg
         //   border-status-scheduled-border
@@ -84,10 +85,6 @@ module.exports = {
           'no-show-fg':         '#92400E',
           'no-show-border':     '#FDE68A',
           'no-show-solid':      '#B45309',
-          'cancelled-bg':       '#FEE2E2',
-          'cancelled-fg':       '#991B1B',
-          'cancelled-border':   '#FECACA',
-          'cancelled-solid':    '#B91C1C',
         },
 
         // Role-chip family (canonical) — distinct from status & brand chips

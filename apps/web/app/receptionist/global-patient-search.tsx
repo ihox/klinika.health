@@ -126,7 +126,7 @@ export function GlobalPatientSearch({
   );
 
   return (
-    <div ref={containerRef} className="relative">
+    <div ref={containerRef} className="relative shrink-0">
       <label
         className={cn(
           'flex items-center gap-2 rounded-md border border-line-strong bg-surface px-3 py-1.5 text-[13px] transition focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/25',

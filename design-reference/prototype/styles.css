@@ -69,7 +69,8 @@
        in_progress  → cyan + pulse    (doctor seeing patient now)
        completed    → green           (done, positive)
        no_show      → amber           (didn't happen, attention)
-       cancelled    → red             (won't happen, destructive) */
+     Lifecycle: scheduled → arrived → in_progress → completed, with
+     no_show as the single alternate terminal state. */
   --status-scheduled-bg:     #E0E7FF;
   --status-scheduled-fg:     #3730A3;
   --status-scheduled-border: #C7D2FE;
@@ -89,11 +90,6 @@
   --status-no-show-fg:     #92400E;
   --status-no-show-border: #FDE68A;
   --status-no-show-solid:  #B45309;
-
-  --status-cancelled-bg:     #FEE2E2;
-  --status-cancelled-fg:     #991B1B;
-  --status-cancelled-border: #FECACA;
-  --status-cancelled-solid:  #B91C1C;
 
   /* --- Growth chart — sex-based patient line/dot color ----------------
      Pediatric convention: blue = boy (Djalë), pink = girl (Vajzë).
@@ -193,17 +189,57 @@ p { margin: 0; }
 .topbar-brand {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   font-family: var(--font-display);
   font-weight: 600;
-  font-size: 16px;
+  font-size: 17px;
   color: var(--text-strong);
-  letter-spacing: -0.015em;
+  letter-spacing: -0.012em;
+}
+
+/* ---------------------------------------------------------------------------
+   .brand-mark — the klinika.health tile glyph
+   Adopted from the marketing site (website/index.html) to unify the brand
+   between app and marketing. A teal-gradient rounded tile with a single
+   white QRS-style pulse line inside. Size is set inline (width + height +
+   border-radius) at each use site so the same component scales cleanly from
+   16 px favicon up to 56 px login hero without redefining the class.
+   --------------------------------------------------------------------------- */
+.brand-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px; height: 28px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, var(--teal-600) 0%, var(--teal-500) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    0 1px 2px rgba(13, 148, 136, 0.18);
+  flex-shrink: 0;
+  color: white;
+}
+.brand-mark svg {
+  width: 58%; height: 58%;
+  display: block;
 }
 
 .topbar-brand .dot-app {
   color: var(--text-faint);
   font-weight: 400;
+}
+.topbar-brand .domain {
+  color: var(--text-faint);
+  font-weight: 400;
+}
+
+/* Wrap "klinika.health" so the wordmark is ONE flex item inside
+   .topbar-brand. Without the wrapper, the bare "klinika" text node
+   and the .dot-app span each become their own flex item and the
+   parent's `gap: 10px` opens up between them — leaving a visible
+   space between "klinika" and ".health". */
+.topbar-brand .brand-word {
+  display: inline-flex;
+  align-items: baseline;
 }
 
 .topbar-nav {
@@ -239,6 +275,7 @@ p { margin: 0; }
   color: var(--text-muted);
   border-radius: var(--r-sm);
   position: relative;
+  white-space: nowrap;
   transition: color 150ms ease, background 150ms ease;
 }
 .nav-link:hover { color: var(--text); background: var(--bg-subtle); }

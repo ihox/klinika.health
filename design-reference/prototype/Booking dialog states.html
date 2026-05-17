@@ -506,28 +506,6 @@
     margin-right: 4px;
     flex-shrink: 0;
   }
-  .demo-appt.cancelled {
-    background: var(--bg-subtle);
-    border-color: var(--border);
-    border-left: 3px solid var(--border-strong);
-    opacity: 0.55;
-  }
-  .demo-appt.cancelled .name {
-    color: var(--text-faint);
-    text-decoration: line-through;
-    text-decoration-thickness: 1px;
-  }
-  .demo-appt.cancelled .meta { color: var(--text-faint); }
-  .demo-appt.cancelled .pre {
-    font-size: 9px;
-    background: var(--bg-muted);
-    color: var(--text-muted);
-    border-radius: 3px;
-    padding: 1px 5px;
-    font-weight: 700;
-    margin-right: 4px;
-    flex-shrink: 0;
-  }
 
   .lc-card .lc-foot {
     padding: 11px 16px 13px;
@@ -792,7 +770,7 @@
   <section class="lifecycle-section">
     <div class="sec-head">
       <div>
-        <h2>Termini në kalendar · 6 gjendje</h2>
+        <h2>Termini në kalendar · 5 gjendje</h2>
         <p>Çdo termin tani është një <em>vizitë</em> me një cikël jetësor të vetëm. Kartela në kalendar tregon ku është pacienti pa pasur nevojë të hapet kartela klinike.</p>
       </div>
       <div class="meta">data model · v2 · unified</div>
@@ -807,8 +785,7 @@
       <span class="step">in_progress</span>
       <span class="arrow">→</span>
       <span class="step">completed</span>
-      <span class="branch">·  alternatives from scheduled:</span>
-      <span class="step alt">cancelled</span>
+      <span class="branch">·  alternative from scheduled:</span>
       <span class="step alt">no_show</span>
     </div>
 
@@ -911,27 +888,6 @@
         </div>
         <div class="lc-foot">
           Pacienti nuk u paraqit. Kornizë e ndërprerë e kuqe, emri me vijë mbi të. Slot-i mbetet i parashënuar për histori.
-        </div>
-      </div>
-
-      <!-- 06 cancelled -->
-      <div class="lc-card">
-        <div class="lc-head">
-          <div>
-            <div class="num">06</div>
-            <h3>Cancelled · anuluar</h3>
-          </div>
-          <span class="tag t-muted">ALT</span>
-        </div>
-        <div class="lc-stage">
-          <div class="demo-appt cancelled">
-            <span class="pre">AN</span>
-            <span class="name">Era Krasniqi</span>
-            <span class="meta">14:20</span>
-          </div>
-        </div>
-        <div class="lc-foot">
-          Termini u anulua para mbërritjes. Shumë i venitur (opacity 0.55), gri, me vijë mbi emër. Slot-i bëhet i lirë për të tjerët.
         </div>
       </div>
 

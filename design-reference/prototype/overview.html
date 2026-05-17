@@ -387,13 +387,9 @@
 <!-- Brand bar -->
 <div class="ovr-bar">
   <div class="b-left">
-    <svg class="logo" width="48" height="48" viewBox="0 0 64 64" fill="none">
-      <path d="M32 54 C 12 40, 8 26, 18 18 C 24 14, 30 16, 32 22 C 34 16, 40 14, 46 18 C 56 26, 52 40, 32 54 Z" fill="var(--teal-100)" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
-      <path d="M10 34 L 22 34 L 26 28 L 30 40 L 34 30 L 38 36 L 54 36" stroke="var(--teal-800)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-      <circle cx="54" cy="36" r="2.6" fill="var(--accent-500)"/>
-    </svg>
+    <span class="brand-mark" style="width:48px;height:48px;border-radius:13px" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l2-6 4 12 2-6h6"/></svg></span>
     <div>
-      <div class="word">klinika<span class="ext">.</span></div>
+      <div class="word">klinika<span class="ext">.health</span></div>
       <div class="meta"><strong>Design overview</strong> · pediatric clinic management · Albanian-first</div>
     </div>
   </div>
@@ -422,11 +418,7 @@
     <div class="ds-card logo-card">
       <div class="ds-label">Marka</div>
       <div class="big-mark" style="position: relative; height: 130px;">
-        <svg width="100" height="100" viewBox="0 0 64 64" fill="none" style="color: var(--primary);">
-          <path d="M32 54 C 12 40, 8 26, 18 18 C 24 14, 30 16, 32 22 C 34 16, 40 14, 46 18 C 56 26, 52 40, 32 54 Z" fill="var(--teal-100)" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
-          <path d="M10 34 L 22 34 L 26 28 L 30 40 L 34 30 L 38 36 L 54 36" stroke="var(--teal-800)" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-          <circle cx="54" cy="36" r="2.4" fill="var(--accent-500)"/>
-        </svg>
+        <span class="brand-mark" style="width:100px;height:100px;border-radius:28px" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l2-6 4 12 2-6h6"/></svg></span>
         <!-- Pulse-dot annotation -->
         <div style="position: absolute; bottom: 10px; right: 12px; display: flex; align-items: center; gap: 6px; font-family: var(--font-mono); font-size: 10px; color: var(--teal-700); background: rgba(255,255,255,0.7); padding: 3px 7px; border-radius: 999px; backdrop-filter: blur(4px);">
           <span style="display: inline-block; width: 8px; height: 8px; border-radius: 999px; background: var(--accent-500);"></span>
@@ -435,11 +427,8 @@
       </div>
 
       <div class="lockup" style="border-top: 1px solid var(--border-soft); border-bottom: 1px solid var(--border-soft); padding: 14px 0;">
-        <svg width="28" height="28" viewBox="0 0 64 64" fill="none" style="color: var(--primary);">
-          <path d="M32 54 C 12 40, 8 26, 18 18 C 24 14, 30 16, 32 22 C 34 16, 40 14, 46 18 C 56 26, 52 40, 32 54 Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
-          <path d="M14 34 L 22 34 L 26 26 L 30 42 L 34 28 L 38 36 L 50 36" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-        </svg>
-        <span class="lockup-word">klinika<span class="ext">.</span></span>
+        <span class="brand-mark" style="width:32px;height:32px;border-radius:9px" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l2-6 4 12 2-6h6"/></svg></span>
+        <span class="lockup-word">klinika<span class="ext">.health</span></span>
       </div>
 
       <div style="font-size: 11.5px; color: var(--text-muted); line-height: 1.55; padding: 4px 2px;">
@@ -544,8 +533,8 @@
         <span class="chip chip-red"><span class="dot"></span>&lt; 7 ditë</span>
         <span class="chip chip-teal"><span class="dot"></span>Tani</span>
         <span class="chip">15 min</span>
-        <!-- MS = Mungesë (no-show). Canonical no-show color is amber; red
-             is reserved for cancelled. See styles.css → --status-no-show-*. -->
+        <!-- MS = Mungesë (no-show). Canonical no-show color is amber.
+             See styles.css → --status-no-show-*. -->
         <span class="chip" style="background: var(--status-no-show-bg); color: var(--status-no-show-fg); border-color: var(--status-no-show-border);">MS</span>
       </div>
       <div style="margin-top: 12px; font-size: 11px; color: var(--text-faint); line-height: 1.5;">

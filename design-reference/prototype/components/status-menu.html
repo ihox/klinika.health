@@ -151,8 +151,7 @@
     <span class="step">arrived</span><span class="arrow">→</span>
     <span class="step">in_progress</span><span class="arrow">→</span>
     <span class="step">completed</span>
-    <span style="opacity: 0.6; margin-left: 12px;">·  alternatives:</span>
-    <span class="step alt">cancelled</span>
+    <span style="opacity: 0.6; margin-left: 12px;">·  alternative:</span>
     <span class="step alt">no_show</span>
   </div>
 
@@ -208,12 +207,6 @@
             </svg>
             Mungoi
           </button>
-          <button class="row muted">
-            <svg class="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-              <circle cx="8" cy="8" r="6"/><path d="M4.5 4.5l7 7"/>
-            </svg>
-            Anulo
-          </button>
 
           <div class="divider"></div>
           <button class="row danger">
@@ -267,7 +260,7 @@
         </div>
       </div>
       <div class="foot">
-        Walk-in fillon në gjendje <code>arrived</code>, kështu që nuk shfaqet "Shëno si arritur". <em>Riprogramo</em> nuk ka kuptim — pa termin për të lëvizur. <em>Mungoi</em>/<em>Anulo</em> nuk shfaqen — pa termin për të humbur.
+        Walk-in fillon në gjendje <code>arrived</code>, kështu që nuk shfaqet "Shëno si arritur". <em>Riprogramo</em> nuk ka kuptim — pa termin për të lëvizur. <em>Mungoi</em> nuk shfaqet — pa termin për të humbur.
       </div>
     </div>
   </div>
@@ -283,7 +276,7 @@
       <li><strong>Header kontekstual.</strong> Rreshti i parë jep kohën dhe ditën; rreshti i dytë jep emrin. Walk-in chip-i e zëvendëson kohën me <code>↻ Pa termin · erdhi HH:MM</code>.</li>
       <li><strong>Seksione me etiketa monospace.</strong> <em>"Lëviz në"</em> dhe <em>"Gjendja e vizitës"</em> i ndajnë qartë veprimet — që në shikim të parë, recepsionisti e di se ku të kërkojë.</li>
       <li><strong>Auto-tranzicionet.</strong> <em>Filloi vizita</em> është manual; në praktikë vendoset automatikisht kur mjeku hap kartelën. Recepsionisti e ka vetëm si rezervë.</li>
-      <li><strong>Ngjyrat.</strong> Pa ngjyrë për tranzicione normale (arrived, in_progress, completed). E kuqe vetëm te <em>Mungoi</em> dhe <em>Fshij terminin</em>. E zbehur te <em>Anulo</em> që të mos thirret pa qëllim.</li>
+      <li><strong>Ngjyrat.</strong> Pa ngjyrë për tranzicione normale (arrived, in_progress, completed). E kuqe vetëm te <em>Mungoi</em> dhe <em>Fshij terminin</em>.</li>
       <li><strong>Fshirja.</strong> Bën soft-delete me toast 30s + Anulo (shih <a href="toast-undo.html" style="color: var(--primary);">toast-undo</a>). Fshin gjithë vizitën, jo vetëm slot-in.</li>
     </ul>
   </div>

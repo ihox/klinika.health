@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" role="img" aria-label="klinika.health">
+  
+  <defs>
+    <linearGradient id="k-app-g" x1="0" y1="0" x2="1024" y2="1024" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0D9488"></stop>
+      <stop offset="1" stop-color="#14B8A6"></stop>
+    </linearGradient>
+  </defs>
+  <rect width="1024" height="1024" rx="180" fill="url(#k-app-g)"></rect>
+  
+  <svg x="192" y="192" width="640" height="640" viewBox="0 0 24 24" fill="none">
+    <path d="M3 12h4l2-6 4 12 2-6h6" stroke="#FFFFFF" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" fill="none"></path>
+  </svg>
+</svg>

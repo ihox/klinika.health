@@ -332,7 +332,7 @@
     background-color: rgba(28,25,23,0.025);
   }
   /* Past appointments — slightly faded; status pills keep their colors */
-  .day-col.past .appt:not(.completed):not(.noshow):not(.cancelled) {
+  .day-col.past .appt:not(.completed):not(.noshow) {
     opacity: 0.85;
     filter: saturate(0.78);
   }
@@ -345,8 +345,8 @@
      STATUS COLOR SYSTEM (canonical) — read me first
      -----------------------------------------------------------
      This calendar uses ONE canonical color per visit status
-     (scheduled, arrived/in_progress, completed, no_show,
-     cancelled). The same color is used across filter pills,
+     (scheduled, arrived/in_progress, completed, no_show).
+     The same color is used across filter pills,
      calendar cards, and hover overlays — receptionist learns
      the visual language once.
 
@@ -361,7 +361,9 @@
        in_progress  → --status-in-progress-*  (cyan; w/ pulse)
        completed    → --status-completed-*    (green)
        no_show      → --status-no-show-*      (amber)
-       cancelled    → --status-cancelled-*    (red)
+
+     Lifecycle: scheduled → arrived → in_progress → completed,
+     with no_show as the single alternate terminal state.
 
      ACCESSIBILITY:
        - Cards carry [data-status] for screen-reader/aria mapping
@@ -531,8 +533,8 @@
     }
   }
   /* Future appts are draggable */
-  .appt:not(.completed):not(.noshow):not(.cancelled) { cursor: grab; }
-  .appt:not(.completed):not(.noshow):not(.cancelled):active { cursor: grabbing; }
+  .appt:not(.completed):not(.noshow) { cursor: grab; }
+  .appt:not(.completed):not(.noshow):active { cursor: grabbing; }
   .appt.is-dragging { opacity: 0.35; transform: scale(0.98); }
 
   /* Drop preview ghost on the target column */
@@ -556,9 +558,9 @@
   }
   .drop-preview.show { display: flex; }
   .drop-preview.invalid {
-    background: var(--status-cancelled-bg);
-    border-color: var(--status-cancelled-solid);
-    color: var(--status-cancelled-fg);
+    background: var(--red-bg);
+    border-color: var(--red);
+    color: var(--red);
   }
 
   /* Card content — STRICT MINIMAL.
@@ -634,19 +636,10 @@
     text-decoration-color: rgba(146,64,14,0.5);
   }
 
-  /* CANCELLED — red, slightly muted. */
-  .appt.cancelled {
-    background: var(--status-cancelled-bg);
-    border-color: var(--status-cancelled-border);
-    border-left-color: var(--status-cancelled-solid);
-    opacity: 0.85;
-  }
-  .appt.cancelled .name {
-    color: var(--status-cancelled-fg);
-    text-decoration: line-through;
-    text-decoration-thickness: 1px;
-    text-decoration-color: rgba(153,27,27,0.5);
-  }
+  /* (Visit-cancellation status retired — bookings that don't happen
+     are either no_show / amber, or hard-deleted from the schedule.
+     The companion .filter-pill amber tab + status menu action have
+     also been removed.) */
 
   /* "scheduled-warm" (new-patient warmth) is RETIRED from cards.
      New-patient signalling belongs in the booking dialog and the
@@ -982,11 +975,6 @@
     color: var(--status-no-show-fg);
     border-color: var(--status-no-show-border);
   }
-  .filter-pill.fp-cancelled {
-    background: var(--status-cancelled-bg);
-    color: var(--status-cancelled-fg);
-    border-color: var(--status-cancelled-border);
-  }
 
   /* ----- ACTIVE state — solid status fill, white fg ----- */
   .filter-pill.is-active {
@@ -1003,7 +991,6 @@
   .filter-pill.fp-scheduled.is-active { background: var(--status-scheduled-solid); }
   .filter-pill.fp-completed.is-active { background: var(--status-completed-solid); }
   .filter-pill.fp-noshow.is-active    { background: var(--status-no-show-solid); }
-  .filter-pill.fp-cancelled.is-active { background: var(--status-cancelled-solid); }
   .day-col.flash {
     animation: cellFlash 320ms ease-out;
   }
@@ -1592,17 +1579,6 @@
     text-decoration: line-through;
     text-decoration-thickness: 1px;
   }
-  .appt.walkin.cancelled {
-    background: var(--status-cancelled-bg);
-    border-color: var(--status-cancelled-border);
-    border-left: 3px dashed var(--status-cancelled-solid);
-    opacity: 0.85;
-  }
-  .appt.walkin.cancelled .name {
-    color: var(--status-cancelled-fg);
-    text-decoration: line-through;
-    text-decoration-thickness: 1px;
-  }
 
   /* Demo: pinned hover state — forces a single card into the
      expanded state without a real hover so reviewers see the
@@ -2119,11 +2095,8 @@
 <!-- Top bar -->
 <header class="topbar">
   <a href="index.html" class="topbar-brand">
-    <svg width="22" height="22" viewBox="0 0 64 64" fill="none" style="color: var(--primary);">
-      <path d="M32 54 C 12 40, 8 26, 18 18 C 24 14, 30 16, 32 22 C 34 16, 40 14, 46 18 C 56 26, 52 40, 32 54 Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
-      <path d="M14 34 L 22 34 L 26 26 L 30 42 L 34 28 L 38 36 L 50 36" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-    </svg>
-    klinika<span class="dot-app">.</span>
+    <span class="brand-mark" style="width:28px;height:28px;border-radius:8px" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l2-6 4 12 2-6h6"/></svg></span>
+    <span class="brand-word">klinika<span class="dot-app">.health</span></span>
   </a>
 
   <nav class="topbar-nav">
@@ -2293,9 +2266,6 @@
       <button type="button" class="filter-pill fp-noshow" role="tab" aria-selected="false">
         <span class="dot"></span>Mungesë<span class="count">2</span>
       </button>
-      <button type="button" class="filter-pill fp-cancelled" role="tab" aria-selected="false">
-        <span class="dot"></span>Anuluar<span class="count">3</span>
-      </button>
     </div>
 
     <!-- Grid — Monday through Saturday (clinic closed Sunday). Wednesday = today.
@@ -2384,7 +2354,6 @@
              10:30  no_show       Dion Hoxha    (amber)
              11:00  arrived       Era Krasniqi  (cyan)         + walk-in hover demo
              14:20  in_progress   Lena Hoti     (cyan, pulse)
-             15:30  cancelled     Endi Krasniqi (red)
              16:30  scheduled     Mira Hoxhaj   (indigo)       + pinned hover-tip demo
            Card bodies are STRICT name-only; hover reveals only
            "name · time". -->
@@ -2423,10 +2392,6 @@
         <div class="appt in-progress" style="top: 520px; height: 30px;" data-time="14:20">
           <div class="name">Lena Hoti</div>
           <div class="meta">14:20 · 15 min</div>
-        </div>
-        <div class="appt cancelled" style="top: 660px; height: 30px;" data-time="15:30">
-          <div class="name">Endi Krasniqi</div>
-          <div class="meta">15:30</div>
         </div>
         <!-- HOVER STATE DEMO: pinned .hover-state so reviewers see the
              expanded card without having to mouse over. The card grows
@@ -2781,14 +2746,6 @@
     Mungoi
   </button>
 
-  <button type="button" class="aa-action" onclick="apptSetStatus('cancelled')" style="color: var(--text-muted);">
-    <svg class="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-      <circle cx="8" cy="8" r="6"/>
-      <path d="M4.5 4.5l7 7"/>
-    </svg>
-    Anulo
-  </button>
-
   <div class="aa-divider"></div>
 
   <button type="button" class="aa-action danger" onclick="apptDelete()">
@@ -2842,7 +2799,7 @@
     BUSY_BY_DAY = buildBusyMap();
     // Make future appts draggable + tag them with their iso for drop targeting
     document.querySelectorAll('.day-col .appt').forEach(el => {
-      if (el.classList.contains('completed') || el.classList.contains('noshow') || el.classList.contains('cancelled')) return;
+      if (el.classList.contains('completed') || el.classList.contains('noshow')) return;
       el.setAttribute('draggable', 'true');
       const col = el.closest('.day-col');
       if (col) el.dataset.fromIso = col.dataset.iso;
@@ -2881,7 +2838,6 @@
                           : el.classList.contains('in-progress') ? 'Në vizitë'
                           : el.classList.contains('arrived')     ? 'Arriti'
                           : el.classList.contains('noshow')      ? 'Mungesë'
-                          : el.classList.contains('cancelled')   ? 'Anuluar'
                           : el.classList.contains('walkin')      ? 'Pa termin'
                           : 'Planifikuar';
     el.setAttribute('aria-label', `${name} · ${time} · ${statusFromClass}`);
@@ -3383,13 +3339,13 @@
 
   // New unified status setter — supports the full lifecycle:
   //   scheduled → arrived → in_progress → completed
-  //   plus alternates: cancelled, no_show
+  //   plus the single alternate terminal state: no_show
   function apptSetStatus(status) {
     if (!activeApptEl) return;
     const name = activeApptEl.querySelector('.name')?.textContent.trim() || '';
     const el = activeApptEl;
     // Strip all status modifier classes; re-apply target.
-    el.classList.remove('completed', 'noshow', 'cancelled', 'arrived', 'in-progress', 'scheduled-warm');
+    el.classList.remove('completed', 'noshow', 'arrived', 'in-progress', 'scheduled-warm');
     let msg = '';
     switch (status) {
       case 'arrived':
@@ -3407,10 +3363,6 @@
       case 'no_show':
         el.classList.add('noshow');
         msg = `${name} u shënua si mungesë`;
-        break;
-      case 'cancelled':
-        el.classList.add('cancelled');
-        msg = `Termini i ${name} u anulua`;
         break;
     }
     closeApptActions();

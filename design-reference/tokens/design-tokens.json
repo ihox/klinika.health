@@ -72,12 +72,11 @@
     },
 
     "visit-status": {
-      "notes": "Canonical visit-status color system (klinika v1.2). ONE color per visit lifecycle state, used consistently across filter pills, calendar cards, hover overlays, and badges in every surface (receptionist calendar, doctor list, chart, reports). The receptionist learns the visual language once and it holds everywhere. All bg/fg pairings pass WCAG AA at ≥12.5px. Mapping: scheduled→indigo · arrived+in_progress→cyan · completed→green · no_show→amber · cancelled→red.",
+      "notes": "Canonical visit-status color system (klinika v1.2). ONE color per visit lifecycle state, used consistently across filter pills, calendar cards, hover overlays, and badges in every surface (receptionist calendar, doctor list, chart, reports). The receptionist learns the visual language once and it holds everywhere. All bg/fg pairings pass WCAG AA at ≥12.5px. Lifecycle: scheduled → arrived → in_progress → completed, with no_show as the single alternate terminal state. Mapping: scheduled→indigo · arrived+in_progress→cyan · completed→green · no_show→amber.",
       "scheduled":   { "bg": "#E0E7FF", "fg": "#3730A3", "border": "#C7D2FE", "solid": "#4F46E5" },
       "in-progress": { "bg": "#CFFAFE", "fg": "#155E75", "border": "#A5F3FC", "solid": "#0E7490" },
       "completed":   { "bg": "#DCFCE7", "fg": "#14532D", "border": "#BBF7D0", "solid": "#15803D" },
-      "no-show":     { "bg": "#FEF3C7", "fg": "#92400E", "border": "#FDE68A", "solid": "#B45309" },
-      "cancelled":   { "bg": "#FEE2E2", "fg": "#991B1B", "border": "#FECACA", "solid": "#B91C1C" }
+      "no-show":     { "bg": "#FEF3C7", "fg": "#92400E", "border": "#FDE68A", "solid": "#B45309" }
     },
 
     "role": {

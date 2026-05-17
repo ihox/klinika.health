@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="148" height="28" viewBox="0 0 148 28" fill="none" role="img" aria-label="klinika.health">
+  <defs>
+    <linearGradient id="k-anim-lockup-g" x1="0" y1="0" x2="28" y2="28" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0D9488"></stop>
+      <stop offset="1" stop-color="#14B8A6"></stop>
+    </linearGradient>
+  </defs>
+  <g transform="translate(14 14)">
+    <g>
+      <rect x="-14" y="-14" width="28" height="28" rx="8" fill="url(#k-anim-lockup-g)"></rect>
+      <g transform="translate(-8 -8) scale(0.6667)">
+        <path d="M3 12h4l2-6 4 12 2-6h6" stroke="#FFFFFF" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" fill="none" stroke-dasharray="40 40">
+          
+        </path>
+      </g>
+      
+    </g>
+  </g>
+  <g font-family="&#39;Inter Tight&#39;,&#39;Inter&#39;,system-ui,-apple-system,&#39;Segoe UI&#39;,sans-serif" font-size="17" letter-spacing="-0.2">
+    <text x="38" y="20" font-weight="600" fill="#0C0A09">klinika</text>
+    <text x="89" y="20" font-weight="400" fill="#A8A29E">.health</text>
+  </g>
+</svg>

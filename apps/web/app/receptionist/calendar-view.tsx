@@ -809,7 +809,13 @@ export function CalendarView(): ReactElement {
             can spill past its column / the section's rounded edge.
             Mirrors design-reference/prototype/receptionist.html `.cal-card`. */}
         <section className="mt-5 overflow-visible rounded-lg border border-line bg-surface-elevated shadow-xs">
-          <div className="flex items-center justify-between border-b border-line bg-surface-elevated px-5 py-3.5">
+          {/* Calendar toolbar — date nav on the left, patient search on
+              the far right per design-reference/prototype/receptionist.html.
+              Search lives inside the toolbar (not in its own row) so the
+              calendar grid sits directly under the date nav and we
+              reclaim ~52px of vertical space; receptionists scan the
+              calendar far more often than they reach for the search. */}
+          <div className="flex items-center justify-between gap-4 border-b border-line bg-surface-elevated px-5 py-3.5">
             <div className="flex items-center gap-3">
               <WeekNavButton dir="prev" onClick={goPrevWeek} />
               <div className="font-display text-[17px] font-semibold tracking-[-0.015em] tabular-nums">
@@ -827,13 +833,6 @@ export function CalendarView(): ReactElement {
                 Sot
               </Button>
             </div>
-          </div>
-
-          {/* Global patient search — relocated from the topbar per
-              design-reference/prototype/receptionist.html. Lives above
-              the grid so the `/` shortcut still works without crowding
-              the role-aware top nav. */}
-          <div className="border-b border-line px-5 py-3">
             <GlobalPatientSearch
               onPick={openGlobalPickerForPatient}
               onAddNew={openGlobalQuickAdd}

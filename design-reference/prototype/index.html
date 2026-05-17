@@ -181,22 +181,19 @@
   }
   .logo-anim {
     transform-origin: center;
-    animation: beat 1400ms ease-in-out 1500ms infinite;
+    animation: beat 1400ms ease-in-out 1500ms infinite, tileIn 600ms cubic-bezier(.2,.7,.2,1) 100ms backwards;
   }
-  .logo-anim .heart-shape {
-    stroke-dasharray: 240;
-    stroke-dashoffset: 240;
-    animation: drawHeart 800ms ease-out 100ms forwards;
+  @keyframes tileIn {
+    from { opacity: 0; transform: scale(0.7); }
+    to   { opacity: 1; transform: scale(1); }
   }
-  .logo-anim .pulse-line {
-    stroke-dasharray: 110;
-    stroke-dashoffset: 110;
-    animation: drawPulse 700ms ease-out 700ms forwards;
+  .logo-anim svg path {
+    stroke-dasharray: 36;
+    stroke-dashoffset: 36;
+    animation: drawPulse 700ms ease-out 500ms forwards;
   }
-  .logo-anim .pulse-dot {
-    opacity: 0;
-    transform-origin: 54px 36px;
-    animation: dotIn 320ms ease-out 1300ms forwards;
+  @keyframes drawPulse {
+    to { stroke-dashoffset: 0; }
   }
 
   @media (max-width: 900px) {
@@ -211,12 +208,8 @@
 <div class="login-left">
   <div class="login-card">
     <div class="brand-row">
-      <svg class="mark logo-anim" width="36" height="36" viewBox="0 0 64 64" fill="none" aria-hidden="true" style="color: var(--primary);">
-        <path class="heart-shape" d="M32 54 C 12 40, 8 26, 18 18 C 24 14, 30 16, 32 22 C 34 16, 40 14, 46 18 C 56 26, 52 40, 32 54 Z" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
-        <path class="pulse-line" d="M10 34 L 22 34 L 26 28 L 30 40 L 34 30 L 38 36 L 54 36" stroke="var(--teal-800)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-        <circle class="pulse-dot" cx="54" cy="36" r="2.8" fill="var(--accent-500)"/>
-      </svg>
-      <span class="word">klinika<span class="ext">.</span></span>
+      <span class="brand-mark logo-anim" style="width:40px;height:40px;border-radius:11px" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l2-6 4 12 2-6h6"/></svg></span>
+      <span class="word">klinika<span class="ext">.health</span></span>
     </div>
 
     <div class="login-title">Mirë se erdhët</div>
@@ -254,7 +247,7 @@
       <span>·</span>
       <span>v1.0</span>
       <span>·</span>
-      <a href="root.html" style="color: var(--text-muted);">klinika.health</a>
+      <a href="../website/index.html" style="color: var(--text-muted);">klinika.health</a>
       <span>·</span>
       <a href="admin-login.html" style="color: var(--text-muted);">Admin</a>
     </div>

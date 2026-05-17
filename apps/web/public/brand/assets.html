@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>klinika.health — brand assets</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Inter+Tight:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #FAFAF9;
+    --paper: #FFFFFF;
+    --subtle: #F5F5F4;
+    --border: #E7E5E4;
+    --border-soft: #F0EFEC;
+    --text: #1C1917;
+    --text-strong: #0C0A09;
+    --text-muted: #57534E;
+    --text-faint: #A8A29E;
+    --teal-50: #F0FDFA;
+    --teal-700: #0F766E;
+    --teal-800: #115E59;
+    --ui: 'Inter', system-ui, sans-serif;
+    --display: 'Inter Tight', 'Inter', sans-serif;
+    --mono: 'JetBrains Mono', ui-monospace, monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 48px 40px 96px;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--ui);
+  }
+
+  .pg-head {
+    max-width: 1280px;
+    margin: 0 auto 36px;
+    padding-bottom: 22px;
+    border-bottom: 1px solid var(--border-soft);
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 24px;
+  }
+  .pg-head h1 {
+    font-family: var(--display);
+    font-size: 28px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    color: var(--text-strong);
+    margin: 0;
+  }
+  .pg-head .sub {
+    color: var(--text-muted);
+    font-size: 13px;
+    line-height: 1.6;
+    margin-top: 6px;
+    max-width: 640px;
+  }
+  .pg-head .meta {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-faint);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    text-align: right;
+    line-height: 1.7;
+  }
+
+  .wrap { max-width: 1280px; margin: 0 auto; }
+
+  .sec { margin-top: 40px; }
+  .sec > h2 {
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-strong);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin: 0 0 16px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border-soft);
+  }
+  .sec > .desc {
+    font-size: 12.5px;
+    color: var(--text-muted);
+    line-height: 1.6;
+    max-width: 720px;
+    margin-bottom: 18px;
+  }
+
+  /* ---- Grid of asset cards ---- */
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px;
+  }
+  .grid.cols-4 { grid-template-columns: repeat(4, 1fr); }
+  .card {
+    background: var(--paper);
+    border: 1px solid var(--border-soft);
+    border-radius: 14px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+  .card .stage {
+    min-height: 200px;
+    display: grid;
+    place-items: center;
+    padding: 28px;
+    background:
+      linear-gradient(0deg, var(--paper), var(--paper)),
+      repeating-conic-gradient(#f5f5f4 0% 25%, #ffffff 0% 50%) 50% / 14px 14px;
+  }
+  .card .stage.dark {
+    background: #0C0A09;
+  }
+  .card .stage.warm {
+    background: linear-gradient(160deg, #FED7AA, #FB923C);
+  }
+  .card .stage img {
+    display: block;
+    max-width: 100%;
+    max-height: 100%;
+  }
+  .card .meta {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: baseline;
+    padding: 12px 14px 14px;
+    border-top: 1px solid var(--border-soft);
+    background: var(--subtle);
+  }
+  .card .meta .nm {
+    font-family: var(--display);
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-strong);
+    letter-spacing: -0.005em;
+  }
+  .card .meta .dims {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    color: var(--text-faint);
+    letter-spacing: 0.04em;
+  }
+  .card .meta .note {
+    grid-column: 1 / -1;
+    margin-top: 4px;
+    font-size: 11.5px;
+    color: var(--text-muted);
+    line-height: 1.5;
+  }
+
+  /* ---- Construction / specs card ---- */
+  .specs {
+    display: grid;
+    grid-template-columns: 1.2fr 1fr;
+    background: var(--paper);
+    border: 1px solid var(--border-soft);
+    border-radius: 14px;
+    overflow: hidden;
+  }
+  .specs .canvas {
+    min-height: 360px;
+    display: grid;
+    place-items: center;
+    position: relative;
+    background: linear-gradient(180deg, #fafaf7 0%, #f4f3ed 100%);
+  }
+  .specs .canvas::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(13,148,136,0.045) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(13,148,136,0.045) 1px, transparent 1px);
+    background-size: 20px 20px;
+    pointer-events: none;
+  }
+  .specs .canvas img {
+    position: relative;
+    width: 180px;
+    height: 180px;
+    filter: drop-shadow(0 18px 38px rgba(15, 118, 110, 0.25));
+  }
+  .specs .body {
+    padding: 26px 28px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    border-left: 1px solid var(--border-soft);
+  }
+  .specs h3 {
+    font-family: var(--display);
+    font-size: 18px;
+    font-weight: 600;
+    letter-spacing: -0.015em;
+    color: var(--text-strong);
+    margin: 0;
+  }
+  .specs .field-list {
+    display: grid;
+    grid-template-columns: 92px 1fr;
+    gap: 7px 16px;
+    font-size: 12.5px;
+  }
+  .specs .field-list .k {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    color: var(--text-faint);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    padding-top: 2px;
+  }
+  .specs .field-list .v {
+    color: var(--text);
+    line-height: 1.55;
+  }
+  .specs .field-list .v code {
+    font-family: var(--mono);
+    font-size: 11px;
+    background: var(--teal-50);
+    color: var(--teal-800);
+    padding: 1px 5px;
+    border-radius: 3px;
+  }
+
+  /* ---- Colour swatches ---- */
+  .swatch-row {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 10px;
+  }
+  .sw {
+    background: var(--paper);
+    border: 1px solid var(--border-soft);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  .sw .chip {
+    height: 72px;
+  }
+  .sw .lbl {
+    padding: 10px 12px 12px;
+    border-top: 1px solid var(--border-soft);
+  }
+  .sw .lbl .nm {
+    font-family: var(--display);
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-strong);
+  }
+  .sw .lbl .hex {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    color: var(--text-muted);
+    margin-top: 2px;
+    letter-spacing: 0.02em;
+  }
+
+  /* ---- Animated card stage ---- */
+  .card .stage.anim {
+    position: relative;
+  }
+
+  /* ---- Download strip ---- */
+  .dl {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    padding: 18px;
+    background: var(--paper);
+    border: 1px solid var(--border-soft);
+    border-radius: 12px;
+  }
+  .dl a {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 9px 12px;
+    border-radius: 8px;
+    background: var(--subtle);
+    border: 1px solid var(--border-soft);
+    color: var(--text-strong);
+    text-decoration: none;
+    font-family: var(--mono);
+    font-size: 11.5px;
+    transition: background 150ms, border-color 150ms, color 150ms;
+  }
+  .dl a:hover {
+    background: var(--teal-50);
+    border-color: var(--teal-700);
+    color: var(--teal-800);
+  }
+  .dl a .arr { color: var(--text-faint); }
+  .dl a:hover .arr { color: var(--teal-700); }
+</style>
+</head>
+<body>
+
+<div class="pg-head">
+  <div>
+    <h1>klinika.health — brand assets</h1>
+    <p class="sub">Drop-in SVG logo files. Every file fills its viewBox edge-to-edge (no padding) so it composes cleanly inside its host container — set the size on the wrapping element, not via SVG margins.</p>
+  </div>
+  <div class="meta">
+    logo/ · v1.0<br>
+    9 files
+  </div>
+</div>
+
+<div class="wrap">
+
+  <!-- ==================== CONSTRUCTION ==================== -->
+  <section class="sec">
+    <h2>Construction</h2>
+    <div class="specs">
+      <div class="canvas">
+        <img src="mark.svg" alt="klinika.health mark" width="180" height="180">
+      </div>
+      <div class="body">
+        <h3>Anatomy</h3>
+        <div class="field-list">
+          <div class="k">tile</div>      <div class="v">28 × 28, corner radius <code>8</code>. Linear gradient at 135° (top-left → bottom-right) from <code>#0D9488</code> to <code>#14B8A6</code>.</div>
+          <div class="k">glyph</div>     <div class="v">Pulse line on a 24 × 24 inner viewBox: <code>M3 12h4l2-6 4 12 2-6h6</code>. Drawn at 16 × 16 (≈ 6 px margin on every side). Stroke <code>2.4</code>, round caps, round joins.</div>
+          <div class="k">wordmark</div>  <div class="v">Inter Tight 600, 17 px, letter-spacing <code>-0.012em</code>. <code>.health</code> shifts to Inter Tight 400 in muted neutral.</div>
+          <div class="k">gap</div>       <div class="v">10 px between mark and wordmark in the horizontal lockup.</div>
+          <div class="k">min size</div>  <div class="v">Mark-only: <strong>16 px</strong>. Horizontal lockup: <strong>24 px</strong> tall.</div>
+          <div class="k">clear-space</div><div class="v">Always reserve at least <strong>½ × tile-height</strong> of empty space around the lockup. No surrounding text or graphics inside that area.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== MARK VARIANTS ==================== -->
+  <section class="sec">
+    <h2>Mark · 3 variants</h2>
+    <p class="desc">Square mark for favicons, app icons, avatars, and any context where the wordmark won't fit. <strong>Primary</strong> is the default; the other two cover monochrome print and dark backgrounds.</p>
+
+    <div class="grid">
+      <div class="card">
+        <div class="stage">
+          <img src="mark.svg" alt="mark" width="120" height="120">
+        </div>
+        <div class="meta">
+          <span class="nm">Primary (color)</span>
+          <span class="dims">28 × 28</span>
+          <span class="note">Teal-gradient tile + white pulse. Use anywhere you have colour and the tile can show.</span>
+        </div>
+      </div>
+      <div class="card">
+        <div class="stage">
+          <img src="mark-black.svg" alt="mark / black" width="120" height="120">
+        </div>
+        <div class="meta">
+          <span class="nm">Single-ink black</span>
+          <span class="dims">28 × 28</span>
+          <span class="note">Solid black tile, white pulse. For B&amp;W print, fax, newsprint, embossing.</span>
+        </div>
+      </div>
+      <div class="card">
+        <div class="stage dark">
+          <img src="mark-white.svg" alt="mark / white" width="120" height="120">
+        </div>
+        <div class="meta">
+          <span class="nm">White knockout</span>
+          <span class="dims">28 × 28</span>
+          <span class="note">White tile with pulse cut to transparent so the background shows through. For dark photographic backgrounds and video.</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== LOCKUP VARIANTS ==================== -->
+  <section class="sec">
+    <h2>Horizontal lockup · 3 variants</h2>
+    <p class="desc">Mark + "klinika.health". The default everywhere there's room — nav bars, email signatures, hero sections, app stores.</p>
+
+    <div class="grid">
+      <div class="card">
+        <div class="stage">
+          <img src="logo.svg" alt="lockup" width="296" height="56">
+        </div>
+        <div class="meta">
+          <span class="nm">Primary (color)</span>
+          <span class="dims">148 × 28</span>
+          <span class="note">Default lockup. Used in the marketing site nav, login pages, and the app topbar.</span>
+        </div>
+      </div>
+      <div class="card">
+        <div class="stage">
+          <img src="logo-black.svg" alt="lockup / black" width="296" height="56">
+        </div>
+        <div class="meta">
+          <span class="nm">Single-ink black</span>
+          <span class="dims">148 × 28</span>
+          <span class="note">Letterheads, mono printing, regulatory filings.</span>
+        </div>
+      </div>
+      <div class="card">
+        <div class="stage dark">
+          <img src="logo-white.svg" alt="lockup / white" width="296" height="56">
+        </div>
+        <div class="meta">
+          <span class="nm">White knockout</span>
+          <span class="dims">148 × 28</span>
+          <span class="note">Mark knocked out of solid white; wordmark in white with a translucent <code style="font-family: var(--mono); font-size: 10.5px;">.health</code> domain.</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== UTILITY ==================== -->
+  <section class="sec">
+    <h2>Utility · favicon, app icon, wordmark</h2>
+    <p class="desc">Specialised assets for shipping the brand outside the product surface.</p>
+
+    <div class="grid">
+      <div class="card">
+        <div class="stage">
+          <img src="favicon.svg" alt="favicon" width="96" height="96">
+        </div>
+        <div class="meta">
+          <span class="nm">Favicon</span>
+          <span class="dims">32 × 32</span>
+          <span class="note">Slightly heavier stroke (2.6) so the pulse survives at 16 px. Drop straight into <code style="font-family: var(--mono); font-size: 10.5px;">&lt;link rel="icon"&gt;</code>.</span>
+        </div>
+      </div>
+      <div class="card">
+        <div class="stage">
+          <img src="app-icon.svg" alt="app icon" width="180" height="180" style="border-radius: 32px;">
+        </div>
+        <div class="meta">
+          <span class="nm">App icon</span>
+          <span class="dims">1024 × 1024</span>
+          <span class="note">For the App Store, Play Store, and PWA install. Tile fills the canvas — the host OS applies its own mask.</span>
+        </div>
+      </div>
+      <div class="card">
+        <div class="stage">
+          <img src="wordmark.svg" alt="wordmark" width="212" height="40">
+        </div>
+        <div class="meta">
+          <span class="nm">Wordmark only</span>
+          <span class="dims">106 × 20</span>
+          <span class="note">Type-only logotype. Use when the mark already appears nearby in the layout.</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== ANIMATED ==================== -->
+  <section class="sec">
+    <h2>Animated</h2>
+    <p class="desc">Standalone SVGs with native SMIL animations — no CSS, no JS, no external dependencies. Loops forever (every 2 seconds) inside <code style="font-family: var(--mono); font-size: 10.5px;">&lt;img&gt;</code>, <code style="font-family: var(--mono); font-size: 10.5px;">&lt;object&gt;</code>, or inline. Use on the login splash, marketing hero, and onboarding intro.</p>
+
+    <div class="grid">
+      <div class="card">
+        <div class="stage anim">
+          <img src="mark-animated.svg" alt="mark / animated" width="140" height="140">
+        </div>
+        <div class="meta">
+          <span class="nm">Animated mark</span>
+          <span class="dims">28 × 28</span>
+          <span class="note">Tile heartbeats while the pulse line continuously redraws. Loops forever.</span>
+        </div>
+      </div>
+
+      <div class="card" style="grid-column: span 2;">
+        <div class="stage anim">
+          <img src="logo-animated.svg" alt="lockup / animated" width="444" height="84">
+        </div>
+        <div class="meta">
+          <span class="nm">Animated lockup</span>
+          <span class="dims">148 × 28</span>
+          <span class="note">Mark heartbeats with the pulse-trace cycle while the wordmark sits steady. Loops forever — use sparingly.</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== PALETTE ==================== -->
+  <section class="sec">
+    <h2>Brand palette</h2>
+    <p class="desc">Six values cover everything in the logo system. Anywhere else the brand needs to extend, derive from these.</p>
+
+    <div class="swatch-row">
+      <div class="sw">
+        <div class="chip" style="background: #0D9488;"></div>
+        <div class="lbl"><div class="nm">teal-600</div><div class="hex">#0D9488</div></div>
+      </div>
+      <div class="sw">
+        <div class="chip" style="background: #14B8A6;"></div>
+        <div class="lbl"><div class="nm">teal-500</div><div class="hex">#14B8A6</div></div>
+      </div>
+      <div class="sw">
+        <div class="chip" style="background: #0F766E;"></div>
+        <div class="lbl"><div class="nm">teal-700</div><div class="hex">#0F766E</div></div>
+      </div>
+      <div class="sw">
+        <div class="chip" style="background: #0C0A09;"></div>
+        <div class="lbl"><div class="nm">stone-950</div><div class="hex">#0C0A09</div></div>
+      </div>
+      <div class="sw">
+        <div class="chip" style="background: #A8A29E;"></div>
+        <div class="lbl"><div class="nm">stone-400</div><div class="hex">#A8A29E</div></div>
+      </div>
+      <div class="sw">
+        <div class="chip" style="background: #FFFFFF; border-bottom: 1px solid var(--border);"></div>
+        <div class="lbl"><div class="nm">white</div><div class="hex">#FFFFFF</div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== FILES ==================== -->
+  <section class="sec">
+    <h2>Files</h2>
+    <p class="desc">All nine files sit in <code style="font-family: var(--mono); font-size: 11.5px; background: var(--subtle); padding: 1px 5px; border-radius: 3px;">logo/</code> at the project root, alongside a <code style="font-family: var(--mono); font-size: 11.5px; background: var(--subtle); padding: 1px 5px; border-radius: 3px;">README.md</code> with the same construction notes.</p>
+
+    <div class="dl">
+      <a href="mark.svg" target="_blank">mark.svg <span class="arr">↗</span></a>
+      <a href="mark-black.svg" target="_blank">mark-black.svg <span class="arr">↗</span></a>
+      <a href="mark-white.svg" target="_blank">mark-white.svg <span class="arr">↗</span></a>
+      <a href="logo.svg" target="_blank">logo.svg <span class="arr">↗</span></a>
+      <a href="logo-black.svg" target="_blank">logo-black.svg <span class="arr">↗</span></a>
+      <a href="logo-white.svg" target="_blank">logo-white.svg <span class="arr">↗</span></a>
+      <a href="wordmark.svg" target="_blank">wordmark.svg <span class="arr">↗</span></a>
+      <a href="favicon.svg" target="_blank">favicon.svg <span class="arr">↗</span></a>
+      <a href="app-icon.svg" target="_blank">app-icon.svg <span class="arr">↗</span></a>
+      <a href="mark-animated.svg" target="_blank">mark-animated.svg <span class="arr">↗</span></a>
+      <a href="logo-animated.svg" target="_blank">logo-animated.svg <span class="arr">↗</span></a>
+    </div>
+  </section>
+
+</div>
+
+</body>
+</html>
