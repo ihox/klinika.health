@@ -28,7 +28,6 @@ interface GeneralForm {
   city: string;
   phones: string[];
   email: string;
-  walkinDurationMinutes: number;
 }
 
 export function GeneralTab({ settings, onChange, onToast }: Props) {
@@ -39,7 +38,6 @@ export function GeneralTab({ settings, onChange, onToast }: Props) {
     city: settings.general.city,
     phones: [...settings.general.phones],
     email: settings.general.email,
-    walkinDurationMinutes: settings.general.walkinDurationMinutes,
   }));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -53,7 +51,6 @@ export function GeneralTab({ settings, onChange, onToast }: Props) {
       city: settings.general.city,
       phones: [...settings.general.phones],
       email: settings.general.email,
-      walkinDurationMinutes: settings.general.walkinDurationMinutes,
     });
   }, [settings]);
 
@@ -64,6 +61,7 @@ export function GeneralTab({ settings, onChange, onToast }: Props) {
       const next = await clinicClient.updateGeneral({
         ...form,
         phones: form.phones.map((p) => p.trim()).filter((p) => p.length > 0),
+        walkinDurationMinutes: settings.general.walkinDurationMinutes,
       });
       onChange(next);
       onToast('Cilësimet u ruajtën.');
@@ -84,15 +82,6 @@ export function GeneralTab({ settings, onChange, onToast }: Props) {
   }
   function removePhone(i: number): void {
     setForm((f) => ({ ...f, phones: f.phones.filter((_, idx) => idx !== i) }));
-  }
-
-  function setWalkinDuration(raw: string): void {
-    // Number input may emit '' when the field is cleared mid-edit. Treat
-    // it as a sentinel by keeping the previous value rather than NaN.
-    const parsed = Number.parseInt(raw, 10);
-    if (Number.isFinite(parsed)) {
-      setForm((f) => ({ ...f, walkinDurationMinutes: parsed }));
-    }
   }
 
   return (
@@ -117,7 +106,6 @@ export function GeneralTab({ settings, onChange, onToast }: Props) {
                   city: settings.general.city,
                   phones: [...settings.general.phones],
                   email: settings.general.email,
-                  walkinDurationMinutes: settings.general.walkinDurationMinutes,
                 })
               }
               disabled={saving}
@@ -199,26 +187,6 @@ export function GeneralTab({ settings, onChange, onToast }: Props) {
             value={form.email}
             onChange={(e) => setForm({ ...form, email: e.target.value })}
           />
-
-          <FieldLabel htmlFor="walkinDuration">
-            Kohëzgjatja e termineve pa termin (minuta)
-          </FieldLabel>
-          <div>
-            <Input
-              id="walkinDuration"
-              type="number"
-              min={5}
-              max={60}
-              step={5}
-              value={form.walkinDurationMinutes}
-              onChange={(e) => setWalkinDuration(e.target.value)}
-              className="max-w-[140px]"
-              data-testid="walkin-duration"
-            />
-            <FieldHelp>
-              Sa minuta ndahen midis dy pacientëve pa termin që vijnë në të njëjtën kohë.
-            </FieldHelp>
-          </div>
         </FormGrid>
         {error ? (
           <div className="mt-4 rounded-md border border-amber-200 bg-amber-50 text-amber-900 text-[12.5px] px-3 py-2">

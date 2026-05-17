@@ -51,6 +51,7 @@ async function mockChart(page: Page, options: ChartFixtureOptions = {}): Promise
         alergjiTjera: 'Penicilinë, dhembet mjekun',
         createdAt: '2023-08-03T10:00:00.000Z',
         updatedAt: '2026-05-14T09:00:00.000Z',
+        isComplete: true,
       },
       visits: [
         {
@@ -745,6 +746,7 @@ test.describe('Patient chart shell', () => {
           alergjiTjera: null,
           createdAt: '2025-01-15T00:00:00.000Z',
           updatedAt: '2025-01-15T00:00:00.000Z',
+          isComplete: true,
         },
         visits: [],
         vertetime: [],

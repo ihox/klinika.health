@@ -7,6 +7,14 @@ original work that surfaced the need.
 
 ---
 
+## test(e2e): migrate kalendari mocks from /api/appointments/* to /api/visits/calendar/*
+
+- **Files:** `apps/web/tests/e2e/kalendari.spec.ts`
+- **Scope:** The receptionist calendar UI now calls `/api/visits/calendar/*` (per ADR-011's appointments + visits unification), but `kalendari.spec.ts` still mocks the legacy `/api/appointments/*` shape. Three tests currently fail as a result (initial render, mark-kryer, end-of-day prompt). Re-write the `mockApi` helper to fulfil the new endpoint shapes (`/api/visits/calendar`, `/api/visits/calendar/stats`, `/api/visits/calendar/unmarked-past`, `/api/visits/calendar/stream`, `PATCH /api/visits/calendar/:id`).
+- **Effort:** ~30–60 min — requires inspecting the new endpoint payloads in `apps/web/lib/visits-calendar-client.ts` and `apps/api/src/modules/visits/visits-calendar.service.ts` rather than a mechanical rename.
+- **Priority:** medium (3 e2e tests are red until this lands)
+- **Reference:** surfaced during the shared auth-fixture migration that fixed the broader `useMe`-redirect failures.
+
 ## design(prototype): remove cancelled status from design-reference/prototype/
 
 - **Files:** receptionist.html, doctor.html, overview.html, styles.css, tokens/*

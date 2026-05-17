@@ -183,6 +183,7 @@ async function mockEverything(
           alergjiTjera: null,
           createdAt: '2023-08-03T10:00:00.000Z',
           updatedAt: '2026-05-14T09:00:00.000Z',
+          isComplete: true,
         },
         visits: [
           {

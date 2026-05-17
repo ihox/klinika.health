@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { ApiError } from '@/lib/api';
 import {
   clinicClient,
@@ -30,12 +31,37 @@ for (let h = 6; h <= 22; h += 1) {
 
 export function HoursTab({ settings, onChange, onToast }: Props) {
   const [hours, setHours] = useState<HoursConfig>(() => structuredClone(settings.hours));
+  const [walkinDuration, setWalkinDuration] = useState<number>(
+    settings.general.walkinDurationMinutes,
+  );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     setHours(structuredClone(settings.hours));
   }, [settings.hours]);
+
+  useEffect(() => {
+    setWalkinDuration(settings.general.walkinDurationMinutes);
+  }, [settings.general.walkinDurationMinutes]);
+
+  function setWalkin(raw: string): void {
+    // Number input may emit '' when the field is cleared mid-edit. Treat
+    // it as a sentinel by keeping the previous value rather than NaN.
+    const parsed = Number.parseInt(raw, 10);
+    if (Number.isFinite(parsed)) {
+      setWalkinDuration(parsed);
+    }
+  }
+
+  function resetDurations(): void {
+    setHours((h) => ({
+      ...h,
+      durations: [...settings.hours.durations],
+      defaultDuration: settings.hours.defaultDuration,
+    }));
+    setWalkinDuration(settings.general.walkinDurationMinutes);
+  }
 
   function setDay(day: DayKey, value: HoursDay): void {
     setHours((h) => ({ ...h, days: { ...h.days, [day]: value } }));
@@ -97,13 +123,48 @@ export function HoursTab({ settings, onChange, onToast }: Props) {
     });
   }
 
+  async function persistChanges(): Promise<ClinicSettings> {
+    let next = settings;
+    if (!shallowEqualJson(hours, settings.hours)) {
+      next = await clinicClient.updateHours(hours);
+      onChange(next);
+    }
+    if (walkinDuration !== settings.general.walkinDurationMinutes) {
+      next = await clinicClient.updateGeneral({
+        name: next.general.name,
+        shortName: next.general.shortName,
+        address: next.general.address,
+        city: next.general.city,
+        phones: next.general.phones,
+        email: next.general.email,
+        walkinDurationMinutes: walkinDuration,
+      });
+      onChange(next);
+    }
+    return next;
+  }
+
   async function save(): Promise<void> {
     setSaving(true);
     setError(null);
     try {
-      const next = await clinicClient.updateHours(hours);
-      onChange(next);
+      const next = await persistChanges();
       onToast(`Orari u ruajt · ${openDayCount(next.hours)} ditë të hapura.`);
+    } catch (err: unknown) {
+      const message = err instanceof ApiError ? err.message : 'Ruajtja dështoi.';
+      setError(message);
+      onToast(message, 'error');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function saveDurations(): Promise<void> {
+    setSaving(true);
+    setError(null);
+    try {
+      await persistChanges();
+      onToast('Cilësimet u ruajtën.');
     } catch (err: unknown) {
       const message = err instanceof ApiError ? err.message : 'Ruajtja dështoi.';
       setError(message);
@@ -306,11 +367,49 @@ export function HoursTab({ settings, onChange, onToast }: Props) {
           <span className="text-[12px] text-stone-400">— shfaqet e zgjedhur në dialogun e caktimit.</span>
         </div>
 
+        <div className="mt-4 pt-4 border-t border-stone-100">
+          <div className="flex items-center gap-3">
+            <label
+              htmlFor="walkinDuration"
+              className="text-[13px] text-stone-500 font-medium"
+            >
+              Kohëzgjatja e termineve pa termin (minuta)
+            </label>
+            <Input
+              id="walkinDuration"
+              type="number"
+              min={5}
+              max={60}
+              step={5}
+              value={walkinDuration}
+              onChange={(e) => setWalkin(e.target.value)}
+              className="w-[72px]"
+              data-testid="walkin-duration"
+            />
+          </div>
+          <div className="mt-1.5 text-[12px] text-stone-400">
+            Sa minuta ndahen midis dy pacientëve pa termin që vijnë në të njëjtën kohë.
+          </div>
+        </div>
+
         <div className="mt-4">
           <InfoTip>
             Rezolucioni i kalendarit ndjek kohëzgjatjen më të shkurtër të zgjedhur. Me 10 min të
             zgjedhura, kalendari shfaq një ndarje çdo 10 minuta.
           </InfoTip>
+        </div>
+
+        <div className="mt-5 pt-4 border-t border-stone-100 flex justify-end gap-2">
+          <Button variant="ghost" onClick={resetDurations} disabled={saving}>
+            Anulo
+          </Button>
+          <Button
+            onClick={saveDurations}
+            disabled={saving}
+            data-testid="durations-save"
+          >
+            {saving ? 'Po ruhet…' : 'Ruaj'}
+          </Button>
         </div>
       </SectionCard>
     </>
@@ -324,6 +423,10 @@ function timeOptionsIncluding(value: string): string[] {
 
 function openDayCount(h: HoursConfig): number {
   return DAY_ORDER.filter((d) => h.days[d].open).length;
+}
+
+function shallowEqualJson(a: unknown, b: unknown): boolean {
+  return JSON.stringify(a) === JSON.stringify(b);
 }
 
 function todayDayKey(): DayKey | null {

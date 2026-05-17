@@ -59,9 +59,12 @@ export interface BookingDialogProps {
  *   - Path 2 (patient-first): date pre-filled to today, time empty.
  *   - Edit (existing appt):  every field pre-filled; PATCH on submit.
  *
- * Duration is NEVER pre-selected on create — the receptionist must
- * actively choose one. Per the design prototype, this is a deliberate
- * friction point to prevent zero-thought defaults.
+ * Duration is pre-selected from the clinic's `Kohëzgjatja e parazgjedhur`
+ * setting (`hours.defaultDuration`). Receptionists can still pick a
+ * different duration with one click — the default just removes the
+ * extra tap for the most common case. If the pre-selected duration
+ * comes back blocked from availability, it auto-resets to null so the
+ * receptionist must choose a non-blocked option.
  *
  * Availability is fetched from `/api/appointments/availability` and
  * re-fetched whenever date or time changes. The duration grid renders
@@ -83,7 +86,9 @@ export function BookingDialog({
 }: BookingDialogProps): ReactElement {
   const [date, setDate] = useState<string>(initialDate);
   const [time, setTime] = useState<string>(initialTime);
-  const [duration, setDuration] = useState<number | null>(initialDurationMinutes ?? null);
+  const [duration, setDuration] = useState<number | null>(
+    initialDurationMinutes ?? hours.defaultDuration ?? null,
+  );
   const [availability, setAvailability] = useState<AvailabilityOption[]>([]);
   const [availabilityError, setAvailabilityError] = useState(false);
   // Bumped to force the availability effect to re-run on a Retry click.
@@ -147,22 +152,26 @@ export function BookingDialog({
     setAvailabilityRetryToken((n) => n + 1);
   }, []);
 
-  // When the receptionist changes time after picking a duration, drop
-  // the selection — they must reaffirm. This is the same friction the
-  // design notes call out: "Ndryshimi i orës rivendos gjendjen."
+  // When the receptionist changes time/date, reset the duration to the
+  // clinic's `Kohëzgjatja e parazgjedhur` default. Receptionists can
+  // still pick a different one; this keeps the dialog consistent with
+  // the open-state pre-selection rather than dropping back to null.
   const onTimeChange = useCallback(
     (next: string) => {
       setTime(next);
-      setDuration(null);
+      setDuration(hours.defaultDuration);
       setServerError(null);
     },
-    [],
+    [hours.defaultDuration],
   );
-  const onDateChange = useCallback((next: string) => {
-    setDate(next);
-    setDuration(null);
-    setServerError(null);
-  }, []);
+  const onDateChange = useCallback(
+    (next: string) => {
+      setDate(next);
+      setDuration(hours.defaultDuration);
+      setServerError(null);
+    },
+    [hours.defaultDuration],
+  );
 
   // Auto-reset duration if the currently-selected one becomes blocked.
   useEffect(() => {
