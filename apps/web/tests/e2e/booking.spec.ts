@@ -7,9 +7,16 @@ test.use({ authState: 'receptionist' });
 /**
  * E2E for the slice-09 booking flows. Both Path 1 (slot-first) and
  * Path 2 (patient-first) plus edit-existing and the three conflict
- * states (clean fit, auto-extend, blocked). The API surface is mocked
- * at the route layer — the appointments integration spec
- * (apps/api/src/modules/appointments/appointments.integration.spec.ts)
+ * states (clean fit, auto-extend, blocked).
+ *
+ * Endpoints mocked here mirror the unified visits surface introduced
+ * by ADR-011 (appointments → visits). The receptionist UI now calls
+ * `/api/visits/calendar/*` for reads and `/api/visits/{scheduled,
+ * :id/scheduling, :id/status, calendar/:id}` for writes. The legacy
+ * `/api/appointments/*` paths are gone.
+ *
+ * The visits-calendar integration spec
+ * (apps/api/src/modules/visits/visits-calendar.integration.spec.ts)
  * covers the live wire-up against Postgres.
  */
 
@@ -36,13 +43,18 @@ const SAMPLE_PATIENTS = [
   { id: 'p-dion', firstName: 'Dion', lastName: 'Hoxha', dateOfBirth: '2019-01-15' },
 ];
 
-interface MockAppointment {
+type MockStatus = 'scheduled' | 'arrived' | 'in_progress' | 'completed' | 'no_show';
+
+interface MockEntry {
   id: string;
   patientId: string;
   patient: { firstName: string; lastName: string; dateOfBirth: string | null };
-  scheduledFor: string;
-  durationMinutes: number;
-  status: 'scheduled' | 'completed' | 'no_show';
+  scheduledFor: string | null;
+  durationMinutes: number | null;
+  arrivedAt: string | null;
+  status: MockStatus;
+  isWalkIn: boolean;
+  paymentCode: 'A' | 'B' | 'C' | 'D' | 'E' | null;
   lastVisitAt: string | null;
   isNewPatient: boolean;
   createdAt: string;
@@ -57,7 +69,7 @@ interface AvailabilityScript {
 }
 
 interface MockState {
-  current: MockAppointment[];
+  current: MockEntry[];
   posts: Array<Record<string, unknown>>;
   patches: Array<{ id: string; body: Record<string, unknown> }>;
   deletes: string[];
@@ -66,7 +78,7 @@ interface MockState {
   nextAvailability: AvailabilityScript;
 }
 
-function newState(initial: MockAppointment[] = []): MockState {
+function newState(initial: MockEntry[] = []): MockState {
   return {
     current: initial,
     posts: [],
@@ -98,7 +110,7 @@ async function mockApi(page: Page, state: MockState): Promise<void> {
     };
   });
 
-  await page.route('**/api/appointments/stream', (route: Route) =>
+  await page.route('**/api/visits/calendar/stream', (route: Route) =>
     route.fulfill({ status: 204, body: '' }),
   );
 
@@ -124,18 +136,28 @@ async function mockApi(page: Page, state: MockState): Promise<void> {
     }),
   );
 
-  await page.route('**/api/appointments?**', (route: Route) =>
-    route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({
-        appointments: state.current,
-        serverTime: new Date().toISOString(),
-      }),
-    }),
-  );
+  // GET /api/visits/calendar?from=...&to=... — entries for a date range.
+  // Registered before the more specific stats/unmarked-past/availability
+  // routes so LIFO matches them first.
+  await page.route('**/api/visits/calendar?**', async (route: Route) => {
+    const url = new URL(route.request().url());
+    if (
+      url.pathname.endsWith('/api/visits/calendar') &&
+      route.request().method() === 'GET'
+    ) {
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          entries: state.current,
+          serverTime: new Date().toISOString(),
+        }),
+      });
+    }
+    return route.fallback();
+  });
 
-  await page.route('**/api/appointments/stats**', (route: Route) =>
+  await page.route('**/api/visits/calendar/stats**', (route: Route) =>
     route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -143,24 +165,29 @@ async function mockApi(page: Page, state: MockState): Promise<void> {
         date: TODAY_ISO,
         total: state.current.length,
         scheduled: state.current.filter((a) => a.status === 'scheduled').length,
+        walkIn: state.current.filter((a) => a.isWalkIn).length,
+        standaloneCount: 0,
         completed: state.current.filter((a) => a.status === 'completed').length,
         noShow: state.current.filter((a) => a.status === 'no_show').length,
+        arrived: state.current.filter((a) => a.status === 'arrived').length,
+        inProgress: state.current.filter((a) => a.status === 'in_progress').length,
         firstStart: state.current[0]?.scheduledFor ?? null,
         lastEnd: state.current[state.current.length - 1]?.scheduledFor ?? null,
+        paymentTotalCents: 0,
         nextAppointment: null,
       }),
     }),
   );
 
-  await page.route('**/api/appointments/unmarked-past', (route: Route) =>
+  await page.route('**/api/visits/calendar/unmarked-past', (route: Route) =>
     route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({ appointments: [] }),
+      body: JSON.stringify({ entries: [] }),
     }),
   );
 
-  await page.route('**/api/appointments/availability**', (route: Route) => {
+  await page.route('**/api/visits/calendar/availability**', (route: Route) => {
     const url = new URL(route.request().url());
     const time = url.searchParams.get('time') ?? '10:30';
     const date = url.searchParams.get('date') ?? TODAY_ISO;
@@ -186,70 +213,109 @@ async function mockApi(page: Page, state: MockState): Promise<void> {
     });
   });
 
-  // POST create + DELETE soft-delete + POST restore + PATCH update + GET by id
-  await page.route(/\/api\/appointments(?:\/[\w-]+(?:\/restore)?)?$/, async (route: Route) => {
-    const url = new URL(route.request().url());
-    const method = route.request().method();
-    const path = url.pathname;
+  // POST /api/visits/scheduled — create a booking.
+  await page.route('**/api/visits/scheduled', async (route: Route) => {
+    if (route.request().method() !== 'POST') return route.fallback();
+    const body = (await route.request().postDataJSON()) as Record<string, unknown>;
+    state.posts.push(body);
+    const id = `apt-${state.posts.length}`;
+    const date = String(body.date);
+    const time = String(body.time);
+    // 2026-05 in Belgrade is UTC+2 (CEST). Build the UTC ISO instant.
+    const utcOffsetMin = -120;
+    const utcDate = new Date(`${date}T${time}:00.000Z`);
+    utcDate.setMinutes(utcDate.getMinutes() + utcOffsetMin);
+    const patient =
+      SAMPLE_PATIENTS.find((p) => p.id === body.patientId) ?? SAMPLE_PATIENTS[0]!;
+    const apt: MockEntry = {
+      id,
+      patientId: String(body.patientId),
+      patient: {
+        firstName: patient.firstName,
+        lastName: patient.lastName,
+        dateOfBirth: patient.dateOfBirth,
+      },
+      scheduledFor: utcDate.toISOString(),
+      durationMinutes: Number(body.durationMinutes),
+      arrivedAt: null,
+      status: 'scheduled',
+      isWalkIn: false,
+      paymentCode: null,
+      lastVisitAt: null,
+      isNewPatient: true,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    state.current.push(apt);
+    return route.fulfill({
+      status: 201,
+      contentType: 'application/json',
+      body: JSON.stringify({ entry: apt }),
+    });
+  });
 
-    if (method === 'POST' && /\/api\/appointments$/.test(path)) {
-      const body = (await route.request().postDataJSON()) as Record<string, unknown>;
-      state.posts.push(body);
-      const id = `apt-${state.posts.length}`;
-      const date = String(body.date);
-      const time = String(body.time);
-      const [hh, mm] = time.split(':').map(Number) as [number, number];
-      const utcOffsetMin = -120;
-      const utcDate = new Date(`${date}T${time}:00.000Z`);
-      utcDate.setMinutes(utcDate.getMinutes() + utcOffsetMin);
-      const patient =
-        SAMPLE_PATIENTS.find((p) => p.id === body.patientId) ?? SAMPLE_PATIENTS[0]!;
-      const apt: MockAppointment = {
-        id,
-        patientId: String(body.patientId),
-        patient: {
-          firstName: patient.firstName,
-          lastName: patient.lastName,
-          dateOfBirth: patient.dateOfBirth,
-        },
-        scheduledFor: utcDate.toISOString(),
-        durationMinutes: Number(body.durationMinutes),
-        status: 'scheduled',
-        lastVisitAt: null,
-        isNewPatient: true,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-      state.current.push(apt);
-      return route.fulfill({
-        status: 201,
-        contentType: 'application/json',
-        body: JSON.stringify({ appointment: apt }),
-      });
+  // PATCH /api/visits/:id/scheduling — reschedule date/time/duration.
+  await page.route(/\/api\/visits\/[\w-]+\/scheduling(?:\?.*)?$/, async (route: Route) => {
+    if (route.request().method() !== 'PATCH') return route.fallback();
+    const match = /\/api\/visits\/([\w-]+)\/scheduling/.exec(
+      new URL(route.request().url()).pathname,
+    );
+    if (!match) return route.fallback();
+    const id = match[1]!;
+    const body = (await route.request().postDataJSON()) as Record<string, unknown>;
+    state.patches.push({ id, body });
+    const apt = state.current.find((a) => a.id === id);
+    if (!apt) return route.fulfill({ status: 404, body: '' });
+    if (typeof body.durationMinutes === 'number') {
+      apt.durationMinutes = body.durationMinutes;
     }
+    if (typeof body.date === 'string' && typeof body.time === 'string') {
+      const utcOffsetMin = -120;
+      const utcDate = new Date(`${body.date}T${body.time}:00.000Z`);
+      utcDate.setMinutes(utcDate.getMinutes() + utcOffsetMin);
+      apt.scheduledFor = utcDate.toISOString();
+    }
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ entry: apt }),
+    });
+  });
 
-    const idMatch = /\/api\/appointments\/([\w-]+)(\/restore)?$/.exec(path);
-    if (idMatch) {
+  // PATCH /api/visits/:id/status — status-only transition.
+  await page.route(/\/api\/visits\/[\w-]+\/status(?:\?.*)?$/, async (route: Route) => {
+    if (route.request().method() !== 'PATCH') return route.fallback();
+    const match = /\/api\/visits\/([\w-]+)\/status/.exec(
+      new URL(route.request().url()).pathname,
+    );
+    if (!match) return route.fallback();
+    const id = match[1]!;
+    const body = (await route.request().postDataJSON()) as Record<string, unknown>;
+    state.patches.push({ id, body });
+    const apt = state.current.find((a) => a.id === id);
+    if (!apt) return route.fulfill({ status: 404, body: '' });
+    if (typeof body.status === 'string') {
+      apt.status = body.status as MockStatus;
+    }
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ entry: apt }),
+    });
+  });
+
+  // DELETE /api/visits/calendar/:id — soft-delete.
+  // POST   /api/visits/calendar/:id/restore — restore within window.
+  await page.route(
+    /\/api\/visits\/calendar\/[\w-]+(?:\/restore)?(?:\?.*)?$/,
+    async (route: Route) => {
+      const url = new URL(route.request().url());
+      const idMatch = /\/api\/visits\/calendar\/([\w-]+)(\/restore)?$/.exec(url.pathname);
+      if (!idMatch) return route.fallback();
       const id = idMatch[1]!;
       const isRestore = idMatch[2] === '/restore';
-      if (method === 'PATCH') {
-        const body = (await route.request().postDataJSON()) as Record<string, unknown>;
-        state.patches.push({ id, body });
-        const apt = state.current.find((a) => a.id === id);
-        if (!apt) return route.fulfill({ status: 404, body: '' });
-        if (typeof body.status === 'string') {
-          apt.status = body.status as MockAppointment['status'];
-        }
-        if (typeof body.durationMinutes === 'number') {
-          apt.durationMinutes = body.durationMinutes;
-        }
-        return route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: JSON.stringify({ appointment: apt }),
-        });
-      }
-      if (method === 'DELETE') {
+      const method = route.request().method();
+      if (method === 'DELETE' && !isRestore) {
         state.deletes.push(id);
         state.current = state.current.filter((a) => a.id !== id);
         return route.fulfill({
@@ -265,12 +331,12 @@ async function mockApi(page: Page, state: MockState): Promise<void> {
         return route.fulfill({
           status: 200,
           contentType: 'application/json',
-          body: JSON.stringify({ appointment: state.current[0] ?? null }),
+          body: JSON.stringify({ entry: state.current[0] ?? null }),
         });
       }
-    }
-    return route.fallback();
-  });
+      return route.fallback();
+    },
+  );
 
   // Patient search + create
   await page.route('**/api/patients**', async (route: Route) => {
@@ -475,13 +541,16 @@ test.describe('Booking dialog', () => {
     page,
   }) => {
     // 11:00 Belgrade = 09:00 UTC in May (UTC+2).
-    const initial: MockAppointment = {
+    const initial: MockEntry = {
       id: 'apt-existing',
       patientId: 'p-rita',
       patient: { firstName: 'Rita', lastName: 'Hoxha', dateOfBirth: '2024-02-12' },
       scheduledFor: '2026-05-14T09:00:00.000Z',
       durationMinutes: 15,
+      arrivedAt: null,
       status: 'scheduled',
+      isWalkIn: false,
+      paymentCode: null,
       lastVisitAt: null,
       isNewPatient: true,
       createdAt: '2026-05-01T10:00:00.000Z',
@@ -507,3 +576,6 @@ test.describe('Booking dialog', () => {
     expect(state.patches[0]!.body).toMatchObject({ durationMinutes: 20 });
   });
 });
+
+// Reference unused constants so eslint --noUnusedLocals doesn't bark.
+export const _TODAY_TIMESTAMP = TODAY_TIMESTAMP;

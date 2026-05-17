@@ -48,13 +48,13 @@
 
 ## Cleanup tasks
 - Stale slice-XX branches (slice-01 through slice-16) can be pruned
-- E2E mocks in apps/web/tests/e2e/{booking,kalendari}.spec.ts still mock the
-  pre-Phase-2a `/api/appointments/*` URL space and `{appointments: [...]}`
-  payload shape. Rewrite the route handlers to the new
-  `/api/visits/calendar/*` paths + `{entries: [...]}` payloads + the new
-  stream event names (visit.created / visit.updated / visit.status_changed
-  / visit.deleted / visit.restored). doctor-home.spec.ts was already
-  updated in commit 34fad6b; these two are the remaining stragglers.
+- E2E test for receptionist edit-lock behavior on the end-of-day prompt
+  (commit 8720a5c). A receptionist-only session viewing yesterday's
+  incomplete visit should see the banner + "Mjeku duhet të shënojë
+  statusin." label with the "Shëno status" dropdown hidden. Currently
+  kalendari.spec.ts test 3 verifies the doctor's path (banner → mark →
+  banner clears) under a `test.use({ authState: 'doctor' })` override;
+  the receptionist-locked variant has no coverage. Effort: ~30 min.
 - ~~ui: surface in_progress count across dashboard surfaces~~ —
   RESOLVED by `fix(stats): cross-view parity for "në pritje" (scheduled
   + arrived)` (2026-05-16). Doctor's DayStats tile gained the
