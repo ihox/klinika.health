@@ -97,6 +97,11 @@ COPY --from=builder --chown=10001:10001 /workspace/apps/api/dist ./apps/api/dist
 COPY --from=builder --chown=10001:10001 /workspace/apps/api/node_modules ./apps/api/node_modules
 COPY --from=builder --chown=10001:10001 /workspace/apps/api/prisma ./apps/api/prisma
 COPY --from=builder --chown=10001:10001 /workspace/apps/api/package.json ./apps/api/package.json
+# tsconfig.json is needed by ts-node when the seed scripts run (the
+# staging seed is invoked via `compose run --rm api ./node_modules/.bin/ts-node …`).
+# Without it ts-node falls back to its bundled defaults — including
+# `module: NodeNext` — which then errors on missing `moduleResolution`.
+COPY --from=builder --chown=10001:10001 /workspace/apps/api/tsconfig.json ./apps/api/tsconfig.json
 
 # In-image storage dir so an empty bind mount inherits the right
 # ownership on first boot. Host directory must be chowned to 10001

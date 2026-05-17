@@ -107,8 +107,11 @@ async function seedClinic(): Promise<string> {
         C: { label: 'Kontroll', amountCents: 500 },
         D: { label: 'Vizitë e gjatë', amountCents: 2000 },
       } satisfies Prisma.InputJsonValue,
-      logoUrl: null,
-      signatureUrl: null,
+      // logoUrl + signatureUrl are non-null in the schema (see
+      // prisma/schema.prisma). Placeholder paths land here; the
+      // clinic admin uploads real assets through Cilësimet → Stampa.
+      logoUrl: '/assets/clinics/donetamed/logo.png',
+      signatureUrl: '/assets/clinics/donetamed/signature-blank.png',
       smtpConfig: Prisma.DbNull,
       status: 'active',
     },
