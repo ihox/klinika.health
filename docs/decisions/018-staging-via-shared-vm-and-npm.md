@@ -151,3 +151,59 @@ The api image now also ships `tsconfig.json` so the seed's ts-node resolves its 
 ### Why this is a refinement, not a supersession
 
 The original decision in this ADR — staging via the shared Proxmox VM, sibling NPM, no Cloudflare Tunnel — is unchanged. What changed is the *mechanism* of getting code onto the VM. The new mechanism matches what the founder already operates for two other site stacks; the maintenance burden is materially lower than running a Klinika-specific deploy flow.
+
+## Real DonetaMED data on staging (2026-05-17)
+
+Status: Accepted (supplements the original decision; supersedes only the "no real data" trade-off in the body above)
+
+### What this supplement reverses
+
+The body of this ADR accepted the trade-off:
+
+> Staging starts empty (no real data) — diverges from ADR-002's "real DonetaMED data migrated here." Re-introducing real data on staging requires a separate decision because the Kosovo consent picture has changed since ADR-002 was written.
+
+This supplement is that separate decision. Real DonetaMED data (~11,163 patients, ~63,405 visits, ~6 years of clinical records) is approved for staging, with the constraints below.
+
+### The decision
+
+Migrate the live DonetaMED `.accdb` into the staging Postgres so the operator + Dr. Taulant can exercise the doctor's daily workflows against realistic data before production cutover. Same `donetamed` subdomain that was already provisioned in the staging seed.
+
+### Stated representations driving the decision
+
+- The founder represents that Dr. Taulant has consented to his patient data being held on the staging VM for the purpose of dry-run / acceptance testing ahead of production cutover.
+- The operator's read of Kosovo law (jurisdiction per CLAUDE.md §1.preamble) permits this transfer to a host the founder controls, on the basis that it is a vendor-side staging environment, not a public service.
+- The operator accepts personal responsibility for protecting the data on the staging VM at the level of the production environment ADR-002 specifies, even though the staging stack does not match production's ingress controls.
+
+These are representations, not legal findings. If any of them changes (Dr. Taulant withdraws consent, Kosovo authority asserts a different interpretation, the operator transfers responsibility), this supplement should be revisited.
+
+### Constraints
+
+1. **Access scope**: Staging URL access stays restricted to the operator and explicitly-invited reviewers. NPM does not publish a directory; the host is not indexed; the URLs are shared out-of-band. No public marketing or demo use.
+2. **`.accdb` lifecycle on the VM**: The source `.accdb` is transferred to the VM only for the duration of an import run. It is deleted from the VM filesystem immediately after the run finishes (`rm /srv/sites/klinika-health/storage/PEDIATRIA.accdb`). It is never committed (`.gitignore` covers `*.accdb`), never put in a Docker image, never copied to another VM.
+3. **Database retention**: The migrated data lives on staging until production cutover or until the founder explicitly wipes the clinic (`DELETE FROM patients WHERE clinic_id = …; DELETE FROM visits …;` inside a transaction). No long-term retention beyond what's needed for the cutover rehearsal.
+4. **No telemetry leakage**: Pino redaction (already in the api per CLAUDE.md §7) covers names / DOBs / clinical free-text. No new telemetry pipeline is added that could egress PHI to a third-party service.
+5. **Audit log**: Every `migrate.py` `--commit` run leaves a row in the operator's local log and the platform audit log. Re-runs after the doctor begins UI sessions are forbidden because the upsert is destructive over UI edits (see [memory: project_migration_rerun_gotchas](../../tools/migrate/) — "The destructive side of idempotency").
+6. **Shared-VM risk acknowledged**: The staging VM hosts unrelated tenants (`montelgo`, `tregu-online`). Klinika's compose project is isolated at the Docker level; nothing prevents a host-level compromise from reaching all three. The trade-off is acceptable for staging-tier risk, not for production. Production cloud / on-premise paths in ADR-002 / ADR-018 remain authoritative for the production picture.
+
+### What changes vs. the original ADR-018 body
+
+| Aspect | Original body | This supplement |
+|---|---|---|
+| Patient data | None (synthetic seed only) | Real DonetaMED migrated data |
+| Purpose | UI shape verification | Dry-run rehearsal of the full doctor workflow |
+| Consent dependency | Not required (no PHI) | Operator-attested doctor consent (see above) |
+| Lifecycle | Indefinite (seed re-runs OK) | Until production cutover, then wipe |
+
+### Anti-patterns to avoid
+
+- Don't take screenshots of staging chart views that include patient names and post them to public channels (slack-screenshots-in-pr, github issue attachments, etc.). The patient data is real.
+- Don't expand the staging access list without telling the founder; the consent representation above is bounded by who can actually see the data.
+- Don't re-import after the doctor has done UI sessions against staging. Per the destructive-idempotency rule, his edits would revert. If a re-import is genuinely needed, freeze his sessions, snapshot his changes externally, re-import, merge his changes back manually.
+- Don't leave the `.accdb` on the VM after a run. Set a calendar reminder if needed; the cleanup is the operator's responsibility, not the migration tool's.
+
+### Revisit when
+
+- Production cutover happens; this whole staging-with-real-data picture becomes obsolete.
+- Dr. Taulant withdraws or modifies consent.
+- The shared-VM trade-off becomes untenable (a tenant compromise, a new compliance trigger, etc.).
+- Klinika onboards a second clinic — that clinic's staging-data decision is separate and needs its own ADR (or its own supplement here).
