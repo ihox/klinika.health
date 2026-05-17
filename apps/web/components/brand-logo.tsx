@@ -1,5 +1,5 @@
 interface BrandLogoProps {
-  /** `primary` = heart icon + wordmark. `mark` = icon only. */
+  /** `primary` = gradient mark + "klinika.health" wordmark. `mark` = gradient tile only. */
   variant?: 'primary' | 'mark';
   /** Rendered height in pixels. Width auto-scales via the SVG's intrinsic ratio. */
   height?: number;
@@ -9,15 +9,15 @@ interface BrandLogoProps {
 }
 
 const SOURCES: Record<NonNullable<BrandLogoProps['variant']>, string> = {
-  primary: '/brand/logo-primary.svg',
-  mark: '/brand/logo-mark.svg',
+  primary: '/brand/logo.svg',
+  mark: '/brand/mark.svg',
 };
 
 export function BrandLogo({
   variant = 'primary',
   height = 22,
   className,
-  alt = 'klinika.',
+  alt = 'klinika.health',
 }: BrandLogoProps) {
   return (
     <img
