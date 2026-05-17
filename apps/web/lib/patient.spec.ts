@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 
 import {
   chartPath,
@@ -108,7 +108,7 @@ describe('chartPath / masterDataPath', () => {
 });
 
 describe('navigateToPatient', () => {
-  let getOneSpy: ReturnType<typeof vi.spyOn>;
+  let getOneSpy: MockInstance<typeof patientClient.getOne>;
 
   beforeEach(() => {
     getOneSpy = vi.spyOn(patientClient, 'getOne');
@@ -164,7 +164,7 @@ describe('navigateToPatient', () => {
 });
 
 describe('safeNavigateToPatient', () => {
-  let getOneSpy: ReturnType<typeof vi.spyOn>;
+  let getOneSpy: MockInstance<typeof patientClient.getOne>;
 
   beforeEach(() => {
     getOneSpy = vi.spyOn(patientClient, 'getOne');
