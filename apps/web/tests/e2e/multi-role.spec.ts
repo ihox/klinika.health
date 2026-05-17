@@ -1,4 +1,8 @@
-import { expect, test, type Page, type Route } from '@playwright/test';
+import { type Page, type Route } from '@playwright/test';
+
+import { expect, test } from './fixtures/auth';
+
+test.use({ authState: 'logged-out' });
 
 /**
  * Playwright E2E for the multi-role refactor (ADR-004). Like

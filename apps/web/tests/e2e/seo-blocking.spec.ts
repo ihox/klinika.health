@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures/auth';
 
 // Klinika handles PHI and must never appear in search engines or
 // AI training datasets — see CLAUDE.md §1. The no-index policy

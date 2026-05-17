@@ -1,4 +1,6 @@
-import { expect, test, type Page, type Route } from '@playwright/test';
+import { type Page, type Route } from '@playwright/test';
+
+import { expect, test } from './fixtures/auth';
 
 /**
  * E2E for slice 15 — print pipeline + vërtetim issue/reprint.

@@ -1,4 +1,6 @@
-import { expect, test, type Page, type Route } from '@playwright/test';
+import { type Page, type Route } from '@playwright/test';
+
+import { expect, test } from './fixtures/auth';
 
 /**
  * E2E for the WHO growth charts (slice 14).
@@ -46,31 +48,6 @@ interface ChartFixture {
 }
 
 async function mockChart(page: Page, fixture: ChartFixture): Promise<void> {
-  // The chart shell calls useMe() on mount; an unmocked 401 would
-  // bounce the test to /login. Stub a doctor session so the chart
-  // renders deterministically in both CI (api unreachable) and local
-  // (api returns a real 401) environments.
-  await page.route('**/api/auth/me', (route: Route) =>
-    route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({
-        user: {
-          id: 'u-taulant',
-          email: 'taulant@donetamed.example',
-          firstName: 'Taulant',
-          lastName: 'Shala',
-          roles: ['doctor'],
-          title: 'Dr.',
-          clinicName: 'DonetaMED',
-          clinicShortName: 'donetamed',
-          createdAt: '2024-01-01T00:00:00.000Z',
-          lastLoginAt: '2026-05-14T08:00:00.000Z',
-        },
-      }),
-    }),
-  );
-
   // Chart-view short-circuits to EmptyVisitsState (no right column) when
   // visits.length === 0, which hides the growth panel these tests assert
   // against. Default to a single placeholder visit when the fixture

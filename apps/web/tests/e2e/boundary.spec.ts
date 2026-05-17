@@ -1,4 +1,6 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures/auth';
+
+test.use({ authState: 'logged-out' });
 
 /**
  * E2E for the platform-vs-clinic routing boundary (ADR-005 fix).

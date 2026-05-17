@@ -1,4 +1,13 @@
-import { expect, test, type Page, type Route } from '@playwright/test';
+import { type Page, type Route } from '@playwright/test';
+
+import { expect, test } from './fixtures/auth';
+
+// Platform admin lives on the apex domain (ADR-005) and authenticates
+// via /api/admin/auth/me, not the clinic /api/auth/me the default
+// fixture mocks. These tests stand up their own admin auth state per
+// test via mockAdminApi, so we opt out of the fixture-level clinic
+// auth here.
+test.use({ authState: 'logged-out' });
 
 /**
  * E2E for the platform-admin surface. The API is mocked at the route

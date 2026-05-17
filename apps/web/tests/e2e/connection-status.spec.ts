@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures/auth';
 
 // The connection indicator polls /health/ready every 30s and surfaces
 // online / offline / degraded. Playwright lets us intercept the fetch

@@ -1,4 +1,8 @@
-import { expect, test, type Page, type Route } from '@playwright/test';
+import { type Page, type Route } from '@playwright/test';
+
+import { expect, test } from './fixtures/auth';
+
+test.use({ authState: 'receptionist' });
 
 /**
  * E2E for the slice-09 booking flows. Both Path 1 (slot-first) and

@@ -1,4 +1,6 @@
-import { expect, test, type Page, type Route } from '@playwright/test';
+import { type Page, type Route } from '@playwright/test';
+
+import { expect, test } from './fixtures/auth';
 
 /**
  * E2E for the doctor's "Pamja e ditës" home dashboard (slice 10).

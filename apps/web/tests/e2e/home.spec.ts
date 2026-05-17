@@ -1,4 +1,6 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures/auth';
+
+test.use({ authState: 'logged-out' });
 
 const PORT = process.env.WEB_PORT ?? '3000';
 const APEX_BASE_URL = `http://localhost:${PORT}`;

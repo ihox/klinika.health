@@ -1,4 +1,6 @@
-import { expect, test, type Page, type Route } from '@playwright/test';
+import { type Page, type Route } from '@playwright/test';
+
+import { expect, test } from './fixtures/auth';
 
 /**
  * E2E for the doctor dashboard's top-nav GLOBAL patient search — the

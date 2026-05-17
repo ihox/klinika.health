@@ -1,4 +1,8 @@
-import { expect, test, type Page, type Route } from '@playwright/test';
+import { type Page, type Route } from '@playwright/test';
+
+import { expect, test } from './fixtures/auth';
+
+test.use({ authState: 'clinic_admin' });
 
 /**
  * E2E for `/cilesimet` (clinic admin settings). The API is mocked at
@@ -26,6 +30,7 @@ const CLINIC_BASE = {
     city: 'Prizren',
     phones: ['045 83 00 83', '043 543 123'],
     email: 'info@donetamed.health',
+    walkinDurationMinutes: 10,
   },
   branding: { hasLogo: false, logoContentType: null, hasSignature: false },
   hours: {
@@ -273,6 +278,50 @@ test.describe('Clinic settings', () => {
     await page.locator('[data-testid="day-state-sat"]').selectOption('closed');
     await page.locator('[data-testid="hours-save"]').click();
     await expect(page.getByText(/Orari u ruajt/)).toBeVisible();
+  });
+
+  test('Hours → walk-in duration field lives in Orari dhe terminet, not Përgjithshme', async ({
+    page,
+  }) => {
+    await mockClinicApi(page);
+
+    // Field must be absent from General.
+    await page.goto('/cilesimet');
+    await expect(page.locator('[data-testid="walkin-duration"]')).toHaveCount(0);
+
+    // …and present inside Hours.
+    await page.goto('/cilesimet?tab=hours');
+    await expect(page.locator('[data-testid="pane-hours"]')).toBeVisible();
+    await expect(page.locator('[data-testid="walkin-duration"]')).toBeVisible();
+  });
+
+  test('Hours → durations section save persists value and emits toast', async ({ page }) => {
+    await mockClinicApi(page);
+    await page.goto('/cilesimet?tab=hours');
+
+    const walkin = page.locator('[data-testid="walkin-duration"]');
+    await expect(walkin).toHaveValue('10');
+    await walkin.fill('20');
+    await page.locator('[data-testid="durations-save"]').click();
+    await expect(page.getByText('Cilësimet u ruajtën.')).toBeVisible();
+
+    // Re-enter the tab — the new value is what the API returned.
+    await page.goto('/cilesimet');
+    await page.getByRole('button', { name: /Orari dhe terminet/ }).click();
+    await expect(page.locator('[data-testid="walkin-duration"]')).toHaveValue('20');
+  });
+
+  test('Hours → durations section save persists toggled duration list', async ({ page }) => {
+    await mockClinicApi(page);
+    await page.goto('/cilesimet?tab=hours');
+
+    // 60 min is not in the default list — toggle it on and save.
+    await page.locator('[data-testid="dur-60"]').check();
+    await page.locator('[data-testid="durations-save"]').click();
+    await expect(page.getByText('Cilësimet u ruajtën.')).toBeVisible();
+
+    await page.goto('/cilesimet?tab=hours');
+    await expect(page.locator('[data-testid="dur-60"]')).toBeChecked();
   });
 
   test('Users → add staff modal posts and updates the table', async ({ page }) => {

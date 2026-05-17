@@ -1,4 +1,6 @@
-import { expect, test, type Page, type Route } from '@playwright/test';
+import { type Page, type Route } from '@playwright/test';
+
+import { expect, test } from './fixtures/auth';
 
 /**
  * E2E for the patients surface — both receptionist and doctor flows.
@@ -185,6 +187,9 @@ function emptyState(): MockState {
 }
 
 test.describe('Receptionist patient search and quick-add', () => {
+  test.use({ authState: 'receptionist' });
+
+
   test('search renders only public DTO fields', async ({ page }) => {
     const state = emptyState();
     await mockApi(page, state);
