@@ -7,6 +7,9 @@ name: Deploy Staging
 #      which `compose pulls`, runs prisma migrate deploy, and brings
 #      the stack up.
 #
+# CI-gate verification: this workflow now waits on a green upstream
+# CI run before deploying (see `on.workflow_run` below).
+#
 # The deploy keypair on the VM has `command="/usr/local/bin/deploy.sh"`
 # in authorized_keys, so the SSH command argument (`klinika-health`)
 # is the slug — that's the entire payload this workflow ships.
