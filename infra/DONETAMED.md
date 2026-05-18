@@ -407,9 +407,49 @@ Plain `POSTGRESQL_HOST` etc. (single underscore) are **not** recognised — the 
 |---|---|---|
 | `ORTHANC_POSTGRES_PASSWORD` | compose substitution for the orthanc-postgres POSTGRES_PASSWORD and Orthanc's POSTGRESQL__PASSWORD | ≥32 hex chars; independent from `POSTGRES_PASSWORD` |
 | `ORTHANC_URL` | api container (`apps/api/src/modules/dicom/orthanc.client.ts`) | `http://orthanc:8042` over the dicom docker net |
-| `ORTHANC_WEBHOOK_SECRET` | api container (`apps/api/src/modules/dicom/dicom.controller.ts`) | Validates the `X-Klinika-Orthanc-Secret` header on Orthanc-→-Klinika webhook events. Set now even though the on-stored.lua hook isn't wired yet (future). |
+| `ORTHANC_WEBHOOK_SECRET` | Klinika api (`apps/api/src/modules/dicom/dicom.controller.ts`) verifies; Orthanc Lua hook sends it as `X-Klinika-Orthanc-Secret` | Shared secret on the webhook path. ≥32 hex chars. The orthanc container also gets a passthrough so the Lua hook can `os.getenv` it. |
+| `ORTHANC_WEBHOOK_URL` | Orthanc Lua hook (`infra/compose/orthanc/on-stored.lua`) | Wired in 18b.5d. Points at `http://api:3001/api/dicom/internal/orthanc-event` over the internal `dicom` docker network. |
 
 `ORTHANC_USERNAME` / `ORTHANC_PASSWORD` intentionally **not** set — Orthanc REST authentication is off (port 8042 is on an internal docker network). The api's Orthanc client tolerates absence: `if (user && pass)` gate, no auth header sent otherwise.
+
+#### On-stored webhook flow (18b.5d)
+
+Every time the ultrasound modality C-STOREs an instance into Orthanc, Orthanc fires the `OnStoredInstance` Lua callback in [infra/compose/orthanc/on-stored.lua](compose/orthanc/on-stored.lua). The hook walks **Instance → Study** via Orthanc's in-process REST (`/instances/<id>/study`) to resolve the Orthanc study ID, then POSTs `{studyId, instanceId, timestamp}` to Klinika's bridge endpoint:
+
+```
+Orthanc Lua hook → POST http://api:3001/api/dicom/internal/orthanc-event
+   Headers:
+     Content-Type: application/json
+     X-Klinika-Orthanc-Secret: <secret from .env>
+     Host: donetamed.klinika.health
+```
+
+The **Host header is hard-coded** to the public tenant hostname because Klinika's `ClinicResolutionMiddleware` resolves the tenant from the HTTP Host header — the TCP destination is `api:3001` over the internal docker network, but at the HTTP layer the api needs to see `donetamed.klinika.health` to identify which clinic's `clinicId` to inject into the request context. Hardcoding is acceptable because this Lua file ships with the donetamed compose file (per-clinic deployment). For a future multi-tenant on-prem install the value would become env-driven.
+
+On the receiving end, Klinika's `DicomController.orthancEvent` (no AuthGuard, secret-gated) calls `DicomService.ingestStudyEvent(clinicId, studyId)` which:
+
+1. Calls Orthanc's REST `GET /studies/<id>` for the metadata (description + patient-name DICOM tag).
+2. Upserts `dicom_studies` keyed on `(clinic_id, orthanc_study_id)` — idempotent if Orthanc fires multiple stores for the same study (one row, image count updated).
+
+End-to-end smoke test:
+
+```bash
+# On the laptop:
+python3 /tmp/make_test_dcm.py        # pydicom one-liner generates a fresh DICOM
+storescu -aet ULTRASOUND -aec DONETAMED localhost 4242 /tmp/test.dcm
+sleep 2
+
+# Confirm the row landed:
+docker exec klinika-donetamed-postgres psql -U klinika -d klinika -c \
+  "SELECT orthanc_study_id, image_count, study_description, patient_name_dicom
+   FROM dicom_studies ORDER BY received_at DESC LIMIT 5;"
+```
+
+#### Two gotchas worth knowing
+
+1. **`OnStoredInstance` callback parameters**: Orthanc passes `(instanceId, tags, metadata)` where `metadata` carries transfer-context fields (`RemoteAet`, `CalledAet`, `RemoteIP`, `IndexInSeries`, …) — **not** the parent study ID. You must walk the resource tree via REST (`/instances/<id>` → `ParentSeries` → `/series/<id>` → `ParentStudy`, or the shortcut `/instances/<id>/study` which returns the study directly). The original on-stored.lua tried `metadata['ParentStudy']`, returned early on nil, and silently never fired the webhook. Caught only when running against a live Orthanc — the existing integration tests stub the receiver side, so this bug was invisible in CI.
+
+2. **`ORTHANC__LUA_SCRIPTS` via env var**: orthancteam's `/startup/generateConfiguration.py` runs `json.loads(value)` on every `ORTHANC__`-prefixed env var before merging into the JSON config. So a JSON-encoded array literal `'["/etc/orthanc/lua-scripts/on-stored.lua"]'` works correctly — no need for a mounted `orthanc.json` fragment. The same parser also intercepts env vars ending in `_SECRET` (treats their value as a docker-secrets file path) — for `ORTHANC_WEBHOOK_SECRET` this is a harmless info-log line because no file actually exists at the hex-string path, and Lua's `os.getenv` still returns the true value from the container env.
 
 #### Day-to-day Orthanc commands
 
@@ -462,7 +502,8 @@ See [`.env.donetamed.example`](../.env.donetamed.example) for the full annotated
 | `SEED_CLINIC_ADMIN_PASSWORD` | same |
 | `ORTHANC_POSTGRES_PASSWORD` | ≥32 hex chars, independent from `POSTGRES_PASSWORD`. See [18b.5 — Orthanc DICOM](#18b5--orthanc-dicom-server). |
 | `ORTHANC_URL` | Defaults to `http://orthanc:8042` (internal docker net). Used by `apps/api/src/modules/dicom/orthanc.client.ts`. |
-| `ORTHANC_WEBHOOK_SECRET` | ≥32 hex chars. Validates the `X-Klinika-Orthanc-Secret` header on Orthanc-→-Klinika webhook events. Set even though the hook isn't wired yet. |
+| `ORTHANC_WEBHOOK_SECRET` | ≥32 hex chars. Validates the `X-Klinika-Orthanc-Secret` header on Orthanc-→-Klinika webhook events. See [On-stored webhook flow](#on-stored-webhook-flow-18b5d). |
+| `ORTHANC_WEBHOOK_URL` | `http://api:3001/api/dicom/internal/orthanc-event` — consumed by the Orthanc-side Lua hook. |
 
 Defaults that should be reviewed before first deploy:
 
@@ -867,7 +908,7 @@ The day the laptop physically moves to the clinic and starts serving real patien
 
 ## What's NOT here yet (planned)
 
-- **Orthanc → Klinika webhook wiring** — the on-stored.lua hook that POSTs to `/api/dicom/internal/orthanc-event` on every stored DICOM. The webhook secret is already in `.env` (`ORTHANC_WEBHOOK_SECRET`); flipping it on is a config + Lua script change.
+- **Ultrasound print-template DICOM rendering** — `print.service.ts` currently passes `ultrasoundImages: []` to the renderer, so the page-2 grid still shows SVG placeholders even though `dicom_studies` is now populated. Wiring the renderer to query `VisitDicomLink` and fetch base64 preview bytes from Orthanc is a separate dev slice (~half a day, app-code).
 - **DICOM AET allowlist** — today Orthanc accepts C-STORE from any calling AET. Tighten at cutover (see [18b.6 checklist](#18b6--cutover-checklist-planned)).
 - `.accdb` patient migration — cutover-day procedure (18b.6)
 - Cloudflare Access for SSH — 18b.6 (so the laptop can be SSHed from outside the clinic LAN)
