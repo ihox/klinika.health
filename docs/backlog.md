@@ -65,6 +65,22 @@
   the same definition of "në pritje" = scheduled + arrived; granular
   calendar-filter pills remain per-status.
 
+## DICOM / ultrasound
+
+- **DICOM picker UX — discuss with Dr. Taulant during/after cutover and refine based on actual clinic workflow:**
+  - Should the picker default-filter to today's studies (vs. all recent)?
+  - Sort order: `received_at DESC` vs. study date DESC?
+  - Auto-suggest linking when DICOM patient name fuzzy-matches the current chart's patient (or DOB matches)?
+  - Notification badge on the doctor's home screen when new unlinked studies arrive while a visit is open?
+  - Bulk-link UX for cases where multiple studies belong to the same visit (e.g., abdomen + thyroid scans in one session)?
+  - "Forget linking — this study is for clinic archive only" workflow for studies that should be stored but not attached to a visit?
+
+  Current behavior (post-18b.5d): studies arrive in the `dicom_studies` table via Orthanc's on-stored webhook, doctor manually opens the picker and links to the current visit. Safe default; UX refinement based on real-world usage feedback after Dr. Taulant uses it for a few weeks.
+
+  Estimated effort: ~2–4 hours depending on which refinements ship together. Should be informed by actual clinic workflow, not guessed at upfront.
+
+- **Ultrasound print-template DICOM rendering** — `print.service.ts` currently passes `ultrasoundImages: []` so page 2 renders SVG placeholders. Wire the renderer to query `VisitDicomLink` and fetch base64 previews from Orthanc. ~half a day, app-code. (Already in the on-prem "What's NOT here yet" list — duplicated here for backlog discoverability.)
+
 ## v2 candidates
 - DICOM MWL (auto study-patient linkage)
 - AI features (clinical summary, smarter autocomplete)
