@@ -42,7 +42,7 @@ Compose stack (project name `klinika-donetamed`):
    ├─ klinika-donetamed-web              Next.js 15 standalone   :3000 → host 127.0.0.1:8003
    ├─ klinika-donetamed-api              NestJS 10               :3001 (internal only)
    ├─ klinika-donetamed-postgres         Postgres 16             :5432 (internal only)
-   ├─ klinika-donetamed-orthanc          Orthanc 1.12 / image 26.4.2   DICOM :4242 (LAN), REST :8042 (internal only)
+   ├─ klinika-donetamed-orthanc          Orthanc 1.12 / image 26.4.2   DICOM :4242 (LAN), REST + Explorer :8042 (127.0.0.1 only)
    └─ klinika-donetamed-orthanc-postgres Postgres 16             :5432 (internal only, dedicated for Orthanc index)
 
 Networks:
@@ -375,7 +375,7 @@ Both containers are on the `klinika-donetamed-dicom` docker network. The api con
 | Port | Exposure | Auth |
 |---|---|---|
 | `4242` (DICOM C-STORE) | Published on `0.0.0.0` — reachable from the clinic LAN | None (any AET accepted today; tighten at cutover — see [18b.6 checklist](#18b6--cutover-checklist-planned)) |
-| `8042` (Orthanc REST) | **Not published** — only the api container reaches it via the `dicom` docker network | `ORTHANC__AUTHENTICATION_ENABLED=false` (REST is on an internal docker network behind no host port) |
+| `8042` (Orthanc REST + Explorer UI) | Published on `127.0.0.1` only — reachable from the laptop itself or via SSH local-forward. The api container reaches it container-to-container via the `dicom` docker network (which doesn't go through the host-port mapping at all). | `ORTHANC__AUTHENTICATION_ENABLED=false` — REST and Explorer are anonymous because external reach requires SSH-level auth first. To add Orthanc-level auth see [Accessing Orthanc Explorer](#accessing-orthanc-explorer). |
 
 ⚠️ **UFW vs Docker gotcha:** UFW rules do NOT apply to Docker-published ports — Docker manipulates the iptables FORWARD chain while UFW operates on INPUT, so containerized destinations bypass UFW's filter. The `ufw allow from <RFC1918> to any port 4242` rules added in this slice are documentary; the **real LAN-only enforcement** lives in the `DOCKER-USER` iptables chain — see [DOCKER-USER iptables enforcement](#docker-user-iptables-enforcement-lan-only-published-ports).
 
@@ -473,6 +473,32 @@ storescu -aet ULTRASOUND -aec DONETAMED <laptop-LAN-ip> 4242 /path/to/sample.dcm
 docker exec klinika-donetamed-api sh -c 'curl -fsS -X DELETE http://orthanc:8042/studies/<orthanc-study-id>'
 ```
 
+#### Accessing Orthanc Explorer
+
+Orthanc ships with a browser-based admin UI ("Orthanc Explorer 2") at `http://<orthanc>:8042/ui/app/`. It surfaces diagnostics, lets you browse / preview / delete studies, view storage stats, run ad-hoc REST queries, etc. Useful for one-off operator tasks the doctor / receptionist UI doesn't expose. The legacy classic Explorer is still available at `/app/explorer.html` if you prefer the older interface.
+
+The Explorer port (`8042`) is published on the laptop's **loopback only** (`127.0.0.1:8042`). External reach requires SSH local-forward:
+
+```bash
+# From your dev machine (or any machine with SSH access to the laptop):
+ssh -L 8042:localhost:8042 donetamed-klinika
+
+# Then on your local machine, open in a browser:
+#   http://localhost:8042/ui/app/
+```
+
+Once Cloudflare Access for SSH lands in 18b.6, this works from anywhere on the internet via your Cloudflare identity — no LAN access to the laptop needed.
+
+**Security posture:** the Explorer is anonymous today — no Orthanc-level auth. This is consistent with the REST API anonymous policy (the REST API and the Explorer share the same `:8042` HTTP listener). Reach is gated at the network layer (loopback binding + SSH-level auth + Cloudflare Access in 18b.6), not by Orthanc itself. To add a second auth layer later:
+
+```yaml
+# in infra/compose/docker-compose.donetamed.yml, orthanc service env:
+ORTHANC__AUTHENTICATION_ENABLED: "true"
+ORTHANC__REGISTERED_USERS: '{"admin": "<bcrypt-or-plaintext-per-orthanc-docs>"}'
+```
+
+The Klinika API's Orthanc client then needs `ORTHANC_USERNAME` + `ORTHANC_PASSWORD` (already supported, see [Required env vars](#required-env-vars-1)). Deferred until cutover experience tells us whether the extra auth layer is worth the rotation overhead.
+
 #### Backups
 
 Two tracks — see [Backup procedure](#backup-procedure) for the full strategy:
@@ -483,7 +509,7 @@ Two tracks — see [Backup procedure](#backup-procedure) for the full strategy:
 #### Current security posture (to revisit at cutover)
 
 - **Any AE title is accepted** (no calling-AET allowlist). The modality just needs to know the called AET (`DONETAMED`) and the laptop's LAN IP+port. Anyone on the clinic LAN who knows those three can push studies.
-- **REST is anonymous** but unreachable from the host or LAN — only via the dicom docker network.
+- **REST + Explorer are anonymous** at the Orthanc layer; reach is gated by the network layer instead (loopback-only publishing on `127.0.0.1:8042` + SSH-level auth to get a tunnel; container-to-container traffic from the api stays on the internal `dicom` docker network and doesn't traverse the host-port mapping at all). See [Accessing Orthanc Explorer](#accessing-orthanc-explorer).
 - **TLS** is not configured on DICOM port 4242 (the ultrasound modality probably can't do DICOM-TLS anyway). Plaintext on the clinic LAN is the accepted v1 trade-off; consider modality-side TLS at cutover if the ultrasound supports it.
 
 ---

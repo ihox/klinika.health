@@ -180,10 +180,20 @@ services:
     networks:
       - dicom
     ports:
-      # DICOM C-STORE — published on all host interfaces. UFW restricts
-      # source addresses to RFC1918 (clinic LAN). REST port 8042 is
-      # deliberately NOT published.
+      # DICOM C-STORE — published on all host interfaces. The
+      # DOCKER-USER iptables chain (added in 18b.5) restricts source
+      # addresses to RFC1918 ranges. UFW rules on the same port are
+      # advisory only because Docker bypasses UFW's filter chain.
       - "0.0.0.0:4242:4242"
+      # Orthanc Explorer + REST — loopback ONLY. Reachable from the
+      # laptop itself or via SSH local-forward
+      # (e.g. `ssh -L 8042:localhost:8042 donetamed-klinika`, which
+      # works through Cloudflare Access SSH from anywhere).
+      # Anonymous today (matches the REST API anonymous policy);
+      # enable auth later by setting ORTHANC__AUTHENTICATION_ENABLED +
+      # ORTHANC__REGISTERED_USERS. See infra/DONETAMED.md §
+      # Accessing Orthanc Explorer.
+      - "127.0.0.1:8042:8042"
     depends_on:
       orthanc-postgres:
         condition: service_healthy
