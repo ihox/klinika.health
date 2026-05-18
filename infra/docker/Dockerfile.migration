@@ -1,0 +1,88 @@
+## Klinika migration tool — Access (.accdb) → Postgres image.
+##
+## Packages the Python migration tool (tools/migrate/) for the on-prem
+## DonetaMED laptop so the cutover-day reset-and-test cycle is a
+## single `docker run` away. Built and run only on the laptop; not
+## published to GHCR and not part of the deploy workflow.
+##
+## System dep: mdbtools (provides mdb-json), the only thing the
+## migration tool subprocesses. Pure Python otherwise — psycopg
+## ships a binary wheel, no native compilation needed.
+##
+## Networking is deliberately NOT baked in. The container must join
+## the donetamed Postgres network at run time (--network
+## klinika-donetamed-internal). The compose-managed Postgres is
+## reachable as `klinika-donetamed-postgres:5432` from inside that
+## network.
+##
+## Config flow:
+##   - config.docker.yaml below references ${DATABASE_URL} and
+##     ${ACCDB_PATH:-/data/PEDIATRIA.accdb}.
+##   - The operator's migrate.sh on the laptop:
+##       * sources /srv/sites/klinika-health/.env (for POSTGRES_PASSWORD)
+##       * builds DATABASE_URL pointing at the container hostname
+##       * bind-mounts the .accdb read-only at /data/PEDIATRIA.accdb
+##       * --network klinika-donetamed-internal
+##
+## Usage examples (called by /home/ilir/Desktop/migrate.sh):
+##   docker run --rm \
+##     --network klinika-donetamed-internal \
+##     -v /home/ilir/Desktop/PEDIATRIA.accdb:/data/PEDIATRIA.accdb:ro \
+##     -e DATABASE_URL=... \
+##     klinika-migration:donetamed check --config /app/config.docker.yaml
+
+FROM python:3.12-slim-bookworm
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PIP_NO_CACHE_DIR=1
+
+# mdbtools is the only system dep. ca-certificates keeps psycopg's TLS
+# happy if the DSN ever points at a managed Postgres (not the v1 case,
+# but cheap insurance).
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+        mdbtools \
+        ca-certificates \
+ && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Install deps first so the layer caches across source edits.
+COPY tools/migrate/requirements.txt /app/requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy the tool. .dockerignore at the repo root excludes the .venv,
+# .pytest_cache, migration-logs, and any local PEDIATRIA.accdb so
+# operator-local state never leaks into the image. Tests come along
+# so `pytest tests/` works inside the container if ever useful.
+COPY tools/migrate/migrate.py /app/migrate.py
+COPY tools/migrate/klinika_migrate/ /app/klinika_migrate/
+COPY tools/migrate/tests/ /app/tests/
+COPY tools/migrate/pytest.ini /app/pytest.ini
+
+# Bake a config that defers every variable to the environment. The
+# tool's own ${VAR} expansion handles substitution at load time.
+RUN printf '%s\n' \
+    'source:' \
+    '  path: ${ACCDB_PATH}' \
+    'target:' \
+    '  dsn: ${DATABASE_URL}' \
+    '  clinic_subdomain: ${CLINIC_SUBDOMAIN}' \
+    '  migration_user_email: ${MIGRATION_USER_EMAIL}' \
+    'options:' \
+    '  dry_run: true' \
+    '  log_dir: /app/migration-logs' \
+    > /app/config.docker.yaml
+
+# Default the env vars that the bundled config references, so a bare
+# `docker run --rm klinika-migration:donetamed` doesn't fail at config
+# load time when the operator is just exploring (e.g. printing --help).
+# Real invocations override these — see migrate.sh on the laptop.
+ENV ACCDB_PATH=/data/PEDIATRIA.accdb \
+    CLINIC_SUBDOMAIN=donetamed \
+    MIGRATION_USER_EMAIL=taulant.shala@klinika.health \
+    DATABASE_URL=postgresql://klinika:replace_me@klinika-donetamed-postgres:5432/klinika
+
+ENTRYPOINT ["python", "/app/migrate.py"]

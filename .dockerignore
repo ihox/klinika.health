@@ -42,8 +42,15 @@ playwright/.cache
 storage
 **/storage
 
-# Migration tool (Python; never needed in the api/web image)
-tools
+# Migration tool — exclude only the operator-local / generated bits.
+# The api/web prod images don't COPY tools/ at all (the directory is
+# referenced only by Dockerfile.migration), so leaving the rest in
+# their build context costs a few kB of tar — fine.
+tools/migrate/.venv
+tools/migrate/.pytest_cache
+tools/migrate/migration-logs
+tools/migrate/config.yaml
+tools/migrate/PEDIATRIA.accdb
 
 # Legacy data sources (large + sensitive)
 *.accdb
