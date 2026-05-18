@@ -21,6 +21,7 @@ playwright/.cache/
 .env.*.local
 .env.staging
 .env.production
+.env.donetamed
 
 # Patient data and Access source (never commit)
 *.accdb
