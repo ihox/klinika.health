@@ -2,7 +2,7 @@
 
 This is the runbook for the **on-premise** DonetaMED install: one Lenovo ThinkBook laptop at the clinic in Prizren, Kosovo. Staging (`klinika-health.ihox.net`, see [STAGING.md](STAGING.md)) and the future production cloud (slice 18c) are separate environments and live in their own runbooks.
 
-The laptop is currently in bring-up (slices 18b.2a / 18b.2b / 18b.2c / 18b.3 / 18b.4 complete). 18b.5 (Orthanc DICOM) and 18b.6 (cutover at the clinic) are the remaining slices before it becomes the live production install. Read **Architecture** first, then **What works today**, then **Day-to-day operations**. The bootstrap procedure under **Initial setup** is a record of how we got here — useful for replicating on a fresh laptop.
+The laptop is currently in bring-up (slices 18b.2a / 18b.2b / 18b.2c / 18b.3 / 18b.4 / 18b.5 complete). 18b.6 (cutover at the clinic) is the remaining slice before it becomes the live production install. Read **Architecture** first, then **What works today**, then **Day-to-day operations**. The bootstrap procedure under **Initial setup** is a record of how we got here — useful for replicating on a fresh laptop.
 
 ---
 
@@ -29,21 +29,26 @@ laptop (clinic LAN, WiFi-only today, Ethernet at clinic in 18b.6)
        │                                via /var/lib/klinika/.ssh deploy
        │                                key); kept for ops/reference, the
        │                                auto-deploy uses its own checkout
-       ├─ postgres_data/             ← bind mount, chown 999:999
-       ├─ storage/                   ← bind mount, chown 10001:10001
-       │                                (clinic logos + signatures + DICOM
-       │                                metadata once 18b.5 lands)
+       ├─ postgres_data/             ← Klinika app DB, chown 999:999
+       ├─ storage/                   ← clinic logos + signatures,
+       │                                chown 10001:10001
+       ├─ orthanc/
+       │   ├─ postgres_data/         ← Orthanc SQL index, chown 999:999
+       │   └─ storage/               ← raw DICOM bytes, chown 999:999
        └─ backup.sh.example          ← template; copy to backup.sh to
                                        activate
 
 Compose stack (project name `klinika-donetamed`):
-   ├─ klinika-donetamed-web        Next.js 15 standalone   :3000 → host 127.0.0.1:8003
-   ├─ klinika-donetamed-api        NestJS 10               :3001 (internal only)
-   └─ klinika-donetamed-postgres   Postgres 16             :5432 (internal only)
+   ├─ klinika-donetamed-web              Next.js 15 standalone   :3000 → host 127.0.0.1:8003
+   ├─ klinika-donetamed-api              NestJS 10               :3001 (internal only)
+   ├─ klinika-donetamed-postgres         Postgres 16             :5432 (internal only)
+   ├─ klinika-donetamed-orthanc          Orthanc 1.12 / image 26.4.2   DICOM :4242 (LAN), REST :8042 (internal only)
+   └─ klinika-donetamed-orthanc-postgres Postgres 16             :5432 (internal only, dedicated for Orthanc index)
 
 Networks:
    - klinika-donetamed-internal     postgres ↔ api
    - klinika-donetamed-public       api ↔ web
+   - klinika-donetamed-dicom        orthanc ↔ orthanc-postgres ↔ api
 
 External access: HTTPS via Cloudflare Tunnel only (cloudflared on the
 laptop dials out to Cloudflare's edge; nothing is published on the LAN).
@@ -62,20 +67,20 @@ The image refs are `ghcr.io/ihox/klinika-{api,web}:donetamed` — built and push
 
 ---
 
-## What works today (post-18b.4)
+## What works today (post-18b.5)
 
 - ✅ Klinika stack running on the laptop (postgres + api + web)
 - ✅ **External HTTPS via Cloudflare Tunnel** — `https://donetamed.klinika.health` reachable from anywhere
 - ✅ **Auto-deploy on push to `donetamed` branch** — CI → build → deploy → smoke test in ~5 min total
 - ✅ **Dedicated `:donetamed` image tag** built per-commit, with `:donetamed-<sha>` immutable variants for rollback
 - ✅ Tenancy resolution at the edge (Cloudflare Tunnel forwards Host header → api middleware reads subdomain)
+- ✅ **Orthanc DICOM server** — accepts C-STORE from LAN on TCP 4242 as AET `DONETAMED`; api consumes via internal REST on port 8042
 - ✅ OS hardening (UFW, fail2ban, key-only SSH, unattended-upgrades)
 - ✅ Idempotent seed (clinic + 4 users, no patients)
 
 ### Coming up (still future work)
 
-- ⏳ **18b.5** — Orthanc DICOM container + ultrasound modality integration
-- ⏳ **18b.6** — Production cutover at the clinic (physical move, ethernet, `.accdb` patient migration, Cloudflare Access for SSH, doctor onboarding)
+- ⏳ **18b.6** — Production cutover at the clinic (physical move, ethernet, `.accdb` patient migration, Cloudflare Access for SSH, doctor onboarding, ultrasound DICOM destination configured)
 - ⏳ **Production cloud (18c)** — separate environment for non-DonetaMED tenants
 
 ---
@@ -337,6 +342,112 @@ The deploy job runs on the laptop as `github-runner` (no sudo). Steps:
 
 If any step fails the deploy job fails red in the Actions UI; the previous container generation keeps running because compose only swaps containers on a successful `up -d`.
 
+### 18b.5 — Orthanc DICOM server
+
+The clinic's ultrasound machine pushes DICOM studies to a local PACS via DICOM C-STORE on port 4242. Klinika's API consumes them via Orthanc's REST API on port 8042. Both are on the laptop in dedicated containers.
+
+#### Topology
+
+```
+ultrasound (LAN)  ── DICOM C-STORE (TCP 4242, AET DONETAMED) ──▶  klinika-donetamed-orthanc
+                                                                   │
+                                                                   │  REST :8042 (internal docker net only)
+                                                                   ▼
+                                                                klinika-donetamed-api (Orthanc REST client
+                                                                       in apps/api/src/modules/dicom/)
+                                                                   │
+                                                                   ▼ Postgres index
+                                                                klinika-donetamed-orthanc-postgres
+                                                                   │
+                                                                   ▼ DICOM file bytes on filesystem
+                                                                /srv/sites/klinika-health/orthanc/storage/<dir>/<dir>/<uuid>
+```
+
+#### Containers
+
+- `klinika-donetamed-orthanc` — `orthancteam/orthanc:26.4.2`. Runs as uid 999 inside the container.
+- `klinika-donetamed-orthanc-postgres` — `postgres:16-alpine`, dedicated DB called `orthanc`. Independent of the main Klinika app DB.
+
+Both containers are on the `klinika-donetamed-dicom` docker network. The api container is **also** on that network so it can reach Orthanc REST at `http://orthanc:8042` for the image-proxy endpoints in `apps/api/src/modules/dicom/`.
+
+#### Ports + auth posture
+
+| Port | Exposure | Auth |
+|---|---|---|
+| `4242` (DICOM C-STORE) | Published on `0.0.0.0` — reachable from the clinic LAN | None (any AET accepted today; tighten at cutover — see [18b.6 checklist](#18b6--cutover-checklist-planned)) |
+| `8042` (Orthanc REST) | **Not published** — only the api container reaches it via the `dicom` docker network | `ORTHANC__AUTHENTICATION_ENABLED=false` (REST is on an internal docker network behind no host port) |
+
+⚠️ **UFW vs Docker gotcha:** UFW rules do NOT apply to Docker-published ports — Docker manipulates the iptables FORWARD chain while UFW operates on INPUT, so containerized destinations bypass UFW's filter. The `ufw allow from <RFC1918> to any port 4242` rules added in this slice are documentary; **actual exposure is LAN-only because the laptop has no public IP** (Cloudflare Tunnel is outbound-only, the LAN router doesn't forward 4242 from WAN). Hardening via the iptables `DOCKER-USER` chain is a follow-up — not blocking for v1.
+
+#### Storage layout
+
+- `/srv/sites/klinika-health/orthanc/postgres_data/` — owner `999:999`, holds the Orthanc Postgres SQL index (study/series/instance metadata, DICOM tags, etc.)
+- `/srv/sites/klinika-health/orthanc/storage/` — owner `999:999`, holds the raw DICOM bytes in Orthanc's content-addressed layout (`<hex>/<hex>/<uuid>`)
+
+DICOM bytes deliberately stay on the filesystem (`POSTGRESQL_ENABLE_STORAGE=false`). Putting hundreds of GB of DICOM blobs in Postgres bloats backups, hurts vacuum, and makes the DB the bottleneck. Index in Postgres, payload on disk.
+
+#### Env-var convention
+
+orthancteam/orthanc's `/startup/generateConfiguration.py` walks `os.environ` for keys with the `ORTHANC__` prefix. **Each level of JSON nesting becomes a double underscore.** A few examples:
+
+| Env var | Maps to JSON path |
+|---|---|
+| `ORTHANC__NAME=DonetaMED` | `"Name": "DonetaMED"` |
+| `ORTHANC__DICOM_AET=DONETAMED` | `"DicomAet": "DONETAMED"` |
+| `ORTHANC__DICOM_PORT=4242` | `"DicomPort": 4242` |
+| `ORTHANC__AUTHENTICATION_ENABLED=false` | `"AuthenticationEnabled": false` |
+| `ORTHANC__POSTGRESQL__HOST=orthanc-postgres` | `"PostgreSQL": { "Host": "orthanc-postgres" }` |
+| `ORTHANC__POSTGRESQL__ENABLE_INDEX=true` | `"PostgreSQL": { "EnableIndex": true }` |
+
+Plain `POSTGRESQL_HOST` etc. (single underscore) are **not** recognised — the script only inspects keys with the `ORTHANC__` prefix.
+
+#### Required env vars
+
+| Var | Used by | Notes |
+|---|---|---|
+| `ORTHANC_POSTGRES_PASSWORD` | compose substitution for the orthanc-postgres POSTGRES_PASSWORD and Orthanc's POSTGRESQL__PASSWORD | ≥32 hex chars; independent from `POSTGRES_PASSWORD` |
+| `ORTHANC_URL` | api container (`apps/api/src/modules/dicom/orthanc.client.ts`) | `http://orthanc:8042` over the dicom docker net |
+| `ORTHANC_WEBHOOK_SECRET` | api container (`apps/api/src/modules/dicom/dicom.controller.ts`) | Validates the `X-Klinika-Orthanc-Secret` header on Orthanc-→-Klinika webhook events. Set now even though the on-stored.lua hook isn't wired yet (future). |
+
+`ORTHANC_USERNAME` / `ORTHANC_PASSWORD` intentionally **not** set — Orthanc REST authentication is off (port 8042 is on an internal docker network). The api's Orthanc client tolerates absence: `if (user && pass)` gate, no auth header sent otherwise.
+
+#### Day-to-day Orthanc commands
+
+```bash
+# REST endpoints from inside the api container
+docker exec klinika-donetamed-api sh -c 'curl -fsS http://orthanc:8042/system | head -20'
+docker exec klinika-donetamed-api sh -c 'curl -fsS http://orthanc:8042/statistics'
+docker exec klinika-donetamed-api sh -c 'curl -fsS http://orthanc:8042/studies'
+
+# REST from any one-off container on the dicom net (e.g. for ad-hoc debugging)
+docker run --rm --network klinika-donetamed-dicom curlimages/curl:8.10.1 \
+  -fsSL http://orthanc:8042/statistics
+
+# DICOM C-ECHO from another machine on the LAN (sanity-check connectivity)
+echoscu -aet TESTSCU -aec DONETAMED <laptop-LAN-ip> 4242
+
+# DICOM C-STORE a file from another machine on the LAN
+storescu -aet ULTRASOUND -aec DONETAMED <laptop-LAN-ip> 4242 /path/to/sample.dcm
+
+# Delete a study by Orthanc ID (REST)
+docker exec klinika-donetamed-api sh -c 'curl -fsS -X DELETE http://orthanc:8042/studies/<orthanc-study-id>'
+```
+
+#### Backups
+
+The existing [`backup.sh.example`](#backup-procedure) backs up the main Klinika Postgres + storage. **Orthanc adds two new directories that ALSO need backups:**
+
+- `/srv/sites/klinika-health/orthanc/storage/` — the DICOM files themselves (can grow to hundreds of GB)
+- `/srv/sites/klinika-health/orthanc/postgres_data/` — the Orthanc index
+
+For the index it's cleaner to `pg_dump` the `orthanc` DB from inside the running container than tar the data dir. For the filesystem storage, `tar czf` of the storage dir is fine. Extend `backup.sh.example` accordingly when promoting it to `backup.sh`.
+
+#### Current security posture (to revisit at cutover)
+
+- **Any AE title is accepted** (no calling-AET allowlist). The modality just needs to know the called AET (`DONETAMED`) and the laptop's LAN IP+port. Anyone on the clinic LAN who knows those three can push studies.
+- **REST is anonymous** but unreachable from the host or LAN — only via the dicom docker network.
+- **TLS** is not configured on DICOM port 4242 (the ultrasound modality probably can't do DICOM-TLS anyway). Plaintext on the clinic LAN is the accepted v1 trade-off; consider modality-side TLS at cutover if the ultrasound supports it.
+
 ---
 
 ## Required env vars
@@ -351,6 +462,9 @@ See [`.env.donetamed.example`](../.env.donetamed.example) for the full annotated
 | `SEED_DOCTOR_PASSWORD` | same |
 | `SEED_RECEPTIONIST_PASSWORD` | same |
 | `SEED_CLINIC_ADMIN_PASSWORD` | same |
+| `ORTHANC_POSTGRES_PASSWORD` | ≥32 hex chars, independent from `POSTGRES_PASSWORD`. See [18b.5 — Orthanc DICOM](#18b5--orthanc-dicom-server). |
+| `ORTHANC_URL` | Defaults to `http://orthanc:8042` (internal docker net). Used by `apps/api/src/modules/dicom/orthanc.client.ts`. |
+| `ORTHANC_WEBHOOK_SECRET` | ≥32 hex chars. Validates the `X-Klinika-Orthanc-Secret` header on Orthanc-→-Klinika webhook events. Set even though the hook isn't wired yet. |
 
 Defaults that should be reviewed before first deploy:
 
@@ -573,7 +687,7 @@ kc up -d api
 |---|---|
 | ✅ 18b.3 | Cloudflare Tunnel for external HTTPS — DONE, see [18b.3 section above](#18b3--cloudflare-tunnel-for-external-https) |
 | ✅ 18b.4 | Self-hosted runner + auto-deploy + dedicated `:donetamed` image tag — DONE, see [18b.4 section above](#18b4--self-hosted-runner--auto-deploy) |
-| 18b.5 | Orthanc DICOM container, ultrasound modality push, image proxy through the api |
+| ✅ 18b.5 | Orthanc DICOM server, infra-only (no app-code changes; api's pre-existing Orthanc client wires up via `ORTHANC_URL`) — DONE, see [18b.5 section above](#18b5--orthanc-dicom-server) |
 | 18b.6 | Production cutover at the clinic (see checklist below) |
 
 ### 18b.6 — Cutover checklist (planned)
@@ -581,7 +695,15 @@ kc up -d api
 The day the laptop physically moves to the clinic and starts serving real patients. Each item below should be a runnable step with no ambiguity by the time we get there.
 
 - [ ] **Static IP on the laptop's Ethernet interface** (currently WiFi-only; clinic LAN gives DHCP today, but a static lease keeps cloudflared / fail2ban / backups consistent across reboots). Configure via `netplan`.
-- [ ] **Connect ultrasound to the clinic LAN**, configure its DICOM destination to send to the laptop's static IP on **port 4242** (Orthanc C-STORE port — landed in 18b.5).
+- [ ] **Connect ultrasound to the clinic LAN**, configure its DICOM destination on the modality. Settings to enter into the ultrasound's DICOM config page:
+  - **Called AE Title (AEC)**: `DONETAMED`
+  - **Host**: the laptop's static LAN IP at the clinic
+  - **Port**: `4242`
+  - **Transfer syntax**: any (Orthanc accepts all)
+  - **Calling AE Title (AET)**: anything — Orthanc accepts any calling AET today (tighten via a `ORTHANC__DICOM_MODALITIES` allowlist after we know the modality's actual AET)
+  Sanity-check from another machine on the clinic LAN with `echoscu -aet TESTSCU -aec DONETAMED <laptop-IP> 4242` before pointing the real ultrasound at it.
+- [ ] **Tighten Orthanc DICOM AET allowlist** — once the ultrasound is verified pushing studies, add `ORTHANC__DICOM_ALWAYS_ALLOW_STORE=false` and an explicit modality entry under `ORTHANC__DICOM_MODALITIES` so only the registered ultrasound can C-STORE.
+- [ ] **Add the DOCKER-USER chain belt-and-suspenders** for DICOM port 4242: UFW's allow-from-RFC1918 rules are documentary because Docker bypasses UFW's INPUT chain. Add explicit `iptables -I DOCKER-USER` DROP rules for non-RFC1918 sources OR rebind the compose port to the laptop's specific LAN IP (`<lan-ip>:4242:4242` instead of `0.0.0.0:4242:4242`).
 - [ ] **Run patient migration** with the fresh `.accdb` exported from the clinic's existing system:
   ```bash
   cd tools/migrate
@@ -625,8 +747,11 @@ The day the laptop physically moves to the clinic and starts serving real patien
 | Compose file (canonical) | [infra/compose/docker-compose.donetamed.yml](compose/docker-compose.donetamed.yml) on the `donetamed` branch |
 | Auto-deploy workflow | `.github/workflows/deploy-donetamed.yml` (lives on both `main` and `donetamed`; identical content) |
 | Environment + secrets | `/srv/sites/klinika-health/.env` on the laptop only — gitignored |
-| Database files | `/srv/sites/klinika-health/postgres_data` (uid 999) |
+| Database files (Klinika app) | `/srv/sites/klinika-health/postgres_data` (uid 999) |
 | Clinic logos + signatures | `/srv/sites/klinika-health/storage` (uid 10001) |
+| DICOM files (Orthanc payload) | `/srv/sites/klinika-health/orthanc/storage/` (uid 999) |
+| Orthanc SQL index | `/srv/sites/klinika-health/orthanc/postgres_data/` (uid 999) |
+| Orthanc DICOM AET / port / hostname | AET `DONETAMED` / TCP 4242 / laptop's LAN IP. Set via `ORTHANC__DICOM_AET` / `ORTHANC__DICOM_PORT` in compose. |
 | Repo clone (ops/reference) | `/srv/sites/klinika-health/repo` (donetamed branch, read-only deploy key) |
 | Runner work tree | `/opt/actions-runner/_work/klinika.health/klinika.health/` (recreated per job) |
 | Runner credentials | `/opt/actions-runner/.credentials*` (scoped behind 0750 parent dir) |
@@ -639,7 +764,9 @@ The day the laptop physically moves to the clinic and starts serving real patien
 
 ## What's NOT here yet (planned)
 
-- Orthanc + DICOM — 18b.5
+- **Orthanc → Klinika webhook wiring** — the on-stored.lua hook that POSTs to `/api/dicom/internal/orthanc-event` on every stored DICOM. The webhook secret is already in `.env` (`ORTHANC_WEBHOOK_SECRET`); flipping it on is a config + Lua script change.
+- **DICOM AET allowlist** — today Orthanc accepts C-STORE from any calling AET. Tighten at cutover (see [18b.6 checklist](#18b6--cutover-checklist-planned)).
+- **DOCKER-USER iptables hardening** — currently relying on the laptop having no public IP. Cutover follow-up.
 - `.accdb` patient migration — cutover-day procedure (18b.6)
 - Cloudflare Access for SSH — 18b.6 (so the laptop can be SSHed from outside the clinic LAN)
 - Static IP / Ethernet on the laptop — 18b.6 (the clinic move)
