@@ -12,13 +12,20 @@ name: Deploy Staging
 # is the slug — that's the entire payload this workflow ships.
 
 on:
-  push:
+  # Gated on CI success: the deploy fires only after the CI workflow
+  # on `main` finishes green. A red or cancelled CI run leaves staging
+  # on its previous version. `workflow_dispatch` stays as the manual
+  # escape hatch — it ignores CI state entirely (intended for
+  # hot-fixes when CI has a known-bad unrelated failure).
+  #
+  # Note: `workflow_run` triggers don't support `paths-ignore`. CI
+  # itself runs on every main push, so doc-only commits will still
+  # cycle through CI → deploy. Acceptable cost — the deploy is fast
+  # (~2m) and idempotent.
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
     branches: [main]
-    paths-ignore:
-      - 'docs/**'
-      - '**.md'
-      - 'design-reference/prototype/**'
-      - 'tools/migrate/**'
   workflow_dispatch:
 
 concurrency:
@@ -32,7 +39,14 @@ permissions:
 jobs:
   deploy:
     name: Build images + trigger VM deploy
-    if: github.ref == 'refs/heads/main'
+    # Run on manual trigger OR when the upstream CI run on main
+    # completed successfully. The ref check is belt-and-suspenders
+    # for workflow_dispatch (which lets the operator pick a branch
+    # in the Actions UI).
+    if: |
+      github.ref == 'refs/heads/main' &&
+      (github.event_name == 'workflow_dispatch' ||
+       github.event.workflow_run.conclusion == 'success')
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment:

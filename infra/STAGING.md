@@ -283,9 +283,20 @@ All on-VM commands run as the `deploy` user from `/srv/sites/klinika-health/`. C
 
 ### Trigger a deploy
 
-Pushing to `main` triggers `deploy-staging.yml` automatically. To re-run manually (e.g. after fixing NPM/DNS):
+Deploys are **gated on CI passing**. Pushing to `main` triggers the
+`CI` workflow first; only when CI completes green does
+`deploy-staging.yml` fire. If you push with red CI, staging stays
+on its previous version — no auto-deploy.
+
+To deploy anyway (emergency hot-fix, CI infrastructure issue, or
+any case where you've confirmed the red CI is unrelated to the
+deploy artifact):
 
 > Actions → Deploy Staging → Run workflow → main
+
+Manual triggers bypass the CI gate entirely. Use them sparingly —
+the gate exists to keep staging from regressing on top of a broken
+main.
 
 The workflow builds the api + web images, pushes them to GHCR, then SSHes the dispatcher (`ssh -p 101 deploy@80.108.9.40 klinika-health`) which pulls, migrates, and brings the stack up.
 
