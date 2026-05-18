@@ -377,7 +377,7 @@ Both containers are on the `klinika-donetamed-dicom` docker network. The api con
 | `4242` (DICOM C-STORE) | Published on `0.0.0.0` — reachable from the clinic LAN | None (any AET accepted today; tighten at cutover — see [18b.6 checklist](#18b6--cutover-checklist-planned)) |
 | `8042` (Orthanc REST) | **Not published** — only the api container reaches it via the `dicom` docker network | `ORTHANC__AUTHENTICATION_ENABLED=false` (REST is on an internal docker network behind no host port) |
 
-⚠️ **UFW vs Docker gotcha:** UFW rules do NOT apply to Docker-published ports — Docker manipulates the iptables FORWARD chain while UFW operates on INPUT, so containerized destinations bypass UFW's filter. The `ufw allow from <RFC1918> to any port 4242` rules added in this slice are documentary; **actual exposure is LAN-only because the laptop has no public IP** (Cloudflare Tunnel is outbound-only, the LAN router doesn't forward 4242 from WAN). Hardening via the iptables `DOCKER-USER` chain is a follow-up — not blocking for v1.
+⚠️ **UFW vs Docker gotcha:** UFW rules do NOT apply to Docker-published ports — Docker manipulates the iptables FORWARD chain while UFW operates on INPUT, so containerized destinations bypass UFW's filter. The `ufw allow from <RFC1918> to any port 4242` rules added in this slice are documentary; the **real LAN-only enforcement** lives in the `DOCKER-USER` iptables chain — see [DOCKER-USER iptables enforcement](#docker-user-iptables-enforcement-lan-only-published-ports).
 
 #### Storage layout
 
@@ -673,11 +673,59 @@ kc up -d api
 
 - **No disk encryption (accepted risk).** The laptop ships with no LUKS / no full-disk encryption. Physical security responsibility sits at the clinic — locked office during off-hours, the laptop never leaves the premises. Patient data on disk is therefore protected only by Linux permissions; an attacker with physical boot access can read everything. Reconsider once we can dedicate a maintenance window for the LUKS conversion.
 - **SSH** — key-only auth, no root login, fail2ban watching the sshd journal. UFW limits port 22 to RFC1918 (10/8, 172.16/12, 192.168/16). Once 18b.6 happens, the clinic LAN's WAN-side will not reach port 22 anyway; **Cloudflare Access for SSH** (planned in 18b.6) is the off-LAN management path.
-- **Docker** — UFW does NOT see Docker's iptables rules by default. The compose file binds the web port to **127.0.0.1 only**; api + postgres have no host port mapping at all. Cloudflare Tunnel is the only external ingress.
+- **Docker** — UFW does NOT see Docker's iptables rules by default. The compose file binds the web port to **127.0.0.1 only**; api + postgres have no host port mapping at all. Cloudflare Tunnel is the only external ingress. For the one port that IS published on `0.0.0.0` (Orthanc DICOM 4242), real LAN-only enforcement lives in the `DOCKER-USER` iptables chain — see [DOCKER-USER iptables enforcement](#docker-user-iptables-enforcement-lan-only-published-ports) below.
 - **Cloudflare Tunnel** — outbound-only QUIC, no inbound rule needed. The tunnel token lives in `/etc/cloudflared/cloudflared.env` mode `0600 root:root`; the systemd unit reads it via `EnvironmentFile`, NOT as a `--token` CLI flag, so the token is **absent from `ps -ef`** and `/proc/<pid>/cmdline`. See [18b.3 — Cloudflare Tunnel](#18b3--cloudflare-tunnel-for-external-https) for the hardening detail.
 - **Secrets at rest** — `.env` is `0640 root:klinika`, GHCR config is `0600`, deploy key is `0600 klinika:klinika`, tunnel env file is `0600 root:root`, runner credentials are inside `0750 github-runner:github-runner` dir.
 - **GitHub Actions runner** — runs as `github-runner` (uid 995) with `docker` + `klinika` group membership and **no sudo**. The runner has docker-sock access, which is root-equivalent on this host. Treat any compromise of the GitHub repo or the runner credentials as a host-level breach. Runner credentials at `/opt/actions-runner/.credentials*` are scoped behind the `0750` parent dir.
 - **Auto-updates** — `unattended-upgrades` installs Ubuntu security + ESM updates automatically. `Automatic-Reboot=false` so an unexpected reboot can't take the clinic off-line mid-day; the admin reboots manually outside 10:00–18:00.
+
+### DOCKER-USER iptables enforcement (LAN-only published ports)
+
+UFW operates on the `INPUT` chain; Docker manipulates `FORWARD`. Traffic that arrives on the host's external interface destined for a Docker-published port goes through `PREROUTING → FORWARD → DOCKER-USER → DOCKER → container` — **never `INPUT`** — so UFW rules for those ports are advisory only. The `DOCKER-USER` chain runs BEFORE Docker's own `DOCKER` chain and is the supported hook for restricting traffic to published ports.
+
+Rules currently installed (`sudo iptables -L DOCKER-USER -n -v`):
+
+```
+1  RETURN  docker0 *  0.0.0.0/0  0.0.0.0/0                                  /* docker0 bridge */
+2  RETURN  *       *  192.168.0.0/16  0.0.0.0/0                             /* RFC1918 192.168/16 */
+3  RETURN  *       *  172.16.0.0/12   0.0.0.0/0                             /* RFC1918 172.16/12 */
+4  RETURN  *       *  10.0.0.0/8      0.0.0.0/0                             /* RFC1918 10/8 (clinic LAN) */
+5  RETURN  lo      *  0.0.0.0/0       0.0.0.0/0                             /* loopback */
+6  RETURN  *       *  0.0.0.0/0       0.0.0.0/0    state RELATED,ESTABLISHED /* established/related */
+7  DROP    *       *  0.0.0.0/0       0.0.0.0/0                             /* drop non-RFC1918 to docker-published ports */
+```
+
+Semantics: any RETURN drops out of `DOCKER-USER` and the packet proceeds to the regular `DOCKER` filter chain (which accepts traffic to published ports). Rule 7 catches anything that didn't match a RETURN — public-internet sources hitting any Docker-published port will be silently dropped.
+
+**Why this matters today:** the laptop has no public IP, so in practice nothing illegitimate reaches port 4242 anyway (the LAN router doesn't forward WAN→4242). The DOCKER-USER rules are belt-and-suspenders for the day the laptop gains a public address by accident — a misconfigured router, an unauthenticated VPN tunnel, an ISP DHCP delivering a routable IP, etc.
+
+**Persistence:** rules are saved in `/etc/iptables/rules.v4` via `iptables-persistent` (package `iptables-persistent`, service `netfilter-persistent`, both `enabled` for boot). Survives reboot. Verified by `sudo systemctl restart netfilter-persistent` followed by `sudo iptables -L DOCKER-USER -n -v` — same rules come back.
+
+**To add a new Docker-published port:** no DOCKER-USER change needed; the existing RFC1918-allow + default-DROP applies to every Docker port. Just publish the port in compose.
+
+**To make an exception** (e.g. expose a specific port to a single non-RFC1918 IP), add a more specific RETURN rule BEFORE rule 7:
+
+```bash
+sudo iptables -I DOCKER-USER 1 -p tcp -s 203.0.113.42 --dport 4242 -j RETURN \
+  -m comment --comment "exception: monitoring scanner"
+sudo netfilter-persistent save
+```
+
+**To inspect packet hits** (audit which rules are getting matched):
+
+```bash
+sudo iptables -L DOCKER-USER -n -v --line-numbers
+# pkts/bytes columns show traffic that matched each rule
+```
+
+**To recover** if a rule change breaks things and SSH is still up:
+
+```bash
+sudo iptables -F DOCKER-USER          # flush all rules in the chain
+sudo netfilter-persistent save        # persist the flushed state (or leave unsaved until reboot)
+```
+
+SSH itself is not Docker-published (port 22 is host sshd), so DOCKER-USER cannot lock you out of SSH.
 
 ---
 
@@ -703,7 +751,6 @@ The day the laptop physically moves to the clinic and starts serving real patien
   - **Calling AE Title (AET)**: anything — Orthanc accepts any calling AET today (tighten via a `ORTHANC__DICOM_MODALITIES` allowlist after we know the modality's actual AET)
   Sanity-check from another machine on the clinic LAN with `echoscu -aet TESTSCU -aec DONETAMED <laptop-IP> 4242` before pointing the real ultrasound at it.
 - [ ] **Tighten Orthanc DICOM AET allowlist** — once the ultrasound is verified pushing studies, add `ORTHANC__DICOM_ALWAYS_ALLOW_STORE=false` and an explicit modality entry under `ORTHANC__DICOM_MODALITIES` so only the registered ultrasound can C-STORE.
-- [ ] **Add the DOCKER-USER chain belt-and-suspenders** for DICOM port 4242: UFW's allow-from-RFC1918 rules are documentary because Docker bypasses UFW's INPUT chain. Add explicit `iptables -I DOCKER-USER` DROP rules for non-RFC1918 sources OR rebind the compose port to the laptop's specific LAN IP (`<lan-ip>:4242:4242` instead of `0.0.0.0:4242:4242`).
 - [ ] **Run patient migration** with the fresh `.accdb` exported from the clinic's existing system:
   ```bash
   cd tools/migrate
@@ -766,7 +813,6 @@ The day the laptop physically moves to the clinic and starts serving real patien
 
 - **Orthanc → Klinika webhook wiring** — the on-stored.lua hook that POSTs to `/api/dicom/internal/orthanc-event` on every stored DICOM. The webhook secret is already in `.env` (`ORTHANC_WEBHOOK_SECRET`); flipping it on is a config + Lua script change.
 - **DICOM AET allowlist** — today Orthanc accepts C-STORE from any calling AET. Tighten at cutover (see [18b.6 checklist](#18b6--cutover-checklist-planned)).
-- **DOCKER-USER iptables hardening** — currently relying on the laptop having no public IP. Cutover follow-up.
 - `.accdb` patient migration — cutover-day procedure (18b.6)
 - Cloudflare Access for SSH — 18b.6 (so the laptop can be SSHed from outside the clinic LAN)
 - Static IP / Ethernet on the laptop — 18b.6 (the clinic move)
