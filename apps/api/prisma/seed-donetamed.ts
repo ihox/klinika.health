@@ -140,11 +140,11 @@ async function seedClinicUsers(clinicId: string): Promise<void> {
   const clinicAdminPassword = readEnvOrThrow('SEED_CLINIC_ADMIN_PASSWORD');
 
   await prisma.user.upsert({
-    where: { email: 'taulant@donetamed.com' },
+    where: { email: 'taulant@klinika.health' },
     update: { roles: ['doctor'] },
     create: {
       clinicId,
-      email: 'taulant@donetamed.com',
+      email: 'taulant@klinika.health',
       passwordHash: await hashPassword(doctorPassword),
       roles: ['doctor'],
       firstName: 'Taulant',
@@ -157,11 +157,11 @@ async function seedClinicUsers(clinicId: string): Promise<void> {
   });
 
   await prisma.user.upsert({
-    where: { email: 'albina@donetamed.com' },
+    where: { email: 'albina@klinika.health' },
     update: { roles: ['receptionist'] },
     create: {
       clinicId,
-      email: 'albina@donetamed.com',
+      email: 'albina@klinika.health',
       passwordHash: await hashPassword(receptionistPassword),
       roles: ['receptionist'],
       firstName: 'Albina',
@@ -174,11 +174,11 @@ async function seedClinicUsers(clinicId: string): Promise<void> {
   });
 
   await prisma.user.upsert({
-    where: { email: 'admin@donetamed.com' },
+    where: { email: 'donetamed-admin@klinika.health' },
     update: { roles: ['clinic_admin'] },
     create: {
       clinicId,
-      email: 'admin@donetamed.com',
+      email: 'donetamed-admin@klinika.health',
       passwordHash: await hashPassword(clinicAdminPassword),
       roles: ['clinic_admin'],
       firstName: 'Klinika',

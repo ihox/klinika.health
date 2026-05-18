@@ -82,7 +82,7 @@ RUN printf '%s\n' \
 # Real invocations override these — see migrate.sh on the laptop.
 ENV ACCDB_PATH=/data/PEDIATRIA.accdb \
     CLINIC_SUBDOMAIN=donetamed \
-    MIGRATION_USER_EMAIL=taulant@donetamed.com \
+    MIGRATION_USER_EMAIL=taulant@klinika.health \
     DATABASE_URL=postgresql://klinika:replace_me@klinika-donetamed-postgres:5432/klinika
 
 ENTRYPOINT ["python", "/app/migrate.py"]
