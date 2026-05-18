@@ -154,8 +154,29 @@ services:
       ORTHANC__POSTGRESQL__PASSWORD: ${ORTHANC_POSTGRES_PASSWORD}
       ORTHANC__POSTGRESQL__ENABLE_INDEX: "true"
       ORTHANC__POSTGRESQL__ENABLE_STORAGE: "false"
+      # Lua hook — OnStoredInstance posts a webhook to Klinika's API
+      # for every received DICOM instance so the bridge can index
+      # studies in dicom_studies. setConfig parses the value via
+      # json.loads first, so an env-encoded JSON array works.
+      # See infra/compose/orthanc/on-stored.lua + DONETAMED.md §
+      # On-stored webhook flow.
+      ORTHANC__LUA_SCRIPTS: '["/etc/orthanc/lua-scripts/on-stored.lua"]'
+      # Read by the Lua hook via `os.getenv`. NOT processed by
+      # orthancteam's configurator (no ORTHANC__ prefix); just lives
+      # in the container env. The endpoint is on the internal `dicom`
+      # docker network; the Host header in the Lua hook is what lets
+      # Klinika's ClinicResolutionMiddleware resolve the tenant.
+      ORTHANC_WEBHOOK_URL: http://api:3001/api/dicom/internal/orthanc-event
+      # Passthrough of the laptop .env value. Even though the env var
+      # name ends in _SECRET (which the configurator interprets as a
+      # docker-secrets file-path mapping), the file-path-load only
+      # fires for paths actually present under /run/secrets/, so the
+      # configurator emits one info-level log line and otherwise
+      # ignores it. Lua's os.getenv still returns the real value.
+      ORTHANC_WEBHOOK_SECRET: ${ORTHANC_WEBHOOK_SECRET}
     volumes:
       - /srv/sites/klinika-health/orthanc/storage:/var/lib/orthanc/db
+      - ./orthanc/on-stored.lua:/etc/orthanc/lua-scripts/on-stored.lua:ro
     networks:
       - dicom
     ports:

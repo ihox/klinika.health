@@ -17,7 +17,15 @@
 -- directly).
 
 function OnStoredInstance(instanceId, tags, metadata)
-  local studyId = metadata['ParentStudy']
+  -- Orthanc's OnStoredInstance `metadata` table only contains the
+  -- transfer-context fields (RemoteAet, RemoteIP, CalledAet, etc.) —
+  -- the parent study is not in there. Walk Instance → Study via
+  -- Orthanc's in-process REST. The `/instances/<id>/study` shortcut
+  -- returns the Study object directly (one hop, not two). Wired in
+  -- 18b.5d; the existing receiver-side integration tests stub the
+  -- payload, so this Lua path had never run against a live Orthanc.
+  local study = ParseJson(RestApiGet('/instances/' .. instanceId .. '/study'))
+  local studyId = study['ID']
   if studyId == nil then
     return
   end
@@ -36,6 +44,14 @@ function OnStoredInstance(instanceId, tags, metadata)
 
   local headers = {}
   headers['Content-Type'] = 'application/json'
+  -- The TCP destination is api:3001 over the internal `dicom` docker
+  -- network, but Klinika's ClinicResolutionMiddleware resolves the
+  -- tenant from the HTTP Host header. Forcing the public hostname
+  -- here lets the webhook land in the donetamed clinic's request
+  -- context. Hardcoded because this Lua script ships with the
+  -- donetamed compose file (per-clinic deployment; see
+  -- infra/DONETAMED.md § On-stored webhook flow).
+  headers['Host'] = 'donetamed.klinika.health'
   if webhookSecret ~= nil and webhookSecret ~= '' then
     headers['X-Klinika-Orthanc-Secret'] = webhookSecret
   end
