@@ -64,6 +64,7 @@ services:
     networks:
       - internal
       - public
+      - dicom
     # No host port mapping — only the web container reaches it via the
     # public network.
 
@@ -85,10 +86,94 @@ services:
       # and forwards to 127.0.0.1:8003 on the same host.
       - "127.0.0.1:8003:3000"
 
+  # ------------------------------------------------------------------
+  # Orthanc — DICOM PACS for the clinic's ultrasound machine.
+  # Slice 18b.5. Backed by a dedicated Postgres (separate from the
+  # Klinika app DB) holding the SQL metadata index; DICOM bytes
+  # themselves stay on the filesystem under
+  # /srv/sites/klinika-health/orthanc/storage so backups can tar them
+  # directly without dumping multi-GB blobs through Postgres.
+  #
+  # Orthanc REST API (port 8042) is NOT exposed to the host — only the
+  # klinika-donetamed-api container reaches it via the `dicom` network.
+  # DICOM C-STORE (port 4242) is published on all interfaces; UFW
+  # restricts it to RFC1918 sources (clinic LAN only).
+  # ------------------------------------------------------------------
+  orthanc-postgres:
+    image: postgres:16-alpine
+    container_name: klinika-donetamed-orthanc-postgres
+    restart: unless-stopped
+    environment:
+      TZ: Europe/Belgrade
+      PGTZ: Europe/Belgrade
+      POSTGRES_DB: orthanc
+      POSTGRES_USER: orthanc
+      POSTGRES_PASSWORD: ${ORTHANC_POSTGRES_PASSWORD}
+    volumes:
+      - /srv/sites/klinika-health/orthanc/postgres_data:/var/lib/postgresql/data
+    networks:
+      - dicom
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U orthanc -d orthanc"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  orthanc:
+    image: orthancteam/orthanc:26.4.2
+    container_name: klinika-donetamed-orthanc
+    restart: unless-stopped
+    environment:
+      TZ: Europe/Belgrade
+      # Orthanc reads ORTHANC__<JSON_KEY> env vars and merges them into
+      # /tmp/orthanc.json at boot. Authoritative env-var docs:
+      # https://orthanc.uclouvain.be/book/users/docker.html#environment-variables
+      ORTHANC__NAME: "DonetaMED"
+      # DICOM AET is hard-capped at 16 chars per DICOM PS3.5 §6.2.
+      # "DONETAMED" leaves headroom for future suffixes if needed.
+      ORTHANC__DICOM_AET: "DONETAMED"
+      ORTHANC__DICOM_PORT: "4242"
+      # Authentication off — Orthanc REST never leaves the docker
+      # `dicom` network. DICOM port 4242 is reachable on the clinic LAN
+      # but DICOM is its own auth (calling-AET allowlist; today we
+      # accept any AET, to be tightened at cutover).
+      ORTHANC__AUTHENTICATION_ENABLED: "false"
+      ORTHANC__REMOTE_ACCESS_ALLOWED: "true"
+      # Postgres backend — INDEX in Postgres for transactional safety,
+      # raw DICOM bytes on the filesystem (vs putting hundreds of GB
+      # of blobs in the SQL DB). See infra/DONETAMED.md § 18b.5.
+      #
+      # Env var naming is ORTHANC__<JSON_KEY>__<SUB_KEY> per the
+      # orthancteam/orthanc image's /startup/generateConfiguration.py
+      # which walks os.environ for ORTHANC__-prefixed keys. The
+      # PostgreSQL plugin auto-enables when its config keys are set.
+      ORTHANC__POSTGRESQL__HOST: orthanc-postgres
+      ORTHANC__POSTGRESQL__PORT: "5432"
+      ORTHANC__POSTGRESQL__DATABASE: orthanc
+      ORTHANC__POSTGRESQL__USERNAME: orthanc
+      ORTHANC__POSTGRESQL__PASSWORD: ${ORTHANC_POSTGRES_PASSWORD}
+      ORTHANC__POSTGRESQL__ENABLE_INDEX: "true"
+      ORTHANC__POSTGRESQL__ENABLE_STORAGE: "false"
+    volumes:
+      - /srv/sites/klinika-health/orthanc/storage:/var/lib/orthanc/db
+    networks:
+      - dicom
+    ports:
+      # DICOM C-STORE — published on all host interfaces. UFW restricts
+      # source addresses to RFC1918 (clinic LAN). REST port 8042 is
+      # deliberately NOT published.
+      - "0.0.0.0:4242:4242"
+    depends_on:
+      orthanc-postgres:
+        condition: service_healthy
+
 networks:
   internal:
     name: klinika-donetamed-internal
     driver: bridge
   public:
     name: klinika-donetamed-public
+    driver: bridge
+  dicom:
+    name: klinika-donetamed-dicom
     driver: bridge
