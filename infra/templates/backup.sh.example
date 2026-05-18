@@ -1,0 +1,79 @@
+#!/bin/bash
+# Klinika DonetaMED backup script template.
+# Canonical copy: infra/templates/backup.sh.example in the repo.
+# Deployed copy:  /srv/sites/klinika-health/backup.sh.example on the laptop
+#                 (then `cp ... backup.sh && chmod +x` to activate).
+#
+# SCOPE — what this script DOES back up:
+#   1. Klinika Postgres dump (app DB: patients, visits, users, etc.)
+#   2. Orthanc Postgres dump (DICOM metadata index)
+#   3. Klinika /storage tarball (clinic logos + doctor signatures)
+#   4. .env + docker-compose.donetamed.yml (disaster-recovery config)
+#
+# SCOPE — what this script DELIBERATELY does NOT back up:
+#   • Orthanc DICOM files at /srv/sites/klinika-health/orthanc/storage/
+#     Reason: ~150 GB/year growth at clinic scale makes daily inclusion
+#     impractical (each backup would balloon to multi-GB, and 14 daily
+#     copies × 150 GB = 2.1 TB).
+#     Operator's responsibility to sync this directory to external
+#     storage (USB drive / NAS) on a slower schedule — see
+#     infra/DONETAMED.md § Backup procedure.
+#
+# Activate by copying to backup.sh, chmod +x, and either invoke
+# manually or add a root cron entry:
+#   30 2 * * *  /srv/sites/klinika-health/backup.sh >> /var/log/klinika-backup.log 2>&1
+#
+# Retention: last 14 days kept locally. Off-site (Backblaze B2 via
+# restic) is intentionally NOT included here — that lands in a later
+# slice once the credentials are provisioned.
+
+set -euo pipefail
+
+BACKUP_DIR="${1:-/var/backups/klinika-donetamed}"
+TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+TARGET="$BACKUP_DIR/$TIMESTAMP"
+
+mkdir -p "$TARGET"
+chmod 0700 "$TARGET"
+
+# 1. Klinika Postgres dump (uncompressed SQL — typically <100 MB)
+docker exec klinika-donetamed-postgres \
+    pg_dump -U klinika -d klinika \
+  > "$TARGET/klinika.sql"
+
+# 2. Orthanc Postgres dump (DICOM metadata index — typically <50 MB
+#    even after years of studies; the bulk of DICOM data is the
+#    filesystem bytes which we explicitly skip below)
+docker exec klinika-donetamed-orthanc-postgres \
+    pg_dump -U orthanc -d orthanc \
+  > "$TARGET/orthanc.sql"
+
+# 3. Klinika /storage (uploads: patient files, clinic logos,
+#    doctor signatures). Note: bind-mount path on host is
+#    /srv/sites/klinika-health/storage, NOT /srv/sites/klinika-health/orthanc/storage
+tar czf "$TARGET/storage.tar.gz" -C /srv/sites/klinika-health storage
+
+# 4. Compose config + env (for disaster recovery; .env carries
+#    POSTGRES_PASSWORD, AUTH_SECRET, ORTHANC_POSTGRES_PASSWORD,
+#    so keep this archive at 0700 — already set above)
+cp /srv/sites/klinika-health/.env "$TARGET/.env"
+cp /srv/sites/klinika-health/repo/infra/compose/docker-compose.donetamed.yml \
+   "$TARGET/docker-compose.donetamed.yml"
+chmod 0600 "$TARGET/.env"
+
+# 5. EXPLICITLY NOT BACKED UP — Orthanc DICOM payload
+#    Path: /srv/sites/klinika-health/orthanc/storage/
+#    Recommended out-of-band procedure (operator runs on USB drive /
+#    NAS rotation):
+#      rsync -a --delete /srv/sites/klinika-health/orthanc/storage/ \
+#        /mnt/backup-usb/orthanc-storage/
+#    The Orthanc Postgres dump (step 2) is the metadata needed to
+#    reattach files on restore — Orthanc rescans the storage dir on
+#    startup and reconciles against the index.
+
+echo "Backup complete: $TARGET ($(du -sh "$TARGET" | cut -f1))"
+echo "REMINDER: Orthanc DICOM storage (/srv/sites/klinika-health/orthanc/storage/) is NOT included."
+echo "          Sync that directory manually to external storage on a separate cadence."
+
+# Retention: keep last 14 days
+find "$BACKUP_DIR" -maxdepth 1 -type d -mtime +14 -exec rm -rf {} \;

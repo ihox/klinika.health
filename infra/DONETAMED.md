@@ -435,12 +435,10 @@ docker exec klinika-donetamed-api sh -c 'curl -fsS -X DELETE http://orthanc:8042
 
 #### Backups
 
-The existing [`backup.sh.example`](#backup-procedure) backs up the main Klinika Postgres + storage. **Orthanc adds two new directories that ALSO need backups:**
+Two tracks — see [Backup procedure](#backup-procedure) for the full strategy:
 
-- `/srv/sites/klinika-health/orthanc/storage/` — the DICOM files themselves (can grow to hundreds of GB)
-- `/srv/sites/klinika-health/orthanc/postgres_data/` — the Orthanc index
-
-For the index it's cleaner to `pg_dump` the `orthanc` DB from inside the running container than tar the data dir. For the filesystem storage, `tar czf` of the storage dir is fine. Extend `backup.sh.example` accordingly when promoting it to `backup.sh`.
+- **Track A (daily, scripted):** `pg_dump` of the Orthanc Postgres index → included in `backup.sh.example`.
+- **Track B (weekly-ish, manual):** rsync of `/srv/sites/klinika-health/orthanc/storage/` (raw DICOM bytes) to external storage — deliberately excluded from the script because ~150 GB/year growth would blow up daily archive size.
 
 #### Current security posture (to revisit at cutover)
 
@@ -597,7 +595,19 @@ sudo -u klinika docker exec -it klinika-donetamed-postgres \
 
 ## Backup procedure
 
-Template at [`/srv/sites/klinika-health/backup.sh.example`](file:///srv/sites/klinika-health/backup.sh.example). To activate:
+Two tracks running on different cadences:
+
+### Track A — daily, automatic, small data (the script)
+
+Canonical copy in repo: [`infra/templates/backup.sh.example`](templates/backup.sh.example). Deployed copy on the laptop at `/srv/sites/klinika-health/backup.sh.example` (mode `0644 root:root`, **not executable** until the operator activates it).
+
+What it captures (each daily archive typically <200 MB):
+1. **Klinika Postgres dump** — `pg_dump -U klinika -d klinika` from inside `klinika-donetamed-postgres`
+2. **Orthanc Postgres dump** — `pg_dump -U orthanc -d orthanc` from inside `klinika-donetamed-orthanc-postgres` (DICOM metadata index — study/series/instance tags, NOT the DICOM bytes themselves)
+3. **Klinika `/storage` tarball** — clinic logos + doctor signatures from `/srv/sites/klinika-health/storage/`
+4. **`.env` + `docker-compose.donetamed.yml`** — disaster-recovery config (the archive's `.env` is chmod 0600 because it holds POSTGRES_PASSWORD / AUTH_SECRET / ORTHANC_POSTGRES_PASSWORD)
+
+Activate:
 
 ```bash
 sudo cp /srv/sites/klinika-health/backup.sh.example \
@@ -606,17 +616,60 @@ sudo chmod +x /srv/sites/klinika-health/backup.sh
 sudo /srv/sites/klinika-health/backup.sh    # manual run
 ```
 
-What it captures (each daily archive ~5–500 MB depending on DICOM):
-- Postgres dump (`pg_dump -U klinika -d klinika`)
-- `/srv/sites/klinika-health/storage` tarball (logos + signatures)
-- A copy of `.env` and `docker-compose.donetamed.yml` for disaster recovery
-
-Retention: last 14 days locally. Off-site (Backblaze B2 via restic) is intentionally not in v1 — that lands in a later slice once credentials are provisioned.
-
-To run nightly at 02:30 add to root cron:
+Schedule nightly at 02:30 via root cron:
 
 ```cron
 30 2 * * *  /srv/sites/klinika-health/backup.sh >> /var/log/klinika-backup.log 2>&1
+```
+
+Retention: last 14 days locally. Off-site (Backblaze B2 via restic) is intentionally not in v1 — that lands in a later slice once credentials are provisioned.
+
+### Track B — manual, weekly-ish, large data (DICOM payload)
+
+⚠️ **The script DELIBERATELY does NOT back up `/srv/sites/klinika-health/orthanc/storage/`.** At clinic scale that directory grows ~150 GB/year. Including it in the daily archive would balloon each run to multi-GB and 14 days × multi-GB local retention is impractical.
+
+Operator backs it up out-of-band, on a slower schedule (weekly-ish), to external storage (USB drive or NAS):
+
+```bash
+# Example: rsync to a mounted USB drive
+sudo rsync -a --delete \
+  /srv/sites/klinika-health/orthanc/storage/ \
+  /mnt/backup-usb/donetamed-orthanc-storage/
+```
+
+The Orthanc Postgres dump from Track A is the metadata needed to reattach DICOM files after restore. On restore: copy the storage directory back, restore the Postgres dump, then start Orthanc — it rescans the storage dir at boot and reconciles against the index.
+
+### What this strategy is NOT covering
+
+- **Off-site automated backups** — both tracks land on local disk only. Backblaze B2 via restic is planned in a later slice once credentials are provisioned.
+- **Bare-metal disaster recovery of the laptop itself** — Ubuntu install, hardening (UFW, fail2ban, etc.), Docker setup, cloudflared, GitHub runner. Those need re-running on a fresh laptop from the [Initial setup](#initial-setup-one-time-per-fresh-laptop) procedures in this doc.
+- **Continuous WAL streaming** — both Postgres instances use `pg_dump` (point-in-time = backup time). For sub-day RPO we'd add streaming WAL archive; not planned for v1.
+
+### Restore procedures (cheat-sheet)
+
+```bash
+# 1. Restore Klinika app DB from a backup archive:
+gunzip -c $BACKUP/klinika.sql.gz 2>/dev/null || cat $BACKUP/klinika.sql | \
+  docker exec -i klinika-donetamed-postgres psql -U klinika -d klinika
+
+# 2. Restore Orthanc metadata DB:
+cat $BACKUP/orthanc.sql | \
+  docker exec -i klinika-donetamed-orthanc-postgres psql -U orthanc -d orthanc
+
+# 3. Restore Klinika /storage tarball:
+sudo tar xzf $BACKUP/storage.tar.gz -C /srv/sites/klinika-health
+sudo chown -R 10001:10001 /srv/sites/klinika-health/storage
+
+# 4. Restore Orthanc DICOM bytes from external drive:
+sudo rsync -a /mnt/backup-usb/donetamed-orthanc-storage/ \
+  /srv/sites/klinika-health/orthanc/storage/
+sudo chown -R 999:999 /srv/sites/klinika-health/orthanc/storage
+
+# 5. Bring the stack back up:
+sudo -u github-runner docker compose \
+  -f /srv/sites/klinika-health/repo/infra/compose/docker-compose.donetamed.yml \
+  --env-file /srv/sites/klinika-health/.env \
+  up -d
 ```
 
 ---
@@ -805,7 +858,10 @@ The day the laptop physically moves to the clinic and starts serving real patien
 | GHCR pull credentials | `/root/.docker/config.json` + `/var/lib/klinika/.docker/config.json` (mode 0600) |
 | Deploy key (private, for git clone) | `/var/lib/klinika/.ssh/id_github_klinika` (mode 0600 klinika:klinika) |
 | Seed credentials | `SEED_*_PASSWORD` rows in `.env` on the laptop |
-| Backup template | `/srv/sites/klinika-health/backup.sh.example` |
+| Backup template (canonical) | [`infra/templates/backup.sh.example`](templates/backup.sh.example) in the repo |
+| Backup template (deployed) | `/srv/sites/klinika-health/backup.sh.example` on the laptop (mode 0644 root:root, not yet activated) |
+| Backup target (local) | `/var/backups/klinika-donetamed/<TIMESTAMP>/` once `backup.sh` runs |
+| Orthanc DICOM payload backup | NOT in `backup.sh` — manual rsync to external storage on weekly-ish cadence (see [Backup procedure → Track B](#track-b--manual-weekly-ish-large-data-dicom-payload)) |
 
 ---
 
