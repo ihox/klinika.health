@@ -12,10 +12,10 @@
 #   3. Bind mounts live under /srv/sites/klinika-health/ (postgres_data,
 #      storage) so backups can `tar` the host directory directly.
 #
-# The image refs deliberately point at ghcr.io/ihox/klinika-*:staging
-# while 18b is bring-up — the staging-built images are the same code
-# the laptop will run. In 18b.4 we'll switch IMAGE_TAG to a dedicated
-# :donetamed tag built by the on-prem deploy workflow.
+# Image refs point at ghcr.io/ihox/klinika-*:donetamed — built and
+# pushed by .github/workflows/deploy-donetamed.yml on every green CI
+# run against the donetamed branch. The matching sha-tagged variant
+# (`:donetamed-<sha>`) is pushed in parallel for rollback.
 #
 # Operational guide: infra/DONETAMED.md
 
@@ -45,7 +45,7 @@ services:
       retries: 10
 
   api:
-    image: ghcr.io/ihox/klinika-api:${IMAGE_TAG:-staging}
+    image: ghcr.io/ihox/klinika-api:donetamed
     container_name: klinika-donetamed-api
     restart: unless-stopped
     env_file: /srv/sites/klinika-health/.env
@@ -68,7 +68,7 @@ services:
     # public network.
 
   web:
-    image: ghcr.io/ihox/klinika-web:${IMAGE_TAG:-staging}
+    image: ghcr.io/ihox/klinika-web:donetamed
     container_name: klinika-donetamed-web
     restart: unless-stopped
     env_file: /srv/sites/klinika-health/.env
