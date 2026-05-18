@@ -1,0 +1,94 @@
+# Klinika DonetaMED on-prem stack — runs on the clinic laptop at
+# /srv/sites/klinika-health/. Mirrors the staging compose
+# (infra/compose/docker-compose.staging.yml) with three intentional
+# differences:
+#
+#   1. Tenancy runs in SUFFIX mode (CLINIC_HOST_SUFFIX=.klinika.health),
+#      matching production. No CLINIC_HOST_APEX / CLINIC_HOST_PREFIX
+#      because the laptop serves the real apex + tenant hostnames once
+#      Cloudflare Tunnel lands in 18b.3.
+#   2. The web port is bound to 127.0.0.1 only — external access is
+#      provided by Cloudflare Tunnel (18b.3), not a host-published port.
+#   3. Bind mounts live under /srv/sites/klinika-health/ (postgres_data,
+#      storage) so backups can `tar` the host directory directly.
+#
+# The image refs deliberately point at ghcr.io/ihox/klinika-*:staging
+# while 18b is bring-up — the staging-built images are the same code
+# the laptop will run. In 18b.4 we'll switch IMAGE_TAG to a dedicated
+# :donetamed tag built by the on-prem deploy workflow.
+#
+# Operational guide: infra/DONETAMED.md
+
+name: klinika-donetamed
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: klinika-donetamed-postgres
+    restart: unless-stopped
+    environment:
+      TZ: Europe/Belgrade
+      PGTZ: Europe/Belgrade
+      POSTGRES_DB: ${POSTGRES_DB:-klinika}
+      POSTGRES_USER: ${POSTGRES_USER:-klinika}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - /srv/sites/klinika-health/postgres_data:/var/lib/postgresql/data
+    networks:
+      - internal
+    # No host port mapping — only the api reaches it via the internal
+    # network.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-klinika} -d ${POSTGRES_DB:-klinika}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  api:
+    image: ghcr.io/ihox/klinika-api:${IMAGE_TAG:-staging}
+    container_name: klinika-donetamed-api
+    restart: unless-stopped
+    env_file: /srv/sites/klinika-health/.env
+    environment:
+      TZ: Europe/Belgrade
+      NODE_ENV: production
+      API_PORT: 3001
+      API_HOST: 0.0.0.0
+      DATABASE_URL: postgresql://${POSTGRES_USER:-klinika}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-klinika}?schema=public
+      STORAGE_ROOT: /workspace/storage
+    volumes:
+      - /srv/sites/klinika-health/storage:/workspace/storage
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - internal
+      - public
+    # No host port mapping — only the web container reaches it via the
+    # public network.
+
+  web:
+    image: ghcr.io/ihox/klinika-web:${IMAGE_TAG:-staging}
+    container_name: klinika-donetamed-web
+    restart: unless-stopped
+    env_file: /srv/sites/klinika-health/.env
+    environment:
+      TZ: Europe/Belgrade
+      NODE_ENV: production
+      API_INTERNAL_URL: http://api:3001
+    depends_on:
+      - api
+    networks:
+      - public
+    ports:
+      # Localhost-only. Cloudflare Tunnel (18b.3) terminates externally
+      # and forwards to 127.0.0.1:8003 on the same host.
+      - "127.0.0.1:8003:3000"
+
+networks:
+  internal:
+    name: klinika-donetamed-internal
+    driver: bridge
+  public:
+    name: klinika-donetamed-public
+    driver: bridge
