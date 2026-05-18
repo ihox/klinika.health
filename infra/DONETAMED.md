@@ -638,16 +638,22 @@ Bind-mounted data (`postgres_data/`, `storage/`) survives `down`. Bringing it ba
 
 ### Reset the laptop to empty
 
-Destructive — only use if you're sure.
+Destructive — only use if you're sure. Two paths depending on what you need:
 
-```bash
-kc down
-sudo rm -rf /srv/sites/klinika-health/{postgres_data,storage}/*
-# uids must be restored after a wipe
-sudo chown -R 999:999    /srv/sites/klinika-health/postgres_data
-sudo chown -R 10001:10001 /srv/sites/klinika-health/storage
-# Then re-run the bring-up sequence (migrate + seed + up)
-```
+- **Full reset with re-seed + migration prep** — the operator script `/home/ilir/Desktop/clean.sh`. Wipes Klinika + Orthanc data dirs, applies Prisma migrations + sidecar SQL (so `platform_admin_role` exists for the migration tool), re-seeds the four-user fixture, and verifies the empty state. See [Migration tooling (Access → Postgres)](#migration-tooling-access--postgres) for the canonical content.
+- **Minimal wipe** — just clear data, no re-seed:
+  ```bash
+  kc down
+  sudo rm -rf /srv/sites/klinika-health/postgres_data
+  sudo rm -rf /srv/sites/klinika-health/storage
+  sudo install -d -o 70    -g 70    -m 700 /srv/sites/klinika-health/postgres_data
+  sudo install -d -o 10001 -g 10001 -m 755 /srv/sites/klinika-health/storage
+  # Then re-run the bring-up sequence (migrate + sidecar SQL + seed + up).
+  # uids: 70 is postgres in postgres:16-alpine; 10001 is the api image's
+  # non-root user. The directory itself is recreated rather than wiped
+  # with `rm -rf <dir>/*` so partial wipes (busy file handles, hidden
+  # entries) can't silently leave data behind.
+  ```
 
 ### One-off psql
 
@@ -738,6 +744,167 @@ sudo -u github-runner docker compose \
   --env-file /srv/sites/klinika-health/.env \
   up -d
 ```
+
+---
+
+## Migration tooling (Access → Postgres)
+
+Cutover-day procedure for importing the clinic's existing `PEDIATRIA.accdb` into Klinika's Postgres. Same scripts double as the pre-cutover rehearsal: `clean.sh` → `migrate.sh` → verify → `clean.sh` to leave the laptop empty.
+
+### What's in git, what's not
+
+- **In git, committed:** [`infra/docker/Dockerfile.migration`](docker/Dockerfile.migration) — packages [`tools/migrate/`](../tools/migrate/) (Python 3.12 + `mdbtools`) into a Linux image. ENTRYPOINT is `python /app/migrate.py`; a bundled `config.docker.yaml` defers every variable to env vars (`DATABASE_URL`, `ACCDB_PATH`, `CLINIC_SUBDOMAIN`, `MIGRATION_USER_EMAIL`).
+- **NOT in git, operator-local:** `/home/ilir/Desktop/PEDIATRIA.accdb`, `/home/ilir/Desktop/clean.sh`, `/home/ilir/Desktop/migrate.sh`. Paths and laptop-specific. Canonical script content is in this section so anyone can recreate them on a fresh laptop.
+
+### Build the migration image
+
+```bash
+cd /srv/sites/klinika-health/repo
+sudo -u klinika docker build \
+  -f infra/docker/Dockerfile.migration \
+  -t klinika-migration:donetamed \
+  .
+```
+
+Verify the image runs and prints help:
+
+```bash
+sudo -u klinika docker run --rm klinika-migration:donetamed --help
+```
+
+### Place the source `.accdb`
+
+The file is sensitive (PHI) and large. SCP it to the operator's Desktop:
+
+```bash
+# from the dev machine
+scp ~/Desktop/PEDIATRIA.accdb donetamed-klinika:/home/ilir/Desktop/PEDIATRIA.accdb
+
+# on the laptop, confirm
+ls -la /home/ilir/Desktop/PEDIATRIA.accdb
+file /home/ilir/Desktop/PEDIATRIA.accdb   # → Microsoft Access Database
+```
+
+The migration image bind-mounts this path read-only at `/data/PEDIATRIA.accdb` at run time — the .accdb never enters the image and stays gitignored.
+
+### `clean.sh` — full reset + re-seed (canonical content)
+
+Place at `/home/ilir/Desktop/clean.sh`, `chmod 0755`. Runs `compose down`, wipes Klinika + Orthanc data dirs, applies Prisma migrations and the sidecar SQL files in [`apps/api/prisma/sql/`](../apps/api/prisma/sql/) (this is what installs `platform_admin_role` + RLS policies — the deploy workflow only runs `prisma migrate deploy` and would skip them otherwise), re-seeds the four-user fixture, brings the full stack up, runs `/health/ready`, and prints row counts so a partial wipe surfaces immediately.
+
+```bash
+#!/bin/bash
+# Full reset of DonetaMED Klinika state on this laptop.
+# WIPES: Klinika postgres, Orthanc postgres, /storage/, /orthanc/storage/.
+# RE-SEEDS: admin, doctor (taulant@klinika.health), receptionist (albina@klinika.health),
+#           clinic admin (donetamed-admin@klinika.health) via prisma/seed-donetamed.ts.
+set -euo pipefail
+if [[ "${1:-}" != "--confirm" ]]; then
+  echo "WARNING: This will WIPE ALL patient data, Klinika storage, and DICOM files."
+  read -r -p "Type 'yes-delete-everything' to proceed: " confirm
+  [[ "$confirm" == "yes-delete-everything" ]] || { echo "Aborted."; exit 1; }
+fi
+REPO=/srv/sites/klinika-health/repo
+COMPOSE_FILE=$REPO/infra/compose/docker-compose.donetamed.yml
+ENV_FILE=/srv/sites/klinika-health/.env
+DC="sudo -u klinika docker compose -f $COMPOSE_FILE --env-file $ENV_FILE"
+cd "$REPO"
+$DC down --remove-orphans
+for _ in $(seq 1 30); do
+  remaining=$(sudo -u klinika docker ps -a --filter "label=com.docker.compose.project=klinika-donetamed" --format '{{.ID}}' | wc -l)
+  [[ "$remaining" -eq 0 ]] && break
+  sleep 1
+done
+wipe_dir() {
+  local dir=$1 uid=$2 gid=$3 mode=$4
+  sudo rm -rf "$dir"
+  sudo install -d -o "$uid" -g "$gid" -m "$mode" "$dir"
+  local left
+  left=$(sudo find "$dir" -mindepth 1 -maxdepth 1 | wc -l)
+  [[ "$left" -eq 0 ]] || { echo "ERROR: $dir still has $left entries — aborting." >&2; exit 1; }
+}
+wipe_dir /srv/sites/klinika-health/postgres_data         70    70    700
+wipe_dir /srv/sites/klinika-health/orthanc/postgres_data 70    70    700
+wipe_dir /srv/sites/klinika-health/storage               10001 10001 755
+wipe_dir /srv/sites/klinika-health/orthanc/storage       999   999   755
+$DC up -d postgres
+until sudo -u klinika docker inspect --format '{{.State.Health.Status}}' klinika-donetamed-postgres 2>/dev/null | grep -q healthy; do sleep 2; done
+$DC run --rm api node node_modules/prisma/build/index.js migrate deploy
+for f in "$REPO"/apps/api/prisma/sql/*.sql; do
+  sudo cat "$f" | sudo -u klinika docker exec -i klinika-donetamed-postgres \
+    psql -U klinika -d klinika -v ON_ERROR_STOP=1 > /dev/null
+done
+$DC run --rm api ./node_modules/.bin/ts-node --transpile-only prisma/seed-donetamed.ts
+$DC up -d
+sleep 10
+curl -fsS http://localhost:8003/health/ready
+sudo -u klinika docker exec klinika-donetamed-postgres \
+  psql -U klinika -d klinika \
+  -c "SELECT count(*) AS patients FROM patients;" \
+  -c "SELECT count(*) AS visits FROM visits;" \
+  -c "SELECT count(*) AS clinics FROM clinics WHERE deleted_at IS NULL;" \
+  -c "SELECT count(*) AS users FROM users WHERE deleted_at IS NULL;"
+```
+
+Expected verify output: `patients=0, visits=0, clinics=1, users=3`.
+
+### `migrate.sh` — run the import (canonical content)
+
+Place at `/home/ilir/Desktop/migrate.sh`, `chmod 0755`. Joins the `klinika-donetamed-internal` Docker network, runs the four migration phases in the order matching the local rehearsal on 2026-05-17 (`check → patients → visits → apply-sex-inference → report`), and writes per-run logs to `/home/ilir/migration-logs/<UTC-timestamp>/`.
+
+```bash
+#!/bin/bash
+set -euo pipefail
+ACCDB=/home/ilir/Desktop/PEDIATRIA.accdb
+ENV_FILE=/srv/sites/klinika-health/.env
+NETWORK=klinika-donetamed-internal
+IMAGE=klinika-migration:donetamed
+LOG_BASE=/home/ilir/migration-logs
+RUN_TS=$(date -u +%Y%m%dT%H%M%SZ)
+LOG_DIR=$LOG_BASE/$RUN_TS
+[[ -f "$ACCDB" ]] || { echo "ERROR: $ACCDB not found."; exit 1; }
+sudo -u klinika docker image inspect "$IMAGE" >/dev/null 2>&1 || { echo "ERROR: build $IMAGE first."; exit 1; }
+if [[ "${1:-}" != "--confirm" ]]; then
+  read -r -p "Type 'yes-migrate' to proceed: " confirm
+  [[ "$confirm" == "yes-migrate" ]] || { echo "Aborted."; exit 1; }
+fi
+mkdir -p "$LOG_DIR"
+PG_USER=$(sudo grep -E '^POSTGRES_USER=' "$ENV_FILE" | cut -d= -f2-); : "${PG_USER:=klinika}"
+PG_DB=$(sudo grep -E '^POSTGRES_DB=' "$ENV_FILE" | cut -d= -f2-); : "${PG_DB:=klinika}"
+PG_PASS=$(sudo grep -E '^POSTGRES_PASSWORD=' "$ENV_FILE" | cut -d= -f2-)
+DATABASE_URL="postgresql://${PG_USER}:${PG_PASS}@klinika-donetamed-postgres:5432/${PG_DB}"
+RUN="sudo -u klinika docker run --rm
+  --network ${NETWORK}
+  -v ${ACCDB}:/data/PEDIATRIA.accdb:ro
+  -v ${LOG_DIR}:/app/migration-logs
+  -e DATABASE_URL=${DATABASE_URL}
+  -e ACCDB_PATH=/data/PEDIATRIA.accdb
+  -e CLINIC_SUBDOMAIN=donetamed
+  -e MIGRATION_USER_EMAIL=taulant@klinika.health
+  ${IMAGE}"
+$RUN check               --config /app/config.docker.yaml
+$RUN patients            --config /app/config.docker.yaml --commit
+$RUN visits              --config /app/config.docker.yaml --commit
+$RUN apply-sex-inference --config /app/config.docker.yaml --commit
+set +e; $RUN report      --config /app/config.docker.yaml; REPORT_EXIT=$?; set -e
+echo "report exit=$REPORT_EXIT (0=PASS)"
+sudo -u klinika docker exec klinika-donetamed-postgres \
+  psql -U klinika -d klinika \
+  -c "SELECT count(*) AS patients FROM patients WHERE legacy_id IS NOT NULL;" \
+  -c "SELECT count(*) AS visits FROM visits WHERE legacy_id IS NOT NULL;"
+```
+
+Expected counts after a successful run against the 2026-05-10 `.accdb`: `patients=11163, visits=63405`, sex inference `5919 male + 5244 female`, verdict `PASS`. Matches the local 2026-05-17 rehearsal under [`tools/migrate/migration-logs/migration-report.json`](../tools/migrate/migration-logs/migration-report.json) byte-for-byte (same source file sha256).
+
+### Cutover-day sequence
+
+The same scripts that run the rehearsal cycle run the real cutover. On the day:
+
+1. **Take a backup** of the running state (run `backup.sh` if it's been activated, or `pg_dump` manually) before the wipe.
+2. **Place the fresh `.accdb`** on `/home/ilir/Desktop/PEDIATRIA.accdb` (the SCP-from-dev path above, or directly from the clinic's existing system on a USB stick).
+3. **Reset to empty** — `bash /home/ilir/Desktop/clean.sh` (interactive confirmation). Confirms `0 patients, 0 visits, 1 clinic, 3 users`.
+4. **Run the import** — `bash /home/ilir/Desktop/migrate.sh` (interactive confirmation). Verdict must be `PASS` before continuing.
+5. **Smoke-check the UI** — log in as Dr. Taulant at `https://donetamed.klinika.health`, search a known patient name from the clinic's existing records, open one chart, print a vërtetim. Confirm the blank-stamp area is in the right place (CLAUDE.md §1.1).
+6. If anything is wrong, `clean.sh` again gets you back to a known empty state.
 
 ---
 
@@ -871,13 +1038,12 @@ The day the laptop physically moves to the clinic and starts serving real patien
   - **Calling AE Title (AET)**: anything — Orthanc accepts any calling AET today (tighten via a `ORTHANC__DICOM_MODALITIES` allowlist after we know the modality's actual AET)
   Sanity-check from another machine on the clinic LAN with `echoscu -aet TESTSCU -aec DONETAMED <laptop-IP> 4242` before pointing the real ultrasound at it.
 - [ ] **Tighten Orthanc DICOM AET allowlist** — once the ultrasound is verified pushing studies, add `ORTHANC__DICOM_ALWAYS_ALLOW_STORE=false` and an explicit modality entry under `ORTHANC__DICOM_MODALITIES` so only the registered ultrasound can C-STORE.
-- [ ] **Run patient migration** with the fresh `.accdb` exported from the clinic's existing system:
+- [ ] **Run patient migration** with the fresh `.accdb` exported from the clinic's existing system. The on-laptop scripts handle the whole cycle:
   ```bash
-  cd tools/migrate
-  python migrate.py --config config.yaml --source ~/PEDIATRIA.accdb --dry-run
-  python migrate.py --config config.yaml --source ~/PEDIATRIA.accdb --execute
+  bash /home/ilir/Desktop/clean.sh    # wipe + re-seed + sidecar SQL
+  bash /home/ilir/Desktop/migrate.sh  # check → patients → visits → sex inference → report
   ```
-  (~11,163 patients + ~220,465 visits per CLAUDE.md §14. Tool runs locally on the laptop, never against staging.)
+  Build the migration image first if it's not present (`docker build -f infra/docker/Dockerfile.migration -t klinika-migration:donetamed .`). Expected counts against the 2026-05-10 export: 11,163 patients + 63,405 visits (verdict `PASS`). Full procedure: [Migration tooling (Access → Postgres)](#migration-tooling-access--postgres).
 - [ ] **Cloudflare Access for SSH** so the laptop can be managed from outside the clinic LAN once UFW + RFC1918 restrictions cut off off-LAN SSH. Pattern: a Cloudflare tunnel route for SSH + an Access policy gating it on the operator's Cloudflare identity.
 - [ ] **Train Dr. Taulant + Albina** on the live UI. Walk through booking flow, walk-in flow, calendar, vërtetim PDF, password change. Hand over the four `SEED_*_PASSWORD` values (from a password manager, never email).
 - [ ] **Operator handover** — the clinic's IT contact gets read-only SSH access via Cloudflare Access, the runbook URL, and an escalation path (Telegram / email) for incidents.
@@ -936,7 +1102,7 @@ The day the laptop physically moves to the clinic and starts serving real patien
 
 - **Ultrasound print-template DICOM rendering** — `print.service.ts` currently passes `ultrasoundImages: []` to the renderer, so the page-2 grid still shows SVG placeholders even though `dicom_studies` is now populated. Wiring the renderer to query `VisitDicomLink` and fetch base64 preview bytes from Orthanc is a separate dev slice (~half a day, app-code).
 - **DICOM AET allowlist** — today Orthanc accepts C-STORE from any calling AET. Tighten at cutover (see [18b.6 checklist](#18b6--cutover-checklist-planned)).
-- `.accdb` patient migration — cutover-day procedure (18b.6)
+- `.accdb` patient migration tooling and runbook — DONE (see [Migration tooling (Access → Postgres)](#migration-tooling-access--postgres)); cutover-day execution still owed by 18b.6
 - Cloudflare Access for SSH — 18b.6 (so the laptop can be SSHed from outside the clinic LAN)
 - Static IP / Ethernet on the laptop — 18b.6 (the clinic move)
 - Off-site backups (Backblaze B2 via restic) — later slice once credentials are provisioned
