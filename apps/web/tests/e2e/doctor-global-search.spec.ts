@@ -241,9 +241,15 @@ test.describe('Doctor — global patient search', () => {
 
     // Click somewhere neutral so focus is parked outside the search.
     await page.getByRole('heading', { name: /Mirëdita/ }).click();
-    // Playwright's "ControlOrMeta" expands to ⌘ on Mac, Ctrl elsewhere
-    // — matches the runtime detection in `apps/web/lib/platform.ts`.
-    await page.keyboard.press('ControlOrMeta+k');
+    // Always press `Control+k` (not `ControlOrMeta+k`) — the production
+    // `isMac` detector reads `navigator.userAgentData.platform` first,
+    // and Playwright's chromium uses the Desktop Chrome device profile
+    // which sets `userAgentData.platform = "Windows"` regardless of
+    // host OS. So under Playwright the app thinks it's on Windows and
+    // the listener gates on `e.ctrlKey`. `ControlOrMeta+k` on a Mac
+    // host would fire `Meta+k`, which the listener (in this
+    // environment) doesn't catch.
+    await page.keyboard.press('Control+k');
     await expect(page.getByLabel('Kërko pacient në klinikë')).toBeFocused();
   });
 });

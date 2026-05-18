@@ -179,10 +179,12 @@ test.describe('Doctor home dashboard', () => {
     await expect(page.getByText('Era Krasniqi').first()).toBeVisible();
     await expect(page.getByText('Mira Hoxhaj').first()).toBeVisible();
 
-    // Day stats: visits 1 / 3, mesatare 12 min, pagesa 15 €. The
+    // Day stats: visits 1/3, mesatare 12 min, pagesa 15 €. The
     // "Pagesa" tile and the visit log both show "15 €"; scope to the
-    // tile by querying via the label.
-    await expect(page.getByText('1 / 3')).toBeVisible();
+    // tile by querying via the label. `{completed}` / `{total}` render
+    // as adjacent text nodes around an inline `/` span with margin,
+    // so textContent is "1/3" without spaces.
+    await expect(page.getByText('1/3')).toBeVisible();
     await expect(page.getByText('Mesatare', { exact: true })).toBeVisible();
     await expect(page.getByText('Pagesa', { exact: true })).toBeVisible();
     await expect(page.getByText('15 €').first()).toBeVisible();
@@ -204,18 +206,44 @@ test.describe('Doctor home dashboard', () => {
     await mockApi(page, snapshot);
     await page.goto('/doctor');
 
-    // Mock the patients endpoint enough to keep the destination page
-    // from erroring on missing API.
-    await page.route('**/api/patients**', (route: Route) =>
-      route.fulfill({
+    // The "Hap kartelën" click goes through safeNavigateToPatient,
+    // which GETs /api/patients/:id and then routes to /pacient/:id
+    // (chart) when isComplete=true, else /pacient/:id/te-dhena
+    // (master-data form). Both forms come from commit f45b9b4 —
+    // the legacy /doctor/pacientet?patientId=X target is gone.
+    //
+    // The mock pattern is a regex (not a glob) because Playwright's
+    // `**/api/patients**` glob curiously does NOT match
+    // `/api/patients/:id` — the path segment after `patients/` slips
+    // past the trailing `**`. Using a regex sidesteps that.
+    await page.route(/\/api\/patients(\/[^/?]+)?(\?.*)?$/, (route: Route) => {
+      const url = new URL(route.request().url());
+      const m = /\/api\/patients\/([^/]+)$/.exec(url.pathname);
+      if (m && route.request().method() === 'GET') {
+        return route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            patient: {
+              id: m[1],
+              firstName: 'Era',
+              lastName: 'Krasniqi',
+              dateOfBirth: '2023-08-03',
+              sex: 'f',
+              isComplete: true,
+            },
+          }),
+        });
+      }
+      return route.fulfill({
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify({ patients: [] }),
-      }),
-    );
+      });
+    });
 
     await page.getByRole('button', { name: /Hap kartelën/ }).click();
-    await expect(page).toHaveURL(/\/doctor\/pacientet\?patientId=p-current/);
+    await expect(page).toHaveURL(/\/pacient\/p-current$/);
   });
 
   test('quick-search filters the visible appointment list', async ({ page }) => {

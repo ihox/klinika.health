@@ -182,7 +182,33 @@ test.describe('Boundary login flows (happy paths)', () => {
         headers: {
           'set-cookie': 'klinika_session=doctor-test; Path=/; HttpOnly',
         },
-        body: JSON.stringify({ role: 'doctor' }),
+        // Verify-form uses `out.roles` (plural array) to compute the
+        // post-success path via homePathForRoles.
+        body: JSON.stringify({ roles: ['doctor'] }),
+      });
+    });
+    // After MFA success the doctor home calls /api/auth/me via the
+    // shared RouteGate. The auth fixture is in 'logged-out' mode for
+    // this file so /me is unmocked by default — stub it here as the
+    // authenticated doctor so the gate clears.
+    await page.route('**/api/auth/me', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          user: {
+            id: '00000000-0000-4000-8000-000000000001',
+            email: 'taulant.shala@klinika.health',
+            firstName: 'Taulant',
+            lastName: 'Shala',
+            roles: ['doctor'],
+            title: 'Dr.',
+            clinicName: 'DonetaMED',
+            clinicShortName: 'DM',
+            createdAt: '2024-02-14T10:00:00.000Z',
+            lastLoginAt: '2026-05-14T13:00:00.000Z',
+          },
+        }),
       });
     });
 

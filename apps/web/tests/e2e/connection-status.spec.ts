@@ -59,7 +59,12 @@ test.describe('Connection status indicator', () => {
     );
     await expect(page.getByRole('status')).toContainText('Pa lidhje');
 
-    // Restore connectivity: the next poll should flip to online.
+    // Restore connectivity: the indicator hooks the browser's
+    // `online` event for an immediate re-probe, so flipping the
+    // context's offline flag from true→false (toggling first to
+    // ensure the transition fires) is the deterministic way to
+    // trigger a fresh poll — much faster than waiting 30s for the
+    // next setInterval tick.
     await page.unroute('**/health/ready');
     await page.route('**/health/ready', (route) =>
       route.fulfill({
@@ -68,6 +73,7 @@ test.describe('Connection status indicator', () => {
         body: JSON.stringify({ status: 'ok', db: { ok: true, latencyMs: 1 } }),
       }),
     );
+    await context.setOffline(true);
     await context.setOffline(false);
     await expect(page.getByRole('status')).toHaveAttribute(
       'data-state',

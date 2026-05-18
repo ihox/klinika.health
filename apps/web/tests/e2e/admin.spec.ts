@@ -73,7 +73,10 @@ function tenantDetailPayload(id: string, status: 'active' | 'suspended'): unknow
           email: 'taulant.shala@klinika.health',
           firstName: 'Taulant',
           lastName: 'Shala',
-          role: 'doctor',
+          // TenantUser.roles is an array (ADR-004 multi-role) — the
+          // page renders `user.roles.map(...)`, so a singular `role`
+          // field crashes the whole tenant-detail view at render time.
+          roles: ['doctor'],
           isActive: true,
           lastLoginAt: '2026-05-14T13:00:00.000Z',
         },

@@ -160,6 +160,10 @@ test.describe('Multi-role nav + redirect (ADR-004)', () => {
     await page.getByRole('button', { name: 'Hyr' }).click();
 
     await expect(page).toHaveURL(/\/verify\?/);
+    // Wait for the OTP cells to mount (Suspense fallback resolves)
+    // before pressing keys — otherwise keystrokes land on an unfocused
+    // page and the form stays empty.
+    await expect(page.getByLabel('Shifra 1')).toBeVisible();
     for (const digit of '482613') await page.keyboard.press(digit);
 
     // Doctor wins on priority → /doctor.
@@ -180,6 +184,91 @@ test.describe('Multi-role nav + redirect (ADR-004)', () => {
     await mockLoginMfaRequired(page);
     await mockMfaVerifyAs(page, EREBL);
     await mockMe(page, EREBL);
+    // The receptionist calendar view mounts on /receptionist and
+    // immediately fetches clinic settings + visit data. With
+    // API_INTERNAL_URL=disabled the unmocked requests return 401-ish
+    // failures and the view redirects to /login?reason=session-expired
+    // before the assertion below can land. Stub the bare minimum so
+    // the calendar renders.
+    await page.route('**/api/clinic/settings', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          general: {
+            name: 'DonetaMED',
+            shortName: 'DM',
+            subdomain: 'donetamed',
+            address: 'X',
+            city: 'Prizren',
+            phones: ['x'],
+            email: 'x@x.test',
+          },
+          branding: { hasLogo: false, logoContentType: null, hasSignature: false },
+          hours: {
+            timezone: 'Europe/Belgrade',
+            days: {
+              mon: { open: false },
+              tue: { open: false },
+              wed: { open: false },
+              thu: { open: false },
+              fri: { open: false },
+              sat: { open: false },
+              sun: { open: false },
+            },
+            durations: [15],
+            defaultDuration: 15,
+          },
+          paymentCodes: {},
+          email: { mode: 'default', smtp: null },
+        }),
+      }),
+    );
+    await page.route('**/api/visits/calendar/stream', (route) =>
+      route.fulfill({ status: 204, body: '' }),
+    );
+    await page.route('**/api/visits/calendar/unmarked-past', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ entries: [] }),
+      }),
+    );
+    await page.route('**/api/visits/calendar/stats**', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          date: '2026-05-14',
+          total: 0,
+          scheduled: 0,
+          walkIn: 0,
+          standaloneCount: 0,
+          completed: 0,
+          noShow: 0,
+          arrived: 0,
+          inProgress: 0,
+          firstStart: null,
+          lastEnd: null,
+          paymentTotalCents: 0,
+          nextAppointment: null,
+        }),
+      }),
+    );
+    await page.route('**/api/visits/calendar?**', (route) => {
+      const url = new URL(route.request().url());
+      if (
+        url.pathname.endsWith('/api/visits/calendar') &&
+        route.request().method() === 'GET'
+      ) {
+        return route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ entries: [], serverTime: new Date().toISOString() }),
+        });
+      }
+      return route.fallback();
+    });
 
     await page.goto('/login');
     await page.getByLabel('Email').fill(EREBL.email);
@@ -187,6 +276,7 @@ test.describe('Multi-role nav + redirect (ADR-004)', () => {
     await page.getByRole('button', { name: 'Hyr' }).click();
 
     await expect(page).toHaveURL(/\/verify\?/);
+    await expect(page.getByLabel('Shifra 1')).toBeVisible();
     for (const digit of '482613') await page.keyboard.press(digit);
 
     // Receptionist with no doctor / clinic_admin → /receptionist.
@@ -254,6 +344,7 @@ test.describe('Multi-role nav + redirect (ADR-004)', () => {
     await page.getByLabel('Fjalëkalimi').fill('valid-password-here');
     await page.getByRole('button', { name: 'Hyr' }).click();
     await expect(page).toHaveURL(/\/verify\?/);
+    await expect(page.getByLabel('Shifra 1')).toBeVisible();
     for (const digit of '482613') await page.keyboard.press(digit);
     await expect(page).toHaveURL(/\/cilesimet$/, { timeout: 5000 });
 

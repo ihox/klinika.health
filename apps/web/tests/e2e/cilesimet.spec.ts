@@ -63,7 +63,7 @@ const USERS_BASE = [
     email: 'taulant.shala@klinika.health',
     firstName: 'Taulant',
     lastName: 'Shala',
-    role: 'doctor',
+    roles: ['doctor'],
     title: 'Dr.',
     credential: 'Pediatër',
     hasSignature: false,
@@ -76,7 +76,7 @@ const USERS_BASE = [
     email: 'ereblire.krasniqi@klinika.health',
     firstName: 'Erëblirë',
     lastName: 'Krasniqi',
-    role: 'receptionist',
+    roles: ['receptionist'],
     title: null,
     credential: null,
     hasSignature: false,
@@ -198,7 +198,9 @@ async function mockClinicApi(page: Page) {
         email: body.email,
         firstName: body.firstName,
         lastName: body.lastName,
-        role: body.role,
+        // The client sends `roles: ClinicRole[]` (multi-role per
+        // ADR-004); the table reads `u.roles`, not `u.role`.
+        roles: body.roles ?? [],
         title: null,
         credential: null,
         hasSignature: false,
@@ -333,7 +335,9 @@ test.describe('Clinic settings', () => {
     await page.locator('[data-testid="new-user-first"]').fill('Adea');
     await page.locator('[data-testid="new-user-last"]').fill('Maloku');
     await page.locator('[data-testid="new-user-email"]').fill('adea@klinika.health');
-    await page.locator('[data-testid="new-user-role"]').selectOption('receptionist');
+    // Roles are a multi-select via checkboxes (RolePicker component);
+    // there's one checkbox per role with testid `new-user-role-<role>`.
+    await page.locator('[data-testid="new-user-role-receptionist"]').check();
     await page.locator('[data-testid="new-user-submit"]').click();
 
     await expect(page.getByText(/Adea Maloku u shtua/)).toBeVisible();
@@ -362,6 +366,11 @@ test.describe('Clinic settings', () => {
 
     await expect(page.getByText('Cilësimet bazë u ndryshuan')).toBeVisible();
     await page.getByText('Cilësimet bazë u ndryshuan').click();
-    await expect(page.getByText('DonetaMED — Ordinanca Pediatrike')).toBeVisible();
+    // The audit pane renders the clinic name in two places (header span
+    // + expanded diff row). Scope to the diff row inside the audit pane
+    // to avoid a strict-mode collision.
+    await expect(
+      page.getByTestId('pane-audit').getByText('DonetaMED — Ordinanca Pediatrike').first(),
+    ).toBeVisible();
   });
 });

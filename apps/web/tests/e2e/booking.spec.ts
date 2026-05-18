@@ -488,7 +488,7 @@ test.describe('Booking dialog', () => {
 
     await expect(page.getByRole('heading', { name: 'Pacient i ri' })).toBeVisible();
     // Quick-add modal pre-fills the names from the seed.
-    await expect(page.getByLabel('Emri')).toHaveValue('Erblire');
+    await expect(page.getByLabel('Emri', { exact: true })).toHaveValue('Erblire');
     await expect(page.getByLabel('Mbiemri')).toHaveValue('Smith');
 
     await page.getByRole('button', { name: 'Ruaj pacientin' }).click();
@@ -506,21 +506,30 @@ test.describe('Booking dialog', () => {
     await page.goto('/receptionist');
 
     // The 10-min slot snap means clicking near the top of any open
-    // column lands at 10:00. We grab today's column (it gets the
-    // teal-tinted background) by looking up by aria-label.
-    const todayCol = page.locator('[role="grid"]').first();
+    // column lands at 10:00. Target TODAY's column (data-today
+    // attribute) — `.first()` returned a past day, which renders
+    // disabled/dimmed and detaches mid-click when the now-line
+    // re-renders.
+    const todayCol = page.locator('[role="grid"][data-today]');
     await todayCol.click({ position: { x: 30, y: 60 } });
 
-    // Picker popover opened, anchored to the click coords.
-    await expect(page.getByRole('dialog', { name: /Cakto për/ })).toBeVisible();
+    // Picker popover opened, anchored to the click coords. The
+    // dialog's accessible name is the picker-ctx element (a date/time
+    // string), not "Cakto për" — that header text lives in a sibling
+    // element above picker-ctx. Verify by scoping into the dialog and
+    // finding the picker's search input. The receptionist top-nav
+    // also has a "Kërko pacient..." placeholder, so we cannot rely on
+    // a bare `getByPlaceholder` without strict-mode collisions.
+    const pickerDialog = page.getByRole('dialog').last();
+    await expect(pickerDialog).toBeVisible();
 
     // Type a query that doesn't match any existing patient, then add new.
-    await page.getByPlaceholder('Kërko pacient...').fill('Linda Berisha');
+    await pickerDialog.getByPlaceholder('Kërko pacient...').fill('Linda Berisha');
     await page.getByText(/Shto pacient të ri/).click();
 
     // Quick-add prefilled with the typed name.
     await expect(page.getByRole('heading', { name: 'Pacient i ri' })).toBeVisible();
-    await expect(page.getByLabel('Emri')).toHaveValue('Linda');
+    await expect(page.getByLabel('Emri', { exact: true })).toHaveValue('Linda');
     await page.getByRole('button', { name: 'Ruaj pacientin' }).click();
 
     // Booking dialog opens — time should be pre-filled from the slot.

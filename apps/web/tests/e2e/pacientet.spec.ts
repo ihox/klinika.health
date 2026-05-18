@@ -43,6 +43,11 @@ const FULL_PATIENTS = [
     birthLengthCm: 51,
     birthHeadCircumferenceCm: 34,
     alergjiTjera: 'Penicilinë',
+    // The doctor list now distinguishes complete vs incomplete patients
+    // — only complete ones show the alergji marker; incomplete ones show
+    // the "Pa plotësuar" pill instead. Add isComplete so the existing
+    // assertions about the alergji marker still find it.
+    isComplete: true,
     createdAt: '2024-01-15T10:00:00.000Z',
     updatedAt: '2024-01-15T10:00:00.000Z',
   },
@@ -60,6 +65,7 @@ const FULL_PATIENTS = [
     birthLengthCm: null,
     birthHeadCircumferenceCm: null,
     alergjiTjera: null,
+    isComplete: true,
     createdAt: '2024-02-10T10:00:00.000Z',
     updatedAt: '2024-02-10T10:00:00.000Z',
   },
@@ -73,7 +79,12 @@ interface MockState {
 }
 
 async function mockApi(page: Page, state: MockState): Promise<void> {
-  await page.route('**/api/patients**', async (route: Route) => {
+  // Use a regex rather than `**/api/patients**` — the latter does NOT
+  // match `/api/patients/:id` in Playwright because `**` only behaves
+  // as a "deep" wildcard when surrounded by `/` (or end-of-string), so
+  // the trailing `**` is treated like `*` which excludes `/`. Regex
+  // matches both list and detail paths cleanly.
+  await page.route(/\/api\/patients(\/[^?]*)?(\?.*)?$/, async (route: Route) => {
     const url = new URL(route.request().url());
     const method = route.request().method();
     const path = url.pathname;
@@ -198,9 +209,10 @@ test.describe('Receptionist patient search and quick-add', () => {
     await expect(page.getByRole('heading', { name: 'Pacientët' })).toBeVisible();
 
     await page.getByPlaceholder(/Kërko pacient/).fill('Rita');
-    // Wait for the debounced fetch.
-    await expect(page.getByText('Rita Hoxha')).toBeVisible();
-    await expect(page.getByText('Rita Hoxhaj')).toBeVisible();
+    // Wait for the debounced fetch. `Rita Hoxha` is a substring of
+    // `Rita Hoxhaj`, so use `exact: true` to disambiguate.
+    await expect(page.getByText('Rita Hoxha', { exact: true })).toBeVisible();
+    await expect(page.getByText('Rita Hoxhaj', { exact: true })).toBeVisible();
 
     // PHI must NOT render anywhere in the visible search results — verify
     // a sentinel field (phone format) is absent.
@@ -216,7 +228,7 @@ test.describe('Receptionist patient search and quick-add', () => {
     await page.getByRole('button', { name: /Pacient i ri/ }).click();
     await expect(page.getByRole('dialog', { name: 'Pacient i ri' })).toBeVisible();
 
-    await page.getByLabel('Emri').fill('Lori');
+    await page.getByLabel('Emri', { exact: true }).fill('Lori');
     await page.getByLabel('Mbiemri').fill('Gashi');
     await page.getByLabel('Datelindja').fill('2024-04-12');
 
@@ -236,7 +248,7 @@ test.describe('Receptionist patient search and quick-add', () => {
     await page.goto('/receptionist/pacientet');
 
     await page.getByRole('button', { name: /Pacient i ri/ }).click();
-    await page.getByLabel('Emri').fill('Rita');
+    await page.getByLabel('Emri', { exact: true }).fill('Rita');
     await page.getByLabel('Mbiemri').fill('Hoxha');
 
     await expect(page.getByText('Mund të ekzistojë tashmë:')).toBeVisible();
@@ -254,7 +266,7 @@ test.describe('Receptionist patient search and quick-add', () => {
     await page.goto('/receptionist/pacientet');
 
     await page.getByRole('button', { name: /Pacient i ri/ }).click();
-    await page.getByLabel('Emri').fill('Rita');
+    await page.getByLabel('Emri', { exact: true }).fill('Rita');
     await page.getByLabel('Mbiemri').fill('Hoxha');
     await expect(page.getByText('Mund të ekzistojë tashmë:')).toBeVisible();
 
@@ -262,19 +274,21 @@ test.describe('Receptionist patient search and quick-add', () => {
     await expect.poll(() => state.publicCreates.length).toBe(1);
   });
 
-  test('receptionist navigating directly to doctor patient page sees an empty result list', async ({ page }) => {
-    // The route exists but the API responds with the receptionist's
-    // public shape — the doctor patient list still works only if the
-    // user has the doctor role on the server. In our mock the GET
-    // returns the public DTO list; the doctor view expects PatientFullDto.
-    // It renders a "no results" state because the public DTOs have no
-    // alergjiTjera/sex/etc. — and any GET :id is 403.
+  // The doctor patient list is now wrapped in
+  // `<RouteGate required={['doctor', 'clinic_admin']}>` — receptionists
+  // hitting /doctor/pacientet are bounced to /forbidden before any
+  // API call, so the "renders empty state because public DTOs are
+  // missing PHI fields" behavior no longer exists. The receptionist
+  // privacy boundary (CLAUDE.md §1.2) is still enforced — just at the
+  // RouteGate layer now, not at the doctor view. Coverage for the
+  // 403 redirect lives in multi-role.spec.ts. Keeping the test as a
+  // documented `.skip` rather than deleting it so future readers can
+  // see why the old assertion stopped matching.
+  test.skip('receptionist navigating directly to doctor patient page sees an empty result list', async ({ page }) => {
     const state = emptyState();
     await mockApi(page, state);
     await page.goto('/doctor/pacientet');
 
-    // The list renders rows from the public DTOs (fewer fields). The
-    // detail panel reflects the absence of opening a record.
     await expect(
       page.getByText(/Zgjidh një pacient/),
     ).toBeVisible();
@@ -282,23 +296,29 @@ test.describe('Receptionist patient search and quick-add', () => {
 });
 
 test.describe('Doctor patient browser', () => {
-  test('list shows all master-data fields', async ({ page }) => {
+  // The doctor patient list used to render the master-data form in the
+  // right pane on row click. As of commit f45b9b4, clicking a row
+  // navigates to /pacient/:id (chart) or /pacient/:id/te-dhena
+  // (master-data form) depending on completeness — there is no
+  // right-pane form on /doctor/pacientet anymore. The "open patient
+  // and see its data fields" half of this test is dead. The list-
+  // rendering half (rows visible, alergji marker visible) still
+  // matters and runs as a sibling test below. Skip rather than
+  // silently delete so the diff history of intent is preserved.
+  test.skip('list shows all master-data fields', async ({ page }) => {
     const state = emptyState();
-    // Tell the mock to return the doctor's full shape regardless of role.
     await page.setExtraHTTPHeaders({ 'x-test-role': 'doctor' });
     await mockApi(page, state);
     await page.goto('/doctor/pacientet');
 
     await expect(page.getByText('Era Krasniqi')).toBeVisible();
-    // Alergji marker dot in the list, visible per spec.
     await expect(page.locator('[aria-label="Ka alergji / shënim"]').first()).toBeVisible();
 
-    // Open the patient — full data should appear in the right panel.
     await page.getByText('Era Krasniqi').first().click();
-    await expect(page.getByDisplayValue('Era')).toBeVisible();
-    await expect(page.getByDisplayValue('Krasniqi')).toBeVisible();
-    await expect(page.getByDisplayValue('Prizren')).toBeVisible();
-    await expect(page.getByDisplayValue('Penicilinë')).toBeVisible();
+    await expect(page.locator('label:has(span:has-text("Emri")) input')).toHaveValue('Era');
+    await expect(page.locator('label:has(span:has-text("Mbiemri")) input')).toHaveValue('Krasniqi');
+    await expect(page.locator('label:has(span:text-is("Vendi i lindjes")) input')).toHaveValue('Prizren');
+    await expect(page.locator('textarea')).toHaveValue('Penicilinë');
   });
 
   test('create new patient submits a full payload', async ({ page }) => {
@@ -309,9 +329,17 @@ test.describe('Doctor patient browser', () => {
 
     await page.getByRole('button', { name: '+ I ri' }).click();
 
-    await page.locator('label:has(span:text-is("Emri")) input').fill('Lori');
-    await page.locator('label:has(span:text-is("Mbiemri")) input').fill('Gashi');
-    await page.locator('label:has(span:text-is("Datelindja")) input').fill('2021-06-12');
+    // Required fields render `<span>Emri<span>*</span></span>` — the
+    // outer span's textContent is "Emri*", so `text-is("Emri")` won't
+    // match. Use a `filter({ hasText: /^Emri/ })` anchored regex so
+    // "Mbiemri" (also contains "emri") doesn't collide.
+    await page.locator('label').filter({ hasText: /^Emri/ }).locator('input').fill('Lori');
+    await page.locator('label').filter({ hasText: /^Mbiemri/ }).locator('input').fill('Gashi');
+    await page.locator('label').filter({ hasText: /^Datelindja/ }).locator('input').fill('2021-06-12');
+    // Gjinia became required as part of the completeness model (f45b9b4)
+    // — the Ruaj button stays disabled until all four mandatory fields
+    // (firstName, lastName, dateOfBirth, sex) are populated.
+    await page.locator('label').filter({ hasText: /^Gjinia/ }).locator('select').selectOption('f');
     await page.locator('label:has(span:text-is("Vendi i lindjes")) input').fill('Pejë');
     await page.locator('label:has(span:text-is("Telefoni")) input').fill('+383 44 444 555');
 
@@ -327,7 +355,13 @@ test.describe('Doctor patient browser', () => {
     });
   });
 
-  test('edit autosaves on blur', async ({ page }) => {
+  // Same root cause as "list shows all master-data fields" above —
+  // clicking a row in /doctor/pacientet now navigates to /pacient/:id,
+  // not into a right-pane form. The autosave-on-blur behavior is
+  // tested at the destination page (the master-data form), but the
+  // "click in /doctor/pacientet then edit" entry point no longer
+  // exists. Skip rather than delete so future-you can see why.
+  test.skip('edit autosaves on blur', async ({ page }) => {
     const state = emptyState();
     await page.setExtraHTTPHeaders({ 'x-test-role': 'doctor' });
     await mockApi(page, state);

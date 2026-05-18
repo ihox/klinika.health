@@ -81,10 +81,39 @@ function mockMfaVerifySuccess(page: Page, code = '482613', roles: string[] = ['d
   });
 }
 
+// `authState: 'logged-out'` means /api/auth/me is NOT mocked by the
+// fixture. Tests that successfully log in need to stub /me so the
+// post-login RouteGate clears — otherwise the gate's 401 handler
+// bounces the page to /login?reason=session-expired and the
+// "I reached /doctor" assertion times out.
+function mockMeAuthenticated(page: Page, roles: string[] = ['doctor']) {
+  return page.route('**/api/auth/me', async (route: Route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        user: {
+          id: '00000000-0000-4000-8000-000000000001',
+          email: 'taulant.shala@klinika.health',
+          firstName: 'Taulant',
+          lastName: 'Shala',
+          roles,
+          title: 'Dr.',
+          clinicName: 'DonetaMED',
+          clinicShortName: 'DM',
+          createdAt: '2024-02-14T10:00:00.000Z',
+          lastLoginAt: '2026-05-14T13:00:00.000Z',
+        },
+      }),
+    });
+  });
+}
+
 test.describe('Login + MFA', () => {
   test('full flow: login → MFA → doctor home', async ({ page }) => {
     await mockLoginMfaRequired(page);
     await mockMfaVerifySuccess(page);
+    await mockMeAuthenticated(page);
 
     await mockClinicIdentity(page);
     await page.goto('/login');
@@ -98,6 +127,9 @@ test.describe('Login + MFA', () => {
     await expect(page.getByRole('heading', { name: 'Verifikoni se jeni ju' })).toBeVisible();
     await expect(page.getByText('t…a@klinika.health')).toBeVisible();
 
+    // Wait for the OTP cells (wrapped in <Suspense>) before pressing
+    // keys, otherwise the first digits land on the fallback.
+    await expect(page.getByLabel('Shifra 1')).toBeVisible();
     // Type the 6 digits — the form auto-submits on the 6th.
     for (const digit of '482613') {
       await page.keyboard.press(digit);
@@ -199,9 +231,13 @@ test.describe('Trusted device (second login)', () => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify({ status: 'authenticated', role: 'doctor' }),
+        // LoginResponse uses `roles: AuthRole[]` (plural array) — the
+        // form keys off `result.roles` before redirecting via
+        // homePathForRoles().
+        body: JSON.stringify({ status: 'authenticated', roles: ['doctor'] }),
       });
     });
+    await mockMeAuthenticated(page);
     await mockClinicIdentity(page);
     await page.goto('/login');
     await page.getByLabel('Email').fill('taulant.shala@klinika.health');
