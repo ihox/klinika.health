@@ -1,0 +1,155 @@
+name: Deploy DonetaMED
+
+# Auto-deploy to the DonetaMED on-prem laptop on push to the
+# `donetamed` branch. Gated on a green CI run: GitHub fires this
+# workflow only when the upstream CI on `donetamed` finishes
+# successfully. `workflow_dispatch` stays as a manual escape hatch
+# (ignores CI state — use for hot-fixes when CI has a known-bad
+# unrelated failure).
+#
+# Two jobs:
+#   1. build  — GitHub-hosted ubuntu runner builds api + web images,
+#               pushes them to GHCR as ghcr.io/ihox/klinika-{api,web}:donetamed
+#               (and a sha-tagged variant for rollback).
+#   2. deploy — self-hosted runner ON the laptop pulls the fresh
+#               images, runs `prisma migrate deploy`, rolls the stack,
+#               and smoke-tests /health/ready.
+#
+# The deploy job runs as the `github-runner` user (uid 995). It has
+# `docker` group (manages compose) and `klinika` group (reads
+# /srv/sites/klinika-health/.env, mode 0640 root:klinika). NO sudo.
+# The on-disk repo clone at /srv/sites/klinika-health/repo is owned
+# by `klinika` and is NOT touched by this workflow — the deploy
+# operates from the runner's own `actions/checkout` workspace under
+# /opt/actions-runner/_work/.
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [donetamed]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-donetamed
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build:
+    name: Build images
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: donetamed
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build & push api image (donetamed)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./infra/docker/Dockerfile.api.prod
+          push: true
+          tags: |
+            ghcr.io/ihox/klinika-api:donetamed
+            ghcr.io/ihox/klinika-api:donetamed-${{ github.sha }}
+          cache-from: type=gha,scope=donetamed-api
+          cache-to: type=gha,mode=max,scope=donetamed-api
+          platforms: linux/amd64
+
+      - name: Build & push web image (donetamed)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./infra/docker/Dockerfile.web.prod
+          push: true
+          tags: |
+            ghcr.io/ihox/klinika-web:donetamed
+            ghcr.io/ihox/klinika-web:donetamed-${{ github.sha }}
+          cache-from: type=gha,scope=donetamed-web
+          cache-to: type=gha,mode=max,scope=donetamed-web
+          platforms: linux/amd64
+
+  deploy:
+    name: Deploy to on-prem laptop
+    needs: build
+    runs-on: [self-hosted, donetamed]
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: donetamed
+
+      - name: Pull fresh images
+        run: |
+          docker compose \
+            -f infra/compose/docker-compose.donetamed.yml \
+            --env-file /srv/sites/klinika-health/.env \
+            pull
+
+      - name: Run Prisma migrations
+        # Direct prisma binary call — corepack/pnpm in the Node 20.18
+        # base image trips a stale-key error on first invocation.
+        # Mirrors the staging dispatcher in STAGING.md.
+        run: |
+          docker compose \
+            -f infra/compose/docker-compose.donetamed.yml \
+            --env-file /srv/sites/klinika-health/.env \
+            run --rm api \
+            node node_modules/prisma/build/index.js migrate deploy
+
+      - name: Roll the stack
+        run: |
+          docker compose \
+            -f infra/compose/docker-compose.donetamed.yml \
+            --env-file /srv/sites/klinika-health/.env \
+            up -d --remove-orphans
+
+      - name: Smoke test — /health/ready
+        run: |
+          for attempt in $(seq 1 12); do
+            if curl -fsS -m 5 http://localhost:8003/health/ready > /tmp/health.json; then
+              echo "✓ /health/ready passed:"
+              cat /tmp/health.json
+              exit 0
+            fi
+            echo "  attempt $attempt failed, retrying in 5s…"
+            sleep 5
+          done
+          echo "✗ /health/ready failed after 12 attempts"
+          docker compose -f infra/compose/docker-compose.donetamed.yml \
+            --env-file /srv/sites/klinika-health/.env \
+            logs api --tail 100
+          exit 1
+
+      - name: Smoke test — external HTTPS via Cloudflare Tunnel
+        # Confirms the laptop's cloudflared is still healthy and
+        # the apex/tenant routing through Cloudflare's edge works.
+        run: |
+          curl -fsSL --retry 5 --retry-delay 5 \
+            https://donetamed.klinika.health/health/ready
+
+      - name: Verify image tag is :donetamed
+        run: |
+          api_image=$(docker inspect klinika-donetamed-api --format='{{.Config.Image}}')
+          echo "api image: $api_image"
+          case "$api_image" in
+            ghcr.io/ihox/klinika-api:donetamed*) echo "✓ image tag confirmed" ;;
+            *) echo "✗ expected :donetamed tag, got $api_image" >&2 ; exit 1 ;;
+          esac
