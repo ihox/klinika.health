@@ -24,7 +24,6 @@ import {
 import {
   daysSinceColor,
   doctorDashboardClient,
-  formatEuros,
   formatOpenVisitLabel,
   greetingForInstant,
   type DashboardAppointment,
@@ -737,7 +736,6 @@ function DayStats({
   const completed = snapshot?.stats.visitsCompleted ?? 0;
   const total = snapshot?.stats.appointmentsTotal ?? 0;
   const avg = snapshot?.stats.averageVisitMinutes;
-  const payments = snapshot?.stats.paymentsCents ?? 0;
   // Derive in_progress + waiting from the appointment rows. The
   // dashboard endpoint doesn't expose these as separate fields, but
   // every appointment carries `status`, and the secondary tile line
@@ -751,7 +749,7 @@ function DayStats({
       (a) => a.status === 'scheduled' || a.status === 'arrived',
     ).length ?? 0;
   return (
-    <div className="grid grid-cols-3 border-t border-line">
+    <div className="grid grid-cols-2 border-t border-line">
       <div className="border-r border-line px-4 py-3.5">
         {/* Option A from the chart.html in_progress design demo
             (Surface 2 · "fraction + breakdown sekondar"). Big
@@ -813,7 +811,6 @@ function DayStats({
         }
         label="Mesatare"
       />
-      <Stat value={formatEuros(payments)} label="Pagesa" />
     </div>
   );
 }
@@ -1073,7 +1070,7 @@ function VisitsLogPanel({
               key={e.id}
               type="button"
               onClick={() => onEntryClick(e)}
-              className="grid w-full grid-cols-[60px_1fr_auto_auto] items-center gap-4 border-b border-line-soft px-4 py-2.5 text-left text-[13px] transition last:border-b-0 hover:bg-surface-subtle"
+              className="grid w-full grid-cols-[60px_1fr_auto] items-center gap-4 border-b border-line-soft px-4 py-2.5 text-left text-[13px] transition last:border-b-0 hover:bg-surface-subtle"
             >
               <span className="font-mono text-[12px] tabular-nums text-ink-muted">
                 {toLocalParts(new Date(e.recordedAt)).time}
@@ -1090,20 +1087,6 @@ function VisitsLogPanel({
                 {e.primaryDiagnosis
                   ? `${e.primaryDiagnosis.code} ${e.primaryDiagnosis.latinDescription}`
                   : 'Pa diagnozë'}
-              </span>
-              <span className="font-display text-[13px] font-semibold tabular-nums text-ink">
-                {e.paymentCode ? (
-                  <>
-                    <span className="mr-1 text-[11px] font-normal text-ink-faint">
-                      {e.paymentCode}
-                    </span>
-                    {e.paymentAmountCents != null
-                      ? formatEuros(e.paymentAmountCents)
-                      : '—'}
-                  </>
-                ) : (
-                  '—'
-                )}
               </span>
             </button>
           ))

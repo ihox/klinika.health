@@ -179,15 +179,15 @@ test.describe('Doctor home dashboard', () => {
     await expect(page.getByText('Era Krasniqi').first()).toBeVisible();
     await expect(page.getByText('Mira Hoxhaj').first()).toBeVisible();
 
-    // Day stats: visits 1/3, mesatare 12 min, pagesa 15 €. The
-    // "Pagesa" tile and the visit log both show "15 €"; scope to the
-    // tile by querying via the label. `{completed}` / `{total}` render
-    // as adjacent text nodes around an inline `/` span with margin,
-    // so textContent is "1/3" without spaces.
+    // Day stats: visits 1/3, mesatare 12 min. `{completed}` /
+    // `{total}` render as adjacent text nodes around an inline `/`
+    // span with margin, so textContent is "1/3" without spaces.
+    // Aggregate payment surfaces moved to /raporti — the Pagesa tile
+    // and per-row price are no longer rendered on the home page.
     await expect(page.getByText('1/3')).toBeVisible();
     await expect(page.getByText('Mesatare', { exact: true })).toBeVisible();
-    await expect(page.getByText('Pagesa', { exact: true })).toBeVisible();
-    await expect(page.getByText('15 €').first()).toBeVisible();
+    await expect(page.getByText('Pagesa', { exact: true })).toHaveCount(0);
+    await expect(page.getByText('15 €')).toHaveCount(0);
 
     // Next patient: name + allergy chip + visit count.
     await expect(
