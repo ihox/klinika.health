@@ -47,6 +47,24 @@
   pass to keep the dictionary honest.
 
 ## Cleanup tasks
+- Raporti print: multi-page A4 pagination for high-volume days (ADR-019).
+  The v1 print template renders the whole visits table inside one
+  paper element. ~23–30 rows fit comfortably; days with 40+ visits
+  overflow the bottom margin. Follow-up: add CSS @page rules so the
+  letterhead + stat block stay on page 1, the table flows across
+  pages, the sum row appears on the last page, and a "Faqe N nga M"
+  pager renders in the footer. Effort: ~2 hours, blocked on a day
+  with 40+ visits — until then 30-row days are the realistic upper
+  bound for one doctor. Trigger to reopen: a clinic complains the
+  bottom rows clip on the printout.
+- Raporti print: expose `clinic.license_number` in `/api/clinic/settings`
+  and render the "Lic. MSH-Nr. …" line under the letterhead meta
+  block. Schema column exists; the settings DTO doesn't include it.
+- Raporti print: replace the `settings.general.shortName` placeholder
+  in the "formal" letterhead subtitle with a dedicated
+  `clinic.formal_name` column ("Ordinanca Specialistike Pediatrike"
+  for DonetaMED). Currently we render shortName because it's the only
+  field already on the wire.
 - Stale slice-XX branches (slice-01 through slice-16) can be pruned
 - E2E test for receptionist edit-lock behavior on the end-of-day prompt
   (commit 8720a5c). A receptionist-only session viewing yesterday's
