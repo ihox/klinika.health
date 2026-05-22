@@ -1,0 +1,646 @@
+<!DOCTYPE html>
+<html lang="sq">
+<head>
+<meta charset="UTF-8">
+<title>Klinika — Raporti i ditës · printim</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="styles.css">
+<!--
+  ============================================================
+  print-raporti.html — design pass · 22.05.2026
+
+  Formal A4 portrait daily financial report. Same letterhead +
+  signature pattern as print-visit.html (one canonical "Klinika
+  printed document" feel across visit reports and daily
+  reports). One stat block at top, full visits table below, sum
+  row + signature at bottom.
+
+  A4: 210 mm × 297 mm, 16mm L/R margins, 14mm T, 18mm B.
+  ============================================================
+-->
+<style>
+  body { background: #E7E5E4; min-height: 100vh; }
+
+  /* ====== Preview toolbar (chrome only — never prints) ====== */
+  .preview-bar {
+    position: sticky; top: 0;
+    background: var(--bg-elevated);
+    border-bottom: 1px solid var(--border);
+    padding: 12px 24px;
+    display: flex; align-items: center; gap: 16px;
+    z-index: 10;
+    box-shadow: var(--shadow-xs);
+  }
+  .pb-back { display: flex; align-items: center; gap: 6px; color: var(--text-muted); font-size: 13px; }
+  .pb-back:hover { color: var(--text); }
+  .pb-title { font-family: var(--font-display); font-size: 15px; font-weight: 600; }
+  .pb-sub { font-size: 12px; color: var(--text-muted); }
+  .pb-spacer { flex: 1; }
+
+  /* ====== Paper area ====== */
+  .paper-area {
+    padding: 32px 24px 48px;
+    display: flex; flex-direction: column; align-items: center;
+    gap: 14px;
+  }
+  .paper {
+    width: 210mm;
+    min-height: 297mm;
+    background: white;
+    box-shadow: 0 8px 24px rgba(28,25,23,0.16), 0 2px 8px rgba(28,25,23,0.08);
+    padding: 14mm 16mm 18mm;
+    font-family: 'Inter', system-ui, sans-serif;
+    font-size: 10pt;
+    color: #1c1917;
+    line-height: 1.45;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ====== Letterhead (same family as print-visit) ====== */
+  .letterhead {
+    display: grid;
+    grid-template-columns: 1.2fr 1fr;
+    gap: 12mm;
+    padding-bottom: 5mm;
+    border-bottom: 1.5px solid #0F766E;
+    margin-bottom: 4mm;
+    align-items: flex-start;
+  }
+  .lh-clinic .formal {
+    display: block;
+    font-size: 7.5pt;
+    font-weight: 500;
+    letter-spacing: 0.04em;
+    color: #57534E;
+    text-transform: uppercase;
+    margin-bottom: 1.2mm;
+    line-height: 1.2;
+  }
+  .lh-clinic .name {
+    font-family: 'Inter Tight', 'Inter', sans-serif;
+    font-size: 18pt;
+    font-weight: 700;
+    letter-spacing: -0.015em;
+    color: #0F766E;
+    line-height: 1;
+  }
+  .lh-clinic .meta {
+    margin-top: 2.5mm;
+    font-size: 8.2pt;
+    color: #57534E;
+    line-height: 1.55;
+    font-variant-numeric: tabular-nums;
+  }
+  .lh-clinic .meta .lic {
+    display: inline-block;
+    margin-top: 0.8mm;
+    color: #78716C;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 7.5pt;
+    letter-spacing: 0.02em;
+  }
+  .lh-doc {
+    text-align: right;
+  }
+  .lh-doc .doc-tag {
+    display: inline-block;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 7.5pt;
+    color: #0F766E;
+    background: #F0FDFA;
+    border: 1px solid #99F6E4;
+    padding: 1.5mm 3mm;
+    border-radius: 999px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    font-weight: 600;
+    margin-bottom: 2mm;
+  }
+  .lh-doc .doc-title {
+    font-family: 'Inter Tight', sans-serif;
+    font-size: 22pt;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1.05;
+    color: #1c1917;
+  }
+  .lh-doc .doc-meta {
+    margin-top: 2mm;
+    font-size: 9pt;
+    color: #57534E;
+    line-height: 1.5;
+    font-variant-numeric: tabular-nums;
+  }
+  .lh-doc .doc-meta .k {
+    color: #A8A29E;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-size: 7pt;
+    font-weight: 500;
+    margin-right: 2mm;
+  }
+  .lh-doc .doc-meta .v {
+    color: #1c1917;
+    font-weight: 600;
+  }
+  .lh-doc .doc-meta .row { margin-bottom: 0.6mm; }
+
+  /* ====== Body ====== */
+  .doc-body { flex: 1; display: flex; flex-direction: column; gap: 5mm; }
+
+  /* Stat block at top — three numbers in a clean row */
+  .stat-block {
+    border: 1px solid #D6D3D1;
+    border-radius: 3px;
+    overflow: hidden;
+    display: grid;
+    grid-template-columns: 1.3fr 1fr 1.4fr;
+  }
+  .stat-block .cell {
+    padding: 5mm 6mm;
+    border-right: 1px solid #E7E5E4;
+    display: flex;
+    flex-direction: column;
+    gap: 1.5mm;
+  }
+  .stat-block .cell:last-child { border-right: none; }
+  .stat-block .cell.revenue { background: #F0FDFA; }
+  .stat-block .lab {
+    font-size: 7.3pt;
+    font-weight: 700;
+    color: #0F766E;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+  .stat-block .v {
+    font-family: 'Inter Tight', sans-serif;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    color: #1c1917;
+    letter-spacing: -0.02em;
+    line-height: 1;
+  }
+  .stat-block .cell.revenue .v { font-size: 28pt; color: #0F766E; }
+  .stat-block .cell.revenue .v .unit {
+    font-family: 'Inter', sans-serif;
+    font-size: 14pt;
+    color: #0F766E;
+    font-weight: 600;
+    margin-left: 1.5mm;
+    letter-spacing: 0;
+  }
+  .stat-block .cell.count .v { font-size: 22pt; }
+  .stat-block .cell.status {
+    gap: 1.5mm;
+  }
+  .stat-block .cell.status .lines {
+    display: flex;
+    flex-direction: column;
+    gap: 1.2mm;
+    font-size: 9pt;
+    font-variant-numeric: tabular-nums;
+  }
+  .stat-block .cell.status .lines .line {
+    display: grid;
+    grid-template-columns: 5mm 1fr auto;
+    gap: 2mm;
+    align-items: center;
+  }
+  .stat-block .cell.status .lines .sw {
+    width: 8px; height: 8px; border-radius: 2px;
+  }
+  .stat-block .cell.status .lines .lab2 {
+    color: #1c1917;
+    font-weight: 500;
+    text-transform: none;
+    letter-spacing: 0;
+    font-size: 9pt;
+  }
+  .stat-block .cell.status .lines .n {
+    font-family: 'Inter Tight', sans-serif;
+    font-weight: 700;
+    color: #1c1917;
+    font-size: 11pt;
+  }
+  .stat-block .foot-note {
+    margin-top: auto;
+    padding-top: 1.5mm;
+    font-size: 7.5pt;
+    color: #78716C;
+    font-variant-numeric: tabular-nums;
+  }
+  .stat-block .foot-note .sep { color: #C4C0BC; margin: 0 1mm; }
+  .stat-block .foot-note strong { color: #1c1917; font-weight: 600; }
+
+  /* Section heading + table */
+  .sect-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-top: 1mm;
+    margin-bottom: 2mm;
+    padding-bottom: 1.5mm;
+    border-bottom: 1px solid #D6D3D1;
+  }
+  .sect-head h2 {
+    font-family: 'Inter Tight', sans-serif;
+    font-size: 11pt;
+    font-weight: 700;
+    color: #1c1917;
+    letter-spacing: -0.01em;
+  }
+  .sect-head .meta {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 7.5pt;
+    color: #78716C;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  table.print-visits {
+    width: 100%;
+    border-collapse: collapse;
+    font-variant-numeric: tabular-nums;
+    font-size: 9pt;
+  }
+  table.print-visits thead th {
+    text-align: left;
+    font-family: 'Inter', sans-serif;
+    font-size: 7.5pt;
+    font-weight: 600;
+    color: #57534E;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    padding: 1.8mm 2mm;
+    border-bottom: 1px solid #1c1917;
+    background: white;
+  }
+  table.print-visits thead th.num { text-align: right; }
+  table.print-visits thead th.col-time { width: 14mm; }
+  table.print-visits thead th.col-dob { width: 22mm; }
+  table.print-visits thead th.col-status { width: 28mm; }
+  table.print-visits thead th.col-pay { width: 18mm; }
+  table.print-visits thead th.col-code { width: 14mm; }
+  table.print-visits tbody td {
+    padding: 1.4mm 2mm;
+    border-bottom: 0.5px solid #E7E5E4;
+    vertical-align: middle;
+  }
+  table.print-visits tbody td.num { text-align: right; }
+  table.print-visits tbody td.time {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 8.5pt;
+    color: #57534E;
+  }
+  table.print-visits tbody td.name { font-weight: 600; color: #1c1917; }
+  table.print-visits tbody td.name .age { color: #A8A29E; font-weight: 400; margin-left: 1.5mm; font-size: 7.5pt; }
+  table.print-visits tbody td.name .note {
+    display: block;
+    color: #78716C;
+    font-weight: 400;
+    font-size: 7.5pt;
+    font-style: italic;
+    margin-top: 0.3mm;
+  }
+  table.print-visits tbody td.dob {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 8pt;
+    color: #57534E;
+  }
+  table.print-visits tbody td.status .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 1.2mm;
+    font-size: 8pt;
+    font-weight: 500;
+  }
+  table.print-visits tbody td.status .chip .dot {
+    width: 6px; height: 6px; border-radius: 999px;
+  }
+  table.print-visits tbody td.status .chip.s-completed { color: #14532D; }
+  table.print-visits tbody td.status .chip.s-completed .dot { background: #15803D; }
+  table.print-visits tbody td.status .chip.s-noshow    { color: #92400E; }
+  table.print-visits tbody td.status .chip.s-noshow .dot { background: #B45309; }
+  table.print-visits tbody td.status .chip.s-scheduled { color: #3730A3; }
+  table.print-visits tbody td.status .chip.s-scheduled .dot { background: #4F46E5; }
+  table.print-visits tbody td.pay {
+    font-family: 'Inter Tight', sans-serif;
+    font-weight: 700;
+    color: #1c1917;
+    font-size: 10pt;
+    letter-spacing: -0.01em;
+  }
+  table.print-visits tbody td.pay .free { color: #78716C; font-style: italic; font-weight: 500; font-size: 8.5pt; }
+  table.print-visits tbody td.pay .none { color: #A8A29E; font-weight: 400; }
+  table.print-visits tbody td.code {
+    text-align: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 700;
+    color: #1c1917;
+    font-size: 9.5pt;
+  }
+  table.print-visits tbody td.code .empty { color: #C4C0BC; font-weight: 400; }
+  table.print-visits tbody tr.row-noshow td,
+  table.print-visits tbody tr.row-scheduled td { color: #78716C; }
+  table.print-visits tbody tr.row-noshow td.name,
+  table.print-visits tbody tr.row-scheduled td.name { color: #1c1917; }
+  table.print-visits tfoot td {
+    padding: 2.5mm 2mm 1.5mm;
+    border-top: 1.2px solid #1c1917;
+    font-family: 'Inter Tight', sans-serif;
+    font-weight: 700;
+    font-size: 11pt;
+    color: #1c1917;
+  }
+  table.print-visits tfoot td.label {
+    font-family: 'Inter', sans-serif;
+    font-weight: 500;
+    color: #57534E;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-size: 8pt;
+  }
+  table.print-visits tfoot td.note {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 400;
+    color: #78716C;
+    font-size: 7.5pt;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    text-align: right;
+  }
+  table.print-visits tfoot td.sum {
+    text-align: right;
+    color: #0F766E;
+    font-size: 14pt;
+    letter-spacing: -0.015em;
+  }
+  table.print-visits tfoot td.sum .unit {
+    font-family: 'Inter', sans-serif;
+    font-weight: 600;
+    color: #0F766E;
+    font-size: 10pt;
+    margin-left: 0.8mm;
+  }
+
+  /* Payment code key (small legend) */
+  .code-key {
+    margin-top: 2mm;
+    font-size: 7.5pt;
+    color: #78716C;
+    display: flex;
+    gap: 4mm;
+    flex-wrap: wrap;
+    padding: 2mm 0;
+    border-top: 0.5px dashed #D6D3D1;
+    font-variant-numeric: tabular-nums;
+  }
+  .code-key .k {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 700;
+    color: #1c1917;
+    margin-right: 1mm;
+  }
+
+  /* ====== Footer ====== */
+  .doc-footer {
+    margin-top: 8mm;
+    padding-top: 8mm;
+    border-top: 0.5px solid #D6D3D1;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: 12mm;
+  }
+  .sig-col { font-size: 9pt; min-width: 70mm; text-align: right; }
+  .sig-col .sig-img { height: 14mm; margin-bottom: 1mm; color: #1c1917; }
+  .sig-col .sig-line { border-top: 1px solid #1c1917; padding-top: 1.5mm; width: 70mm; margin-left: auto; }
+  .sig-col .name { font-weight: 600; font-size: 10pt; }
+  .sig-col .cred { color: #57534E; font-size: 8pt; }
+  .sig-col .role-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 7pt;
+    color: #78716C;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-top: 1mm;
+  }
+
+  .doc-footer .issue {
+    text-align: left;
+    font-size: 8.5pt;
+    color: #57534E;
+    line-height: 1.5;
+    font-variant-numeric: tabular-nums;
+  }
+  .doc-footer .issue .issue-when {
+    color: #1c1917;
+    font-weight: 600;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9pt;
+  }
+  .doc-footer .issue .issue-place {
+    margin-top: 1mm;
+    font-size: 8.5pt;
+    color: #57534E;
+    font-weight: 500;
+  }
+  .doc-footer .issue .issue-sub {
+    margin-top: 1.2mm;
+    font-size: 7.5pt;
+    color: #78716C;
+  }
+  /* ====== Print rules ====== */
+  @page { size: A4 portrait; margin: 0; }
+  @media print {
+    body { background: white; }
+    .preview-bar { display: none; }
+    .paper-area { padding: 0; gap: 0; }
+    .paper {
+      box-shadow: none; margin: 0;
+      width: 210mm; min-height: 297mm; padding: 14mm 16mm 18mm;
+    }
+  }
+</style>
+</head>
+<body>
+
+<div class="preview-bar">
+  <a href="raporti.html" class="pb-back btn btn-ghost btn-sm">← Kthehu te raporti</a>
+  <div>
+    <div class="pb-title">Raporti i ditës</div>
+    <div class="pb-sub">22 maj 2026 · A4 portret</div>
+  </div>
+  <div class="pb-spacer"></div>
+  <button class="btn btn-secondary btn-sm">PDF</button>
+  <button class="btn btn-primary btn-sm" onclick="window.print()">Printo</button>
+</div>
+
+<div class="paper-area">
+  <article class="paper">
+
+    <header class="letterhead">
+      <div class="lh-clinic">
+        <span class="formal">Ordinanca Specialistike Pediatrike</span>
+        <div class="name">DONETA-MED</div>
+        <div class="meta">
+          Rr. Adem Jashari, Prizren, Kosovë<br>
+          045 83 00 83 · 043 543 123 · <a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="056c6b636a45616a6b6071646860612b666a68">[email&#160;protected]</a><br>
+          Orari: 10:00 – 18:00<br>
+          <span class="lic">Lic. MSH-Nr. 1487-AM/24</span>
+        </div>
+      </div>
+      <div class="lh-doc">
+        <span class="doc-tag">Raporti i ditës</span>
+        <div class="doc-title">22 maj 2026</div>
+        <div class="doc-meta">
+          <div class="row"><span class="k">Dita</span><span class="v">E premte</span></div>
+          <div class="row"><span class="k">Orari</span><span class="v">08:30 – 17:30</span></div>
+          <div class="row"><span class="k">Mjeku</span><span class="v">Dr. Taulant Shala</span></div>
+        </div>
+      </div>
+    </header>
+
+    <div class="doc-body">
+
+      <!-- Top stat block -->
+      <div class="stat-block">
+        <div class="cell revenue">
+          <div class="lab">Të ardhura totale</div>
+          <div class="v">235<span class="unit">€</span></div>
+          <div class="foot-note">
+            <strong>A</strong> ×11 (15€)<span class="sep">·</span>
+            <strong>B</strong> ×5 (10€)<span class="sep">·</span>
+            <strong>D</strong> ×1 (20€)<span class="sep">·</span>
+            <strong>E</strong> ×1 (falas)
+          </div>
+        </div>
+        <div class="cell count">
+          <div class="lab">Numri i vizitave</div>
+          <div class="v">23</div>
+          <div class="foot-note">
+            <strong>18</strong> të paguara<span class="sep">·</span>
+            <strong>5</strong> të tjera
+          </div>
+        </div>
+        <div class="cell status">
+          <div class="lab">Statusi i vizitave</div>
+          <div class="lines">
+            <div class="line">
+              <span class="sw" style="background: #15803D;"></span>
+              <span class="lab2">Të përfunduara</span>
+              <span class="n">18</span>
+            </div>
+            <div class="line">
+              <span class="sw" style="background: #B45309;"></span>
+              <span class="lab2">Mungesa</span>
+              <span class="n">3</span>
+            </div>
+            <div class="line">
+              <span class="sw" style="background: #4F46E5;"></span>
+              <span class="lab2">Të planifikuara</span>
+              <span class="n">2</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Visits table -->
+      <div class="sect-head">
+        <h2>Vizitat e ditës</h2>
+        <span class="meta">23 rreshta · sipas orës</span>
+      </div>
+
+      <table class="print-visits">
+        <thead>
+          <tr>
+            <th class="col-time">Ora</th>
+            <th>Pacienti</th>
+            <th class="col-dob">DL</th>
+            <th class="col-status">Statusi</th>
+            <th class="col-pay num">Pagesa</th>
+            <th class="col-code">Kodi</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td class="time">08:30</td><td class="name">Era Krasniqi <span class="age">8v</span></td><td class="dob">12.04.2018</td><td class="status"><span class="chip s-completed"><span class="dot"></span>Përfunduar</span></td><td class="pay num">15 €</td><td class="code">A</td></tr>
+          <tr><td class="time">09:00</td><td class="name">Jon Tamniku <span class="age">10v</span></td><td class="dob">03.11.2015</td><td class="status"><span class="chip s-completed"><span class="dot"></span>Përfunduar</span></td><td class="pay num">10 €</td><td class="code">B</td></tr>
+          <tr><td class="time">09:20</td><td class="name">Dion Hoxha <span class="age">1v 7m</span></td><td class="dob">18.10.2024</td><td class="status"><span class="chip s-completed"><span class="dot"></span>Përfunduar</span></td><td class="pay num">15 €</td><td class="code">A</td></tr>
+          <tr><td class="time">09:45</td><td class="name">Aria Kelmendi <span class="age">3v 4m</span></td><td class="dob">22.01.2023</td><td class="status"><span class="chip s-completed"><span class="dot"></span>Përfunduar</span></td><td class="pay num">10 €</td><td class="code">B</td></tr>
+          <tr><td class="time">10:00</td><td class="name">Liam Berisha <span class="age">7m</span></td><td class="dob">14.10.2025</td><td class="status"><span class="chip s-completed"><span class="dot"></span>Përfunduar</span></td><td class="pay num">15 €</td><td class="code">A</td></tr>
+          <tr><td class="time">10:20</td><td class="name">Ema Krasniqi <span class="age">4v 3m</span></td><td class="dob">03.02.2022</td><td class="status"><span class="chip s-completed"><span class="dot"></span>Përfunduar</span></td><td class="pay num">15 €</td><td class="code">A</td></tr>
+          <tr><td class="time">10:40</td><td class="name">Lena Hoti <span class="age">6v 11m</span></td><td class="dob">10.06.2019</td><td class="status"><span class="chip s-completed"><span class="dot"></span>Përfunduar</span></td><td class="pay num">15 €</td><td class="code">A</td></tr>
+          <tr><td class="time">11:00</td><td class="name">Drini Hoxha <span class="age">4v 1m</span></td><td class="dob">22.04.2022</td><td class="status"><span class="chip s-completed"><span class="dot"></span>Përfunduar</span></td><td class="pay num">15 €</td><td class="code">A</td></tr>
+          <tr class="row-noshow"><td class="time">11:20</td><td class="name">Ben Krasniqi <span class="age">3v 6m</span></td><td class="dob">11.11.2022</td><td class="status"><span class="chip s-noshow"><span class="dot"></span>Mungesë</span></td><td class="pay num"><span class="none">—</span></td><td class="code"><span class="empty">—</span></td></tr>
+          <tr><td class="time">11:40</td><td class="name">Mira Hoxhaj <span class="age">2v</span></td><td class="dob">02.05.2024</td><td class="status"><span class="chip s-completed"><span class="dot"></span>Përfunduar</span></td><td class="pay num">15 €</td><td class="code">A</td></tr>
+          <tr><td class="time">12:00</td><td class="name">Endi Krasniqi <span class="age">12 ditë</span><span class="note">Vizita e parë</span></td><td class="dob">15.05.2025</td><td class="status"><span class="chip s-completed"><span class="dot"></span>Përfunduar</span></td><td class="pay num">20 €</td><td class="code">D</td></tr>
+          <tr><td class="time">12:30</td><td class="name">Dorian Hoxha <span class="age">5v 1m</span></td><td class="dob">30.03.2021</td><td class="status"><span class="chip s-completed"><span class="dot"></span>Përfunduar</span></td><td class="pay num">15 €</td><td class="code">A</td></tr>
+          <tr><td class="time">13:00</td><td class="name">Lori Gashi <span class="age">6v 6m</span></td><td class="dob">25.10.2019</td><td class="status"><span class="chip s-completed"><span class="dot"></span>Përfunduar</span></td><td class="pay num">10 €</td><td class="code">B</td></tr>
+          <tr><td class="time">13:30</td><td class="name">Sara Berisha <span class="age">2v</span></td><td class="dob">06.05.2024</td><td class="status"><span class="chip s-completed"><span class="dot"></span>Përfunduar</span></td><td class="pay num">15 €</td><td class="code">A</td></tr>
+          <tr><td class="time">13:50</td><td class="name">Era Berisha <span class="age">5v 3m</span></td><td class="dob">12.02.2021</td><td class="status"><span class="chip s-completed"><span class="dot"></span>Përfunduar</span></td><td class="pay num">15 €</td><td class="code">A</td></tr>
+          <tr class="row-noshow"><td class="time">14:10</td><td class="name">Ron Krasniqi <span class="age">2v 10m</span></td><td class="dob">03.07.2023</td><td class="status"><span class="chip s-noshow"><span class="dot"></span>Mungesë</span></td><td class="pay num"><span class="none">—</span></td><td class="code"><span class="empty">—</span></td></tr>
+          <tr><td class="time">14:30</td><td class="name">Diana Hoti <span class="age">2v 2m</span><span class="note">Pasvizitë · Falas</span></td><td class="dob">11.03.2024</td><td class="status"><span class="chip s-completed"><span class="dot"></span>Përfunduar</span></td><td class="pay num"><span class="free">Falas</span></td><td class="code">E</td></tr>
+          <tr><td class="time">14:55</td><td class="name">Klea Hoxha <span class="age">7v 8m</span></td><td class="dob">18.09.2018</td><td class="status"><span class="chip s-completed"><span class="dot"></span>Përfunduar</span></td><td class="pay num">15 €</td><td class="code">A</td></tr>
+          <tr><td class="time">15:20</td><td class="name">Nora Berisha <span class="age">3v 9m</span></td><td class="dob">25.07.2022</td><td class="status"><span class="chip s-completed"><span class="dot"></span>Përfunduar</span></td><td class="pay num">10 €</td><td class="code">B</td></tr>
+          <tr><td class="time">15:45</td><td class="name">Andi Hoxha <span class="age">6v 1m</span></td><td class="dob">09.04.2020</td><td class="status"><span class="chip s-completed"><span class="dot"></span>Përfunduar</span></td><td class="pay num">10 €</td><td class="code">B</td></tr>
+          <tr class="row-noshow"><td class="time">16:15</td><td class="name">Ardita Gashi <span class="age">11m</span></td><td class="dob">02.06.2025</td><td class="status"><span class="chip s-noshow"><span class="dot"></span>Mungesë</span></td><td class="pay num"><span class="none">—</span></td><td class="code"><span class="empty">—</span></td></tr>
+          <tr class="row-scheduled"><td class="time">16:45</td><td class="name">Genti Kelmendi <span class="age">2v 9m</span></td><td class="dob">14.08.2023</td><td class="status"><span class="chip s-scheduled"><span class="dot"></span>I planifikuar</span></td><td class="pay num"><span class="none">—</span></td><td class="code"><span class="empty">—</span></td></tr>
+          <tr class="row-scheduled"><td class="time">17:30</td><td class="name">Vesa Krasniqi <span class="age">1v 4m</span></td><td class="dob">21.12.2024</td><td class="status"><span class="chip s-scheduled"><span class="dot"></span>I planifikuar</span></td><td class="pay num"><span class="none">—</span></td><td class="code"><span class="empty">—</span></td></tr>
+        </tbody>
+        <tfoot>
+          <tr>
+            <td colspan="2" class="label">Totali</td>
+            <td colspan="2" class="note">18 të paguara · 5 të tjera</td>
+            <td class="sum num">235<span class="unit">€</span></td>
+            <td></td>
+          </tr>
+        </tfoot>
+      </table>
+
+      <div class="code-key">
+        <span><span class="k">A</span>15 €</span>
+        <span><span class="k">B</span>10 €</span>
+        <span><span class="k">C</span>5 €</span>
+        <span><span class="k">D</span>20 €</span>
+        <span><span class="k">E</span>Falas</span>
+      </div>
+    </div>
+
+    <footer class="doc-footer">
+      <div class="issue">
+        <div class="issue-when" id="printStamp">22.05.2026 · 17:42</div>
+        <div class="issue-place">Prizren</div>
+        <div class="issue-sub">Lëshuar nga sistemi Klinika · për arkivim të brendshëm</div>
+      </div>
+      <div class="sig-col">
+        <svg class="sig-img" viewBox="0 0 200 60" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="margin-left:auto;display:block">
+          <path d="M 8 42 Q 15 18 32 26 Q 42 32 36 42 Q 28 50 38 38 Q 50 24 64 36 Q 72 44 80 30 Q 90 14 100 28 Q 108 38 118 26 Q 130 12 144 30 Q 152 42 160 30 L 178 14" opacity="0.85"/>
+          <path d="M 22 48 L 156 48" stroke-width="0.8" opacity="0.3"/>
+        </svg>
+        <div class="sig-line"></div>
+        <div class="name">Dr. Taulant Shala</div>
+        <div class="cred">specialist pediatër · DonetaMED</div>
+        <div class="role-label">Nënshkrimi i mjekut</div>
+      </div>
+    </footer>
+  </article>
+</div>
+
+<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
+  // Stamp current local time on the issued-at line.
+  (function () {
+    const el = document.getElementById('printStamp');
+    if (!el) return;
+    const d = new Date();
+    const pad = n => String(n).padStart(2, '0');
+    el.textContent = pad(d.getDate()) + '.' + pad(d.getMonth() + 1) + '.' + d.getFullYear()
+      + ' · ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+  })();
+  if (new URLSearchParams(location.search).get('print') === '1') {
+    window.addEventListener('load', () => setTimeout(() => window.print(), 250));
+  }
+</script>
+</body>
+</html>
