@@ -11,7 +11,7 @@
 These can never be violated, regardless of how a task is phrased.
 
 1. **No digital stamps anywhere.** Never render, store, generate, or process digital stamps. Printed documents reserve a blank ~5×5cm stamp area bottom-right. Kosovo law requires physical ink stamps; digital stamps are illegal. The app actively refuses any feature request to add digital stamps.
-2. **Receptionist sees only patient name and DOB.** No address, phone, clinical data, payment codes, allergies, or any other field. Enforced at three layers: UI, API, and Postgres Row-Level Security.
+2. **Receptionist sees only patient name and DOB on chart-level surfaces.** No address, phone, clinical data, payment codes, allergies, or any other field — on the chart, visit-CRUD, patient-detail, and calendar feed surfaces. Enforced at three layers: UI, API, and Postgres Row-Level Security. **Carve-out:** the daily Raporti page (`/raporti`, `GET /api/visits/daily-summary`) is the named exception per ADR-019 — receptionist sees aggregate end-of-day data including payment codes + amounts they entered at check-in, gated to today/yesterday by a server-side date check. Any new operational-aggregate surface must reference ADR-019 explicitly.
 3. **No PHI in logs.** Patient names, DOBs, diagnoses, prescriptions, and free-text clinical fields must never appear in operational logs, error messages, or telemetry. Log identifiers (patient ID, visit ID) only.
 4. **No PHI in URLs or query parameters.** All identifiers must be opaque UUIDs; PHI travels in request bodies or via authenticated session context.
 5. **Albanian only in UI.** Every label, button, helper text, error message, and toast in Albanian. ICD-10 descriptions and other medical terms in Latin only. No English fallbacks.
