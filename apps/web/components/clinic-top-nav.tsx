@@ -10,13 +10,13 @@ import { ClinicUserMenu } from './clinic-user-menu';
 
 /**
  * Canonical role-to-menu mapping (CLAUDE.md §5.8, ADR-004 Multi-role
- * update). A user sees the UNION of items their roles grant; the
- * display order is fixed (Kalendari first, Cilësimet last) regardless
- * of which roles produced which items.
+ * update; Raporti added per ADR-019). A user sees the UNION of items
+ * their roles grant; the display order is fixed regardless of which
+ * roles produced which items.
  *
- *   receptionist → Kalendari
- *   doctor       → Pamja e ditës + Pacientët
- *   clinic_admin → Cilësimet
+ *   receptionist → Kalendari + Raporti
+ *   doctor       → Pamja e ditës + Pacientët + Raporti
+ *   clinic_admin → Cilësimet + Raporti
  *
  * Paths target the existing Next.js routes per the routing answer in
  * the refactor brief (kept routes; nav uses Albanian labels). The
@@ -61,6 +61,13 @@ const NAV_ITEMS: NavItem[] = [
     // All three should light up "Pacientët".
     activePrefixes: ['/pacientet', '/pacient', '/doctor/pacientet'],
     grantedBy: ['doctor'],
+  },
+  {
+    key: 'raporti',
+    label: 'Raporti',
+    path: '/raporti',
+    activePrefixes: ['/raporti'],
+    grantedBy: ['doctor', 'receptionist', 'clinic_admin'],
   },
   {
     key: 'cilesimet',

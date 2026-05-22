@@ -177,6 +177,8 @@ describe('pathStartsWithAny', () => {
     expect(pathStartsWithAny('/administrative', PLATFORM_PATH_PREFIXES)).toBe(false);
     expect(pathStartsWithAny('/doctor', CLINIC_PATH_PREFIXES)).toBe(true);
     expect(pathStartsWithAny('/cilesimet/general', CLINIC_PATH_PREFIXES)).toBe(true);
+    expect(pathStartsWithAny('/raporti', CLINIC_PATH_PREFIXES)).toBe(true);
+    expect(pathStartsWithAny('/raporti/print', CLINIC_PATH_PREFIXES)).toBe(true);
     expect(pathStartsWithAny('/login', CLINIC_PATH_PREFIXES)).toBe(false);
   });
 });
