@@ -53,6 +53,7 @@ Triggers that would justify reopening this decision.
 | 016 | [Payment-code mapping + Tjera preflight refinement](016-payment-code-and-preflight-refinement.md) | Accepted |
 | 017 | [Import incomplete-DOB patients with sentinel](017-import-incomplete-dob-with-sentinel.md) | Accepted |
 | 018 | [Staging via shared Proxmox VM + sibling NPM](018-staging-via-shared-vm-and-npm.md) | Accepted (supersedes staging portion of 002) |
+| 019 | [Raporti receptionist carve-out](019-raporti-receptionist-carve-out.md) | Accepted (carve-out from CLAUDE.md §1.2) |
 
 ## Adding a new ADR
 
