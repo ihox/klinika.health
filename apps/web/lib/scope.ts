@@ -175,6 +175,7 @@ export const CLINIC_PATH_PREFIXES = [
   '/pacientet',
   '/pamja-e-dites',
   '/profili-im',
+  '/raporti',
   '/verify',
   '/forgot-password',
   '/reset-password',
