@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { ClinicTopNav } from '@/components/clinic-top-nav';
 import { Button } from '@/components/ui/button';
@@ -178,9 +178,11 @@ export function RaportiView() {
               isFuture={isFuture}
               prevDisabled={prevDisabled}
               nextDisabled={nextDisabled}
+              pickerEnabled={!receptionistOnly}
               onPrev={gotoPrev}
               onNext={gotoNext}
               onToday={gotoToday}
+              onPick={setDate}
             />
             <Button variant="secondary" size="sm" onClick={openPrint} disabled={!data}>
               <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="mr-1.5">
@@ -272,13 +274,43 @@ interface DateNavProps {
   isFuture: boolean;
   prevDisabled: boolean;
   nextDisabled: boolean;
+  /**
+   * When true, clicking the date display opens the browser's native
+   * calendar picker (same affordance as vërtetim). False for
+   * receptionist-only sessions, which keep the arrow-only nav per
+   * the original design.
+   */
+  pickerEnabled: boolean;
   onPrev: () => void;
   onNext: () => void;
   onToday: () => void;
+  onPick: (date: string) => void;
 }
 
 function DateNav(props: DateNavProps) {
   const compact = formatCompactSq(props.date);
+  const pickerRef = useRef<HTMLInputElement>(null);
+
+  function openPicker() {
+    const el = pickerRef.current;
+    if (!el) return;
+    // `showPicker` is the canonical "open this input's picker" API
+    // (Chromium, Safari 16.4+, Firefox 101+). Fall back to focus on
+    // the rare browser that doesn't expose it — Chromium then opens
+    // the picker on the next click anyway.
+    if (typeof el.showPicker === 'function') {
+      try {
+        el.showPicker();
+        return;
+      } catch {
+        // showPicker can throw if the input isn't user-focusable yet;
+        // fall through to focus.
+      }
+    }
+    el.focus();
+    el.click();
+  }
+
   return (
     <div className="relative flex items-center gap-1 rounded-lg border border-line bg-surface-elevated p-[3px] shadow-[0_1px_2px_rgba(28,25,23,0.04)]">
       <button
@@ -295,13 +327,42 @@ function DateNav(props: DateNavProps) {
       >
         <ChevronIcon dir="left" />
       </button>
-      <div
-        className="flex h-8 min-w-[168px] items-center justify-center rounded px-3.5 font-display text-[14px] font-semibold tracking-[-0.005em] tabular-nums"
-        aria-label="Data e raportit"
-      >
-        <CalendarIcon className="mr-1.5 text-ink-faint" />
-        {compact}
-      </div>
+      {props.pickerEnabled ? (
+        <button
+          type="button"
+          onClick={openPicker}
+          aria-label="Zgjidh datën"
+          className="relative flex h-8 min-w-[168px] items-center justify-center rounded px-3.5 font-display text-[14px] font-semibold tracking-[-0.005em] tabular-nums hover:bg-surface-subtle"
+        >
+          <CalendarIcon className="mr-1.5 text-ink-faint" />
+          {compact}
+          {/* Native date input — visually hidden but still focusable
+              so `showPicker()` anchors the calendar popover to the
+              date pill. We position it over the pill (not off-screen)
+              so browsers that don't support showPicker still align
+              the popover correctly when the input is focused. */}
+          <input
+            ref={pickerRef}
+            type="date"
+            value={props.date}
+            onChange={(e) => {
+              const v = e.target.value;
+              if (v) props.onPick(v);
+            }}
+            tabIndex={-1}
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0 h-full w-full opacity-0"
+          />
+        </button>
+      ) : (
+        <div
+          className="flex h-8 min-w-[168px] items-center justify-center rounded px-3.5 font-display text-[14px] font-semibold tracking-[-0.005em] tabular-nums"
+          aria-label="Data e raportit"
+        >
+          <CalendarIcon className="mr-1.5 text-ink-faint" />
+          {compact}
+        </div>
+      )}
       <button
         type="button"
         onClick={props.onNext}
