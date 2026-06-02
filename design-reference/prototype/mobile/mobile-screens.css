@@ -1,0 +1,491 @@
+/* =========================================================================
+   Klinika mobile — per-screen styles
+   Adapts desktop patterns (appt rows, next-patient card, stat cards,
+   walk-in band, profile, login) to phone + tablet layouts.
+   ========================================================================= */
+
+/* =========================================================================
+   Shared greeting / page intro inside the frame
+   ========================================================================= */
+.ms-intro { padding: var(--m-s4) var(--m-gutter) var(--m-s2); }
+.device.is-tablet .ms-intro { padding: var(--m-s5) var(--m-gutter-lg) var(--m-s3); }
+.ms-intro .gr {
+  font-family: var(--font-display);
+  font-size: 22px; font-weight: 600; letter-spacing: -0.025em;
+  color: var(--text-strong); line-height: 1.15;
+}
+.device.is-tablet .ms-intro .gr { font-size: 27px; }
+.ms-intro .gr .accent { color: var(--primary-dark); }
+.ms-intro .sub { font-size: 13px; color: var(--text-muted); margin-top: 4px; }
+.ms-intro .sub .wn { color: var(--primary-dark); font-weight: 500; }
+
+/* =========================================================================
+   Doctor home — "Pacienti në vijim" hero
+   ========================================================================= */
+.ms-pad { padding: 0 var(--m-gutter); }
+.device.is-tablet .ms-pad { padding: 0 var(--m-gutter-lg); }
+
+.ms-next {
+  display: block;
+  width: auto;
+  text-align: left;
+  margin: var(--m-s2) var(--m-gutter) 0;
+  padding: var(--m-s5);
+  border-radius: var(--r-xl);
+  border: 1px solid var(--teal-200);
+  background:
+    radial-gradient(ellipse 70% 80% at 100% 0%, var(--primary-tint), transparent 55%),
+    var(--bg-elevated);
+  box-shadow: var(--shadow-sm);
+  -webkit-tap-highlight-color: transparent;
+}
+.device.is-tablet .ms-next { margin: var(--m-s2) var(--m-gutter-lg) 0; padding: var(--m-s6); }
+.ms-next:active { transform: scale(0.992); }
+.ms-next .nx-tag {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 11px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.1em; color: var(--primary-dark); margin-bottom: 12px;
+}
+.ms-next .nx-tag .dot {
+  width: 7px; height: 7px; border-radius: 999px; background: var(--primary);
+  animation: nx-pulse 2s ease-in-out infinite;
+}
+@keyframes nx-pulse { 0%,100%{opacity:1} 50%{opacity:.35} }
+.ms-next .nx-top {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 14px;
+}
+.ms-next .nx-name {
+  font-family: var(--font-display);
+  font-size: 26px; font-weight: 600; letter-spacing: -0.025em; line-height: 1.05;
+}
+.device.is-tablet .ms-next .nx-name { font-size: 32px; }
+.ms-next .nx-meta {
+  display: flex; flex-wrap: wrap; gap: 8px 14px; margin-top: 8px;
+  font-size: 13px; color: var(--text-muted); align-items: center;
+}
+.ms-next .nx-meta strong { color: var(--text); font-weight: 600; }
+.ms-next .nx-time { text-align: right; flex-shrink: 0; font-variant-numeric: tabular-nums; }
+.ms-next .nx-time .t {
+  display: block;
+  font-family: var(--font-display); font-size: 24px; font-weight: 600; letter-spacing: -0.02em;
+}
+.ms-next .nx-time .s { display: block; font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+
+.ms-next .nx-vitals {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+  gap: 16px 18px;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+.device.is-tablet .ms-next .nx-vitals { grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); }
+/* Left: stacked text fields (Diagnoza, Arsyeja) */
+.ms-next .nx-textcol { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+/* Right: three measurements in one row (Pesha · Gjatësia · Perimetri) */
+.ms-next .nx-measures {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 14px;
+  align-content: start;
+  min-width: 0;
+}
+.ms-next .nx-item { min-width: 0; }
+.ms-next .nx-vitals .lab {
+  display: block;
+  font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.05em;
+  color: var(--text-faint); font-weight: 500; white-space: nowrap;
+}
+.ms-next .nx-measures .lab { letter-spacing: 0.02em; }
+.ms-next .nx-vitals .v {
+  display: block;
+  font-family: var(--font-display); font-size: 17px; font-weight: 600;
+  margin-top: 3px; color: var(--text-strong); font-variant-numeric: tabular-nums;
+}
+.ms-next .nx-vitals .v .u { font-size: 11px; color: var(--text-faint); letter-spacing: 0; margin-left: 2px; }
+.ms-next .nx-vitals .vs { display: block; font-size: 11px; color: var(--text-muted); margin-top: 1px; }
+.ms-next .nx-actions { display: flex; gap: 10px; margin-top: 16px; }
+.ms-next .nx-actions .btn { flex: 1; min-height: var(--m-tap); }
+
+/* =========================================================================
+   Appointment list (agenda)
+   ========================================================================= */
+.ms-card {
+  margin: var(--m-s2) var(--m-gutter) 0;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-xs);
+  overflow: hidden;
+}
+.device.is-tablet .ms-card { margin: var(--m-s2) var(--m-gutter-lg) 0; }
+.ms-card-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 13px 16px; border-bottom: 1px solid var(--border);
+}
+.ms-card-head h3 { font-size: 14px; font-weight: 600; }
+.ms-card-head .meta { font-size: 12px; color: var(--text-muted); }
+
+.ms-appt {
+  display: grid;
+  grid-template-columns: 52px 10px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  text-align: left;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-soft);
+  min-height: var(--m-tap);
+  -webkit-tap-highlight-color: transparent;
+}
+.ms-appt:last-child { border-bottom: none; }
+.ms-appt:active { background: var(--bg-subtle); }
+.ms-appt .time { font-variant-numeric: tabular-nums; font-size: 13px; font-weight: 500; }
+.ms-appt.done .time { color: var(--text-faint); text-decoration: line-through; }
+.ms-appt .sd { width: 9px; height: 9px; border-radius: 999px; background: var(--border-strong); }
+.ms-appt.done .sd { background: var(--green); }
+.ms-appt.next .sd { background: var(--primary); box-shadow: 0 0 0 3px var(--primary-soft); }
+.ms-appt.noshow .sd { background: var(--status-no-show-solid); }
+.ms-appt .nm { font-size: 14px; font-weight: 500; color: var(--text); line-height: 1.25; }
+.ms-appt.done .nm { color: var(--text-muted); }
+.ms-appt .nm .age { color: var(--text-faint); font-weight: 400; font-size: 12px; margin-left: 5px; }
+.ms-appt .nm .wn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 16px; height: 16px; vertical-align: -3px; margin-right: 5px;
+  color: var(--primary-dark); background: var(--primary-soft);
+  border: 1px solid var(--teal-200); border-radius: 4px;
+}
+.ms-appt .rs { font-size: 12px; color: var(--text-muted); margin-top: 2px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ms-appt .rs .wn-tag { color: var(--primary-dark); font-weight: 500; }
+.ms-appt.next {
+  background: linear-gradient(90deg, var(--primary-soft) 0%, transparent 80%);
+  border-left: 3px solid var(--primary);
+}
+.ms-appt.next .nm { font-weight: 600; color: var(--text-strong); }
+.ms-appt .chip { flex-shrink: 0; }
+
+/* Mini stat strip */
+.ms-stats {
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  border-top: 1px solid var(--border);
+}
+.ms-stats .s { padding: 14px 12px; border-right: 1px solid var(--border); }
+.ms-stats .s:last-child { border-right: none; }
+.ms-stats .v {
+  font-family: var(--font-display); font-size: 22px; font-weight: 600;
+  letter-spacing: -0.02em; line-height: 1; font-variant-numeric: tabular-nums;
+}
+.ms-stats .v .u { font-size: 12px; color: var(--text-faint); margin-left: 3px; letter-spacing: 0; }
+.ms-stats .l {
+  font-size: 10.5px; color: var(--text-muted); margin-top: 6px;
+  text-transform: uppercase; letter-spacing: 0.05em;
+}
+
+/* In-list search */
+.ms-listsearch { padding: 12px 16px; position: relative; }
+.ms-listsearch input {
+  width: 100%; min-height: var(--m-tap);
+  padding: 10px 12px 10px 38px;
+  border-radius: var(--r-md);
+  border: 1px solid var(--border-strong);
+  background: var(--bg-elevated);
+  font-size: 15px; outline: none;
+}
+.ms-listsearch input:focus { border-color: var(--primary); box-shadow: var(--focus-ring); }
+.ms-listsearch .icon { position: absolute; left: 28px; top: 50%; transform: translateY(-50%); color: var(--text-faint); }
+
+/* Tablet 2-column doctor layout */
+.ms-two {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--m-s4);
+  padding: 0 var(--m-gutter-lg);
+}
+.device.is-tablet-l .ms-two { grid-template-columns: 1fr 1fr; align-items: start; }
+.ms-two .ms-card, .ms-two .ms-next { margin-left: 0; margin-right: 0; }
+
+/* =========================================================================
+   Done-log rows (doctor "Vizitat e sotshme")
+   ========================================================================= */
+.ms-log { padding: 2px 0; }
+.ms-log .row {
+  display: grid;
+  grid-template-columns: 50px 1fr auto;
+  gap: 12px; align-items: center;
+  padding: 11px 16px;
+  border-bottom: 1px solid var(--border-soft);
+  font-size: 13px;
+}
+.ms-log .row:last-child { border-bottom: none; }
+.ms-log .time { font-variant-numeric: tabular-nums; color: var(--text-muted); font-size: 12px; }
+.ms-log .pt { font-weight: 500; }
+.ms-log .pt .age { color: var(--text-faint); margin-left: 5px; font-size: 11px; font-weight: 400; }
+.ms-log .pt .dx { font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+.ms-log .pay { font-family: var(--font-display); font-weight: 600; font-variant-numeric: tabular-nums; }
+.ms-log .pay .code { color: var(--text-faint); font-weight: 400; font-size: 11px; margin-right: 3px; }
+
+/* =========================================================================
+   Receptionist home — stat cards + day strip + agenda
+   ========================================================================= */
+.ms-statgrid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+  padding: var(--m-s2) var(--m-gutter) 0;
+}
+.device.is-tablet .ms-statgrid { padding: var(--m-s2) var(--m-gutter-lg) 0; gap: 16px; }
+.ms-stat {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  padding: 14px 16px;
+  box-shadow: var(--shadow-xs);
+}
+.ms-stat.accent { border-color: var(--teal-200); background: linear-gradient(180deg, var(--primary-tint), var(--bg-elevated) 70%); }
+.ms-stat .lab {
+  font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.07em;
+  color: var(--text-muted); font-weight: 500; margin-bottom: 8px;
+}
+.ms-stat .num {
+  font-family: var(--font-display); font-size: 30px; font-weight: 600;
+  letter-spacing: -0.02em; line-height: 1; font-variant-numeric: tabular-nums;
+}
+.device.is-tablet .ms-stat .num { font-size: 36px; }
+.ms-stat .foot { font-size: 12px; color: var(--text-muted); margin-top: 8px; }
+.ms-stat .foot strong { color: var(--text); font-weight: 600; }
+
+/* Day strip selector */
+.ms-daystrip {
+  display: flex; align-items: center; gap: 8px;
+  padding: var(--m-s4) var(--m-gutter) var(--m-s1);
+}
+.device.is-tablet .ms-daystrip { padding-left: var(--m-gutter-lg); padding-right: var(--m-gutter-lg); }
+.ms-daystrip .dnav {
+  width: var(--m-tap); height: var(--m-tap);
+  border-radius: var(--r-md); border: 1px solid var(--border-strong);
+  background: var(--bg-elevated); color: var(--text-muted);
+  display: grid; place-items: center; flex-shrink: 0;
+}
+.ms-daystrip .dnav:active { background: var(--bg-subtle); }
+.ms-daystrip .dlabel {
+  flex: 1; text-align: center;
+  font-family: var(--font-display); font-size: 16px; font-weight: 600;
+  letter-spacing: -0.01em; font-variant-numeric: tabular-nums;
+}
+.ms-daystrip .dlabel .today-pill {
+  display: inline-block; margin-left: 8px;
+  font-size: 10px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase;
+  color: #fff; background: var(--primary); padding: 2px 8px; border-radius: 999px;
+  vertical-align: 2px;
+}
+
+/* Ditë / Javë segmented (tablet) */
+.ms-viewtoggle {
+  display: inline-flex; background: var(--bg-subtle);
+  border: 1px solid var(--border); border-radius: var(--r-md); padding: 3px;
+}
+.ms-viewtoggle button {
+  padding: 7px 16px; min-height: 38px;
+  font-size: 13px; font-weight: 500; color: var(--text-muted);
+  border-radius: var(--r-sm); transition: all 120ms ease;
+}
+.ms-viewtoggle button.is-active {
+  background: var(--bg-elevated); color: var(--text-strong);
+  box-shadow: var(--shadow-xs); font-weight: 600;
+}
+
+/* Filter pills — horizontally scrollable on phone */
+.ms-pills {
+  display: flex; gap: 8px; overflow-x: auto; padding: var(--m-s2) var(--m-gutter) var(--m-s1);
+  -webkit-overflow-scrolling: touch; scrollbar-width: none;
+}
+.ms-pills::-webkit-scrollbar { display: none; }
+.device.is-tablet .ms-pills { padding-left: var(--m-gutter-lg); padding-right: var(--m-gutter-lg); flex-wrap: wrap; }
+.ms-pills .filter-pill { flex-shrink: 0; min-height: 36px; }
+
+/* Walk-in band */
+.ms-walkin { margin: var(--m-s4) var(--m-gutter) 0; }
+.device.is-tablet .ms-walkin { margin-left: var(--m-gutter-lg); margin-right: var(--m-gutter-lg); }
+.ms-walkin .wb-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 10px; }
+.ms-walkin .wb-title { font-family: var(--font-display); font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
+.ms-walkin .wb-count { font-size: 12px; color: var(--text-muted); }
+.ms-walkin .wb-grid { display: grid; gap: 10px; }
+.device.is-tablet .ms-walkin .wb-grid { grid-template-columns: repeat(2, 1fr); }
+.ms-wcard {
+  background: var(--bg-elevated); border: 1px solid var(--border);
+  border-left: 3px solid var(--accent-400);
+  border-radius: var(--r-md); padding: 12px 14px;
+  -webkit-tap-highlight-color: transparent;
+}
+.ms-wcard:active { background: var(--bg-subtle); }
+.ms-wcard .wc-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.ms-wcard .wc-name { font-family: var(--font-display); font-size: 15px; font-weight: 600; letter-spacing: -0.005em; }
+.ms-wcard .wc-meta { font-size: 11.5px; color: var(--text-muted); margin-top: 4px; font-variant-numeric: tabular-nums; }
+.ms-wcard .wc-pay { font-family: var(--font-display); font-weight: 600; font-variant-numeric: tabular-nums; font-size: 14px; }
+.ms-wcard .wc-pay .code { color: var(--text-faint); font-weight: 400; font-size: 11px; margin-right: 3px; }
+
+/* =========================================================================
+   Compact week grid (tablet landscape receptionist)
+   ========================================================================= */
+.ms-week {
+  margin: var(--m-s2) var(--m-gutter-lg) 0;
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-xs);
+}
+.ms-week-grid {
+  display: grid;
+  grid-template-columns: 44px repeat(6, 1fr);
+}
+.ms-week-grid .wh {
+  padding: 8px 6px; font-size: 11.5px; font-weight: 600; text-align: center;
+  background: var(--bg-subtle); border-bottom: 1px solid var(--border); border-right: 1px solid var(--border);
+  color: var(--text); font-variant-numeric: tabular-nums;
+}
+.ms-week-grid .wh.today { background: rgba(204,251,241,0.4); color: var(--primary-dark); }
+.ms-week-grid .wh.axis { background: var(--bg-subtle); }
+.ms-week-body { grid-column: 1 / -1; display: grid; grid-template-columns: 44px repeat(6, 1fr); position: relative; }
+.ms-week-axis { border-right: 1px solid var(--border); }
+.ms-week-axis .h {
+  height: 56px; position: relative; border-top: 1px solid var(--border-soft);
+}
+.ms-week-axis .h .lab { position: absolute; top: -7px; right: 5px; font-size: 10px; color: var(--text-faint); background: var(--bg-elevated); padding: 0 3px; font-variant-numeric: tabular-nums; }
+.ms-week-col { position: relative; border-right: 1px solid var(--border-soft);
+  background: repeating-linear-gradient(to bottom, transparent 0, transparent 55px, var(--border-soft) 55px, var(--border-soft) 56px); }
+.ms-week-col:last-child { border-right: none; }
+.ms-week-col.today { background-color: rgba(204,251,241,0.16); }
+.ms-wappt {
+  position: absolute; left: 3px; right: 3px;
+  display: block; text-align: left; font-family: inherit;
+  background: var(--status-scheduled-bg); border: 1px solid var(--status-scheduled-border);
+  border-left: 2px solid var(--status-scheduled-solid);
+  border-radius: 4px; padding: 2px 5px; overflow: hidden;
+  font-size: 10px; font-weight: 600; color: var(--status-scheduled-fg);
+  white-space: nowrap; text-overflow: ellipsis;
+  -webkit-tap-highlight-color: transparent; cursor: pointer;
+}
+.ms-wappt:active { filter: brightness(0.96); }
+.ms-wappt.completed { background: var(--status-completed-bg); border-color: var(--status-completed-border); border-left-color: var(--status-completed-solid); color: var(--status-completed-fg); }
+.ms-wappt.noshow { background: var(--status-no-show-bg); border-color: var(--status-no-show-border); border-left-color: var(--status-no-show-solid); color: var(--status-no-show-fg); }
+.ms-wappt.inprog { background: var(--status-in-progress-bg); border-color: var(--status-in-progress-border); border-left-color: var(--status-in-progress-solid); color: var(--status-in-progress-fg); }
+
+/* =========================================================================
+   Empty states
+   ========================================================================= */
+.ms-empty {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  text-align: center; padding: 48px 32px; gap: 10px;
+}
+.ms-empty .ico {
+  width: 56px; height: 56px; border-radius: 18px;
+  background: var(--bg-subtle); border: 1px solid var(--border);
+  display: grid; place-items: center; color: var(--text-faint); margin-bottom: 4px;
+}
+.ms-empty .t { font-family: var(--font-display); font-size: 17px; font-weight: 600; color: var(--text); }
+.ms-empty .d { font-size: 13px; color: var(--text-muted); max-width: 260px; line-height: 1.5; }
+
+/* =========================================================================
+   Search bottom sheet
+   ========================================================================= */
+.ms-search-field { padding: 4px var(--m-gutter) 12px; position: relative; }
+.ms-search-field input {
+  width: 100%; min-height: var(--m-tap);
+  padding: 12px 14px 12px 42px; font-size: 16px;
+  border: 1px solid var(--border-strong); border-radius: var(--r-md);
+  background: var(--bg); outline: none;
+}
+.ms-search-field input:focus { border-color: var(--primary); box-shadow: var(--focus-ring); }
+.ms-search-field .icon { position: absolute; left: 30px; top: 22px; color: var(--text-faint); }
+.ms-search-field .kbd { position: absolute; right: 28px; top: 18px; }
+
+.ms-result {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px var(--m-gutter); min-height: 56px;
+  border-bottom: 1px solid var(--border-soft);
+  -webkit-tap-highlight-color: transparent;
+}
+.ms-result:active { background: var(--bg-subtle); }
+.ms-result .avatar {
+  width: 38px; height: 38px; border-radius: 999px; flex-shrink: 0;
+  background: var(--teal-700); color: #fff;
+  display: grid; place-items: center; font-size: 13px; font-weight: 600;
+  font-family: var(--font-display);
+}
+.ms-result .info { flex: 1; min-width: 0; }
+.ms-result .info .nm { font-size: 15px; font-weight: 600; color: var(--text-strong); }
+.ms-result .info .dob { font-size: 12.5px; color: var(--text-muted); font-variant-numeric: tabular-nums; margin-top: 1px; }
+.ms-result .visits { font-size: 11px; color: var(--text-muted); background: var(--bg-subtle); padding: 3px 8px; border-radius: 999px; flex-shrink: 0; font-variant-numeric: tabular-nums; }
+.ms-search-add {
+  display: flex; align-items: center; gap: 12px;
+  padding: 14px var(--m-gutter); color: var(--primary-dark); font-weight: 500; font-size: 15px;
+  background: var(--bg-subtle); border-top: 1px solid var(--border);
+}
+.ms-search-add .plus {
+  width: 28px; height: 28px; border-radius: 8px; background: var(--bg-elevated);
+  border: 1px solid var(--teal-300); display: grid; place-items: center;
+  color: var(--primary); font-weight: 700; font-size: 16px;
+}
+.ms-search-recent { font-family: var(--font-mono); font-size: 11px; text-transform: uppercase; letter-spacing: 0.07em; color: var(--text-faint); padding: 6px var(--m-gutter) 4px; }
+
+/* =========================================================================
+   Login (mobile)
+   ========================================================================= */
+.ms-login {
+  flex: 1; min-height: 0; overflow-y: auto;
+  display: flex; flex-direction: column;
+  padding: var(--m-s8) var(--m-s6) var(--m-s6);
+}
+.device.is-tablet .ms-login { padding: 56px 80px; max-width: 540px; margin: 0 auto; width: 100%; }
+.ms-login .brand { display: flex; align-items: center; gap: 10px; margin-bottom: auto; }
+.ms-login .brand .word { font-family: var(--font-display); font-size: 19px; font-weight: 600; letter-spacing: -0.02em; }
+.ms-login .brand .word .ext { color: var(--text-faint); font-weight: 400; }
+.ms-login .hero { margin: 36px 0 28px; }
+.ms-login .hero .ttl { font-family: var(--font-display); font-size: 28px; font-weight: 600; letter-spacing: -0.025em; }
+.ms-login .hero .sub { font-size: 14px; color: var(--text-muted); margin-top: 6px; }
+.ms-login .form { display: flex; flex-direction: column; gap: 16px; }
+.ms-login .form .input { min-height: var(--m-tap); font-size: 16px; padding: 12px 14px; }
+.ms-login .roleswitch {
+  background: var(--bg-subtle); border: 1px solid var(--border);
+  border-radius: var(--r-md); padding: 4px; display: grid;
+  grid-template-columns: 1fr 1fr; gap: 3px;
+}
+.ms-login .roleswitch button {
+  padding: 11px; min-height: var(--m-tap); font-size: 14px; font-weight: 500;
+  color: var(--text-muted); border-radius: var(--r-sm); text-align: center; transition: all 120ms ease;
+}
+.ms-login .roleswitch button.is-active { background: var(--bg-elevated); color: var(--text-strong); box-shadow: var(--shadow-xs); font-weight: 600; }
+.ms-login .rowbtw { display: flex; align-items: center; justify-content: space-between; }
+.ms-login .check { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-muted); }
+.ms-login .check input { width: 16px; height: 16px; accent-color: var(--primary); }
+.ms-login .link { font-size: 13px; color: var(--primary); font-weight: 500; }
+.ms-login .foot { margin-top: 28px; font-size: 12px; color: var(--text-faint); display: flex; gap: 12px; flex-wrap: wrap; }
+
+/* =========================================================================
+   Profile (mobile)
+   ========================================================================= */
+.ms-profile { padding: var(--m-s4) var(--m-gutter) var(--m-s8); }
+.device.is-tablet .ms-profile { padding: var(--m-s6) var(--m-gutter-lg) var(--m-s8); max-width: 640px; margin: 0 auto; width: 100%; }
+.ms-identity { display: flex; align-items: center; gap: 16px; margin-bottom: var(--m-s5); }
+.ms-identity .avatar {
+  width: 64px; height: 64px; border-radius: 999px; flex-shrink: 0;
+  background: var(--teal-700); color: #fff; display: grid; place-items: center;
+  font-family: var(--font-display); font-weight: 600; font-size: 22px;
+}
+.ms-identity .nm { font-family: var(--font-display); font-size: 20px; font-weight: 600; letter-spacing: -0.015em; color: var(--text-strong); }
+.ms-identity .em { font-family: var(--font-mono); font-size: 12.5px; color: var(--text-muted); margin-top: 2px; }
+.ms-identity .roles { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
+.ms-pcard {
+  background: var(--bg-elevated); border: 1px solid var(--border);
+  border-radius: var(--r-lg); box-shadow: var(--shadow-xs); margin-bottom: 14px; overflow: hidden;
+}
+.ms-pcard .h { padding: 13px 16px; border-bottom: 1px solid var(--border); font-size: 13px; font-weight: 600; }
+.ms-prow {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 13px 16px; border-bottom: 1px solid var(--border-soft); min-height: var(--m-tap);
+}
+.ms-prow:last-child { border-bottom: none; }
+.ms-prow .k { font-size: 13px; color: var(--text-muted); }
+.ms-prow .val { font-size: 14px; font-weight: 500; color: var(--text); text-align: right; }
+.ms-prow .val .lock { color: var(--text-faint); margin-left: 6px; vertical-align: -2px; }
+.ms-prow.tappable:active { background: var(--bg-subtle); }
+.ms-prow .chev { color: var(--text-faint); }
