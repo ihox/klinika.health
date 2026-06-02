@@ -3,8 +3,10 @@
 import {
   useCallback,
   useEffect,
+  useRef,
   useState,
   type ReactElement,
+  type TouchEvent as ReactTouchEvent,
 } from 'react';
 
 import { ApiError } from '@/lib/api';
@@ -93,6 +95,24 @@ export function DicomLightbox({
       });
     },
     [total],
+  );
+
+  // Horizontal swipe between frames (mobile). Threshold 50px; the ◀/▶
+  // buttons + arrow keys remain for tablet keyboards / mouse fallback.
+  const touchStartX = useRef<number | null>(null);
+  const onTouchStart = useCallback((e: ReactTouchEvent) => {
+    touchStartX.current = e.touches[0]?.clientX ?? null;
+  }, []);
+  const onTouchEnd = useCallback(
+    (e: ReactTouchEvent) => {
+      const start = touchStartX.current;
+      touchStartX.current = null;
+      if (start == null) return;
+      const end = e.changedTouches[0]?.clientX ?? start;
+      const dx = end - start;
+      if (Math.abs(dx) > 50) step(dx < 0 ? 1 : -1);
+    },
+    [step],
   );
 
   useEffect(() => {
@@ -238,7 +258,11 @@ export function DicomLightbox({
       ) : null}
 
       {/* Image stage */}
-      <div className="fixed inset-0 grid place-items-center">
+      <div
+        className="fixed inset-0 grid place-items-center"
+        onTouchStart={onTouchStart}
+        onTouchEnd={onTouchEnd}
+      >
         {error ? (
           <p
             role="alert"

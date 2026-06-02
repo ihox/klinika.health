@@ -109,8 +109,11 @@ export function DoctorPatientsView() {
     <main className="min-h-screen bg-stone-50">
       <DoctorPatientsTopNav />
 
-      <section className="mx-auto grid max-w-6xl grid-cols-[340px_1fr] gap-6 px-8 py-8">
-        <aside>
+      {/* Mobile: single column showing list OR create-form (not both); the
+          empty "pick a patient" prompt is desktop-only. >=1024px keeps the
+          340px + form two-column split. */}
+      <section className="mx-auto grid max-w-6xl grid-cols-1 gap-6 px-4 py-5 lg:grid-cols-[340px_1fr] lg:px-8 lg:py-8">
+        <aside className={creating ? 'hidden lg:block' : undefined}>
           <div className="mb-4 flex items-center justify-between">
             <h1 className="font-display text-[22px] font-semibold text-stone-900">
               Pacientët
@@ -190,7 +193,9 @@ export function DoctorPatientsView() {
           </div>
         </aside>
 
-        <section className="rounded-lg border border-stone-200 bg-white">
+        <section
+          className={`rounded-lg border border-stone-200 bg-white ${creating ? '' : 'hidden lg:block'}`}
+        >
           {creating ? (
             <PatientFullForm
               key="new"

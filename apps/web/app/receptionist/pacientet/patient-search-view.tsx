@@ -77,7 +77,7 @@ export function PatientSearchView() {
   return (
     <main className="min-h-screen bg-stone-50">
       <header className="border-b border-stone-200 bg-white">
-        <div className="mx-auto flex max-w-5xl items-center justify-between px-8 py-4">
+        <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-4 md:px-8">
           <div className="flex items-center gap-6">
             <Link href="/receptionist" className="font-display text-[20px] font-semibold tracking-[-0.02em] text-stone-900">
               klinika<span className="text-teal-700">.</span>
@@ -95,7 +95,7 @@ export function PatientSearchView() {
         </div>
       </header>
 
-      <section className="mx-auto max-w-5xl px-8 py-8">
+      <section className="mx-auto max-w-5xl px-4 py-6 md:px-8 md:py-8">
         <div className="mb-6 flex items-end justify-between">
           <div>
             <h1 className="font-display text-[28px] font-semibold tracking-[-0.025em] text-stone-900">
