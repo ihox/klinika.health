@@ -1,0 +1,108 @@
+/* ============================================================================
+   Klinika — MOBILE / TABLET foundation tokens + low-level rules.
+
+   This is a thin EXTENSION of the existing design system, never a fork.
+   All new tokens are `--m-`prefixed (handoff spec §8). Everything that can
+   be expressed as a Tailwind utility lives in the components; this file is
+   reserved for the few things Tailwind can't express cleanly:
+     - the `--m-*` token scale
+     - the iOS focus-zoom fix (inputs must be ≥16px on phone)
+     - bottom-tab-bar content inset (so fixed tabs never cover content)
+     - reduced-motion safety for sheet/scrim transitions
+
+   Imported once, globally, from app/layout.tsx (after globals.css).
+   ============================================================================ */
+
+:root {
+  /* Touch + safe areas ------------------------------------------------- */
+  --m-tap: 44px;            /* minimum hit target (Apple HIG / WCAG) */
+  --m-gutter: 16px;         /* phone horizontal gutter */
+  --m-gutter-lg: 24px;      /* tablet horizontal gutter */
+  --m-appbar-h: 52px;       /* phone top app bar height */
+  --m-tabbar-h: 58px;       /* phone bottom tab bar height (excl. safe area) */
+  --m-sheet-radius: 22px;   /* bottom-sheet corner radius */
+
+  /* Mobile spacing scale (denser than desktop page padding) ------------ */
+  --m-s1: 4px;
+  --m-s2: 8px;
+  --m-s3: 12px;
+  --m-s4: 16px;
+  --m-s5: 20px;
+  --m-s6: 24px;
+  --m-s8: 32px;
+}
+
+/* ----------------------------------------------------------------------------
+   iOS focus-zoom fix. Mobile Safari zooms the viewport when a focused
+   input has a font-size < 16px. The shared <Input> and many inline form
+   fields render at 13–14px on desktop; bump every editable control to 16px
+   on phone widths only, so desktop sizing is untouched (spec: "Inputs use
+   16px font to prevent iOS focus-zoom").
+   ---------------------------------------------------------------------------- */
+@media (max-width: 767.98px) {
+  /* `!important` is required: most fields set an explicit Tailwind size
+     class (`text-[13px]`/`text-[14px]`), whose class-selector specificity
+     beats a bare element selector. On a phone we always want ≥16px text
+     inputs to suppress iOS focus-zoom; the small visual bump is intended
+     and improves touch legibility. Scoped to phone width so tablet/desktop
+     sizing is untouched. */
+  input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='color']),
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+}
+
+/* ----------------------------------------------------------------------------
+   Bottom-tab content inset. The phone bottom tab bar is `fixed`; when it is
+   mounted the adaptive nav sets `data-mobile-nav="tabs"` on <body> so page
+   content reserves room for it (+ the home-indicator safe area) and the last
+   rows are never hidden behind the bar. Tablet/desktop are unaffected.
+   ---------------------------------------------------------------------------- */
+@media (max-width: 767.98px) {
+  body[data-mobile-nav='tabs'] {
+    padding-bottom: calc(var(--m-tabbar-h) + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+/* ----------------------------------------------------------------------------
+   Reduced-motion: disable the transform-based sheet/scrim/drawer slides.
+   ---------------------------------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  .m-sheet,
+  .m-scrim,
+  .m-drawer {
+    transition: none !important;
+  }
+}
+
+/* ----------------------------------------------------------------------------
+   Sheet / scrim / drawer transition primitives. The markup is Tailwind, but
+   the slide transforms + the open-state toggle read cleaner as named classes
+   shared by the search sheet, the "Më shumë" overflow sheet, and the drawer.
+   Colors/blur are applied via Tailwind utilities in the components; these
+   classes own only the transform + transition.
+   ---------------------------------------------------------------------------- */
+.m-scrim {
+  opacity: 0;
+  transition: opacity 240ms ease;
+}
+.m-scrim[data-open='true'] {
+  opacity: 1;
+}
+
+.m-sheet {
+  transform: translateY(100%);
+  transition: transform 320ms cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+.m-sheet[data-open='true'] {
+  transform: translateY(0);
+}
+
+.m-drawer {
+  transform: translateX(-102%);
+  transition: transform 300ms cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+.m-drawer[data-open='true'] {
+  transform: translateX(0);
+}
