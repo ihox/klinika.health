@@ -66,6 +66,20 @@
 }
 
 /* ----------------------------------------------------------------------------
+   Full-screen takeover: a focused surface (the visit form opened from the
+   chart drilldown) hides the phone bottom tab bar so the form's own sticky
+   save bar is reachable and the surface is distraction-free (handoff §11.3).
+   ---------------------------------------------------------------------------- */
+@media (max-width: 767.98px) {
+  body[data-hide-tabbar='1'] [data-mobile-tabbar] {
+    display: none !important;
+  }
+  body[data-hide-tabbar='1'][data-mobile-nav='tabs'] {
+    padding-bottom: 0 !important;
+  }
+}
+
+/* ----------------------------------------------------------------------------
    Reduced-motion: disable the transform-based sheet/scrim/drawer slides.
    ---------------------------------------------------------------------------- */
 @media (prefers-reduced-motion: reduce) {

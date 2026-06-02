@@ -160,6 +160,7 @@ export function MobileClinicNav({ me }: Props) {
       {/* ── PHONE <768: fixed bottom tab bar ──────────────────────────── */}
       <nav
         aria-label="Navigimi kryesor"
+        data-mobile-tabbar=""
         className="fixed inset-x-0 bottom-0 z-40 flex items-stretch border-t border-line bg-surface-elevated/95 backdrop-blur-md backdrop-saturate-150 md:hidden"
         style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
       >

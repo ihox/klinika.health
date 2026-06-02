@@ -22,6 +22,8 @@ import { Button } from '@/components/ui/button';
 import { UndoToast } from '@/components/undo-toast';
 import { ApiError } from '@/lib/api';
 import { useMe } from '@/lib/use-me';
+import { useBreakpoint } from '@/lib/hooks/use-breakpoint';
+import { ChartMobileBody } from './chart-mobile';
 import { ageInMonths } from '@/lib/growth-chart';
 import { masterDataPath } from '@/lib/patient';
 import {
@@ -70,6 +72,7 @@ interface Props {
  */
 export function ChartView({ patientId, initialVisitId }: Props): ReactElement {
   const router = useRouter();
+  const { breakpoint } = useBreakpoint();
   const [data, setData] = useState<PatientChartDto | null>(null);
   const [error, setError] = useState<'forbidden' | 'not-found' | 'unknown' | null>(null);
   const [activeVisitId, setActiveVisitId] = useState<string | null>(initialVisitId ?? null);
@@ -350,8 +353,8 @@ export function ChartView({ patientId, initialVisitId }: Props): ReactElement {
         <ChartSkeleton />
       ) : (
         <>
-          <div className="sticky top-[60px] z-20 border-b border-line bg-surface-elevated">
-            <div className="mx-auto max-w-page px-page-x">
+          <div className="z-20 border-b border-line bg-surface-elevated xl:sticky xl:top-[60px]">
+            <div className="mx-auto max-w-page px-4 md:px-[var(--m-gutter-lg)] xl:px-page-x">
               <MasterDataStrip
                 patient={data.patient}
                 daysSinceLastVisit={data.daysSinceLastVisit}
@@ -367,83 +370,115 @@ export function ChartView({ patientId, initialVisitId }: Props): ReactElement {
               onCreateVisit={() => void createNewVisit(patientId, navigateVisit, refresh, setStatusToast)}
             />
           ) : (
-            <>
-              <VisitNav
-                visits={data.visits}
-                activeIndex={activeIndex}
-                onSelect={navigateVisit}
-              />
-
-              <div className="mx-auto grid max-w-page grid-cols-1 gap-6 px-page-x pt-5 lg:grid-cols-[60fr_40fr]">
-                {activeVisit ? (
-                  <VisitForm
-                    visit={activeVisit}
-                    patientName={`${data.patient.firstName} ${data.patient.lastName}`}
-                    visitNumber={data.visits.length - activeIndex}
-                    totalVisits={data.visits.length}
-                    daysSincePrevious={daysSincePreviousFor(data.visits, activeIndex)}
-                    onOpenHistory={() => setHistoryOpenForVisit(activeVisit)}
-                    onDeleteRequest={() => setDeleteDialogOpen(true)}
-                    onNewVisitRequest={
-                      hasActiveVisitToday
-                        ? undefined
-                        : () =>
-                            void createNewVisit(
-                              patientId,
-                              navigateVisit,
-                              refresh,
-                              setStatusToast,
-                            )
-                    }
-                    onPrintVisitReport={() =>
-                      void printVisitReport(activeVisit)
-                    }
-                    onIssueVertetim={() => setVertetimDialogOpen(true)}
-                    onPrintHistory={() => setPrintHistoryOpen(true)}
-                    onCompleteVisit={
-                      canCompleteVisit(activeVisit, me?.roles ?? [])
-                        ? () =>
-                            void completeVisit(
-                              activeVisit,
-                              setActiveVisit,
-                              setStatusToast,
-                              refresh,
-                              router,
-                            )
-                        : undefined
-                    }
-                    onRevertStatus={
-                      canRevertStatus(activeVisit, me?.roles ?? [])
-                        ? () =>
-                            void revertStatus(
-                              activeVisit,
-                              setActiveVisit,
-                              setStatusToast,
-                              refresh,
-                            )
-                        : undefined
-                    }
-                  />
-                ) : (
-                  <VisitFormLoading />
-                )}
-
-                <RightColumn
-                  patient={data.patient}
-                  growthPoints={data.growthPoints}
-                  visits={data.visits}
-                  vertetime={data.vertetime}
-                  activeVisitId={activeVisitId}
-                  activeVisitDate={activeVisit?.visitDate ?? null}
-                  showAllHistory={showAllHistory}
-                  onToggleHistory={() => setShowAllHistory((s) => !s)}
-                  onSelectVisit={navigateVisit}
-                  onRequestSetSex={() => setSetSexOpen(true)}
-                  onViewVertetim={(v) => viewVertetim(v.id)}
-                  onReprintVertetim={(v) => reprintVertetim(v.id)}
+            (() => {
+              // The VisitForm element is built once with all handlers and
+              // reused across every layout (desktop grid / split-pane right
+              // pane / drilldown detail) so the orchestration is shared.
+              const visitFormEl = activeVisit ? (
+                <VisitForm
+                  visit={activeVisit}
+                  patientName={`${data.patient.firstName} ${data.patient.lastName}`}
+                  visitNumber={data.visits.length - activeIndex}
+                  totalVisits={data.visits.length}
+                  daysSincePrevious={daysSincePreviousFor(data.visits, activeIndex)}
+                  onOpenHistory={() => setHistoryOpenForVisit(activeVisit)}
+                  onDeleteRequest={() => setDeleteDialogOpen(true)}
+                  onNewVisitRequest={
+                    hasActiveVisitToday
+                      ? undefined
+                      : () =>
+                          void createNewVisit(patientId, navigateVisit, refresh, setStatusToast)
+                  }
+                  onPrintVisitReport={() => void printVisitReport(activeVisit)}
+                  onIssueVertetim={() => setVertetimDialogOpen(true)}
+                  onPrintHistory={() => setPrintHistoryOpen(true)}
+                  onCompleteVisit={
+                    canCompleteVisit(activeVisit, me?.roles ?? [])
+                      ? () =>
+                          void completeVisit(
+                            activeVisit,
+                            setActiveVisit,
+                            setStatusToast,
+                            refresh,
+                            router,
+                          )
+                      : undefined
+                  }
+                  onRevertStatus={
+                    canRevertStatus(activeVisit, me?.roles ?? [])
+                      ? () =>
+                          void revertStatus(activeVisit, setActiveVisit, setStatusToast, refresh)
+                      : undefined
+                  }
                 />
-              </div>
-            </>
+              ) : (
+                <VisitFormLoading />
+              );
+
+              // ── DESKTOP ≥1280px — original VisitNav + 60/40 grid (untouched) ──
+              if (breakpoint === 'desktop') {
+                return (
+                  <>
+                    <VisitNav
+                      visits={data.visits}
+                      activeIndex={activeIndex}
+                      onSelect={navigateVisit}
+                    />
+                    <div className="mx-auto grid max-w-page grid-cols-1 gap-6 px-page-x pt-5 lg:grid-cols-[60fr_40fr]">
+                      {visitFormEl}
+                      <RightColumn
+                        patient={data.patient}
+                        growthPoints={data.growthPoints}
+                        visits={data.visits}
+                        vertetime={data.vertetime}
+                        activeVisitId={activeVisitId}
+                        activeVisitDate={activeVisit?.visitDate ?? null}
+                        showAllHistory={showAllHistory}
+                        onToggleHistory={() => setShowAllHistory((s) => !s)}
+                        onSelectVisit={navigateVisit}
+                        onRequestSetSex={() => setSetSexOpen(true)}
+                        onViewVertetim={(v) => viewVertetim(v.id)}
+                        onReprintVertetim={(v) => reprintVertetim(v.id)}
+                      />
+                    </div>
+                  </>
+                );
+              }
+
+              // ── TABLET + PHONE <1280px — adaptive split-pane / drilldown ──
+              return (
+                <ChartMobileBody
+                  isTabletLandscape={breakpoint === 'tablet-landscape'}
+                  patient={data.patient}
+                  visits={data.visits}
+                  activeVisitId={activeVisitId}
+                  onSelectVisit={navigateVisit}
+                  onNewVisit={() =>
+                    void createNewVisit(patientId, navigateVisit, refresh, setStatusToast)
+                  }
+                  canNewVisit={!hasActiveVisitToday}
+                  visitForm={visitFormEl}
+                  growthPanel={
+                    <GrowthPanel
+                      patient={data.patient}
+                      ageMonths={ageInMonths(data.patient.dateOfBirth)}
+                      growthPoints={data.growthPoints}
+                      onRequestSetSex={() => setSetSexOpen(true)}
+                    />
+                  }
+                  ultrazeriPanel={
+                    activeVisitId && activeVisit?.visitDate ? (
+                      <UltrazeriPanel
+                        visitId={activeVisitId}
+                        visitDateIso={activeVisit.visitDate}
+                        patientName={`${data.patient.firstName} ${data.patient.lastName}`}
+                      />
+                    ) : null
+                  }
+                  onEditMasterData={() => router.push(masterDataPath(patientId))}
+                />
+              );
+            })()
           )}
           {data ? (
             <SetSexDialog
