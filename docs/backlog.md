@@ -99,15 +99,27 @@
 
 - **Ultrasound print-template DICOM rendering** — `print.service.ts` currently passes `ultrasoundImages: []` so page 2 renders SVG placeholders. Wire the renderer to query `VisitDicomLink` and fetch base64 previews from Orthanc. ~half a day, app-code. (Already in the on-prem "What's NOT here yet" list — duplicated here for backlog discoverability.)
 
-- **Orthanc webhook timeout race** — `on-stored.lua`'s libCURL POST to
-  `api:3001/api/dicom/internal/orthanc-event` can time out *before* the API
-  finishes inserting the `dicom_studies` row. Observed during the at-clinic
-  verification on 2026-06-02: Orthanc logged a libCURL timeout at `20:54:19`
-  while the row's `created_at` landed 12 ms later — the data survived this
-  time, but it's a race that could silently drop webhooks (lost study
-  notifications) under higher volume or API load. Hardening options: increase
-  the Lua HTTP timeout, OR make the hook fire-and-forget/async, OR enqueue the
-  event (pg-boss) and ack immediately. Effort: ~30–45 min.
+- **CRITICAL — Webhook handler deadlock** (upgraded from a "timeout race" after a live
+  incident on 2026-06-02). On receiving Orthanc's `on-stored.lua` webhook, the API handler
+  fetches the study back **from Orthanc** (`OrthancClient.getStudy`) with no timeout. If
+  Orthanc is unresponsive (restart, load spike, or — as observed — its own event lock is
+  held), that fetch hangs. Orthanc's Lua `OnStableStudy` callback meanwhile blocks on the
+  60 s libCURL POST **while holding Orthanc's lock** — which is itself what makes Orthanc
+  unresponsive → the API's fetch can't complete → Orthanc's 60 s timeout retries the
+  webhook → a **self-sustaining deadlock loop every 60 s** that jams Orthanc's REST API.
+  Observed in production: a docs-only `donetamed` push restarted the API mid-send, triggered
+  the loop, and only a manual `stop api → restart orthanc → delete the trigger study` broke
+  it (~20 min Orthanc REST outage). See memory `donetamed-push-triggers-autodeploy`.
+
+  Hardening (any of):
+  - Make the webhook handler **async** — enqueue the indexing (pg-boss) and return `200`
+    immediately so the Lua callback never blocks.
+  - Add a **timeout (~10 s) on `OrthancClient.getStudy`** + circuit breaker so the handler
+    can't hang indefinitely on Orthanc.
+  - Add **backoff** in the handler rather than relying on Orthanc's blind 60 s retry.
+  - Bound the Lua POST timeout low / make `OnStableStudy` non-blocking.
+
+  Priority: **HIGH** — observed in production, caused a ~20 min Orthanc outage. ~1–2 h fix.
 
 ## v2 candidates
 - DICOM MWL (auto study-patient linkage)
