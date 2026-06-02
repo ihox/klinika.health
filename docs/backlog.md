@@ -99,6 +99,16 @@
 
 - **Ultrasound print-template DICOM rendering** — `print.service.ts` currently passes `ultrasoundImages: []` so page 2 renders SVG placeholders. Wire the renderer to query `VisitDicomLink` and fetch base64 previews from Orthanc. ~half a day, app-code. (Already in the on-prem "What's NOT here yet" list — duplicated here for backlog discoverability.)
 
+- **Orthanc webhook timeout race** — `on-stored.lua`'s libCURL POST to
+  `api:3001/api/dicom/internal/orthanc-event` can time out *before* the API
+  finishes inserting the `dicom_studies` row. Observed during the at-clinic
+  verification on 2026-06-02: Orthanc logged a libCURL timeout at `20:54:19`
+  while the row's `created_at` landed 12 ms later — the data survived this
+  time, but it's a race that could silently drop webhooks (lost study
+  notifications) under higher volume or API load. Hardening options: increase
+  the Lua HTTP timeout, OR make the hook fire-and-forget/async, OR enqueue the
+  event (pg-boss) and ack immediately. Effort: ~30–45 min.
+
 ## v2 candidates
 - DICOM MWL (auto study-patient linkage)
 - AI features (clinical summary, smarter autocomplete)
