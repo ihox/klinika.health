@@ -320,6 +320,55 @@ accumulate ~1GB of ultrasound per quarter. When disk crosses 85%:
 4. **Never delete patient images.** Even soft-deleted DICOM studies
    stay on disk until the archival sweep moves them to cold storage.
 
+### DICOM ingest / ultrasound C-STORE (DonetaMED)
+
+The DonetaMED ultrasound (GE Versana Balance, software R2.0.5) sends studies
+to Orthanc over the clinic LAN via DICOM C-STORE. Verified working end-to-end
+on 2026-06-02: ultrasound → Orthanc → Lua `on-stored.lua` webhook →
+`dicom_studies` row. See ADR-009 for the storage architecture.
+
+**Security posture — store is intentionally open.** Orthanc accepts C-STORE
+from *any* calling AET: `DicomAlwaysAllowStore` is left at its default (`true`)
+and no `DicomModalities` allowlist is configured. This is deliberate — the
+trust boundary is the LAN itself (UFW / host iptables + Docker's published-port
+rules) and there is **no public IP and no inbound DICOM from the internet**.
+The DICOM port (`4242`) is reachable only from the clinic network. Revisit this
+the moment more DICOM sources are added or any public/remote access is
+introduced.
+
+**Identity (as of 2026-06-02):**
+- Ultrasound: GE Versana Balance at `192.168.10.119`; calling AET
+  `VersanaB-000000`. This is the GE **factory-default** AET and may change
+  after GE service sets the device serial. Nothing depends on it today (store
+  is open), so a change will not break ingest.
+- Orthanc host (clinic laptop): `192.168.10.120`, Orthanc AET `DONETAMED`,
+  port `4242`. The laptop currently reaches the LAN over a USB-Ethernet adapter
+  (`enx…`), not Wi-Fi — relevant if the interface/IP is ever reconfigured.
+
+**To tighten the allowlist later** (only needed if the trust boundary changes):
+1. Set a *stable, intentional* AE Title on the ultrasound — suggested
+   **`VERSANA`** — under Utility → Connectivity → TCPIP (AE Title), then re-send
+   one study and confirm the new calling AET in Orthanc instance metadata
+   (`GET /instances/<id>/metadata?expand` → `RemoteAET`).
+2. Add to the `orthanc` service in
+   `infra/compose/docker-compose.donetamed.yml`:
+   ```yaml
+   ORTHANC__DICOM_ALWAYS_ALLOW_STORE: "false"
+   ORTHANC__DICOM_MODALITIES: '{"VERSANA": ["VERSANA", "192.168.10.119", 104]}'
+   ```
+   The orthancteam image maps `ORTHANC__DICOM_*` env vars to Orthanc's `Dicom*`
+   config keys (confirmed in this deploy: `ORTHANC__DICOM_AET` → `DicomAet`).
+   Both vars are required — the allowlist only restricts stores once
+   `DicomAlwaysAllowStore` is `false`.
+3. Deploy via the `donetamed` branch (push → auto-deploy → Orthanc restart),
+   then verify a real send still lands and that an `echoscu` with a wrong AET
+   is rejected.
+
+**Known issue — ultrasound clock.** The Versana's date/time is wrong (observed
+~1h slow with the wrong date on 2026-06-02). DICOM `StudyDate`/`StudyTime` —
+and therefore `dicom_studies.received_at` — inherit it. Fix the machine clock
+at the next maintenance window (Utility → System → General).
+
 ### Postgres growing unexpectedly
 
 If `postgres-data` is the culprit and `audit_log` is reasonable, check
