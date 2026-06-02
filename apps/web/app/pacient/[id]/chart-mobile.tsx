@@ -263,6 +263,7 @@ function MobileVisitList({
               type="button"
               onClick={() => onSelect(v.id)}
               aria-current={active ? 'true' : undefined}
+              data-testid="mobile-visit-row"
               className={cn(
                 'flex min-h-[56px] w-full items-center gap-3 px-4 py-2.5 text-left transition active:bg-surface-subtle [-webkit-tap-highlight-color:transparent]',
                 active && 'border-l-2 border-l-primary bg-primary-soft/40 pl-[14px]',
