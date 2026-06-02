@@ -287,9 +287,16 @@ export function DashboardView(): ReactElement {
           onComplete={(v) => void completeOpenVisit(v.id)}
         />
 
-        <div className="grid grid-cols-[40fr_60fr] gap-5">
-          {/* LEFT COLUMN */}
-          <div className="flex flex-col gap-5">
+        {/* Responsive layout (mobile handoff §5 "Doctor home"):
+            - phone: single column — NextPatientCard hero first, then the
+              agenda; the done-log is hidden (order-1/order-2 swap).
+            - tablet portrait (md): same stack, done-log shown.
+            - >=1024px (tablet landscape + desktop): the original 40/60
+              two-column grid (agenda left, hero + log right) — byte-
+              identical at desktop width via `lg:` gating + `lg:order-none`. */}
+        <div className="grid grid-cols-1 gap-5 lg:grid-cols-[40fr_60fr]">
+          {/* LEFT COLUMN (desktop) — agenda */}
+          <div className="order-2 flex flex-col gap-5 lg:order-none">
             <AppointmentsPanel
               snapshot={snapshot}
               now={now}
@@ -298,17 +305,20 @@ export function DashboardView(): ReactElement {
             />
           </div>
 
-          {/* RIGHT COLUMN */}
-          <div className="flex flex-col gap-5">
+          {/* RIGHT COLUMN (desktop) — next-patient hero + done-log */}
+          <div className="order-1 flex flex-col gap-5 lg:order-none">
             <NextPatientCard
               card={snapshot?.nextPatient ?? null}
               now={now}
               onOpenChart={openPatientChart}
             />
-            <VisitsLogPanel
-              entries={snapshot?.todayVisits ?? []}
-              onEntryClick={openVisitChart}
-            />
+            {/* Done-log: hidden on phone (handoff), shown tablet+ */}
+            <div className="hidden md:block">
+              <VisitsLogPanel
+                entries={snapshot?.todayVisits ?? []}
+                onEntryClick={openVisitChart}
+              />
+            </div>
           </div>
         </div>
       </div>
@@ -370,7 +380,7 @@ function GreetingStrip({
   return (
     <div className="mb-5 flex items-end justify-between gap-4">
       <div>
-        <h1 className="font-display text-[26px] font-semibold tracking-[-0.025em] text-ink-strong">
+        <h1 className="font-display text-[22px] font-semibold tracking-[-0.025em] text-ink-strong md:text-[26px]">
           {greeting},{' '}
           <span className="text-primary-dark">Dr. Taulant Shala</span>.
         </h1>
@@ -571,7 +581,9 @@ function AppointmentRow({
       onKeyDown={handleKeyDown}
       aria-current={isCurrent || isNext ? 'true' : undefined}
       className={cn(
-        'grid w-full cursor-pointer grid-cols-[58px_12px_1fr_auto] items-center gap-2.5 border-b border-line-soft px-4 py-2.5 text-left transition last:border-b-0 hover:bg-surface-subtle',
+        // min-h-[44px] on phone for a comfortable touch target; reset at
+        // md+ so the desktop row density is unchanged (≥44px rule, §7).
+        'grid w-full min-h-[44px] cursor-pointer grid-cols-[58px_12px_1fr_auto] items-center gap-2.5 border-b border-line-soft px-4 py-2.5 text-left transition last:border-b-0 hover:bg-surface-subtle md:min-h-0',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35',
         (isCurrent || isNext) &&
           'border-l-2 border-l-primary bg-gradient-to-r from-primary-tint to-transparent pl-[14px]',
@@ -1000,9 +1012,12 @@ function NextPatientCard({
         <Button onClick={() => onOpenChart(card.patientId)}>
           Hap kartelën →
         </Button>
+        {/* Secondary action drops on phone (handoff §5): the hero shows
+            only the primary "Hap kartelën" there. */}
         <Button
           variant="secondary"
           onClick={() => onOpenChart(card.patientId)}
+          className="hidden md:inline-flex"
         >
           Shiko historinë
         </Button>
