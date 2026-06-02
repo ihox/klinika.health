@@ -97,7 +97,7 @@ export function ClinicSettingsView() {
   return (
     <main className="min-h-screen bg-stone-50 pb-16">
       <CilesimetTopNav />
-      <div className="max-w-[1280px] mx-auto px-8 pt-6">
+      <div className="max-w-[1280px] mx-auto px-4 pt-5 md:px-8 md:pt-6">
         <header className="mb-4">
           <h1 className="font-display text-[26px] font-semibold tracking-[-0.02em] text-stone-900">
             Cilësimet e klinikës
@@ -111,8 +111,14 @@ export function ClinicSettingsView() {
           </div>
         </header>
 
-        <div className="grid grid-cols-[232px_1fr] gap-8 items-start">
-          <aside className="sticky top-6 flex flex-col gap-0.5" data-testid="settings-sidebar">
+        {/* Phase 1: stack the sub-nav above content below lg so the page
+            is usable on mobile/tablet; the desktop two-column split is
+            unchanged. The mobile settings tabs get full polish in Phase 3. */}
+        <div className="grid grid-cols-1 gap-5 lg:grid-cols-[232px_1fr] lg:gap-8 lg:items-start">
+          <aside
+            className="flex flex-col gap-0.5 lg:sticky lg:top-6"
+            data-testid="settings-sidebar"
+          >
             <SectionLabel>Klinika</SectionLabel>
             {TABS.filter((t) => t.group === 'clinic').map((t) => (
               <SidebarItem
@@ -228,7 +234,7 @@ function SidebarItem({
 function ClinicSettingsSkeleton() {
   return (
     <main className="min-h-screen bg-stone-50 pb-16" role="status" aria-label="Po ngarkohet…">
-      <div className="max-w-[1280px] mx-auto px-8 pt-6">
+      <div className="max-w-[1280px] mx-auto px-4 pt-5 md:px-8 md:pt-6">
         <header className="mb-4 flex flex-col gap-2.5">
           <Skeleton className="h-7 w-56" />
           <div className="flex items-center gap-2.5">

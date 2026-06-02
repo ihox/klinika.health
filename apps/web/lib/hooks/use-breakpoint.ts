@@ -34,19 +34,21 @@ const QUERIES = [
   '(min-width: 1280px)',
 ];
 
+/** Pure width→breakpoint mapping (exported for unit testing). */
+export function breakpointForWidth(width: number): Breakpoint {
+  for (const bp of BREAKPOINTS) {
+    if (width >= bp.min) return bp.name;
+  }
+  return 'phone';
+}
+
 function readBreakpoint(): Breakpoint {
   // SSR / pre-mount: default to desktop so the server render matches
   // the hydration render (desktop nav is the CSS default at every
   // width via `xl:`-gated markup; the hook only drives tablet/phone
   // structural switches, which resolve after mount).
-  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
-    return 'desktop';
-  }
-  const width = window.innerWidth;
-  for (const bp of BREAKPOINTS) {
-    if (width >= bp.min) return bp.name;
-  }
-  return 'phone';
+  if (typeof window === 'undefined') return 'desktop';
+  return breakpointForWidth(window.innerWidth);
 }
 
 interface UseBreakpointResult {
