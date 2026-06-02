@@ -1,0 +1,533 @@
+/* =========================================================================
+   Klinika — MOBILE / TABLET foundation
+   Extends prototype/styles.css. Adds device-frame chrome, mobile nav
+   (top app bar, bottom tab bar, overflow + search sheets), tablet top nav.
+
+   All new tokens are m-prefixed to keep the namespace clean. Existing
+   teal / warm-neutral / status tokens are reused verbatim — this is a
+   mobile EXTENSION of Klinika's identity, not a new one.
+   ========================================================================= */
+
+:root {
+  /* Touch + safe areas ------------------------------------------------- */
+  --m-tap:          44px;   /* minimum hit target (Apple HIG) */
+  --m-gutter:       16px;   /* phone horizontal gutter */
+  --m-gutter-lg:    24px;   /* tablet gutter */
+  --m-appbar-h:     52px;   /* phone top app bar */
+  --m-tabbar-h:     58px;   /* phone bottom tab bar (+ home indicator) */
+  --m-sheet-radius: 22px;
+  --m-statusbar-phone:  44px;
+  --m-statusbar-tablet: 24px;
+  --m-home-indicator:   22px;
+
+  /* Mobile spacing scale (denser than desktop page padding) ------------ */
+  --m-s1: 4px;
+  --m-s2: 8px;
+  --m-s3: 12px;
+  --m-s4: 16px;
+  --m-s5: 20px;
+  --m-s6: 24px;
+  --m-s8: 32px;
+
+  /* Device bezel ------------------------------------------------------- */
+  --bezel:        #1b1917;
+  --bezel-edge:   #322e2b;
+
+  /* Role-chip tokens ---------------------------------------------------
+     Canonical role colors (indigo / violet / slate) used by .chip-role.
+     These live in tokens/design-tokens.css, which the mobile bundle does
+     not load — mirror them here so role pills render correctly in the
+     drawer header, profile, and user identity rows. */
+  --role-doctor-fg:        #3730A3;
+  --role-doctor-bg:        #EEF2FF;
+  --role-doctor-border:    #C7D2FE;
+  --role-reception-fg:     #5B21B6;
+  --role-reception-bg:     #F5F3FF;
+  --role-reception-border: #DDD6FE;
+  --role-admin-fg:         #334155;
+  --role-admin-bg:         #F1F5F9;
+  --role-admin-border:     #CBD5E1;
+}
+
+/* =========================================================================
+   Studio backdrop + device frame
+   ========================================================================= */
+
+html, body { height: 100%; }
+body.m-studio {
+  margin: 0;
+  min-height: 100vh;
+  background:
+    radial-gradient(ellipse 70% 55% at 50% 0%, #ffffff 0%, transparent 60%),
+    radial-gradient(ellipse 90% 70% at 50% 120%, rgba(13,148,136,0.06), transparent 60%),
+    #ecebe8;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  font-family: var(--font-ui);
+}
+
+.m-stage {
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+/* The scaler wraps the device and is shrunk via transform to fit viewport.
+   Its width/height are set inline to the *scaled* device size so the flex
+   centerer keeps it centered without overflow. flex:none is critical — as a
+   flex item it must NOT shrink below its explicit width (otherwise it
+   collapses to the device's min-content and the tablet frame never grows). */
+.m-scaler {
+  flex: 0 0 auto;
+  transform-origin: center center;
+  transition: width 260ms cubic-bezier(.22,.61,.36,1),
+              height 260ms cubic-bezier(.22,.61,.36,1);
+  filter: drop-shadow(0 40px 80px rgba(28,25,23,0.28))
+          drop-shadow(0 8px 24px rgba(28,25,23,0.14));
+}
+
+.device {
+  position: relative;
+  background: linear-gradient(155deg, var(--bezel-edge), var(--bezel));
+  box-sizing: content-box;
+  transition: width 260ms cubic-bezier(.22,.61,.36,1),
+              height 260ms cubic-bezier(.22,.61,.36,1),
+              padding 260ms cubic-bezier(.22,.61,.36,1),
+              border-radius 260ms cubic-bezier(.22,.61,.36,1);
+}
+.device::after { /* inner bezel highlight */
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 1.5px rgba(255,255,255,0.08),
+              inset 0 1px 1px rgba(255,255,255,0.12);
+  pointer-events: none;
+}
+.device.is-phone   { padding: 14px; border-radius: 56px; }
+.device.is-tablet  { padding: 16px; border-radius: 38px; }
+
+.device-screen {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background: var(--bg);
+  overflow: hidden;
+  border-radius: 42px;
+  display: flex;
+  flex-direction: column;
+}
+.device.is-tablet .device-screen { border-radius: 22px; }
+
+/* =========================================================================
+   Status bar (iOS-style)
+   ========================================================================= */
+.m-statusbar {
+  position: relative;
+  z-index: 40;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 26px;
+  height: var(--m-statusbar-phone);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-strong);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+  background: transparent;
+  pointer-events: none;
+}
+.device.is-tablet .m-statusbar { height: var(--m-statusbar-tablet); padding: 0 20px; font-size: 12px; }
+.m-statusbar.on-dark { color: #fff; }
+.m-statusbar .sb-time { min-width: 54px; }
+.m-statusbar .sb-icons { display: flex; align-items: center; gap: 6px; }
+.m-statusbar .sb-icons svg { display: block; }
+
+/* Home indicator (phone only) */
+.m-home-indicator {
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  height: var(--m-home-indicator);
+  display: grid;
+  place-items: end center;
+  padding-bottom: 8px;
+  z-index: 45;
+  pointer-events: none;
+}
+.m-home-indicator i {
+  width: 134px; height: 5px;
+  border-radius: 999px;
+  background: var(--text-strong);
+  opacity: 0.32;
+}
+.m-home-indicator.on-dark i { background: #fff; opacity: 0.85; }
+
+/* =========================================================================
+   App body region (scrollable content between bars)
+   ========================================================================= */
+.m-app {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.m-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+.m-scroll::-webkit-scrollbar { width: 0; height: 0; }
+
+/* =========================================================================
+   Phone top app bar
+   ========================================================================= */
+.m-appbar {
+  flex-shrink: 0;
+  height: var(--m-appbar-h);
+  display: flex;
+  align-items: center;
+  gap: var(--m-s3);
+  padding: 0 var(--m-gutter);
+  background: rgba(250,250,249,0.86);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  backdrop-filter: saturate(180%) blur(20px);
+  border-bottom: 1px solid var(--border-soft);
+  z-index: 30;
+}
+.m-appbar .ab-title {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--text-strong);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.m-appbar .ab-sub {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-faint);
+  margin-top: 1px;
+  letter-spacing: 0;
+}
+.m-iconbtn {
+  width: var(--m-tap); height: var(--m-tap);
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  color: var(--text-muted);
+  background: transparent;
+  transition: background 120ms ease, color 120ms ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.m-iconbtn:active { background: var(--bg-muted); color: var(--text); }
+.m-iconbtn.has-badge { position: relative; }
+.m-iconbtn .ab-avatar {
+  width: 30px; height: 30px;
+  border-radius: 999px;
+  background: var(--teal-700);
+  color: #fff;
+  display: grid; place-items: center;
+  font-size: 11px; font-weight: 600;
+}
+.m-appbar .ab-brand {
+  display: flex; align-items: center; gap: 8px;
+  flex: 1; min-width: 0;
+}
+.m-appbar .ab-brand .word {
+  font-family: var(--font-display);
+  font-size: 17px; font-weight: 600;
+  letter-spacing: -0.02em; color: var(--text-strong);
+}
+.m-appbar .ab-brand .word .ext { color: var(--text-faint); font-weight: 400; }
+
+/* =========================================================================
+   Phone bottom tab bar
+   ========================================================================= */
+.m-tabbar {
+  flex-shrink: 0;
+  display: flex;
+  align-items: stretch;
+  padding-bottom: var(--m-home-indicator);
+  background: rgba(250,250,249,0.92);
+  -webkit-backdrop-filter: saturate(180%) blur(22px);
+  backdrop-filter: saturate(180%) blur(22px);
+  border-top: 1px solid var(--border);
+  z-index: 30;
+}
+.m-tab {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  padding: 8px 2px 6px;
+  min-height: var(--m-tap);
+  color: var(--text-faint);
+  -webkit-tap-highlight-color: transparent;
+  transition: color 120ms ease;
+  position: relative;
+}
+.m-tab .ic { width: 24px; height: 24px; display: grid; place-items: center; }
+.m-tab .lbl {
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+.m-tab.is-active { color: var(--primary-dark); }
+.m-tab.is-active .lbl { font-weight: 600; }
+.m-tab:active { color: var(--text); }
+.m-tab .tab-badge {
+  position: absolute;
+  top: 6px;
+  left: calc(50% + 8px);
+  min-width: 16px; height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--accent-500);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  display: grid; place-items: center;
+  border: 1.5px solid var(--bg);
+  font-variant-numeric: tabular-nums;
+}
+
+/* =========================================================================
+   Tablet top nav (enlarged desktop topbar)
+   ========================================================================= */
+.m-topnav {
+  flex-shrink: 0;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 0 var(--m-gutter-lg);
+  background: rgba(255,255,255,0.9);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  backdrop-filter: saturate(180%) blur(20px);
+  border-bottom: 1px solid var(--border);
+  z-index: 30;
+}
+.m-topnav .tn-brand {
+  display: flex; align-items: center; gap: 10px;
+  font-family: var(--font-display); font-weight: 600;
+  font-size: 18px; letter-spacing: -0.02em; color: var(--text-strong);
+  flex-shrink: 0;
+}
+.m-topnav .tn-brand .ext { color: var(--text-faint); font-weight: 400; }
+.m-topnav .tn-links { display: flex; gap: 4px; align-items: center; }
+.m-topnav .tn-link {
+  padding: 10px 16px;
+  min-height: var(--m-tap);
+  display: flex; align-items: center;
+  font-size: 15px; font-weight: 500;
+  color: var(--text-muted);
+  border-radius: var(--r-md);
+  position: relative;
+  white-space: nowrap;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 120ms ease, color 120ms ease;
+}
+.m-topnav .tn-link:active { background: var(--bg-subtle); }
+.m-topnav .tn-link.is-active { color: var(--text-strong); font-weight: 600; }
+.m-topnav .tn-link.is-active::after {
+  content: ''; position: absolute;
+  left: 16px; right: 16px; bottom: -1px; height: 2.5px;
+  background: var(--primary); border-radius: 2px;
+}
+.m-topnav .tn-spacer { flex: 1; }
+.m-topnav .tn-search {
+  display: flex; align-items: center; gap: 8px;
+  background: var(--bg-subtle);
+  border: 1px solid transparent;
+  padding: 9px 14px;
+  border-radius: var(--r-md);
+  width: 220px;
+  font-size: 14px;
+  color: var(--text-faint);
+  min-height: var(--m-tap);
+}
+.m-topnav .tn-user {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 10px 6px 6px;
+  border-radius: var(--r-md);
+  min-height: var(--m-tap);
+}
+.m-topnav .tn-user .avatar {
+  width: 34px; height: 34px;
+  border-radius: 999px;
+  background: var(--teal-700); color: #fff;
+  display: grid; place-items: center;
+  font-size: 12px; font-weight: 600;
+}
+.m-topnav .tn-user .name { font-size: 14px; font-weight: 500; }
+
+/* =========================================================================
+   Sheets (bottom sheet + full drawer) + scrim
+   ========================================================================= */
+.m-scrim {
+  position: absolute;
+  inset: 0;
+  background: rgba(28,25,23,0.42);
+  -webkit-backdrop-filter: blur(1px);
+  backdrop-filter: blur(1px);
+  z-index: 50;
+  opacity: 0;
+  transition: opacity 240ms ease;
+}
+.m-scrim.is-open { opacity: 1; }
+
+.m-sheet {
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  z-index: 60;
+  background: var(--bg-elevated);
+  border-top-left-radius: var(--m-sheet-radius);
+  border-top-right-radius: var(--m-sheet-radius);
+  box-shadow: 0 -16px 48px rgba(28,25,23,0.22);
+  transform: translateY(100%);
+  transition: transform 320ms cubic-bezier(.22,.61,.36,1);
+  display: flex;
+  flex-direction: column;
+  max-height: 88%;
+  padding-bottom: var(--m-home-indicator);
+}
+.m-sheet.is-open { transform: translateY(0); }
+.m-sheet .sheet-grip {
+  width: 40px; height: 5px;
+  border-radius: 999px;
+  background: var(--border-strong);
+  margin: 8px auto 4px;
+  flex-shrink: 0;
+}
+.m-sheet .sheet-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px var(--m-gutter) 10px;
+}
+.m-sheet .sheet-head h3 {
+  font-family: var(--font-display);
+  font-size: 17px; font-weight: 600; letter-spacing: -0.01em;
+}
+.m-sheet .sheet-body { overflow-y: auto; -webkit-overflow-scrolling: touch; }
+.m-sheet .sheet-body::-webkit-scrollbar { width: 0; }
+
+/* Full-screen drawer variant (hamburger nav) slides from left */
+.m-drawer {
+  position: absolute;
+  top: 0; bottom: 0; left: 0;
+  width: 82%;
+  max-width: 340px;
+  z-index: 60;
+  background: var(--bg-elevated);
+  box-shadow: 16px 0 48px rgba(28,25,23,0.22);
+  transform: translateX(-102%);
+  transition: transform 300ms cubic-bezier(.22,.61,.36,1);
+  display: flex;
+  flex-direction: column;
+}
+.m-drawer.is-open { transform: translateX(0); }
+
+/* List rows used inside sheets / drawer / menus */
+.m-list { display: flex; flex-direction: column; padding: 4px 0 8px; }
+.m-listitem {
+  display: flex; align-items: center; gap: 14px;
+  padding: 0 var(--m-gutter);
+  min-height: 52px;
+  color: var(--text);
+  font-size: 15px;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 100ms ease;
+}
+.m-listitem:active { background: var(--bg-subtle); }
+.m-listitem .li-ic {
+  width: 24px; height: 24px;
+  display: grid; place-items: center;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+.m-listitem .li-text { flex: 1; min-width: 0; }
+.m-listitem .li-text .sub { font-size: 12px; color: var(--text-faint); margin-top: 1px; }
+.m-listitem .li-chev { color: var(--text-faint); flex-shrink: 0; }
+.m-listitem.danger { color: var(--red); }
+.m-listitem.danger .li-ic { color: var(--red); }
+.m-listitem.is-active { color: var(--primary-dark); font-weight: 600; }
+.m-listitem.is-active .li-ic { color: var(--primary); }
+.m-divider-soft { height: 1px; background: var(--border-soft); margin: 4px 0; }
+
+/* =========================================================================
+   Reusable mobile bits
+   ========================================================================= */
+.m-section-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-faint);
+  font-weight: 500;
+  margin: var(--m-s5) var(--m-gutter) var(--m-s2);
+}
+.device.is-tablet .m-section-label { margin-left: var(--m-gutter-lg); margin-right: var(--m-gutter-lg); }
+
+/* Sticky bottom action bar (for forms) */
+.m-actionbar {
+  flex-shrink: 0;
+  display: flex;
+  gap: 10px;
+  padding: 12px var(--m-gutter);
+  padding-bottom: calc(12px + var(--m-home-indicator));
+  background: rgba(250,250,249,0.94);
+  -webkit-backdrop-filter: blur(18px);
+  backdrop-filter: blur(18px);
+  border-top: 1px solid var(--border);
+}
+.m-actionbar .btn { flex: 1; min-height: var(--m-tap); }
+
+/* Big touch button override inside the frame */
+.device .btn-lg { min-height: var(--m-tap); padding: 12px 18px; font-size: 15px; }
+
+/* FAB */
+.m-fab {
+  position: absolute;
+  right: var(--m-gutter);
+  bottom: calc(var(--m-tabbar-h) + 12px);
+  width: 56px; height: 56px;
+  border-radius: 18px;
+  background: var(--primary);
+  color: #fff;
+  display: grid; place-items: center;
+  box-shadow: 0 10px 24px rgba(13,148,136,0.34), inset 0 1px 0 rgba(255,255,255,0.18);
+  z-index: 35;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 140ms ease;
+}
+.m-fab:active { transform: scale(0.94); }
+
+/* Pull-to-refresh hint */
+.m-refresh-hint {
+  text-align: center;
+  font-size: 11px;
+  color: var(--text-faint);
+  padding: 10px 0 2px;
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+}
+.m-refresh-hint .dot { width: 6px; height: 6px; border-radius: 999px; background: var(--green); }
+
+@media (prefers-reduced-motion: reduce) {
+  .m-scaler, .device, .m-sheet, .m-drawer, .m-scrim { transition: none !important; }
+}

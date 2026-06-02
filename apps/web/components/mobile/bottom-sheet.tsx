@@ -34,6 +34,11 @@ interface BottomSheetProps {
  * Below-desktop only (`xl:hidden`): the search sheet is reachable on both
  * phone and tablet (handoff spec §4); the overflow sheet's only trigger is
  * the phone bottom-tab bar, so it never opens above phone width regardless.
+ *
+ * Unmounts entirely when closed (after the exit transition) so a hidden,
+ * always-present sheet never leaves stray text/controls in the DOM that
+ * could shadow other surfaces — only the slide animation lives on while it
+ * eases out.
  */
 export function BottomSheet({
   open,
@@ -45,10 +50,26 @@ export function BottomSheet({
   scrollBody = true,
   'data-testid': testId,
 }: BottomSheetProps) {
-  const [mounted, setMounted] = useState(false);
+  const [portalReady, setPortalReady] = useState(false);
+  const [inDom, setInDom] = useState(false);
+  const [slideOpen, setSlideOpen] = useState(false);
   const sheetRef = useRef<HTMLDivElement | null>(null);
 
-  useEffect(() => setMounted(true), []);
+  useEffect(() => setPortalReady(true), []);
+
+  // Mount → next frame slide up; close → slide down → unmount after the
+  // 320ms transition. Keeps both enter + exit animations without leaving
+  // the sheet in the DOM while closed.
+  useEffect(() => {
+    if (open) {
+      setInDom(true);
+      const raf = requestAnimationFrame(() => setSlideOpen(true));
+      return () => cancelAnimationFrame(raf);
+    }
+    setSlideOpen(false);
+    const id = window.setTimeout(() => setInDom(false), 340);
+    return () => window.clearTimeout(id);
+  }, [open]);
 
   // Escape closes; lock background scroll while open.
   useEffect(() => {
@@ -68,7 +89,7 @@ export function BottomSheet({
     };
   }, [open, onClose]);
 
-  if (!mounted) return null;
+  if (!portalReady || !inDom) return null;
 
   return createPortal(
     <div
@@ -78,7 +99,7 @@ export function BottomSheet({
     >
       <div
         className="m-scrim absolute inset-0 bg-[rgba(28,25,23,0.42)]"
-        data-open={open ? 'true' : 'false'}
+        data-open={slideOpen ? 'true' : 'false'}
         onClick={onClose}
       />
       <div
@@ -86,7 +107,7 @@ export function BottomSheet({
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        data-open={open ? 'true' : 'false'}
+        data-open={slideOpen ? 'true' : 'false'}
         data-testid={testId}
         className="m-sheet absolute inset-x-0 bottom-0 flex flex-col rounded-t-[var(--m-sheet-radius)] bg-surface-elevated shadow-[0_-16px_48px_rgba(28,25,23,0.22)]"
         style={{

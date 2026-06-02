@@ -17,7 +17,11 @@ export type NavRole = Extract<AuthRole, 'doctor' | 'receptionist' | 'clinic_admi
 
 export interface NavItem {
   key: string;
+  /** Full label — desktop + tablet top nav, overflow sheet, app-bar title. */
   label: string;
+  /** Short label for the cramped phone bottom-tab bar (handoff §3: the
+   *  doctor's "Pamja e ditës" reads "Sot" as a tab). Defaults to `label`. */
+  tabLabel: string;
   path: string;
   /** Sub-paths under which this item should still light up (e.g.
    *  /pacient/[id] is "still on Pacientët"). */
@@ -32,6 +36,7 @@ export const NAV_ITEMS: NavItem[] = [
   {
     key: 'kalendari',
     label: 'Kalendari',
+    tabLabel: 'Kalendari',
     path: '/receptionist',
     activePrefixes: ['/receptionist'],
     grantedBy: ['receptionist'],
@@ -40,6 +45,7 @@ export const NAV_ITEMS: NavItem[] = [
   {
     key: 'pamja-e-dites',
     label: 'Pamja e ditës',
+    tabLabel: 'Sot',
     path: '/doctor',
     activePrefixes: ['/doctor'],
     grantedBy: ['doctor'],
@@ -48,6 +54,7 @@ export const NAV_ITEMS: NavItem[] = [
   {
     key: 'pacientet',
     label: 'Pacientët',
+    tabLabel: 'Pacientët',
     path: '/pacientet',
     // /pacientet is the role-aware wrapper; /pacient/[id] is the chart
     // view; /doctor/pacientet is where the wrapper redirects. All three
@@ -59,6 +66,7 @@ export const NAV_ITEMS: NavItem[] = [
   {
     key: 'raporti',
     label: 'Raporti',
+    tabLabel: 'Raporti',
     path: '/raporti',
     activePrefixes: ['/raporti'],
     grantedBy: ['doctor', 'receptionist', 'clinic_admin'],
@@ -67,6 +75,7 @@ export const NAV_ITEMS: NavItem[] = [
   {
     key: 'cilesimet',
     label: 'Cilësimet',
+    tabLabel: 'Cilësimet',
     path: '/cilesimet',
     activePrefixes: ['/cilesimet'],
     grantedBy: ['clinic_admin'],

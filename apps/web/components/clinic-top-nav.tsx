@@ -6,6 +6,7 @@ import { useMemo } from 'react';
 
 import { homePathForRoles, type AuthRole, type MeResponse } from '@/lib/auth-client';
 import { grantedNavItems, isNavItemActive } from '@/lib/clinic-nav';
+import { useBreakpoint } from '@/lib/hooks/use-breakpoint';
 import { BrandLogo } from './brand-logo';
 import { ClinicUserMenu } from './clinic-user-menu';
 import { MobileClinicNav } from './mobile/mobile-clinic-nav';
@@ -13,14 +14,17 @@ import { MobileClinicNav } from './mobile/mobile-clinic-nav';
 /**
  * Adaptive clinic navigation (CLAUDE.md §5.8; mobile handoff §3).
  *
- * Renders three breakpoint-gated presentations, all driven by the SAME
- * §5.8 role→menu model (`grantedNavItems`) so the union a user sees never
- * diverges across form factors:
+ * Renders two presentations, both driven by the SAME §5.8 role→menu model
+ * (`grantedNavItems`) so the union a user sees never diverges across form
+ * factors. The switch is a `useBreakpoint` conditional MOUNT (not CSS
+ * hiding) so only one nav is ever in the DOM — no hidden duplicate links,
+ * sheets, or user menus to collide with the rest of the app:
  *
- *   - **≥1280px (desktop):** the original horizontal top nav, below —
- *     gated to `xl:` so its rendered output at desktop width is unchanged.
- *   - **768–1279px (tablet) / <768px (phone):** delegated to
- *     `MobileClinicNav` (enlarged top nav / app bar + bottom tabs).
+ *   - **≥1280px (desktop):** the original horizontal top nav (markup
+ *     unchanged → byte-identical desktop rendering). This is the SSR /
+ *     pre-mount default, so desktop has no flash.
+ *   - **<1280px (tablet + phone):** delegated to `MobileClinicNav`
+ *     (enlarged tablet top nav / phone app bar + bottom tabs + sheets).
  *
  * Call sites are unchanged: every clinic page still renders a single
  * `<ClinicTopNav me={…} rightAdjacent={…} />`. `rightAdjacent` (the
@@ -45,6 +49,7 @@ interface Props {
 
 export function ClinicTopNav({ me, brandAdjacent, rightAdjacent }: Props) {
   const pathname = usePathname() ?? '';
+  const { isDesktop } = useBreakpoint();
   const roles = useMemo<AuthRole[]>(() => me?.roles ?? [], [me?.roles]);
 
   const items = useMemo(() => grantedNavItems(roles), [roles]);
@@ -53,10 +58,17 @@ export function ClinicTopNav({ me, brandAdjacent, rightAdjacent }: Props) {
   // (homePathForRoles is the canonical priority — see auth-client.ts).
   const homePath = homePathForRoles(roles);
 
+  // Below desktop → the adaptive mobile/tablet chrome (mounted only here,
+  // so no desktop DOM contains it). `useBreakpoint` defaults to desktop
+  // pre-mount, so desktop renders the header below with no flash.
+  if (!isDesktop) {
+    return <MobileClinicNav me={me} />;
+  }
+
   return (
     <>
-      {/* ── DESKTOP ≥1280px — original markup, gated to xl (no regression) ── */}
-      <header className="sticky top-0 z-30 hidden border-b border-line bg-surface-elevated xl:block">
+      {/* ── DESKTOP ≥1280px — original markup (byte-identical rendering) ── */}
+      <header className="sticky top-0 z-30 border-b border-line bg-surface-elevated">
         <div className="mx-auto flex max-w-page items-center justify-between px-page-x py-3">
           <div className="flex items-center gap-8">
             <Link href={homePath} className="flex items-center" aria-label="Klinika">
@@ -95,9 +107,6 @@ export function ClinicTopNav({ me, brandAdjacent, rightAdjacent }: Props) {
           </div>
         </div>
       </header>
-
-      {/* ── TABLET + PHONE <1280px — adaptive mobile chrome ──────────────── */}
-      <MobileClinicNav me={me} />
     </>
   );
 }

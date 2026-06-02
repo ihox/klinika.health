@@ -177,7 +177,7 @@ export function MobileClinicNav({ me }: Props) {
             >
               <NavIcon name={item.icon} size={24} strokeWidth={active ? 1.9 : 1.6} />
               <span className={cn('text-[10.5px] tracking-[-0.01em]', active && 'font-semibold')}>
-                {item.label}
+                {item.tabLabel}
               </span>
             </Link>
           );
