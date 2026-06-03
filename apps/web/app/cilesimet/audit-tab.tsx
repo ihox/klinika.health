@@ -157,7 +157,7 @@ export function AuditTab({ users }: Props) {
         </Button>
       </div>
 
-      <div className="bg-white border border-stone-200 rounded-xl shadow-xs overflow-hidden">
+      <div className="bg-white border border-stone-200 rounded-xl shadow-xs overflow-x-auto">
         {error ? (
           <div className="p-4 text-[13px] text-amber-900 bg-amber-50 border-b border-amber-200">
             {error}
@@ -177,7 +177,7 @@ export function AuditTab({ users }: Props) {
           return (
             <div key={r.id} className="border-b border-stone-100 last:border-0">
               <div
-                className={`grid grid-cols-[130px_200px_1fr_24px] gap-3 px-4.5 py-3 items-center cursor-pointer transition-colors ${
+                className={`grid min-w-[520px] grid-cols-[130px_200px_1fr_24px] gap-3 px-4.5 py-3 items-center cursor-pointer transition-colors ${
                   isOpen ? 'bg-stone-50' : 'hover:bg-stone-50'
                 }`}
                 onClick={() => toggleExpanded(r.id)}

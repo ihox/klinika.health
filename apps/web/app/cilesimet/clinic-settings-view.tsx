@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ClinicTopNav } from '@/components/clinic-top-nav';
 import { Skeleton } from '@/components/skeleton';
 import { ApiError } from '@/lib/api';
+import { cn } from '@/lib/utils';
 import {
   clinicClient,
   type ClinicSettings,
@@ -115,8 +116,38 @@ export function ClinicSettingsView() {
             is usable on mobile/tablet; the desktop two-column split is
             unchanged. The mobile settings tabs get full polish in Phase 3. */}
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-[232px_1fr] lg:gap-8 lg:items-start">
+          {/* Mobile/tablet: horizontal-scroll tab row (handoff §12.3) — the
+              closest analogue to the desktop left-sidebar of peer sections.
+              The vertical sidebar is desktop-only (lg). */}
+          <nav
+            aria-label="Seksionet e cilësimeve"
+            className="sticky top-[52px] z-10 -mx-4 flex gap-1 overflow-x-auto border-b border-stone-200 bg-stone-50 px-4 pb-2 [-ms-overflow-style:none] [scrollbar-width:none] md:top-[64px] md:-mx-8 md:px-8 lg:hidden [&::-webkit-scrollbar]:hidden"
+          >
+            {TABS.map((t) => (
+              <button
+                key={t.key}
+                type="button"
+                onClick={() => setTab(t.key)}
+                aria-current={tab === t.key ? 'page' : undefined}
+                className={cn(
+                  'inline-flex min-h-[44px] shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md px-3.5 text-[14px] font-medium transition',
+                  tab === t.key
+                    ? 'bg-teal-50 text-teal-800'
+                    : 'text-stone-500 active:bg-stone-100',
+                )}
+              >
+                {t.label}
+                {t.key === 'users' && usersCount != null ? (
+                  <span className="rounded-full bg-stone-200 px-1.5 text-[11px] font-semibold tabular-nums text-stone-600">
+                    {usersCount}
+                  </span>
+                ) : null}
+              </button>
+            ))}
+          </nav>
+
           <aside
-            className="flex flex-col gap-0.5 lg:sticky lg:top-6"
+            className="hidden flex-col gap-0.5 lg:flex lg:sticky lg:top-6"
             data-testid="settings-sidebar"
           >
             <SectionLabel>Klinika</SectionLabel>

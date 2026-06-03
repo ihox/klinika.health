@@ -102,8 +102,8 @@ export function PaymentsTab({ settings, onChange, onToast }: Props) {
         description="Kode të shkurtra që mjeku zgjedh gjatë vizitës. Vetëm mjeku i sheh — nuk shfaqen për recepsion ose pacient."
       />
 
-      <div className="bg-white border border-stone-200 rounded-xl shadow-xs overflow-hidden">
-        <table className="w-full" data-testid="codes-table">
+      <div className="bg-white border border-stone-200 rounded-xl shadow-xs overflow-x-auto">
+        <table className="w-full min-w-[420px]" data-testid="codes-table">
           <thead>
             <tr className="bg-stone-50 border-b border-stone-200">
               <th className="text-left text-[11px] uppercase tracking-wider font-semibold text-stone-500 px-4 py-3 w-20">
