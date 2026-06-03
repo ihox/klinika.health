@@ -16,8 +16,10 @@ import {
   todayIsoLocal,
   toLocalParts,
 } from '@/lib/appointment-client';
-import { ageLabel } from '@/lib/patient-client';
+import { ageLabel, type PatientPublicDto } from '@/lib/patient-client';
 import { clinicClient, type ClinicSettings } from '@/lib/clinic-client';
+import { QuickAddPatientModal } from './pacientet/quick-add-patient-modal';
+import { MobileWalkInSheet } from './mobile-walkin-sheet';
 import {
   ALLOWED_TRANSITIONS,
   calendarClient,
@@ -86,6 +88,9 @@ export function MobileReceptionHome() {
   const [toast, setToast] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [actionEntry, setActionEntry] = useState<CalendarEntry | null>(null);
+  const [walkInOpen, setWalkInOpen] = useState(false);
+  // string seed = QuickAdd open (carrying the typed name); null = closed.
+  const [quickAddSeed, setQuickAddSeed] = useState<string | null>(null);
 
   const todayIso = useMemo(() => todayIsoLocal(now), [now]);
   const [selectedDay, setSelectedDay] = useState<string>(() => todayIsoLocal(new Date()));
@@ -225,6 +230,26 @@ export function MobileReceptionHome() {
     [refreshEntries, refreshStats],
   );
 
+  // Walk-in creation (§12.5). Creates the visit immediately and returns to
+  // the calendar — the clinical visit form is never shown to reception
+  // (§1.2). The doctor picks it up from their own list.
+  const createWalkin = useCallback(
+    async (patientId: string) => {
+      setWalkInOpen(false);
+      setQuickAddSeed(null);
+      try {
+        await calendarClient.createWalkin({ patientId });
+        setToast('Pacienti u shtua. Shfaqet menjëherë në kalendar.');
+      } catch (err) {
+        setToast(err instanceof ApiError ? err.message : 'Walk-in dështoi.');
+      } finally {
+        void refreshEntries();
+        void refreshStats();
+      }
+    },
+    [refreshEntries, refreshStats],
+  );
+
   // Day-list partitions: scheduled bookings (agenda) vs walk-ins (band).
   const agenda = useMemo(
     () =>
@@ -260,6 +285,19 @@ export function MobileReceptionHome() {
         ) : null}
 
         <StatCards stats={stats} now={now} />
+
+        {/* Walk-in — the receptionist's primary mobile action (§12.5).
+            Prominent full-width button right under the stats; a FAB below
+            mirrors it for one-thumbed reach. */}
+        <button
+          type="button"
+          onClick={() => setWalkInOpen(true)}
+          data-testid="walkin-cta"
+          className="mt-4 flex min-h-[52px] w-full items-center justify-center gap-2 rounded-lg bg-primary text-[15px] font-semibold text-white shadow-sm transition active:bg-primary-dark [-webkit-tap-highlight-color:transparent]"
+        >
+          <NavIcon name="plus" size={18} strokeWidth={2} />
+          Vizitë pa termin
+        </button>
 
         {/* Ditë / Javë — tablet only (phone is always the day-list). */}
         <div className="mt-4 hidden md:flex md:justify-end">
@@ -326,6 +364,19 @@ export function MobileReceptionHome() {
         )}
       </div>
 
+      {/* FAB — thumb-reachable walk-in entry (day view, above the tab bar). */}
+      {view === 'day' ? (
+        <button
+          type="button"
+          onClick={() => setWalkInOpen(true)}
+          aria-label="Vizitë pa termin"
+          data-testid="walkin-fab"
+          className="fixed bottom-[calc(var(--m-tabbar-h)+env(safe-area-inset-bottom,0px)+16px)] right-[var(--m-gutter)] z-30 grid h-14 w-14 place-items-center rounded-2xl bg-primary text-white shadow-lg transition active:scale-95 md:hidden"
+        >
+          <NavIcon name="plus" size={24} strokeWidth={2} />
+        </button>
+      ) : null}
+
       {toast ? <Toast key={toast} message={toast} onDone={() => setToast(null)} /> : null}
 
       <StatusActionSheet
@@ -333,6 +384,23 @@ export function MobileReceptionHome() {
         locked={actionEntry ? isLocked(actionEntry) : false}
         onClose={() => setActionEntry(null)}
         onChange={changeStatus}
+      />
+
+      <MobileWalkInSheet
+        open={walkInOpen}
+        onClose={() => setWalkInOpen(false)}
+        onPickPatient={(p) => void createWalkin(p.id)}
+        onCreateNew={(seed) => {
+          setWalkInOpen(false);
+          setQuickAddSeed(seed);
+        }}
+      />
+
+      <QuickAddPatientModal
+        open={quickAddSeed != null}
+        seed={quickAddSeed ?? ''}
+        onClose={() => setQuickAddSeed(null)}
+        onCreated={(p: PatientPublicDto) => void createWalkin(p.id)}
       />
     </main>
   );
