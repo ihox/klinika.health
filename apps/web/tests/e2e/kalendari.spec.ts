@@ -350,3 +350,25 @@ test.describe('Receptionist calendar', () => {
 // when the suite stays focused on real interactions instead of the
 // constants.
 export const _DAYS = [TODAY_ISO, TOMORROW_ISO, YESTERDAY_ISO, SCHEDULED_TIME_LOCAL];
+
+// ───────────────────────────────────────────────────────────────────────────
+// Phone receptionist home (Phase 3) — the walk-in flow is the primary mobile
+// use case. Desktop (default viewport) renders CalendarView, asserted above.
+// ───────────────────────────────────────────────────────────────────────────
+test.describe('Receptionist home — phone walk-in', () => {
+  test.use({ viewport: { width: 390, height: 844 } });
+
+  test('the "Vizitë pa termin" CTA opens the search-or-create sheet', async ({ page }) => {
+    const state: MockState = { current: [], yesterdayUnmarked: [], patches: [] };
+    await mockApi(page, state);
+    await page.goto('/receptionist');
+
+    const cta = page.getByTestId('walkin-cta');
+    await expect(cta).toBeVisible();
+    await cta.click();
+
+    await expect(page.getByTestId('walkin-sheet')).toBeVisible();
+    // The create path is always one tap away (carries the typed name).
+    await expect(page.getByTestId('walkin-create-new')).toBeVisible();
+  });
+});

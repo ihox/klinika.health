@@ -374,3 +374,22 @@ test.describe('Clinic settings', () => {
     ).toBeVisible();
   });
 });
+
+// ───────────────────────────────────────────────────────────────────────────
+// Phone settings (Phase 3) — the vertical sidebar becomes a horizontal-scroll
+// tab row. Desktop (default viewport) keeps the sidebar, asserted above.
+// ───────────────────────────────────────────────────────────────────────────
+test.describe('Clinic settings — phone', () => {
+  test.use({ viewport: { width: 390, height: 844 } });
+
+  test('renders the horizontal tab row; desktop sidebar is hidden', async ({ page }) => {
+    await mockClinicApi(page);
+    await page.goto('/cilesimet');
+
+    const tabrow = page.getByRole('navigation', { name: 'Seksionet e cilësimeve' });
+    await expect(tabrow).toBeVisible();
+    await expect(tabrow.getByRole('button', { name: /Përgjithshme/ })).toBeVisible();
+    await expect(tabrow.getByRole('button', { name: /Përdoruesit/ })).toBeVisible();
+    await expect(page.getByTestId('settings-sidebar')).toBeHidden();
+  });
+});
