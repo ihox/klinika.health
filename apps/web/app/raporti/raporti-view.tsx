@@ -156,9 +156,9 @@ export function RaportiView() {
   return (
     <>
       <ClinicTopNav me={me} />
-      <main className="mx-auto max-w-page px-page-x py-page-y">
+      <main className="mx-auto max-w-page px-4 py-5 md:px-page-x md:py-page-y">
         {/* Header */}
-        <div className="mb-[22px] flex items-end justify-between gap-6">
+        <div className="mb-[22px] flex flex-col items-start gap-3 sm:flex-row sm:items-end sm:justify-between sm:gap-6">
           <div>
             <div className="mb-1.5 font-mono text-[10.5px] uppercase tracking-[0.08em] text-ink-faint">
               Raporti
@@ -240,25 +240,30 @@ export function RaportiView() {
           </div>
         </div>
 
-        {/* Visits table */}
-        <div className="overflow-hidden rounded-xl border border-line bg-surface-elevated shadow-[0_1px_2px_rgba(28,25,23,0.04)]">
-          {loading ? (
-            <div className="px-6 py-12 text-center text-[13px] text-ink-muted">Po ngarkohet…</div>
-          ) : filtered.length === 0 ? (
-            <EmptyState
-              filter={filter}
-              hasAnyVisits={visits.length > 0}
-              restricted={restricted}
-            />
-          ) : (
-            <VisitsTable
-              visits={filtered}
-              totalCents={filteredSumCents}
-              paidCount={countPaid(filtered)}
-              otherCount={filtered.length - countPaid(filtered)}
-            />
-          )}
-        </div>
+        {/* Visits — table on tablet+ (md), card list on phone (handoff §12.1) */}
+        {loading ? (
+          <div className="rounded-xl border border-line bg-surface-elevated px-6 py-12 text-center text-[13px] text-ink-muted">
+            Po ngarkohet…
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="overflow-hidden rounded-xl border border-line bg-surface-elevated">
+            <EmptyState filter={filter} hasAnyVisits={visits.length > 0} restricted={restricted} />
+          </div>
+        ) : (
+          <>
+            <div className="hidden overflow-hidden rounded-xl border border-line bg-surface-elevated shadow-[0_1px_2px_rgba(28,25,23,0.04)] md:block">
+              <VisitsTable
+                visits={filtered}
+                totalCents={filteredSumCents}
+                paidCount={countPaid(filtered)}
+                otherCount={filtered.length - countPaid(filtered)}
+              />
+            </div>
+            <div className="md:hidden">
+              <RaportiVisitCards visits={filtered} totalCents={filteredSumCents} />
+            </div>
+          </>
+        )}
       </main>
     </>
   );
@@ -545,6 +550,96 @@ function FilterPill({ active, label, count, onClick }: FilterPillProps) {
         {count}
       </span>
     </button>
+  );
+}
+
+// Phone visit list — the table's card-list twin (handoff §12.1: a 6-column
+// table would force horizontal scroll on a phone, so each visit becomes a
+// compact card: time · name+age+status · payment).
+function statusCardChipCls(status: DailyReportStatus): string {
+  switch (status) {
+    case 'completed':
+      return 'bg-status-completed-bg text-status-completed-fg';
+    case 'no_show':
+      return 'bg-status-no-show-bg text-status-no-show-fg';
+    case 'in_progress':
+    case 'arrived':
+      return 'bg-status-in-progress-bg text-status-in-progress-fg';
+    default:
+      return 'bg-status-scheduled-bg text-status-scheduled-fg';
+  }
+}
+
+function RaportiVisitCards({
+  visits,
+  totalCents,
+}: {
+  visits: DailyReportVisit[];
+  totalCents: number;
+}) {
+  const now = useMemo(() => new Date(), []);
+  return (
+    <div className="overflow-hidden rounded-xl border border-line bg-surface-elevated shadow-[0_1px_2px_rgba(28,25,23,0.04)]">
+      <ul className="divide-y divide-line-soft">
+        {visits.map((v) => (
+          <li
+            key={v.id}
+            className="grid min-h-[56px] grid-cols-[46px_1fr_auto] items-center gap-3 px-4 py-2.5"
+          >
+            <span className="font-mono text-[12px] tabular-nums text-ink-muted">{v.time}</span>
+            <span className="min-w-0">
+              <span className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+                <span className="truncate text-[14px] font-medium text-ink">
+                  {v.patient.firstName} {v.patient.lastName}
+                </span>
+                {v.patient.dateOfBirth ? (
+                  <span className="text-[11.5px] text-ink-faint">
+                    {ageLabel(v.patient.dateOfBirth, now)}
+                  </span>
+                ) : null}
+              </span>
+              <span className="mt-1 flex items-center gap-1.5">
+                <span
+                  className={cn(
+                    'rounded-pill px-1.5 py-px text-[10.5px] font-medium',
+                    statusCardChipCls(v.status),
+                  )}
+                >
+                  {chipLabel(v.status)}
+                </span>
+                {v.isWalkIn ? (
+                  <span className="text-[10.5px] font-medium text-primary-dark">Pa termin</span>
+                ) : null}
+              </span>
+            </span>
+            <span className="text-right">
+              {v.paymentCode ? (
+                <span className="flex items-center justify-end gap-1.5">
+                  <span className="rounded bg-ink px-1 py-px font-mono text-[10px] font-semibold text-white">
+                    {v.paymentCode}
+                  </span>
+                  <span className="font-display text-[14px] font-semibold tabular-nums text-ink-strong">
+                    {v.paymentCode === 'E'
+                      ? 'Falas'
+                      : v.paymentAmountCents != null
+                        ? centsToEur(v.paymentAmountCents)
+                        : '—'}
+                  </span>
+                </span>
+              ) : (
+                <span className="text-[12px] italic text-ink-faint">pa pagesë</span>
+              )}
+            </span>
+          </li>
+        ))}
+      </ul>
+      <div className="flex items-center justify-between border-t border-line bg-surface-subtle px-4 py-3">
+        <span className="text-[12px] font-medium text-ink-muted">Totali</span>
+        <span className="font-display text-[16px] font-semibold tabular-nums text-ink-strong">
+          {centsToEur(totalCents)}
+        </span>
+      </div>
+    </div>
   );
 }
 
