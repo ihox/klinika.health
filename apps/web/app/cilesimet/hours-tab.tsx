@@ -196,7 +196,7 @@ export function HoursTab({ settings, onChange, onToast }: Props) {
               <div
                 key={day}
                 data-testid={`day-${day}`}
-                className="grid grid-cols-[140px_130px_1fr] gap-4 py-3 border-b border-stone-100 last:border-0 items-center"
+                className="flex flex-wrap items-center gap-3 py-3 border-b border-stone-100 last:border-0 sm:grid sm:grid-cols-[140px_130px_1fr] sm:gap-4"
               >
                 <div className="text-[14px] font-medium text-stone-900 flex items-center gap-2">
                   {DAY_LABELS[day]}

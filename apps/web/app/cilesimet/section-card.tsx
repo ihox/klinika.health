@@ -22,7 +22,7 @@ export function SectionCard({
         className,
       )}
     >
-      <div className="px-6 py-4 border-b border-stone-200 flex items-start justify-between gap-4">
+      <div className="px-4 py-4 border-b border-stone-200 flex items-start justify-between gap-4 sm:px-6">
         <div>
           <h3 className="text-[14px] font-semibold text-stone-900">{title}</h3>
           {description ? (
@@ -30,9 +30,9 @@ export function SectionCard({
           ) : null}
         </div>
       </div>
-      <div className="px-6 py-5">{children}</div>
+      <div className="px-4 py-4 sm:px-6 sm:py-5">{children}</div>
       {actions ? (
-        <div className="px-6 py-3.5 border-t border-stone-200 bg-stone-50 flex justify-end gap-2">
+        <div className="px-4 py-3.5 border-t border-stone-200 bg-stone-50 flex justify-end gap-2 sm:px-6">
           {actions}
         </div>
       ) : null}
@@ -86,8 +86,12 @@ export function InfoTip({
 }
 
 export function FormGrid({ children }: { children: React.ReactNode }) {
+  // Phone: label-on-top single column; ≥640px the 200px label + field
+  // two-column grid (desktop unchanged).
   return (
-    <div className="grid grid-cols-[200px_1fr] gap-x-7 gap-y-4 items-start">{children}</div>
+    <div className="grid grid-cols-1 gap-x-7 gap-y-3 items-start sm:grid-cols-[200px_1fr] sm:gap-y-4">
+      {children}
+    </div>
   );
 }
 

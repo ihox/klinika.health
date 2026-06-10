@@ -104,8 +104,8 @@ export function UsersTab({ users, onChange, onToast }: Props) {
         </Button>
       </div>
 
-      <div className="bg-white border border-stone-200 rounded-xl shadow-xs overflow-hidden">
-        <table className="w-full" data-testid="users-table">
+      <div className="bg-white border border-stone-200 rounded-xl shadow-xs overflow-x-auto">
+        <table className="w-full min-w-[560px]" data-testid="users-table">
           <thead>
             <tr className="bg-stone-50 border-b border-stone-200">
               <th className="text-left text-[11px] uppercase tracking-wider font-semibold text-stone-500 px-4 py-3">
@@ -472,7 +472,7 @@ function EditUserDrawer({
   return (
     <div className="fixed inset-0 z-50 bg-stone-900/35" onClick={onClose}>
       <div
-        className="absolute right-0 top-0 bottom-0 w-[440px] max-w-[calc(100vw-60px)] bg-white shadow-modal flex flex-col"
+        className="absolute right-0 top-0 bottom-0 w-full bg-white shadow-modal flex flex-col sm:w-[440px] sm:max-w-[calc(100vw-60px)]"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"

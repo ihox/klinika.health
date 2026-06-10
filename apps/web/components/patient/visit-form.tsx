@@ -528,13 +528,16 @@ function VisitActionBar({
     // last form field (Pagesa) isn't hidden behind the bar. z-30 matches
     // the prototype; sits under modals (z-50+) and above the master
     // strip's z-20.
-    <footer className="fixed bottom-0 left-0 right-0 z-30 flex flex-col gap-3 border-t border-line bg-surface-elevated px-page-x py-3 shadow-[0_-2px_8px_rgba(28,25,23,0.04)] lg:flex-row lg:flex-wrap lg:items-center lg:justify-between">
-      <div className="flex flex-wrap items-center gap-2">
+    <footer className="fixed bottom-0 left-0 right-0 z-30 flex items-center gap-2 overflow-x-auto border-t border-line bg-surface-elevated px-4 py-2.5 pb-[max(10px,env(safe-area-inset-bottom))] shadow-[0_-2px_8px_rgba(28,25,23,0.04)] [-ms-overflow-style:none] [scrollbar-width:none] lg:flex-wrap lg:justify-between lg:gap-3 lg:overflow-visible lg:px-page-x lg:py-3 lg:pb-3 [&::-webkit-scrollbar]:hidden">
+      <div className="flex shrink-0 items-center gap-2">
+        {/* Print previews are de-scoped on mobile (handoff "Out of scope") —
+            the print buttons show on desktop only. */}
         <Button
           variant="secondary"
           size="sm"
           onClick={onPrintVisitReport}
           data-testid="print-visit-report"
+          className="hidden lg:inline-flex"
         >
           Printo raportin
         </Button>
@@ -551,6 +554,7 @@ function VisitActionBar({
           size="sm"
           onClick={onPrintHistory}
           data-testid="print-history"
+          className="hidden lg:inline-flex"
         >
           Printo historinë
         </Button>
@@ -565,13 +569,14 @@ function VisitActionBar({
           </Button>
         ) : null}
       </div>
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex shrink-0 items-center gap-2">
         <AutoSaveIndicator
           state={autoSaveState}
           lastSavedAt={lastSavedAt}
           onRetry={onSaveNow}
         />
-        <Button variant="secondary" size="sm" onClick={onSaveNow}>
+        {/* Redundant with autosave on mobile; explicit save kept for desktop. */}
+        <Button variant="secondary" size="sm" onClick={onSaveNow} className="hidden lg:inline-flex">
           Ruaj tani
         </Button>
         <span className="hidden h-5 w-px bg-line lg:inline-block" aria-hidden />

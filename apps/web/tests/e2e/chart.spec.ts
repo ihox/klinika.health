@@ -789,3 +789,45 @@ test.describe('Patient chart shell', () => {
     await expect(page.getByRole('button', { name: /Vizitë e re/ })).toBeVisible();
   });
 });
+
+// ───────────────────────────────────────────────────────────────────────────
+// Mobile/tablet adaptive chart (Phase 2). Desktop (default viewport) keeps
+// the VisitNav + 60/40 grid, asserted above; these run at phone width.
+// ───────────────────────────────────────────────────────────────────────────
+test.describe('Patient chart — phone drilldown', () => {
+  test.use({ viewport: { width: 390, height: 844 } });
+
+  test('phone renders the segmented chart tabs, not the desktop visit nav', async ({ page }) => {
+    await mockChart(page);
+    await mockVisits(page);
+    await page.goto(`/pacient/${PATIENT_ID}`);
+
+    await expect(page.getByText('Era Krasniqi', { exact: true }).first()).toBeVisible();
+
+    const tabs = page.getByRole('tablist', { name: 'Seksionet e kartelës' });
+    await expect(tabs).toBeVisible();
+    await expect(tabs.getByRole('tab', { name: /Vizitat/ })).toBeVisible();
+    await expect(tabs.getByRole('tab', { name: /Rritja/ })).toBeVisible();
+    await expect(tabs.getByRole('tab', { name: /Ultrazëri/ })).toBeVisible();
+    await expect(tabs.getByRole('tab', { name: /Të dhëna/ })).toBeVisible();
+
+    // The desktop visit-nav ("Vizita N nga M") must NOT render on phone.
+    await expect(page.getByText(/Vizita \d+ nga \d+/)).toHaveCount(0);
+  });
+
+  test('tapping a visit opens the form full-screen and hides the bottom tab bar', async ({ page }) => {
+    await mockChart(page);
+    await mockVisits(page);
+    await page.goto(`/pacient/${PATIENT_ID}`);
+
+    const tabbar = page.getByRole('navigation', { name: 'Navigimi kryesor' });
+    await expect(tabbar).toBeVisible();
+
+    await page.getByTestId('mobile-visit-row').first().click();
+
+    // Full-screen visit detail: a back-to-list affordance appears and the
+    // phone bottom tab bar is hidden (handoff §11.3 full-screen takeover).
+    await expect(page.getByRole('button', { name: 'Vizitat' })).toBeVisible();
+    await expect(tabbar).toBeHidden();
+  });
+});

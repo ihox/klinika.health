@@ -1,7 +1,8 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import { Inter, Inter_Tight } from 'next/font/google';
 import { ConnectionStatus } from '@/components/connection-status';
 import './globals.css';
+import './mobile.css';
 
 // Every Klinika app route reads cookies, headers, or per-request
 // query string state (auth context, clinic resolution, search
@@ -23,6 +24,18 @@ const interDisplay = Inter_Tight({
   variable: '--font-inter-display',
   display: 'swap',
 });
+
+// Mobile/tablet support (handoff spec §10): cover the safe areas so the
+// app bar / bottom tabs can pad around the notch + home indicator, and
+// paint the browser chrome teal to match the brand. `maximumScale` is left
+// unset so users can still pinch-zoom (accessibility) — the 16px-input
+// rule in mobile.css is what prevents the unwanted iOS focus-zoom.
+export const viewport: Viewport = {
+  themeColor: '#0D9488',
+  viewportFit: 'cover',
+  width: 'device-width',
+  initialScale: 1,
+};
 
 export const metadata: Metadata = {
   title: 'Klinika',

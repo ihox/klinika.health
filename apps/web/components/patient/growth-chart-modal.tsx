@@ -81,12 +81,13 @@ export function GrowthChartModal({
       role="dialog"
       aria-modal="true"
       aria-labelledby="growth-modal-title"
-      className="fixed inset-0 z-modal flex items-center justify-center bg-[rgba(28,25,23,0.62)] p-6 backdrop-blur-sm"
+      className="fixed inset-0 z-modal flex items-center justify-center bg-[rgba(28,25,23,0.62)] p-0 backdrop-blur-sm sm:p-6"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="flex max-h-[calc(100vh-48px)] w-full max-w-[1040px] animate-modal-in flex-col overflow-hidden rounded-lg border border-line bg-surface-elevated shadow-modal">
+      {/* Full-screen on phone; centered modal card from sm up. */}
+      <div className="flex h-full max-h-full w-full max-w-[1040px] animate-modal-in flex-col overflow-hidden rounded-none border border-line bg-surface-elevated shadow-modal sm:h-auto sm:max-h-[calc(100vh-48px)] sm:rounded-lg">
         <Header
           metric={metric}
           onMetricChange={setMetric}
@@ -254,7 +255,7 @@ function Body({
     tone === 'male' ? 'var(--chart-male)' : 'var(--chart-female)';
 
   return (
-    <div className="grid min-h-0 flex-1 grid-cols-[1fr_240px] overflow-hidden">
+    <div className="grid min-h-0 flex-1 grid-cols-1 overflow-auto lg:grid-cols-[1fr_240px] lg:overflow-hidden">
       <ChartCanvas
         metric={metric}
         reference={reference}
@@ -388,7 +389,9 @@ function ChartCanvas({
         data-testid="growth-modal-chart"
         viewBox={`0 0 ${w} ${h}`}
         preserveAspectRatio="xMidYMid meet"
-        className="mx-auto block h-auto w-full max-w-[760px]"
+        // min-w on phone keeps the percentile bands legible; the wrapper
+        // scrolls horizontally rather than squashing the chart (§11.5).
+        className="mx-auto block h-auto w-full min-w-[480px] max-w-[760px] sm:min-w-0"
         onMouseLeave={() => setTooltip(null)}
       >
         {/* Percentile bands — paint outer (P3..P15 + P85..P97) first, inner
@@ -606,7 +609,7 @@ function SideRail({
 }): ReactElement {
   const last = series[series.length - 1] ?? null;
   return (
-    <aside className="flex flex-col gap-5 overflow-y-auto border-l border-line bg-surface-subtle px-5 py-4">
+    <aside className="flex flex-col gap-5 overflow-y-auto border-t border-line bg-surface-subtle px-5 py-4 lg:border-l lg:border-t-0">
       <section>
         <SectionTitle>Matja e fundit</SectionTitle>
         {last ? (

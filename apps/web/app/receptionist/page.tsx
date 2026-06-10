@@ -1,11 +1,11 @@
 import type { Metadata } from 'next';
 
-import { CalendarView } from './calendar-view';
+import { ReceptionHome } from './reception-home';
 
 export const metadata: Metadata = {
   title: 'Kalendari · Klinika',
 };
 
 export default function ReceptionistHome() {
-  return <CalendarView />;
+  return <ReceptionHome />;
 }
